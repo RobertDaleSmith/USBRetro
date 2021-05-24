@@ -16,8 +16,8 @@ pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replic
 
 The Adafruit QtPy_RP2040 has a minor incompatibility with this version of the SDK, requiring two adjustments:
 - While the program will run fine when dropped directly into the device, it will not reset properly when the RESET button is pressed, or when power is cycled.  This appears to be an issue on some, but not all, QtPy RP2040 devices.  The fixes required are:
- - pico-sdk/src/boards/include/boards/adafruit_qtpy_rp2040.h : change #define PICO_FLASH_SPI_CLKDIV 2   to 4
- - pico-sdk/src/rp2_common/hardware_xosc/xosc.c : change xosc_hw->startup = startup_delay; to startup_delay * 32
+  - pico-sdk/src/boards/include/boards/adafruit_qtpy_rp2040.h : change #define PICO_FLASH_SPI_CLKDIV 2   to 4
+  - pico-sdk/src/rp2_common/hardware_xosc/xosc.c : change xosc_hw->startup = startup_delay; to startup_delay * 32
 
 ## Notes
 I have tried to use the Adafruit QtPy RP2040 as much as possible, as it is a compact form factor which is easy to design around.
