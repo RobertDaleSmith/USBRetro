@@ -27,5 +27,5 @@ as a result, Pinout pages of the "Pinout" page for their RP2040 devices don't in
 
 Therefore, I am including a graphic here:
 
-![Adafruit QtPy RP2040 GPIO pinout](img/qtpy_rp2040_GPIO.png)
+![Adafruit QtPy RP2040 GPIO pinout](../../img/qtpy_rp2040_GPIO.png)
 
