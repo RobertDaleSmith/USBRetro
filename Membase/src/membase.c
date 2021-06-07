@@ -1,7 +1,7 @@
 /**
- * membase.c - PC Engine Memory Base 128 processor
+ * membase.c - Main program for PC Engine MB128-compatible peripheral
  *
- * Copyright (c) 2021 Dave Shadoff
+ * Copyright (c) 2021 David Shadoff
  *
  */
 
@@ -20,7 +20,7 @@
 // external clock, and push the data to the RX FIFO, 1 bit at a time.
 
 
-#ifdef ADAFRUIT_QTPY_RP2040	// if build for QTPY RP2040 board, use these pins
+#ifdef ADAFRUIT_QTPY_RP2040	// if build for QTPY RP2040 board, use these GPIO pins
 
 #define DATAIN_PIN	28
 #define CLKIN_PIN	DATAIN_PIN + 1	// Note - must be consecutive for PIO code
@@ -31,7 +31,7 @@
 #define RDSTAT_PIN	3
 #define	FLUSH_PIN	25
 
-#else				// else assume build for RP Pico board, and use these pins
+#else				// else assume build for RP Pico board, and use these GPIO pins
 
 #define DATAIN_PIN	27
 #define CLKIN_PIN	DATAIN_PIN + 1	// Note - must be consecutive for PIO code
@@ -48,15 +48,18 @@
 #define FLASH_AMOUNT	(128 * 1024)
 #define FLASH_SECTORS	(FLASH_AMOUNT / FLASH_SECTOR_SIZE)
 
-#define SYNC_VALUE	0xA8	// bit signature to use as synchronizer on the joypad scan stream
+#define SYNC_VALUE	0xA8	// bit signature to use as a synchronizer on the joypad scan stream
 
 #define CMD_WRITE	0	// command embedded into bitstream
 #define CMD_READ	1
 
 
 static uint8_t MemStore[FLASH_AMOUNT];
+static bool DirtyPage[FLASH_SECTORS];
+static bool AnyDirty;
 static bool in_transaction;
 
+//static int	bits_in = 0;
 static uint8_t	sync_byte = 0;
 
 static bool	rx_bit = false;
@@ -72,15 +75,11 @@ static int	byte_len = 0;
 //
 static absolute_time_t LastTransaction;
 static int64_t idle_microseconds = 750000;
-static bool DirtyPage[FLASH_SECTORS];
-static bool AnyDirty;
 
 PIO pio;
 uint sm;
 
 
-// Get the flash memory at initialization time, and place in SRAM
-//
 void __not_in_flash_func(ReadFlash)()
 {
 int i;
@@ -89,18 +88,9 @@ int i;
 	for (i = 0; i < FLASH_SECTORS; i ++) {
 		DirtyPage[i] = false;
 	}
-
-	LastTransaction = at_the_end_of_time;	// Reset indicator for anything to writeback
 	AnyDirty = false;
 }
 
-//
-// Sequence through dirty pages and erase/rewrite them to flash
-//
-// Original intent was to have this run by the second processor so
-// that the first processor could continue to read the input bitstream,
-// but that hasn't been implemented yet
-//
 static void __not_in_flash_func(WriteFlash)()
 {
 int i;
@@ -112,7 +102,8 @@ uint SectorOffset;
 					// should not be any moment when data dirty but flag is not set
 	LastTransaction = at_the_end_of_time;
 
-// Block commands are faster for large-scale erase
+// Block commands are faster for large-scale erase, but that isn't the common case
+//
 //	uint Interrupts = save_and_disable_interrupts();
 //	flash_range_erase(FLASH_OFFSET, FLASH_AMOUNT);
 //	flash_range_program(FLASH_OFFSET, &MemStore[0], FLASH_AMOUNT);
@@ -150,12 +141,12 @@ static void __not_in_flash_func(process_signals)(void)
 
 	in_transaction = false;
 
-	while (sync_byte != SYNC_VALUE) {
-		while (pio_sm_is_rx_fifo_empty(pio,sm))		// check if any bits to process...
-		{						// while we're waiting, check if it's time to flush
+	while (sync_byte != SYNC_VALUE) {	// check if any bits to process
+						// while we're waiting, check if it's time to flush
+		while (pio_sm_is_rx_fifo_empty(pio,sm)) {
 			if (AnyDirty == true) {
 				if (absolute_time_diff_us(LastTransaction, get_absolute_time()) > idle_microseconds) {
-					// Note: if we flush to flash, we should not disable state machines
+					// Note: if we flush to flash, we should disable state machines
 					//       in order to avoid a backlog of desynchronized bits which
 					//       may cause problems
 					pio_sm_set_enabled(pio,sm,false);
@@ -188,7 +179,7 @@ static void __not_in_flash_func(process_signals)(void)
 	//
 	rw_cmd = pio_sm_get_blocking(pio,sm);
 
-	gpio_put(IDENT_PIN, 0);		// no more IDENT bit
+	gpio_put(IDENT_PIN, 0);		// no more IDENT output
 
 	if (rw_cmd == CMD_WRITE)	// set appropriate LED output
 		gpio_put(WRSTAT_PIN,1);
@@ -354,7 +345,7 @@ int main() {
     gpio_init(IDENT_PIN);		// IDENT_PIN   is the D2 data to send back via joypad - it identifies that the sync signal was detected
     gpio_init(WRSTAT_PIN);		// WRSTAT_PIN  is the 'write' indicator LED (red)
     gpio_init(RDSTAT_PIN);		// RDSTAT_PIN  is the 'read' indicator LED (green)
-    gpio_init(FLUSH_PIN);		// FLUSH_PIN   is the 'writeback to flash' indicator LED (blue if possible)
+    gpio_init(FLUSH_PIN);		// FLUSH_PIN   is the 'writeback to flash' indicator LED (blue)
 
     gpio_set_dir(ACTIVE_PIN,  GPIO_OUT);
     gpio_set_dir(DATAOUT_PIN, GPIO_OUT);
@@ -362,7 +353,6 @@ int main() {
     gpio_set_dir(WRSTAT_PIN,  GPIO_OUT);
     gpio_set_dir(RDSTAT_PIN,  GPIO_OUT);
     gpio_set_dir(FLUSH_PIN,   GPIO_OUT);
-
 
     gpio_put(ACTIVE_PIN,  0);		// turn off all LEDs to start
     gpio_put(WRSTAT_PIN,  0);
@@ -387,7 +377,9 @@ int main() {
 
     sleep_ms(750);
 
-    ReadFlash();				// initialize SRAM from Flash
+    ReadFlash();			// initialize SRAM from Flash
+    LastTransaction = at_the_end_of_time;
+    AnyDirty = false;
 
     process_signals();
 }
