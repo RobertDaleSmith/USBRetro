@@ -9,16 +9,10 @@ The data is loaded into SRAM at startup, and saved into Flash after transactions
 device is not capable of processing additional commands while the Flash flush is in progress (it takes place 0.75 seconds
 after the last read/write of a group of read or write transactions).
 
-## Mouse
+## Others
 
-This project is to allow modern mouse hardware to interface with a PC Engine.
-The PIOs present the approrpaite data to the PC Engine joypad port based on signalling from teh PC Engine, and the RP2040
-device is used for USB Host HID interfacing to a mouse.
-Notes:
-- Wired mice are recognized, but wireless mice aren't due to current limitations in the TinyUSB stack within the Pico SDK.
-This is expected to be corrected in the near future.
-- Some wired mice work better than others; this is thought to be due to the way data is sent via signal buffers on USB; this
-is expected to be corrected in the immediate future.
+Other Projects are coming... the PIOs on the RPi Pico are very interesting and flexible, so will be well-suited to
+retrocomputing/retrogaming projects.
 
 ## Notes
 I have tried to use the Adafruit QtPy RP2040 as much as possible, as it is a compact form factor which is easy to design around.
