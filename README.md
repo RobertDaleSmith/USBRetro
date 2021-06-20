@@ -17,7 +17,7 @@ retrocomputing/retrogaming projects.
 ## Notes
 I have tried to use the Adafruit QtPy RP2040 as much as possible, as it is a compact form factor which is easy to design around.
 
-Unfortunately, the Adafruit site tries todirect all users toward their verison of CircuitPython rather than the Pi SDK, and
+Unfortunately, the Adafruit site tries to direct all users toward CircuitPython rather than C/C++ (the Pi SDK), and
 as a result, Pinout pages of the "Pinout" page for their RP2040 devices don't include references to the GPIO numbers.
 
 Therefore, I am including a graphic here:
