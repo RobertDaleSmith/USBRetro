@@ -11,6 +11,15 @@ after the last read/write of a group of read or write transactions).  While this
 is shut down, so there won't be a backlog of bits causing confusion; however, if any transactions take place during the period of
 flash write, they won't be recognized, and the PC Engine game may identify an error.
 
+Status is displayed by LEDs on the main board, recessed into the device, adjacent to the joypad connector:
+
+Yellow (Left) = Device active
+Green (Right) = Read
+Red (Right) = Write
+Blue (Left) = Delayed commit to Flash memory
+
+![Top View](../img/Membase_unit.png)
+
 ## Source Code
 
 This was built using Pico-SDK version 1.2.0
