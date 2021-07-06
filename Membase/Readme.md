@@ -27,7 +27,8 @@ pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replic
 
 To build the source, first ensure that you have the right version of the RaspberryPi/piso-sdk installed.
 As this board targets the Adafruit QtPy2040 board, you should run the make_ada.sh script (under UNIX), or from
-the command-line, "cmake -DPICO_BOARD=adafruit_qtpy_rp2040 -B build"
+the command-line:  
+"cmake -DPICO_BOARD=adafruit_qtpy_rp2040 -B build"
 Then, "cd build" and "make".
 
 I have also included a release version of the program as a uf2 file in the releases/ folder; just drag and drop it
