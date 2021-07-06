@@ -1,6 +1,6 @@
 # PC_Engine_RP2040_Projects - Projects designed for PC Engine, using RPi Pico or other RP2040 hardware
 
-## ![Memory Base 128 reimplementation](tree/main/Membase)
+## ![Memory Base 128 reimplementation](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/Membase)
 
 This is the third implementation of the Memory Base 128 I have written for modern hardware, and the easiest code to read.
 The PIOs areused for edge-sensing of the data input, and the ARM core is used for processing.
