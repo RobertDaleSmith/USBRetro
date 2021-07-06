@@ -13,10 +13,10 @@ flash write, they won't be recognized, and the PC Engine game may identify an er
 
 Status is displayed by LEDs on the main board, recessed into the device, adjacent to the joypad connector:
 
-Yellow (Left) = Device active
-Green (Right) = Read
-Red (Right) = Write
-Blue (Left) = Delayed commit to Flash memory
+Yellow (Left) = Device active  
+Green (Right) = Read  
+Red (Right) = Write  
+Blue (Left) = Delayed commit to Flash memory  
 
 ![Top View](../img/Membase_unit.png)
 
@@ -56,20 +56,20 @@ And for use, you will also need a short 8-pin mini-DIN male-male cable (various 
 ### Assembly
 
 The "case" is made up of stacked PC boards, with PC boards on the top and bottom; There are 5 different boards in all, but 13 layers as follows:
-a) Top = 1 layer, 1.6mm thick, ENIG board, in "PCE128_Rev_C_Face"
-b) MidTop = 6 layers, 1.6mm thick, HASL board in "PCE128_Rev_C_MidTop"
-c) MidLow = 3 layers, 1.2mm thick, HASL board in "PCE128_Rev_C_MidLow" (looks similar to MidTop, but has cutouts for the LEDs)
-d) Main Board = 1 layer, 1.6mm thick, HASL, SMD assembly board in "PCE128_Rev_C2_Main" (Note: some parts have been shifted from the previous "B" version; they are not interchangeable)
-e) Sub = 1 layer, 0.8mm thick (*), HASL board in "PCE128_Rev_C_Sub"
-f) Bottom = 1 layer, 1.6mm thick, ENIG board in "PCE128_Rev_C_Face" (reverse side faces out)
+1. Top = 1 layer, 1.6mm thick, ENIG board, in "PCE128_Rev_C_Face"  
+2. MidTop = 6 layers, 1.6mm thick, HASL board in "PCE128_Rev_C_MidTop"  
+3. MidLow = 3 layers, 1.2mm thick, HASL board in "PCE128_Rev_C_MidLow" (looks similar to MidTop, but has cutouts for the LEDs)  
+4. Main Board = 1 layer, 1.6mm thick, HASL, SMD assembly board in "PCE128_Rev_C2_Main" (Note: some parts have been shifted from the previous "B" version; they are not interchangeable)  
+5. Sub = 1 layer, 0.8mm thick (*), HASL board in "PCE128_Rev_C_Sub"  
+6. Bottom = 1 layer, 1.6mm thick, ENIG board in "PCE128_Rev_C_Face" (reverse side faces out)  
 
 (*) Note that I trim the through-hole leads flush to the board, which enables a thin "Sub" layer, which exists only to make space for the through-hole portions; if you do not trim these flush, you may need a much thicker Sub layer, and longer M3 screws.
 
 Steps to assembly:
-1) Trim the leads of the through-hole parts carefully, to minimize the solder "bump" on the underside of the board when mounted.  The through-hole parts to be mounted include the 8-pin mini-DIN sockets, and the headers (or sockets) for the RP2040 board.  **Make sure that the mini-DIN connectors are mounted straight, or the upper-layer boards may have trouble being placed.**
-2) Solder carefully, miniizing the amount of "bump" below the board
-3) With the LEDs closest to you, mount the RP2040 board with the USB connector on the right side
-4) Connect it to a host computer while holding the "Boot" button down.  This will put it in DFU mode and create a virtual drive on the host computer.  Drag and drop the *.uf2 firmware file into that folder.  A moment later, the virtual drive should disappear and after about 1 second, all four LEDs should light up briefly as part of the boot sequence of the memory device.  Disconnect it from USB.
+1. Trim the leads of the through-hole parts carefully, to minimize the solder "bump" on the underside of the board when mounted.  The through-hole parts to be mounted include the 8-pin mini-DIN sockets, and the headers (or sockets) for the RP2040 board.  **Make sure that the mini-DIN connectors are mounted straight, or the upper-layer boards may have trouble being placed.**
+2. Solder carefully, miniizing the amount of "bump" below the board
+3. With the LEDs closest to you, mount the RP2040 board with the USB connector on the right side
+4. Connect it to a host computer while holding the "Boot" button down.  This will put it in DFU mode and create a virtual drive on the host computer.  Drag and drop the *.uf2 firmware file into that folder.  A moment later, the virtual drive should disappear and after about 1 second, all four LEDs should light up briefly as part of the boot sequence of the memory device.  Disconnect it from USB.
 
 For the board stack-up, it is best to connect the lower boards first, with the screws going through the bottom layers of board, into one side of the female-female standoffs.  Then, the upper layer boards can simply be stacked, and the top screws tightened easily.
 
