@@ -1,0 +1,3 @@
+Partlist exported from /Users/davidshadoff/Documents/EAGLE/projects/PCE128/PCE128_Rev_C_MidTop/PCE128_rev_C_MidTop.sch at 2021-06-13 6:39 PM
+
+Qty Value Device Package Parts Description 

@@ -260,34 +260,6 @@
 <wire x1="1.1" y1="1.55" x2="-1.1" y2="1.55" width="0.0001" layer="46"/>
 <wire x1="-1.1" y1="1.55" x2="-1.1" y2="2.25" width="0.0001" layer="46"/>
 </package>
-<package name="SOP65P400X130-8N">
-<description>&lt;b&gt;DCT (R-PDSO-G8)&lt;/b&gt;&lt;br&gt;
-</description>
-<smd name="1" x="-1.95" y="0.975" dx="1.1" dy="0.45" layer="1"/>
-<smd name="2" x="-1.95" y="0.325" dx="1.1" dy="0.45" layer="1"/>
-<smd name="3" x="-1.95" y="-0.325" dx="1.1" dy="0.45" layer="1"/>
-<smd name="4" x="-1.95" y="-0.975" dx="1.1" dy="0.45" layer="1"/>
-<smd name="5" x="1.95" y="-0.975" dx="1.1" dy="0.45" layer="1"/>
-<smd name="6" x="1.95" y="-0.325" dx="1.1" dy="0.45" layer="1"/>
-<smd name="7" x="1.95" y="0.325" dx="1.1" dy="0.45" layer="1"/>
-<smd name="8" x="1.95" y="0.975" dx="1.1" dy="0.45" layer="1"/>
-<text x="0" y="0" size="1.27" layer="25" align="center">&gt;NAME</text>
-<text x="0" y="0" size="1.27" layer="27" align="center">&gt;VALUE</text>
-<wire x1="-2.75" y1="1.825" x2="2.75" y2="1.825" width="0.05" layer="51"/>
-<wire x1="2.75" y1="1.825" x2="2.75" y2="-1.825" width="0.05" layer="51"/>
-<wire x1="2.75" y1="-1.825" x2="-2.75" y2="-1.825" width="0.05" layer="51"/>
-<wire x1="-2.75" y1="-1.825" x2="-2.75" y2="1.825" width="0.05" layer="51"/>
-<wire x1="-1.4" y1="1.475" x2="1.4" y2="1.475" width="0.1" layer="51"/>
-<wire x1="1.4" y1="1.475" x2="1.4" y2="-1.475" width="0.1" layer="51"/>
-<wire x1="1.4" y1="-1.475" x2="-1.4" y2="-1.475" width="0.1" layer="51"/>
-<wire x1="-1.4" y1="-1.475" x2="-1.4" y2="1.475" width="0.1" layer="51"/>
-<wire x1="-1.4" y1="0.825" x2="-0.75" y2="1.475" width="0.1" layer="51"/>
-<wire x1="-1.05" y1="1.475" x2="1.05" y2="1.475" width="0.2" layer="21"/>
-<wire x1="1.05" y1="1.475" x2="1.05" y2="-1.475" width="0.2" layer="21"/>
-<wire x1="1.05" y1="-1.475" x2="-1.05" y2="-1.475" width="0.2" layer="21"/>
-<wire x1="-1.05" y1="-1.475" x2="-1.05" y2="1.475" width="0.2" layer="21"/>
-<wire x1="-2.5" y1="1.55" x2="-1.4" y2="1.55" width="0.2" layer="21"/>
-</package>
 </packages>
 <symbols>
 <symbol name="MD-80SGK">
@@ -308,22 +280,6 @@
 <pin name="6" x="22.86" y="-5.08" length="middle" rot="R180"/>
 <pin name="8" x="22.86" y="-7.62" length="middle" rot="R180"/>
 <pin name="12" x="22.86" y="-10.16" length="middle" rot="R180"/>
-</symbol>
-<symbol name="SN74LVC2T45DCTR">
-<wire x1="5.08" y1="2.54" x2="22.86" y2="2.54" width="0.254" layer="94"/>
-<wire x1="22.86" y1="-10.16" x2="22.86" y2="2.54" width="0.254" layer="94"/>
-<wire x1="22.86" y1="-10.16" x2="5.08" y2="-10.16" width="0.254" layer="94"/>
-<wire x1="5.08" y1="2.54" x2="5.08" y2="-10.16" width="0.254" layer="94"/>
-<text x="24.13" y="7.62" size="1.778" layer="95" align="center-left">&gt;NAME</text>
-<text x="24.13" y="5.08" size="1.778" layer="96" align="center-left">&gt;VALUE</text>
-<pin name="VCCA" x="0" y="0" length="middle" direction="pwr"/>
-<pin name="A1" x="0" y="-2.54" length="middle"/>
-<pin name="A2" x="0" y="-5.08" length="middle"/>
-<pin name="GND" x="0" y="-7.62" length="middle" direction="pwr"/>
-<pin name="VCCB" x="27.94" y="0" length="middle" direction="pwr" rot="R180"/>
-<pin name="B1" x="27.94" y="-2.54" length="middle" rot="R180"/>
-<pin name="B2" x="27.94" y="-5.08" length="middle" rot="R180"/>
-<pin name="DIR" x="27.94" y="-7.62" length="middle" rot="R180"/>
 </symbol>
 </symbols>
 <devicesets>
@@ -358,39 +314,6 @@ Source: &lt;a href="https://www.cui.com/product/resource/md-sgk-series.pdf"&gt; 
 <attribute name="MOUSER_PRICE-STOCK" value="https://www.mouser.com/Search/Refine.aspx?Keyword=490-MD-80SGK" constant="no"/>
 <attribute name="RS_PART_NUMBER" value="" constant="no"/>
 <attribute name="RS_PRICE-STOCK" value="" constant="no"/>
-</technology>
-</technologies>
-</device>
-</devices>
-</deviceset>
-<deviceset name="SN74LVC2T45DCTR" prefix="IC">
-<description>&lt;b&gt;2-Bit Bus Transceiver, Translation SSOP8 SN74LVC2T45DCTR, Voltage Level Translator, Bus Transceiver LVC, 3-State 1.65 &lt;/b&gt;&lt;p&gt;
-Source: &lt;a href="http://www.ti.com/lit/ds/symlink/sn74lvc2t45.pdf"&gt; Datasheet &lt;/a&gt;</description>
-<gates>
-<gate name="G$1" symbol="SN74LVC2T45DCTR" x="0" y="0"/>
-</gates>
-<devices>
-<device name="" package="SOP65P400X130-8N">
-<connects>
-<connect gate="G$1" pin="A1" pad="2"/>
-<connect gate="G$1" pin="A2" pad="3"/>
-<connect gate="G$1" pin="B1" pad="7"/>
-<connect gate="G$1" pin="B2" pad="6"/>
-<connect gate="G$1" pin="DIR" pad="5"/>
-<connect gate="G$1" pin="GND" pad="4"/>
-<connect gate="G$1" pin="VCCA" pad="1"/>
-<connect gate="G$1" pin="VCCB" pad="8"/>
-</connects>
-<technologies>
-<technology name="">
-<attribute name="DESCRIPTION" value="2-Bit Bus Transceiver, Translation SSOP8 SN74LVC2T45DCTR, Voltage Level Translator, Bus Transceiver LVC, 3-State 1.65 " constant="no"/>
-<attribute name="HEIGHT" value="1.3mm" constant="no"/>
-<attribute name="MANUFACTURER_NAME" value="Texas Instruments" constant="no"/>
-<attribute name="MANUFACTURER_PART_NUMBER" value="SN74LVC2T45DCTR" constant="no"/>
-<attribute name="MOUSER_PART_NUMBER" value="595-SN74LVC2T45DCTR" constant="no"/>
-<attribute name="MOUSER_PRICE-STOCK" value="https://www.mouser.com/Search/Refine.aspx?Keyword=595-SN74LVC2T45DCTR" constant="no"/>
-<attribute name="RS_PART_NUMBER" value="9213022" constant="no"/>
-<attribute name="RS_PRICE-STOCK" value="http://uk.rs-online.com/web/p/products/9213022" constant="no"/>
 </technology>
 </technologies>
 </device>
@@ -8380,6 +8303,34 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <wire x1="-1.55" y1="0.825" x2="-1.55" y2="-0.825" width="0.2" layer="21"/>
 <wire x1="-1.55" y1="-0.825" x2="0.75" y2="-0.825" width="0.2" layer="21"/>
 </package>
+<package name="SOP50P310X90-8N">
+<description>&lt;b&gt;DCU (R-PDSO-G8)&lt;/b&gt;&lt;br&gt;
+</description>
+<smd name="1" x="-1.575" y="0.75" dx="0.85" dy="0.3" layer="1"/>
+<smd name="2" x="-1.575" y="0.25" dx="0.85" dy="0.3" layer="1"/>
+<smd name="3" x="-1.575" y="-0.25" dx="0.85" dy="0.3" layer="1"/>
+<smd name="4" x="-1.575" y="-0.75" dx="0.85" dy="0.3" layer="1"/>
+<smd name="5" x="1.575" y="-0.75" dx="0.85" dy="0.3" layer="1"/>
+<smd name="6" x="1.575" y="-0.25" dx="0.85" dy="0.3" layer="1"/>
+<smd name="7" x="1.575" y="0.25" dx="0.85" dy="0.3" layer="1"/>
+<smd name="8" x="1.575" y="0.75" dx="0.85" dy="0.3" layer="1"/>
+<text x="0" y="0" size="1.27" layer="25" align="center">&gt;NAME</text>
+<text x="0" y="0" size="1.27" layer="27" align="center">&gt;VALUE</text>
+<wire x1="-2.25" y1="1.3" x2="2.25" y2="1.3" width="0.05" layer="51"/>
+<wire x1="2.25" y1="1.3" x2="2.25" y2="-1.3" width="0.05" layer="51"/>
+<wire x1="2.25" y1="-1.3" x2="-2.25" y2="-1.3" width="0.05" layer="51"/>
+<wire x1="-2.25" y1="-1.3" x2="-2.25" y2="1.3" width="0.05" layer="51"/>
+<wire x1="-1.15" y1="1" x2="1.15" y2="1" width="0.1" layer="51"/>
+<wire x1="1.15" y1="1" x2="1.15" y2="-1" width="0.1" layer="51"/>
+<wire x1="1.15" y1="-1" x2="-1.15" y2="-1" width="0.1" layer="51"/>
+<wire x1="-1.15" y1="-1" x2="-1.15" y2="1" width="0.1" layer="51"/>
+<wire x1="-1.15" y1="0.5" x2="-0.65" y2="1" width="0.1" layer="51"/>
+<wire x1="-0.8" y1="1" x2="0.8" y2="1" width="0.2" layer="21"/>
+<wire x1="0.8" y1="1" x2="0.8" y2="-1" width="0.2" layer="21"/>
+<wire x1="0.8" y1="-1" x2="-0.8" y2="-1" width="0.2" layer="21"/>
+<wire x1="-0.8" y1="-1" x2="-0.8" y2="1" width="0.2" layer="21"/>
+<wire x1="-2" y1="1.25" x2="-1.15" y2="1.25" width="0.2" layer="21"/>
+</package>
 </packages>
 <symbols>
 <symbol name="SN74HC157D">
@@ -8477,6 +8428,22 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <vertex x="7.112" y="3.556"/>
 <vertex x="6.35" y="5.08"/>
 </polygon>
+</symbol>
+<symbol name="SN74LVC2T45DCUR">
+<wire x1="5.08" y1="2.54" x2="22.86" y2="2.54" width="0.254" layer="94"/>
+<wire x1="22.86" y1="-10.16" x2="22.86" y2="2.54" width="0.254" layer="94"/>
+<wire x1="22.86" y1="-10.16" x2="5.08" y2="-10.16" width="0.254" layer="94"/>
+<wire x1="5.08" y1="2.54" x2="5.08" y2="-10.16" width="0.254" layer="94"/>
+<text x="24.13" y="7.62" size="1.778" layer="95" align="center-left">&gt;NAME</text>
+<text x="24.13" y="5.08" size="1.778" layer="96" align="center-left">&gt;VALUE</text>
+<pin name="VCCA" x="0" y="0" length="middle"/>
+<pin name="A1" x="0" y="-2.54" length="middle"/>
+<pin name="A2" x="0" y="-5.08" length="middle"/>
+<pin name="GND" x="0" y="-7.62" length="middle"/>
+<pin name="VCCB" x="27.94" y="0" length="middle" rot="R180"/>
+<pin name="B1" x="27.94" y="-2.54" length="middle" rot="R180"/>
+<pin name="B2" x="27.94" y="-5.08" length="middle" rot="R180"/>
+<pin name="DIR" x="27.94" y="-7.62" length="middle" rot="R180"/>
 </symbol>
 </symbols>
 <devicesets>
@@ -8591,6 +8558,39 @@ Source: &lt;a href="https://www.arrow.com/en/products/19-217ghc-yr1s23t/everligh
 </device>
 </devices>
 </deviceset>
+<deviceset name="SN74LVC2T45DCUR" prefix="IC">
+<description>&lt;b&gt;Texas Instruments SN74LVC2T45DCUR, Voltage Level Translator, Bus Transceiver, 3-State, 1.65  5.5 V, 8-Pin UM&lt;/b&gt;&lt;p&gt;
+Source: &lt;a href="http://www.ti.com/lit/gpn/sn74lvc2t45"&gt; Datasheet &lt;/a&gt;</description>
+<gates>
+<gate name="G$1" symbol="SN74LVC2T45DCUR" x="0" y="0"/>
+</gates>
+<devices>
+<device name="" package="SOP50P310X90-8N">
+<connects>
+<connect gate="G$1" pin="A1" pad="2"/>
+<connect gate="G$1" pin="A2" pad="3"/>
+<connect gate="G$1" pin="B1" pad="7"/>
+<connect gate="G$1" pin="B2" pad="6"/>
+<connect gate="G$1" pin="DIR" pad="5"/>
+<connect gate="G$1" pin="GND" pad="4"/>
+<connect gate="G$1" pin="VCCA" pad="1"/>
+<connect gate="G$1" pin="VCCB" pad="8"/>
+</connects>
+<technologies>
+<technology name="">
+<attribute name="ARROW_PART_NUMBER" value="SN74LVC2T45DCUR" constant="no"/>
+<attribute name="ARROW_PRICE-STOCK" value="https://www.arrow.com/en/products/sn74lvc2t45dcur/texas-instruments?region=nac" constant="no"/>
+<attribute name="DESCRIPTION" value="Texas Instruments SN74LVC2T45DCUR, Voltage Level Translator, Bus Transceiver, 3-State, 1.65  5.5 V, 8-Pin UM" constant="no"/>
+<attribute name="HEIGHT" value="0.9mm" constant="no"/>
+<attribute name="MANUFACTURER_NAME" value="Texas Instruments" constant="no"/>
+<attribute name="MANUFACTURER_PART_NUMBER" value="SN74LVC2T45DCUR" constant="no"/>
+<attribute name="MOUSER_PART_NUMBER" value="595-SN74LVC2T45DCUR" constant="no"/>
+<attribute name="MOUSER_PRICE-STOCK" value="https://www.mouser.co.uk/ProductDetail/Texas-Instruments/SN74LVC2T45DCUR?qs=0smPjiIwnfIdG9vxyJHBdA%3D%3D" constant="no"/>
+</technology>
+</technologies>
+</device>
+</devices>
+</deviceset>
 </devicesets>
 </library>
 </libraries>
@@ -8612,7 +8612,7 @@ Source: &lt;a href="https://www.arrow.com/en/products/19-217ghc-yr1s23t/everligh
 <parts>
 <part name="FRAME1" library="frames" library_urn="urn:adsk.eagle:library:229" deviceset="FRAME_A_L" device="" value="Mini-DIN 8 breakout"/>
 <part name="J2" library="SamacSys_Parts" deviceset="MD-80SGK" device=""/>
-<part name="IC2" library="SamacSys_Parts" deviceset="SN74LVC2T45DCTR" device=""/>
+<part name="IC2" library="PC-Engine" deviceset="SN74LVC2T45DCUR" device=""/>
 <part name="GND1" library="supply1" deviceset="GND" device=""/>
 <part name="GND2" library="supply1" deviceset="GND" device=""/>
 <part name="GND3" library="supply1" deviceset="GND" device=""/>
@@ -8627,7 +8627,7 @@ Source: &lt;a href="https://www.arrow.com/en/products/19-217ghc-yr1s23t/everligh
 <part name="+3V5" library="supply1" library_urn="urn:adsk.eagle:library:371" deviceset="+3V3" device=""/>
 <part name="R3" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="R-US_" device="R0402" package3d_urn="urn:adsk.eagle:package:26058/2" value="3.3K"/>
 <part name="J3" library="SamacSys_Parts" deviceset="MD-80SGK" device=""/>
-<part name="IC1" library="SamacSys_Parts" deviceset="SN74LVC2T45DCTR" device=""/>
+<part name="IC1" library="PC-Engine" deviceset="SN74LVC2T45DCUR" device=""/>
 <part name="GND13" library="supply1" deviceset="GND" device=""/>
 <part name="GND14" library="supply1" deviceset="GND" device=""/>
 <part name="GND15" library="supply1" deviceset="GND" device=""/>
@@ -8649,7 +8649,7 @@ Source: &lt;a href="https://www.arrow.com/en/products/19-217ghc-yr1s23t/everligh
 <part name="R22" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="R-US_" device="R0402" package3d_urn="urn:adsk.eagle:package:26058/2" value="47K"/>
 <part name="R23" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="R-US_" device="R0402" package3d_urn="urn:adsk.eagle:package:26058/2" value="47K"/>
 <part name="R24" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="R-US_" device="R0402" package3d_urn="urn:adsk.eagle:package:26058/2" value="47K"/>
-<part name="IC3" library="SamacSys_Parts" deviceset="SN74LVC2T45DCTR" device=""/>
+<part name="IC3" library="PC-Engine" deviceset="SN74LVC2T45DCUR" device=""/>
 <part name="C1" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="C-US" device="C0402" package3d_urn="urn:adsk.eagle:package:23626/2" value="0.1uF"/>
 <part name="C2" library="resistor" library_urn="urn:adsk.eagle:library:348" deviceset="C-US" device="C0402" package3d_urn="urn:adsk.eagle:package:23626/2" value="0.1uF"/>
 <part name="P+4" library="supply1" library_urn="urn:adsk.eagle:library:371" deviceset="+5V" device=""/>
@@ -9531,12 +9531,6 @@ Source: &lt;a href="https://www.arrow.com/en/products/19-217ghc-yr1s23t/everligh
 </sheet>
 </sheets>
 <errors>
-<approved hash="104,1,127,180.34,IC2,VCCA,+5V,,,"/>
-<approved hash="104,1,154.94,180.34,IC2,VCCB,+3V3,,,"/>
-<approved hash="104,1,116.84,73.66,IC1,VCCA,+5V,,,"/>
-<approved hash="104,1,144.78,73.66,IC1,VCCB,+3V3,,,"/>
-<approved hash="104,1,116.84,124.46,IC3,VCCA,+5V,,,"/>
-<approved hash="104,1,144.78,124.46,IC3,VCCB,+3V3,,,"/>
 <approved hash="113,1,187.283,105.573,J4,,,,,"/>
 <approved hash="113,1,210.143,105.573,J5,,,,,"/>
 </errors>

@@ -1,0 +1,24 @@
+{
+    "Header": {
+        "Comment": "All values are metric (mm)",
+        "CreationDate": "2021-06-16T23:59:56Z",
+        "GenerationSoftware": {
+            "Application": "EAGLE",
+            "Vendor": "Autodesk",
+            "Version": "9.6.2"
+        },
+        "Part": "Single"
+    },
+    "Overall": {
+        "BoardThickness": 1.57,
+        "LayerNumber": 2,
+        "Name": {
+            "ProjectId": "PCE128_rev_C2"
+        },
+        "Owner": "David Shadoff <david.shadoff@gmail.com>",
+        "Size": {
+            "X": 36.195,
+            "Y": 57.404
+        }
+    }
+}
