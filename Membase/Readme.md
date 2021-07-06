@@ -28,7 +28,7 @@ pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replic
 To build the source, first ensure that you have the right version of the RaspberryPi/piso-sdk installed.
 As this board targets the Adafruit QtPy2040 board, you should run the make_ada.sh script (under UNIX), or from
 the command-line:  
-"cmake -DPICO_BOARD=adafruit_qtpy_rp2040 -B build"
+"cmake -DPICO_BOARD=adafruit_qtpy_rp2040 -B build"  
 Then, "cd build" and "make".
 
 I have also included a release version of the program as a uf2 file in the releases/ folder; just drag and drop it
@@ -73,6 +73,8 @@ Steps to assembly:
 4. Connect it to a host computer while holding the "Boot" button down.  This will put it in DFU mode and create a virtual drive on the host computer.  Drag and drop the *.uf2 firmware file into that folder.  A moment later, the virtual drive should disappear and after about 1 second, all four LEDs should light up briefly as part of the boot sequence of the memory device.  Disconnect it from USB.
 
 For the board stack-up, it is best to connect the lower boards first, with the screws going through the bottom layers of board, into one side of the female-female standoffs.  Then, the upper layer boards can simply be stacked, and the top screws tightened easily.
+
+And one final touch: the edges of the PC boards are a different shade than the front/back surfaces, creating a two-tone effect which you may or may not like.  In order to make the case look more like a uniform "black box", I have used a Sharpie marker along the edge of the PC Boards to darken them.  The shade is similar to JLCPCB's matte black solder mask, so it should be a good match in areas with standard lighting.  The Sharpie ink, being permanent, won't run when it gets wet, but be careful near any alcohol-based solvents; the ink may run/stain in such situations.
 
 Here is a visual view:
 
