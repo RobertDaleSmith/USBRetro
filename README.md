@@ -9,6 +9,14 @@ The data is loaded into SRAM at startup, and saved into Flash after transactions
 device is not capable of processing additional commands while the Flash flush is in progress (it takes place 0.75 seconds
 after the last read/write of a group of read or write transactions).
 
+## ![PC Engine USB Mouse adapter](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/PCEMouse)
+
+This allows a modern USB mouse to be used by a PC Engine machine.  The PC Engine did have a mouse later in the console's
+lifetime; it was a mouse with a rotating ball and a cord (anybody familiar with this type of mouse would be familiar
+with the desire to use a modern cordless optical mouse).
+
+The RP2040 board is used as the USB Host for the mouse, and PIOs are used for signalling to the PC Engine console.
+
 ## Others
 
 Other Projects are coming... the PIOs on the RPi Pico are very interesting and flexible, so will be well-suited to
