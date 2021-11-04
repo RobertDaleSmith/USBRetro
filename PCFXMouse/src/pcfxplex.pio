@@ -1,0 +1,111 @@
+;
+; By Dave Shadoff (c) 2021
+;
+;
+; Interfacing for a PC-FX mouse
+;
+; Two state machines are in use:
+; 
+; 1) Multiplexer, free-running:
+;     - Based on when the LATCH signal goes low (and high again), send
+;       32 bits of data on clocked signal from the most-recent word from FIFO
+;
+; 2) Clocked input, which monitors the LATCH joypad line for
+;    high->lowh transitions, to set the state counter
+; 
+;
+; This implements state machine #1
+;
+; Structure of the word sent to the FIFO from the ARM:
+; |00000000|00ssbbbb|xxxxxxxx|yyyyyyyy| (PCE)
+;
+; |00101111|111111bb|xxxxxxxx|yyyyyyyy| (PCFX mouse)
+; |00001111|11111111|1m1mdddd|rsbbbbbb| (PCFX joypad)
+;
+; Where:
+;  - 0 = must be zero
+;  - 1 = must be one
+; MOUSE:
+;  - b = button values, arranged in right/left sequence for PC-FX use
+;  - x = mouse 'x' movement; right is {1 - 0x7F} ; left is {0xFF - 0x80 }
+;  - y = mouse 'y' movement; down  is {1 - 0x7F} ;  up  is {0xFF - 0x80 }
+;
+; NOTES:
+;  - PC-FX left/right is (-/+) - opposite of PC Engine
+;  - PC-FX up/down is (-/+) - opposite of PC Engine
+;
+; JOYPAD:
+;  - m = mode switch (mode 2 is more-significant bit) 
+;  - d = direction button (Left, Down, Right, Up in decreasing significant bit order) 
+;  - r = run button
+;  - s = select button
+;  - s = button (VI, V, IV, III, II, I  in decreasing significant bit order) 
+;
+;
+
+.program pcfxplex
+
+outerloop:
+     pull  noblock        ; if a value was sent, refresh (leave in x otherwise)
+     mov   x, osr         ; the current value will remain in x
+     jmp   PIN, outerloop ; while the latch pin is high, DRAIN THE FIFO
+
+     out   PINS, 1        ; output first bit during latch period
+     wait  1 pin 1        ; latch rising - happens after the rising edge of the first data out bit
+     wait  0 pin 0        ; clk negedge (including just after latch end)
+     set   y, 30          ; loop 31 times (32 minus the bit we already sent)
+
+outputlp:
+     wait  1 pin 0        ; clk posedge
+     out   PINS, 1        ; output next bit
+     wait  0 pin 0        ; clk negedge (including just after latch end)
+     jmp   y--, outputlp
+
+     wait  1 pin 0        ; clk posedge
+     set   PINS, 1        ; output a "1" value here (floating value)
+
+     jmp   outerloop
+
+
+% c-sdk {
+static inline void pcfxplex_program_init(PIO pio, uint sm, uint offset, uint inpin, uint outpin) {
+    pio_sm_config c = pcfxplex_program_get_default_config(offset);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, inpin);
+    pio_gpio_init(pio, inpin+1);
+
+    pio_gpio_init(pio, outpin);
+
+    // Set the IN pin to the provided `inpin` parameter.
+    sm_config_set_in_pins(&c, inpin);
+
+    // Set the JMP pin to the provided `inpin` parameter.
+    sm_config_set_jmp_pin(&c, inpin+1);
+
+    // Set the pin directions to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, inpin, 2, false);
+
+
+    // Set the OUT pin to the provided `outpin` parameter. This is where the data is sent out
+    sm_config_set_out_pins(&c, outpin, 1);
+
+    // Set the SET pin to the provided `outpin` parameter.
+    // This is also where the data is sent out (at end of scan)
+    sm_config_set_set_pins(&c, outpin, 1);
+
+    // Set the pin directions to output at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, outpin, 1, true);
+
+    sm_config_set_out_shift(
+        &c,
+        true,  // Shift-to-right = true
+        false, // Autopull disabled
+        31     // Autopull threshold = 31
+    );
+
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

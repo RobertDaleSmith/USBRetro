@@ -1,0 +1,61 @@
+;
+; By Dave Shadoff (c) 2021
+;
+;
+; Interfacing for a PC-FX mouse
+;
+; Two state machines are in use:
+; 
+; 1) Multiplexer, free-running:
+;     - Based on when the LATCH signal goes low (and high again), send
+;       32 bits of data on clocked signal from the most-recent word from FIFO
+;
+; 2) Clocked input, which monitors the LATCH joypad line for
+;    high->lowh transitions, to set the state counter
+; 
+;
+; This implements state machine #2
+; --------------------------------
+;
+
+.program clock
+
+; Sample bits using an external clock (falling edge)
+; - IN pin 0 is the 'clock' pin - actually a LATCH (from which we will send the throwaway data)
+; - Autopush is enabled, threshold 1
+;
+; This program samples data with each rising clock edge,
+;  with no wait for data to settle
+
+clklp:
+    wait 1 pin 0
+    wait 0 pin 0
+    in   pins, 1
+    jmp  clklp
+
+% c-sdk {
+static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin) {
+    pio_sm_config c = clock_program_get_default_config(offset);
+
+    // Set the IN base pin to the provided `pin` parameter. This is the data
+    // pin, and the next-numbered GPIO is used as the clock pin.
+    sm_config_set_in_pins(&c, inpin);
+
+    // Set the pin directions to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, inpin, 1, false);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, inpin);
+
+    sm_config_set_in_shift(
+        &c,
+        false, // Shift-to-right = false (i.e. shift to left)
+        true,  // Autopush enabled
+        1      // Autopush threshold = 1
+    );
+
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
