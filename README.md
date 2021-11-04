@@ -17,6 +17,14 @@ with the desire to use a modern cordless optical mouse).
 
 The RP2040 board is used as the USB Host for the mouse, and PIOs are used for signalling to the PC Engine console.
 
+## ![PC-FX USB Mouse adapter](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/PCFXMouse)
+
+This allows a modern USB mouse to be used by a PC-FX machine.  The PC-FX did have a mouse which could be used on various
+games, or even on the startup screen.  It was a mouse with a rotating ball and a cord (anybody familiar with this type of
+mouse would be familiar with the desire to use a modern cordless optical mouse).
+
+The RP2040 board is used as the USB Host for the mouse, and PIOs are used for signalling to the PC-FX console.
+
 ## Others
 
 Other Projects are coming... the PIOs on the RPi Pico are very interesting and flexible, so will be well-suited to
