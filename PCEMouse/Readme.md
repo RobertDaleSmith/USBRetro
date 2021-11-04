@@ -90,14 +90,9 @@ implementing the state machine (to decide which nybble to return) in the PIO sta
 
 ## Notes
 
-1. There is a known issue with TinyUSB at the time of this writing; if the USB mouse is disconnected and
-then reconnected, it won't work; the adapter needs to be restarted.  This can be done be either pressing
-the 'RST' button on the Adafruit board (between the black JST connector and the RX pin), or by removing power
-and then re-applying (i.e. removing the whole mouse adapter from the host machine, then re-attaching it).
-
-2. I plan to redesign the boards to support the Seeeduino XIAO RP2040, as it is lower-cost than the Adafruit
+1. I plan to redesign the boards to support the Seeeduino XIAO RP2040, as it is lower-cost than the Adafruit
 board.  It is difficult to say at this time whether either or both of these boards will have sufficient
 availability.
 
-3. I am also considering creating a version fo the board using the RP2040 chip directly, and a USB-A connector,
+2. I am also considering creating a version fo the board using the RP2040 chip directly, and a USB-A connector,
 as 99% of mice use the USB-A connector.
