@@ -1,0 +1,7 @@
+﻿Qty,Designator,Footprint,Comment,LCSC Part # (optional),Description (optional)
+1,J1,1X06_NO_SILK,Do not mount,Do not mount,Multi connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections
+2,"J4, J5",1X07_LONGPADS,Do not mount,Do not mount,Multi connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections
+4,"C1, C2, C5, C6",C0402,100nF 16V,C1525,Samsung CL05B104KO5NNNC 100nF 16V 0402
+2,"C7, C8",C0805,10uF 25V,C15850,Samsung CL21A106KAYNNNE  10uF 25V 0805
+1,R1,R0402,330R,C25104,Uniroyal Elec  0402WGF3300TCE  0402
+2,"IC1, IC3",VSSOP-8_2.0x2.3x0.5P,SN74LVC2T45DCUR,C15741,"2-Bit Bus Transceiver, Translation VSSOP-8_2x2.3x05P SN74LVC2T45DCTR, Voltage Level Translator, Bus Transceiver LVC, 3-State 1.65"
