@@ -8,7 +8,7 @@ The PIOs areused for edge-sensing of the data input, and the ARM core is used fo
 The data is loaded into SRAM at startup, and saved into Flash after transactions take place.  This may not be ideal, as the
 device is not capable of processing additional commands while the Flash flush is in progress (it takes place 0.75 seconds
 after the last read/write of a group of read or write transactions).
-<img src="https://github.com/dshadoff/PC_Engine_RP2040_Projects/img/mini128.jpg" width="355" height="331">
+<img src="https://github.com/dshadoff/PC_Engine_RP2040_Projects/blob/main/img/mini128.jpg" width="355" height="331">
 
 ## ![PC Engine USB Mouse adapter](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/PCEMouse)
 
