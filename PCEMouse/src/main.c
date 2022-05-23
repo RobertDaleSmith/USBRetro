@@ -54,7 +54,17 @@
 //--------------------------------------------------------------------+
 
 
-#ifdef ADAFRUIT_QTPY_RP2040     // if build for QtPy RP2040 board
+#ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
+
+#define DATAIN_PIN      18
+#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
+#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
+#define OUTD1_PIN       27
+#define OUTD2_PIN       28
+#define OUTD3_PIN       29
+
+#else
+#ifdef ADAFRUIT_QTPY_RP2040      // if build for QtPy RP2040 board
 
 #define DATAIN_PIN      24
 #define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
@@ -63,7 +73,8 @@
 #define OUTD2_PIN       28
 #define OUTD3_PIN       29
 
-#elif SEEED_XIAO_RP2040         // else assignments for Seed XIAO RP2040 board - note: needs specific board
+#else
+#ifdef SEEED_XIAO_RP2040         // else assignments for Seed XIAO RP2040 board - note: needs specific board
 
 #define DATAIN_PIN      24
 #define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
@@ -81,6 +92,8 @@
 #define OUTD2_PIN       20
 #define OUTD3_PIN       21
 
+#endif
+#endif
 #endif
 
 void print_greeting(void);

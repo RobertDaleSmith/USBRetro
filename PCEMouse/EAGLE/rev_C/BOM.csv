@@ -1,0 +1,8 @@
+Qty,Designator,Footprint,Comment,LCSC Part # (optional),Description (optional)
+2,"J2, J3",1X13-LONGPADS,Do not mount,Do not mount,Multi connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections
+6,"C1, C2, C3, C4, C5, C6",C0402,100nF 16V,C1525,Samsung CL05B104KO5NNNC 100nF 16V 0402
+2,"C7, C8",C0805,10uF 25V,C15850,Samsung CL21A106KAYNNNE  10uF 25V 0805
+4,"R1, R2, R3, R4",R0402,330R,C25104,Uniroyal Elec  0402WGF3300TCE  0402
+1,U$1,USB-A-TH,912-121A2026S10100,C42425,USB 2.0 1 4 Female Type-A SMD USB Connectors ROHS
+1,J1,MD80SGK,Do not mount,Do not mount,"Circular DIN Connectors mini-DIN, 8P jack, rt, through hole, full shield"
+3,"IC1, IC2, IC3",VSSOP-8_2.0x2.3x0.5P,SN74LVC2T45DCUR,C15741,"2-Bit Bus Transceiver, Translation VSSOP-8_2x2.3x05P SN74LVC2T45DCTR, Voltage Level Translator, Bus Transceiver LVC, 3-State 1.65"
