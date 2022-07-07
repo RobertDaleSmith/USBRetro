@@ -38,8 +38,8 @@ and after about 1 second, all four LEDs should light up briefly as part of the b
 
 ### Compilation
 
-This was built using Pico-SDK version 1.3.0, which may not be the newest version when you read this.
-I needed a special header file for the KB2040 board, as it was released later than SDK 1.3.0.
+This was updated to use Pico-SDK version 1.4.0, which may not be the newest version when you read this.
+The special header file for the KB2040 board is no longer needed (as of SDK 1.3.1).
 
 pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replicated here)
 
