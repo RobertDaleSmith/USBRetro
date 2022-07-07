@@ -33,10 +33,8 @@ and after about 1 second, all four LEDs should light up briefly as part of the b
 
 ### Compilation
 
-This was built using Pico-SDK version 1.3.0, which was just released.  In truth, this had been working with
-pico-sdk 1.2.0 and a special version of TinyUSB as of July 4... but I preferred to wait until a standard
-development environment was available, as I would prefer not to support the development environment itself.
-(Note that several changes to the application source code were required to bring it to the current requirements).
+This was updated to use Pico-SDK version 1.4.0 .
+This was originally built on SDK 1.3.0 (but needed a board definition file to be manually added to the SDK source, which is no longer needed).
 
 pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replicated here)
 
@@ -90,9 +88,7 @@ implementing the state machine (to decide which nybble to return) in the PIO sta
 
 ## Notes
 
-1. I plan to redesign the boards to support the Seeeduino XIAO RP2040, as it is lower-cost than the Adafruit
-board.  It is difficult to say at this time whether either or both of these boards will have sufficient
-availability.
+1. I updated the project some time ago to take advantage of the Adafruit KB2040 board, which breaks out the USB D- and D+
+lines, to allow alternate USB connectors (USB-A are the most common connectors for mice).
 
-2. I am also considering creating a version fo the board using the RP2040 chip directly, and a USB-A connector,
-as 99% of mice use the USB-A connector.
+2. I am also considering creating a version fo the board using the RP2040 chip directly.
