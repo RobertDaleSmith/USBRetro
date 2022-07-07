@@ -132,7 +132,7 @@ int state = 3;          // countdown sequence for shift-register position
 
 static absolute_time_t init_time;
 static absolute_time_t current_time;
-static const absolute_time_t reset_period = 7000;  // at 7000us (7ms), reset the scan exclude flag
+static const int64_t reset_period = 4000;  // at 4000us (4ms), reset the scan exclude flag
 
 PIO pio;
 uint sm1, sm2;   // sm1 = plex; sm2 = clock
@@ -229,7 +229,7 @@ static void __not_in_flash_func(process_signals)(void)
 
 //
 // core1_entry - inner-loop for the second core
-//             - when the "CLR" line is asserted, set lock flag
+//             - when the "CLR" line is de-asserted, set lock flag
 //               protecting the output state machine from inconsistent data
 //
 static void __not_in_flash_func(core1_entry)(void)
@@ -238,7 +238,7 @@ static bool rx_bit = 0;
 
   while (1)
   {
-     // wait for (and sync with) posedge of CLR signal; rx_data is throwaway
+     // wait for (and sync with) negedge of CLR signal; rx_data is throwaway
      rx_bit = pio_sm_get_blocking(pio, sm2);
 
      // Now we are in an update-sequence; set a lock
@@ -253,6 +253,8 @@ static bool rx_bit = 0;
      // Note that when state = zero, it doesn't transition to a next state; the reset to
      // state 3 will happen as part of a timed process on the second CPU & state machine
      //
+     while(gpio_get(DATAIN_PIN) == true);
+
      if (state != 0)
      {
         state--;
@@ -280,6 +282,10 @@ static bool rx_bit = 0;
 int main(void)
 {
   board_init();
+
+  // Pause briefly for stability before starting activity
+  sleep_ms(2000);
+
   printf("TinyUSB Host CDC MSC HID Example\r\n");
 
   tusb_init();

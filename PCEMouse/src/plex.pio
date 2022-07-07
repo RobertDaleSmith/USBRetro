@@ -11,11 +11,11 @@
 ;       to be sent to the OUT pins, based on:
 ;       a) the value of the input SEL line (from joypad)
 ;       b) a counter sent in the ISR, baed on the number of
-;          times the CLR joypad line has gone high in a
+;          times the CLR joypad line has gone low in a
 ;          scanning cycle
 ;
 ; 2) Clocked input, which monitors the CLR joypad line for
-;    low->high transitions, to set the state counter
+;    high->low transitions, to set the state counter
 ; 
 ;
 ; This implements state machine #1
