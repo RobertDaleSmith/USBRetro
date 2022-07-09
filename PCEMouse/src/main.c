@@ -132,7 +132,8 @@ int state = 3;          // countdown sequence for shift-register position
 
 static absolute_time_t init_time;
 static absolute_time_t current_time;
-static const int64_t reset_period = 4000;  // at 4000us (4ms), reset the scan exclude flag
+static absolute_time_t loop_time;
+static const int64_t reset_period = 600;  // at 600us, reset the scan exclude flag
 
 PIO pio;
 uint sm1, sm2;   // sm1 = plex; sm2 = clock
@@ -216,7 +217,7 @@ static void __not_in_flash_func(process_signals)(void)
       output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
       pio_sm_put(pio, sm1, output_word);
       output_exclude = false;
-      init_time = current_time;
+      init_time = get_absolute_time();
     }
 
 #if CFG_TUH_HID
@@ -253,7 +254,18 @@ static bool rx_bit = 0;
      // Note that when state = zero, it doesn't transition to a next state; the reset to
      // state 3 will happen as part of a timed process on the second CPU & state machine
      //
-     while(gpio_get(DATAIN_PIN) == true);
+
+     // Also note that staying in 'scan' (CLK = low, SEL = high), is not expected
+     // last more than about a half of a millisecond
+     //
+     loop_time = get_absolute_time();
+     while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIN_PIN) == 1))
+     {
+        if (absolute_time_diff_us(loop_time, get_absolute_time()) > 550) {
+           state = 0;
+           break;
+        }
+     }
 
      if (state != 0)
      {
@@ -273,6 +285,8 @@ static bool rx_bit = 0;
         output_y = 0;
         output_buttons = global_buttons;
 
+        output_exclude = true;            // continue to lock the output values (which are now zero)
+
         output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
 
      }
@@ -284,7 +298,7 @@ int main(void)
   board_init();
 
   // Pause briefly for stability before starting activity
-  sleep_ms(2000);
+  sleep_ms(1000);
 
   printf("TinyUSB Host CDC MSC HID Example\r\n");
 
