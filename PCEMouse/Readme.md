@@ -88,7 +88,10 @@ implementing the state machine (to decide which nybble to return) in the PIO sta
 
 ## Notes
 
-1. I updated the project some time ago to take advantage of the Adafruit KB2040 board, which breaks out the USB D- and D+
+1. If you would like to enable the functionality to swap mouse buttons when the middle button is pushed (Lemmings'
+buttons are the reverse of what you would expect), uncomment the line in hid_app.c which defines "MID_BUTTON_SWAPPABLE"
+
+2. I updated the project some time ago to take advantage of the Adafruit KB2040 board, which breaks out the USB D- and D+
 lines, to allow alternate USB connectors (USB-A are the most common connectors for mice).
 
-2. I am also considering creating a version fo the board using the RP2040 chip directly.
+3. I am also considering creating a version fo the board using the RP2040 chip directly.

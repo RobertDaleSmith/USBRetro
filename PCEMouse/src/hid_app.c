@@ -48,6 +48,24 @@
 
 #define MAX_REPORT  4
 
+// Uncomment the following line if you desire button-swap when middle button is clicked:
+// #define MID_BUTTON_SWAPPABLE  true
+
+
+
+
+// Button swap functionality
+// -------------------------
+#ifdef MID_BUTTON_SWAPPABLE
+const bool buttons_swappable = true;
+#else
+const bool buttons_swappable = false;
+#endif
+
+static bool buttons_swapped = false;
+
+// Core functionality
+// ------------------
 static uint8_t const keycode2ascii[128][2] =  { HID_KEYCODE_TO_ASCII };
 
 uint8_t buttons;
@@ -234,6 +252,8 @@ static void process_mouse_report(hid_mouse_report_t const * report)
 {
   static hid_mouse_report_t prev_report = { 0 };
 
+  static bool previous_middle_button = false;
+
   //------------- button state  -------------//
   uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
   if ( button_changed_mask & report->buttons)
@@ -244,12 +264,28 @@ static void process_mouse_report(hid_mouse_report_t const * report)
        report->buttons & MOUSE_BUTTON_LEFT      ? '2' : '-',
        report->buttons & MOUSE_BUTTON_MIDDLE    ? 'M' : '-',
        report->buttons & MOUSE_BUTTON_RIGHT     ? '1' : '-');
+
+    if (buttons_swappable && (report->buttons & MOUSE_BUTTON_MIDDLE) &&
+        (previous_middle_button == false))
+       buttons_swapped = (buttons_swapped ? false : true);
+
+    previous_middle_button = (report->buttons & MOUSE_BUTTON_MIDDLE);
   }
 
-  buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x08) |
-             ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x04) |
-             ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x02) |
-             ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x01));
+  if (buttons_swapped)
+  {
+     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x08) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x04) |
+                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x02) |
+                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x01));
+  }
+  else
+  {
+     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x08) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x04) |
+                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x02) |
+                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x01));
+  }
 
   local_x = (0 - report->x);
   local_y = (0 - report->y);
