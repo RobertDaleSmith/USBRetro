@@ -96,6 +96,17 @@
 #endif
 #endif
 
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0') 
+
 void print_greeting(void);
 void led_blinking_task(void);
 
@@ -104,7 +115,7 @@ extern void hid_app_task(void);
 
 int16_t  global_x = 0;
 int16_t  global_y = 0;
-uint8_t  global_buttons = 0x0F;
+uint8_t  global_buttons = 0xFF;
 
 // When PCE reads, set interlock to ensure atomic update
 //
@@ -126,9 +137,9 @@ uint32_t output_word = 0;
 
 int16_t  output_x = 0;
 int16_t  output_y = 0;
-uint8_t  output_buttons = 0x0F;
+uint8_t  output_buttons = 0xFF;
 
-int state = 3;          // countdown sequence for shift-register position
+int state = 0;          // countdown sequence for shift-register position
 
 static absolute_time_t init_time;
 static absolute_time_t current_time;
@@ -168,7 +179,9 @@ void __not_in_flash_func(post_globals)(uint8_t buttons, uint8_t delta_x, uint8_t
      output_y = global_y;
      output_buttons = global_buttons;
 
-     output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
+     output_word = (state << 20) | ((output_buttons & 0xf0) >> 4) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
+     printf("m2: "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN"\r\n",
+      BYTE_TO_BINARY(output_word>>24), BYTE_TO_BINARY(output_word>>16), BYTE_TO_BINARY(output_word>>8), BYTE_TO_BINARY(output_word));
   }
 }
 
@@ -180,7 +193,7 @@ void __not_in_flash_func(post_globals)(uint8_t buttons, uint8_t delta_x, uint8_t
 void __not_in_flash_func(post_to_output)(void)
 {
   if (!output_exclude) {
-     output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
+     output_word = (state << 20) | ((output_buttons & 0xf0) >> 4) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
      pio_sm_put(pio, sm1, output_word);
   }
 }
@@ -213,8 +226,8 @@ static void __not_in_flash_func(process_signals)(void)
     current_time = get_absolute_time();
 
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {
-      state = 3;
-      output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
+      state = 0;
+      output_word = (state << 20) | ((output_buttons & 0xf0) >> 4) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
       pio_sm_put(pio, sm1, output_word);
       output_exclude = false;
       init_time = get_absolute_time();
@@ -287,8 +300,7 @@ static bool rx_bit = 0;
 
         output_exclude = true;            // continue to lock the output values (which are now zero)
 
-        output_word = (state << 20) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
-
+        output_word = (state << 20) | ((output_buttons & 0xf0) >> 4) | ((output_buttons & 0x0f) << 16) | (((output_x>>1) & 0xff) << 8) | ((output_y>>1) & 0xff);
      }
   }
 }
@@ -306,14 +318,15 @@ int main(void)
 
   global_x = 0;
   global_y = 0;
-  global_buttons = 0x0f;
+  global_buttons = 0xff;
 
   output_x = 0;
   output_y = 0;
-  output_buttons = 0x0f;
-  state = 3;
+  output_buttons = 0xff;
+  state = 0;
 
-  output_word = 0x00003F0000;  // state = 3, no buttons pushed, x=0, y=0
+  output_word = 0x00000F000F;  // state = 3, no buttons pushed, x=0, y=0
+
 
   init_time = get_absolute_time();
 
