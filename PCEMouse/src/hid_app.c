@@ -72,7 +72,32 @@ typedef struct TU_ATTR_PACKED
 
 } sony_ds4_report_t;
 
-// 8BitDo PCE 2.4g Controllers
+// 8BitDo USB Adapter for PS classic
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t triangle : 1;
+    uint8_t circle   : 1;
+    uint8_t cross    : 1;
+    uint8_t square   : 1;
+    uint8_t l2       : 1;
+    uint8_t r2       : 1;
+    uint8_t l1       : 1;
+    uint8_t r1       : 1;
+  };
+
+  struct {
+    uint8_t share  : 1;
+    uint8_t option : 1;
+    uint8_t dpad   : 4;
+    uint8_t ps     : 2;
+  };
+
+  uint8_t counter; // +1 each report
+
+} bitdo_psc_report_t;
+
+// 8BitDo USB Adapter for PC Engine 2.4g controllers
 typedef struct TU_ATTR_PACKED
 {
   struct {
@@ -105,12 +130,21 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
 }
 
 // check if device is 8BitDo PCE Controller
-static inline bool is_8bitdo_pce(uint8_t dev_addr)
+static inline bool is_8bit_pce(uint8_t dev_addr)
 {
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   return ((vid == 0x0f0d && pid == 0x0138)); // 8BitDo PCE (wireless)
+}
+
+// check if device is 8BitDo PCE Controller
+static inline bool is_8bit_psc(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x054c && pid == 0x0cda)); // 8BitDo PS classic receiver
 }
 
 //--------------------------------------------------------------------+
@@ -186,7 +220,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isController = is_sony_ds4(dev_addr) || is_8bitdo_pce(dev_addr);
+  bool isController = is_sony_ds4(dev_addr) || is_8bit_pce(dev_addr) || is_8bit_psc(dev_addr);
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
@@ -228,19 +262,35 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
   return result;
 }
 
+bool psc_diff_report(bitdo_psc_report_t const* rpt1, bitdo_psc_report_t const* rpt2)
+{
+  bool result;
+
+  result = rpt1->dpad != rpt2->dpad;
+  result |= rpt1->triangle != rpt2->triangle;
+  result |= rpt1->circle != rpt2->circle;
+  result |= rpt1->square != rpt2->square;
+  result |= rpt1->cross != rpt2->cross;
+  result |= rpt1->r1 != rpt2->r1;
+  result |= rpt1->l1 != rpt2->l1;
+  result |= rpt1->r2 != rpt2->r2;
+  result |= rpt1->l2 != rpt2->l2;
+  result |= rpt1->option != rpt2->option;
+  result |= rpt1->share != rpt2->share;
+  result |= rpt1->ps != rpt2->ps;
+
+  return result;
+}
+
 bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* rpt2)
 {
   bool result;
 
-  // x, y, z, rz must different than 2 to be counted
   result = rpt1->dpad != rpt2->dpad;
   result |= rpt1->sel != rpt2->sel;
   result |= rpt1->run != rpt2->run;
   result |= rpt1->one != rpt2->one;
   result |= rpt1->two != rpt2->two;
-
-  // check the reset with mem compare
-  // result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(bitdo_pce_report_t)-4);
 
   return result;
 }
@@ -304,60 +354,111 @@ void process_sony_ds4(uint8_t const* report, uint16_t len)
                  ((dpad_up)    ? 0x00 : 0x10) |
                  ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x08) |
                  ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x04) |
-                 ((ds4_report.cross)  ? 0x00 : 0x02) |
-                 ((ds4_report.circle) ? 0x00 : 0x01));
+                 ((ds4_report.cross  || ds4_report.triangle)  ? 0x00 : 0x02) |
+                 ((ds4_report.circle || ds4_report.square) ? 0x00 : 0x01));
 
       // local_x = (127 - ds4_report.x);
       // local_y = (127 - ds4_report.y);
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(buttons, local_x, local_y);
+      post_globals(buttons, 0, 0);
     }
 
     prev_report = ds4_report;
   }
 }
 
-void process_8bitdo_pce(uint8_t const* report, uint16_t len)
+void process_8bit_psc(uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static bitdo_psc_report_t prev_report = { 0 };
+
+  bitdo_psc_report_t psc_report;
+  memcpy(&psc_report, report, sizeof(psc_report));
+
+  // counter is +1, assign to make it easier to compare 2 report
+  prev_report.counter = psc_report.counter;
+
+  if ( psc_diff_report(&prev_report, &psc_report) )
+  {
+    printf("DPad = %d ", psc_report.dpad);
+
+    if (psc_report.square   ) printf("Square ");
+    if (psc_report.cross    ) printf("Cross ");
+    if (psc_report.circle   ) printf("Circle ");
+    if (psc_report.triangle ) printf("Triangle ");
+    if (psc_report.l1       ) printf("L1 ");
+    if (psc_report.r1       ) printf("R1 ");
+    if (psc_report.l2       ) printf("L2 ");
+    if (psc_report.r2       ) printf("R2 ");
+    if (psc_report.share    ) printf("Share ");
+    if (psc_report.option   ) printf("Option ");
+    if (psc_report.ps       ) printf("PS ");
+
+    printf("\r\n");
+
+    bool dpad_up    = (psc_report.dpad >= 0 && psc_report.dpad <= 2);
+    bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
+    bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
+    bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
+
+    buttons = ( ((dpad_left)         ? 0x00 : 0x80) |
+                ((dpad_down)         ? 0x00 : 0x40) |
+                ((dpad_right)        ? 0x00 : 0x20) |
+                ((dpad_up)           ? 0x00 : 0x10) |
+                ((psc_report.option || psc_report.ps)  ? 0x00 : 0x08) |
+                ((psc_report.share  || psc_report.ps) ? 0x00 : 0x04) |
+                ((psc_report.cross  || (psc_report.triangle && !psc_report.ps))  ? 0x00 : 0x02) |
+                ((psc_report.circle || psc_report.square) ? 0x00 : 0x01));
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(buttons, 0, 0);
+  }
+
+  prev_report = psc_report;
+}
+
+void process_8bit_pce(uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_pce_report_t prev_report = { 0 };
 
-    bitdo_pce_report_t pce_report;
-    memcpy(&pce_report, report, sizeof(pce_report));
+  bitdo_pce_report_t pce_report;
+  memcpy(&pce_report, report, sizeof(pce_report));
 
-    if ( pce_diff_report(&prev_report, &pce_report) )
-    {
-      printf("DPad = %s ", dpad_str[pce_report.dpad]);
+  if ( pce_diff_report(&prev_report, &pce_report) )
+  {
+    printf("DPad = %s ", dpad_str[pce_report.dpad]);
 
-      if (pce_report.sel) printf("Select ");
-      if (pce_report.run) printf("Run ");
-      if (pce_report.one) printf("I ");
-      if (pce_report.two) printf("II ");
+    if (pce_report.sel) printf("Select ");
+    if (pce_report.run) printf("Run ");
+    if (pce_report.one) printf("I ");
+    if (pce_report.two) printf("II ");
 
-      printf("\r\n");
+    printf("\r\n");
 
-      bool dpad_up    = (pce_report.dpad == 0 || pce_report.dpad == 1 || pce_report.dpad == 7);
-      bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);
-      bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
-      bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
+    bool dpad_up    = (pce_report.dpad == 0 || pce_report.dpad == 1 || pce_report.dpad == 7);
+    bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);
+    bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
+    bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
 
-      buttons = (((dpad_left)      ? 0x00 : 0x80) |
-                 ((dpad_down)      ? 0x00 : 0x40) |
-                 ((dpad_right)     ? 0x00 : 0x20) |
-                 ((dpad_up)        ? 0x00 : 0x10) |
-                 ((pce_report.run) ? 0x00 : 0x08) |
-                 ((pce_report.sel) ? 0x00 : 0x04) |
-                 ((pce_report.two) ? 0x00 : 0x02) |
-                 ((pce_report.one) ? 0x00 : 0x01));
+    buttons = ( ((dpad_left)      ? 0x00 : 0x80) |
+                ((dpad_down)      ? 0x00 : 0x40) |
+                ((dpad_right)     ? 0x00 : 0x20) |
+                ((dpad_up)        ? 0x00 : 0x10) |
+                ((pce_report.run) ? 0x00 : 0x08) |
+                ((pce_report.sel) ? 0x00 : 0x04) |
+                ((pce_report.two) ? 0x00 : 0x02) |
+                ((pce_report.one) ? 0x00 : 0x01));
 
-      // add to accumulator and post to the state machine
-      // if a scan from the host machine is ongoing, wait
-      post_globals(buttons, 0, 0);
-    }
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(buttons, 0, 0);
+  }
 
-    prev_report = pce_report;
+  prev_report = pce_report;
 }
 
 // Invoked when received report from device via interrupt endpoint
@@ -378,14 +479,9 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     break;
 
     default:
-      if ( is_sony_ds4(dev_addr) )
-      {
-        process_sony_ds4(report, len);
-      }
-      else if ( is_8bitdo_pce(dev_addr) )
-      {
-        process_8bitdo_pce(report, len);
-      }
+      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(report, len);
+      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(report, len);
+      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
