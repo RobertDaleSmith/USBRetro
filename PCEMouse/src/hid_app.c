@@ -189,10 +189,10 @@ static struct
 }hid_info[CFG_TUH_HID];
 
 static void process_kbd_report(hid_keyboard_report_t const *report);
-static void process_mouse_report(hid_mouse_report_t const * report);
+static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_t delta_x, uint8_t delta_y);
 
 void hid_app_task(void)
 {
@@ -295,7 +295,7 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
   return result;
 }
 
-void process_sony_ds4(uint8_t const* report, uint16_t len)
+void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds4_report_t prev_report = { 0 };
@@ -348,28 +348,28 @@ void process_sony_ds4(uint8_t const* report, uint16_t len)
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.x > (128 + threshold));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
 
-      buttons = (((dpad_left)  ? 0x00 : 0x80) |
-                 ((dpad_down)  ? 0x00 : 0x40) |
-                 ((dpad_right) ? 0x00 : 0x20) |
-                 ((dpad_up)    ? 0x00 : 0x10) |
-                 ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x08) |
-                 ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x04) |
-                 ((ds4_report.cross  || ds4_report.triangle)  ? 0x00 : 0x02) |
-                 ((ds4_report.circle || ds4_report.square) ? 0x00 : 0x01));
+      buttons = (((dpad_left)  ? 0x00 : 0x08) |
+                 ((dpad_down)  ? 0x00 : 0x04) |
+                 ((dpad_right) ? 0x00 : 0x02) |
+                 ((dpad_up)    ? 0x00 : 0x01) |
+                 ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x80) |
+                 ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x40) |
+                 ((ds4_report.cross  || ds4_report.triangle)  ? 0x00 : 0x20) |
+                 ((ds4_report.circle || ds4_report.square) ? 0x00 : 0x10));
 
       // local_x = (127 - ds4_report.x);
       // local_y = (127 - ds4_report.y);
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(buttons, 0, 0);
+      post_globals(dev_addr, buttons, 0, 0);
     }
 
     prev_report = ds4_report;
   }
 }
 
-void process_8bit_psc(uint8_t const* report, uint16_t len)
+void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_psc_report_t prev_report = { 0 };
@@ -403,24 +403,24 @@ void process_8bit_psc(uint8_t const* report, uint16_t len)
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
 
-    buttons = ( ((dpad_left)         ? 0x00 : 0x80) |
-                ((dpad_down)         ? 0x00 : 0x40) |
-                ((dpad_right)        ? 0x00 : 0x20) |
-                ((dpad_up)           ? 0x00 : 0x10) |
-                ((psc_report.option || psc_report.ps)  ? 0x00 : 0x08) |
-                ((psc_report.share  || psc_report.ps) ? 0x00 : 0x04) |
-                ((psc_report.cross  || (psc_report.triangle && !psc_report.ps))  ? 0x00 : 0x02) |
-                ((psc_report.circle || psc_report.square) ? 0x00 : 0x01));
+    buttons = ( ((dpad_left)         ? 0x00 : 0x08) |
+                ((dpad_down)         ? 0x00 : 0x04) |
+                ((dpad_right)        ? 0x00 : 0x02) |
+                ((dpad_up)           ? 0x00 : 0x01) |
+                ((psc_report.option || psc_report.ps)  ? 0x00 : 0x80) |
+                ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
+                ((psc_report.cross  || (psc_report.triangle && !psc_report.ps))  ? 0x00 : 0x20) |
+                ((psc_report.circle || psc_report.square) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(buttons, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0);
   }
 
   prev_report = psc_report;
 }
 
-void process_8bit_pce(uint8_t const* report, uint16_t len)
+void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_pce_report_t prev_report = { 0 };
@@ -444,18 +444,18 @@ void process_8bit_pce(uint8_t const* report, uint16_t len)
     bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
     bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
 
-    buttons = ( ((dpad_left)      ? 0x00 : 0x80) |
-                ((dpad_down)      ? 0x00 : 0x40) |
-                ((dpad_right)     ? 0x00 : 0x20) |
-                ((dpad_up)        ? 0x00 : 0x10) |
-                ((pce_report.run) ? 0x00 : 0x08) |
-                ((pce_report.sel) ? 0x00 : 0x04) |
-                ((pce_report.two) ? 0x00 : 0x02) |
-                ((pce_report.one) ? 0x00 : 0x01));
+    buttons = ( ((dpad_left)      ? 0x00 : 0x08) |
+                ((dpad_down)      ? 0x00 : 0x04) |
+                ((dpad_right)     ? 0x00 : 0x02) |
+                ((dpad_up)        ? 0x00 : 0x01) |
+                ((pce_report.run) ? 0x00 : 0x80) |
+                ((pce_report.sel) ? 0x00 : 0x40) |
+                ((pce_report.two) ? 0x00 : 0x20) |
+                ((pce_report.one) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(buttons, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0);
   }
 
   prev_report = pce_report;
@@ -475,13 +475,13 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
     case HID_ITF_PROTOCOL_MOUSE:
       TU_LOG2("HID receive boot mouse report\r\n");
-      process_mouse_report( (hid_mouse_report_t const*) report );
+      process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
     break;
 
     default:
-      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(report, len);
-      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(report, len);
-      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(report, len);
+      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, report, len);
+      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
+      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
@@ -583,7 +583,7 @@ uint8_t x1, y1;
 #endif
 }
 
-static void process_mouse_report(hid_mouse_report_t const * report)
+static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report)
 {
   static hid_mouse_report_t prev_report = { 0 };
 
@@ -609,17 +609,17 @@ static void process_mouse_report(hid_mouse_report_t const * report)
 
   if (buttons_swapped)
   {
-     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x08) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x04) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x02) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x01));
+     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
+                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
+                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x10));
   }
   else
   {
-     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x08) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x04) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x02) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x01));
+     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
+                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
+                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
   }
 
   local_x = (0 - report->x);
@@ -627,7 +627,7 @@ static void process_mouse_report(hid_mouse_report_t const * report)
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(buttons, local_x, local_y);
+  post_globals(dev_addr, buttons, local_x, local_y);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel);
@@ -693,7 +693,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       case HID_USAGE_DESKTOP_MOUSE:
         TU_LOG1("HID receive mouse report\r\n");
         // Assume mouse follow boot report layout
-        process_mouse_report( (hid_mouse_report_t const*) report );
+        process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
       break;
 
       default: break;

@@ -13,14 +13,14 @@
 ;    high->low transitions, to set the state counter
 ;    
 ; 
-; This file (clock.pio) implements State Machine #2
+; This file (select.pio) implements State Machine #3
 ; -------------------------------------------------
 ;
 ; NOTE: when connected directly to PC Engine, the clock signal is a very short low-high-low signal;
 ;       but when connected via multitap, the clock signal is always high except when that port is active
 ;
 
-.program clock
+.program select
 
 ; Sample bits using an external clock (falling edge), and push groups of bits into the RX FIFO.
 ; - IN pin 0 is the clock pin (and also the pin with data)
@@ -29,16 +29,15 @@
 ; This program samples data with each falling clock edge,
 ;  with no wait for data to settle
 
-clklp:
+sellp:
     wait 1 pin 0
-    irq 7
     wait 0 pin 0
-    in pins, 1
-    jmp clklp
+    irq 7
+    jmp sellp
 
 % c-sdk {
-static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin) {
-    pio_sm_config c = clock_program_get_default_config(offset);
+static inline void select_program_init(PIO pio, uint sm, uint offset, uint inpin) {
+    pio_sm_config c = select_program_get_default_config(offset);
 
     // Set the IN base pin to the provided `pin` parameter. This is the data
     // pin, and the next-numbered GPIO is used as the clock pin.

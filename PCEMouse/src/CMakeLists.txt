@@ -20,6 +20,7 @@ pico_add_extra_outputs(pcemouse)
 
 pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/plex.pio )
 pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/clock.pio )
+pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/select.pio )
 
 
 # Example source

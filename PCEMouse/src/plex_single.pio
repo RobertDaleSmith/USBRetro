@@ -21,43 +21,46 @@
 ; This implements state machine #1
 ;
 ; Structure of the word sent to the FIFO from the ARM:
-; |P4__BYTE|P3__BYTE|P2__BYTE|P1__BYTE
+; |00000000|00ssbbbb|xxxxxxxx|yyyyyyyy
 ; Where:
-;  - Pn__BYTE = 8 bit button values, arranged in
-;    Run/Sel/II/I/Left/Down/Right/Up sequence for PC Engine use
+;  - 0 = must be zero
+;  - s = state (which nybble to output, 3/2/1/0)
+;  - b = button values, arranged in Run/Sel/II/I sequence for PC Engine use
+;  - x = mouse 'x' movement; left is {1 - 0x7F} ; right is {0xFF - 0x80 }
+;  - y = mouse 'y' movement;  up  is {1 - 0x7F} ; down  is {0xFF - 0x80 }
 ;
 ;
 
 .program plex
 
-clr:
-     set   y, 3     ; count 4-player output bytes
-     pull  block	; if a value was sent, refresh (leave in x otherwise)
-     mov   x, osr   ; the current value will remain in x
-     wait  0 pin 1
+loop:
+     pull  noblock	; if a value was sent, refresh (leave in x otherwise)
+     mov   x, osr	; the current value will remain in x
 
-sel:
-     wait  1 pin 0  ; wait for SEL high
-     out   PINS, 4  ; output dpad | x/y nybbles
+     jmp   PIN, x_y	; SEL pin from joypad input (jump if SEL = '1')
+     out   NULL, 16	; buttons: we will remove the least-significant 4 nybbles
+     jmp   exitnul
 
-     wait  irq 7    ; wait for SEL low or CLR high
-     jmp   PIN, clr ; clear to player 1 if CLR high
+x_y:
+     out   NULL, 20	; 
+     mov   y, osr	; check current nybble based on down-counter of CLR signals
+     mov   osr, x	; 
 
-     out   PINS, 4  ; output buttons
-     jmp   y--, sel ; output next player byte
+nulloop:
+     jmp   !y, exitnul	; if y==0 at beginning, leave loop
+     out   NULL, 4       ; otherwise, lose a nybble
+     jmp   y--, nulloop
 
-     set   y, 0     ; output 0x00ff for player 5
-     mov   osr, ~y  ;
-     out   NULL, 24
-     set   y, 1     ;
-     jmp   sel
+exitnul:
+     out   PINS, 4	; send the nybble to the OUT pins
+     jmp   loop 
+     
 
 % c-sdk {
-static inline void plex_program_init(PIO pio, uint sm, uint offset, uint inpin, uint jmppin, uint outpin) {
+static inline void plex_program_init(PIO pio, uint sm, uint offset, uint jmppin, uint outpin) {
     pio_sm_config c = plex_program_get_default_config(offset);
 
     // Connect these GPIOs to this PIO block
-    pio_gpio_init(pio, inpin);
     pio_gpio_init(pio, jmppin);
 
     pio_gpio_init(pio, outpin);
@@ -76,16 +79,11 @@ static inline void plex_program_init(PIO pio, uint sm, uint offset, uint inpin, 
     // Set the pin directions to output at the PIO
     pio_sm_set_consecutive_pindirs(pio, sm, outpin, 4, true);
 
-    sm_config_set_in_pins(&c, inpin);
-
-    // Set the pin directions to input at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, inpin, 2, false);
-
     sm_config_set_out_shift(
         &c,
         true,  // Shift-to-right = true
         false, // Autopull disabled
-        32     // Autopull threshold = 31
+        31     // Autopull threshold = 31
     );
 
     // Load our configuration, and start the program from the beginning
