@@ -105,11 +105,11 @@ extern void hid_app_task(void);
 
 typedef struct TU_ATTR_PACKED
 {
-  uint8_t global_buttons;
+  int16_t global_buttons;
   int16_t global_x;
   int16_t global_y;
 
-  uint8_t output_buttons;
+  int16_t output_buttons;
   int16_t output_x;
   int16_t output_y;
 } Player_t;
@@ -161,23 +161,33 @@ void __not_in_flash_func(update_output)(void)
 
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
+    bool is6Btns = !(players[i].output_buttons & 0x0f00);
+    bool isMouse = !(players[i].output_buttons & 0x0f);
+
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
 
+    // 6 button extra four buttons (III/IV/V/VI)
+    if (is6Btns && (state == 2)) {
+      byte = ((players[i].output_buttons>>8) & 0xf0);
+    }
+
     // mouse x/y states
-    switch (state) {
-      case 3: // state 3: x most significant nybble
-        byte |= (((players[i].output_x>>1) & 0xf0) >> 4);
-        break;
-      case 2: // state 2: x least significant nybble
-        byte |= (((players[i].output_x>>1) & 0x0f));
-        break;
-      case 1: // state 1: y most significant nybble
-        byte |= (((players[i].output_y>>1) & 0xf0) >> 4);
-        break;
-      case 0: // state 0: y least significant nybble
-        byte |= (((players[i].output_y>>1) & 0x0f));
-        break;
+    if (isMouse) {
+      switch (state) {
+        case 3: // state 3: x most significant nybble
+          byte |= (((players[i].output_x>>1) & 0xf0) >> 4);
+          break;
+        case 2: // state 2: x least significant nybble
+          byte |= (((players[i].output_x>>1) & 0x0f));
+          break;
+        case 1: // state 1: y most significant nybble
+          byte |= (((players[i].output_y>>1) & 0xf0) >> 4);
+          break;
+        case 0: // state 0: y least significant nybble
+          byte |= (((players[i].output_y>>1) & 0x0f));
+          break;
+      }
     }
 
     bytes[i] = byte;
@@ -194,9 +204,9 @@ void __not_in_flash_func(update_output)(void)
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_t delta_x, uint8_t delta_y)
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
-  bool isMouse = !(buttons & 0x0f);
+  bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
 
   if (delta_x >= 128) 
     players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
@@ -358,10 +368,10 @@ int main(void)
 
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
-    players[i].global_buttons = 0xFF;
+    players[i].global_buttons = 0xFFFF;
     players[i].global_x = 0;
     players[i].global_y = 0;
-    players[i].output_buttons = 0xFF;
+    players[i].output_buttons = 0xFFFF;
     players[i].output_x = 0;
     players[i].output_y = 0;
   }
