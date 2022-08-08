@@ -196,6 +196,8 @@ void __not_in_flash_func(update_output)(void)
 //
 void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
+  bool isMouse = !(buttons & 0x0f);
+
   if (delta_x >= 128) 
     players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
   else
@@ -208,7 +210,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_
 
   players[dev_addr-1].global_buttons = buttons;
 
-  if (!output_exclude)
+  if (!output_exclude || !isMouse)
   {
      players[dev_addr-1].output_x = players[dev_addr-1].global_x;
      players[dev_addr-1].output_y = players[dev_addr-1].global_y;
