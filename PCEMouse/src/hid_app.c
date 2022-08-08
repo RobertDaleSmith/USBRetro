@@ -177,7 +177,7 @@ static bool buttons_swapped = false;
 // ------------------
 static uint8_t const keycode2ascii[128][2] =  { HID_KEYCODE_TO_ASCII };
 
-uint8_t buttons;
+uint16_t buttons;
 uint8_t local_x;
 uint8_t local_y;
 
@@ -192,7 +192,7 @@ static void process_kbd_report(hid_keyboard_report_t const *report);
 static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 
 void hid_app_task(void)
 {
@@ -345,20 +345,23 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 ||
                          ds4_report.dpad == 7 || ds4_report.y < (128 - threshold));
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
-      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.x > (128 + threshold));
+      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
+      bool is6btn = true;
 
-      buttons = (((dpad_left)  ? 0x00 : 0x08) |
-                 ((dpad_down)  ? 0x00 : 0x04) |
-                 ((dpad_right) ? 0x00 : 0x02) |
-                 ((dpad_up)    ? 0x00 : 0x01) |
+      buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
+                 ((ds4_report.l1)       ? 0x00 : 0x4000) |
+                 ((ds4_report.square)   ? 0x00 : 0x2000) |
+                 ((ds4_report.triangle) ? 0x00 : 0x1000) |
+                 ((is6btn)              ? 0x00 : 0xFF00) |
+                 ((dpad_left)           ? 0x00 : 0x08) |
+                 ((dpad_down)           ? 0x00 : 0x04) |
+                 ((dpad_right)          ? 0x00 : 0x02) |
+                 ((dpad_up)             ? 0x00 : 0x01) |
                  ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x80) |
                  ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x40) |
-                 ((ds4_report.cross  || ds4_report.triangle)  ? 0x00 : 0x20) |
-                 ((ds4_report.circle || ds4_report.square) ? 0x00 : 0x10));
-
-      // local_x = (127 - ds4_report.x);
-      // local_y = (127 - ds4_report.y);
+                 ((ds4_report.cross  || (!is6btn && ds4_report.triangle)) ? 0x00 : 0x20) |
+                 ((ds4_report.circle || (!is6btn && ds4_report.square))   ? 0x00 : 0x10));
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
@@ -402,15 +405,21 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
+    bool is6btn = true;
 
-    buttons = ( ((dpad_left)         ? 0x00 : 0x08) |
-                ((dpad_down)         ? 0x00 : 0x04) |
-                ((dpad_right)        ? 0x00 : 0x02) |
-                ((dpad_up)           ? 0x00 : 0x01) |
-                ((psc_report.option || psc_report.ps)  ? 0x00 : 0x80) |
-                ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
-                ((psc_report.cross  || (psc_report.triangle && !psc_report.ps))  ? 0x00 : 0x20) |
-                ((psc_report.circle || psc_report.square) ? 0x00 : 0x10));
+    buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
+               ((psc_report.l1)       ? 0x00 : 0x4000) |
+               ((psc_report.square)   ? 0x00 : 0x2000) |
+               ((psc_report.triangle) ? 0x00 : 0x1000) |
+               ((is6btn)              ? 0x00 : 0xFF00) |
+               ((dpad_left)           ? 0x00 : 0x08) |
+               ((dpad_down)           ? 0x00 : 0x04) |
+               ((dpad_right)          ? 0x00 : 0x02) |
+               ((dpad_up)             ? 0x00 : 0x01) |
+               ((psc_report.option || psc_report.ps) ? 0x00 : 0x80) |
+               ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
+               ((psc_report.cross  || (!is6btn && psc_report.triangle && !psc_report.ps)) ? 0x00 : 0x20) |
+               ((psc_report.circle || (!is6btn && psc_report.square)) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -443,15 +452,17 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);
     bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
     bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
+    bool is6btn = false;
 
-    buttons = ( ((dpad_left)      ? 0x00 : 0x08) |
-                ((dpad_down)      ? 0x00 : 0x04) |
-                ((dpad_right)     ? 0x00 : 0x02) |
-                ((dpad_up)        ? 0x00 : 0x01) |
-                ((pce_report.run) ? 0x00 : 0x80) |
-                ((pce_report.sel) ? 0x00 : 0x40) |
-                ((pce_report.two) ? 0x00 : 0x20) |
-                ((pce_report.one) ? 0x00 : 0x10));
+    buttons = (((0xFF00)) |
+               ((dpad_left)      ? 0x00 : 0x08) |
+               ((dpad_down)      ? 0x00 : 0x04) |
+               ((dpad_right)     ? 0x00 : 0x02) |
+               ((dpad_up)        ? 0x00 : 0x01) |
+               ((pce_report.run) ? 0x00 : 0x80) |
+               ((pce_report.sel) ? 0x00 : 0x40) |
+               ((pce_report.two) ? 0x00 : 0x20) |
+               ((pce_report.one) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -609,14 +620,16 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
 
   if (buttons_swapped)
   {
-     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+     buttons = (((0xFF00)) | // no six button controller byte
+                ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x10));
   }
   else
   {
-     buttons = (((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+     buttons = (((0xFF00)) |
+                ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
