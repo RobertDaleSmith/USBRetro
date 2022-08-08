@@ -116,7 +116,6 @@ typedef struct TU_ATTR_PACKED
 
 Player_t players[5] = { 0 };
 
-int8_t getOutputXy(int state, int16_t output_x, int16_t output_y);
 
 // When PCE reads, set interlock to ensure atomic update
 //
@@ -153,6 +152,45 @@ uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
 //
 
 //
+// update_output - updates output_word with multi-tap plex data that
+//                 is sent to PCE based on state and device types
+//
+void __not_in_flash_func(update_output)(void)
+{
+  int8_t bytes[5] = { 0 };
+
+  unsigned short int i;
+  for (i = 0; i < 5; ++i) {
+    // base controller/mouse buttons
+    int8_t byte = (players[i].output_buttons & 0xff);
+
+    // mouse x/y states
+    switch (state) {
+      case 3: // state 3: x most significant nybble
+        byte |= (((players[i].output_x>>1) & 0xf0) >> 4);
+        break;
+      case 2: // state 2: x least significant nybble
+        byte |= (((players[i].output_x>>1) & 0x0f));
+        break;
+      case 1: // state 1: y most significant nybble
+        byte |= (((players[i].output_y>>1) & 0xf0) >> 4);
+        break;
+      case 0: // state 0: y least significant nybble
+        byte |= (((players[i].output_y>>1) & 0x0f));
+        break;
+    }
+
+    bytes[i] = byte;
+  }
+
+  output_word = (bytes[0])      | // player 1
+                (bytes[1] << 8) | // player 2
+                (bytes[2] << 16)| // player 3
+                (bytes[3] << 24); // player 4
+}
+
+
+//
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
@@ -176,11 +214,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_
      players[dev_addr-1].output_y = players[dev_addr-1].global_y;
      players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
 
-     output_word = ((players[0].output_buttons & 0xff)) |
-                   ((getOutputXy(state, players[0].output_x, players[0].output_y) & 0x0f)) |
-                   ((players[1].output_buttons & 0xff) << 8) |
-                   ((players[2].output_buttons & 0xff) << 16) |
-                   ((players[3].output_buttons & 0xff) << 24);
+     update_output();
   }
 }
 
@@ -192,11 +226,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t buttons, uint8_
 void __not_in_flash_func(post_to_output)(void)
 {
   if (!output_exclude) {
-     output_word = ((players[0].output_buttons & 0xff)) |
-                   ((getOutputXy(state, players[0].output_x, players[0].output_y) & 0x0f)) |
-                   ((players[1].output_buttons & 0xff) << 8) |
-                   ((players[2].output_buttons & 0xff) << 16) |
-                   ((players[3].output_buttons & 0xff) << 24);
+     update_output();
      pio_sm_put(pio, sm1, output_word);
   }
 }
@@ -230,12 +260,7 @@ static void __not_in_flash_func(process_signals)(void)
 
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {
       state = 3;
-      output_word = ((players[0].output_buttons & 0xff)) |
-                    ((getOutputXy(state, players[0].output_x, players[0].output_y) & 0x0f)) |
-                    ((players[1].output_buttons & 0xff) << 8) |
-                    ((players[2].output_buttons & 0xff) << 16) |
-                    ((players[3].output_buttons & 0xff) << 24);
-      // pio_sm_clear_fifos(pio, sm1);
+      update_output();
       // pio_sm_put(pio, sm1, output_word);
       output_exclude = false;
       init_time = get_absolute_time();
@@ -248,6 +273,7 @@ static void __not_in_flash_func(process_signals)(void)
     // post_to_output();
   }
 }
+
 
 //
 // core1_entry - inner-loop for the second core
@@ -291,22 +317,14 @@ static bool rx_bit = 0;
      if (state != 0)
      {
         state--;
-        output_word = ((players[0].output_buttons & 0xff)) |
-                      ((getOutputXy(state, players[0].output_x, players[0].output_y) & 0x0f)) |
-                      ((players[1].output_buttons & 0xff) << 8) |
-                      ((players[2].output_buttons & 0xff) << 16) |
-                      ((players[3].output_buttons & 0xff) << 24);
+        update_output();
 
         // renew countdown timeframe
         init_time = get_absolute_time();
      }
      else
      {
-        output_word = ((players[0].output_buttons & 0xff)) |
-                      ((getOutputXy(state, players[0].output_x, players[0].output_y) & 0x0f)) |
-                      ((players[1].output_buttons & 0xff) << 8) |
-                      ((players[2].output_buttons & 0xff) << 16) |
-                      ((players[3].output_buttons & 0xff) << 24);
+        update_output();
 
         unsigned short int i;
         for (i = 0; i < 5; ++i) {
@@ -442,20 +460,4 @@ void led_blinking_task(void)
 
   board_led_write(led_state);
   led_state = 1 - led_state; // toggle
-}
-
-int8_t getOutputXy(int state, int16_t output_x, int16_t output_y) {
-  switch (state) {
-    case 3: // x: f0
-      return (((output_x>>1) & 0xf0) >> 4);
-      break;
-    case 2: // x: 0f
-      return (((output_x>>1) & 0x0f));
-      break;
-    case 1: // y: f0
-      return (((output_y>>1) & 0xf0) >> 4);
-    case 0: // y: 0f
-      return (((output_y>>1) & 0x0f));
-      break;
-  }
 }
