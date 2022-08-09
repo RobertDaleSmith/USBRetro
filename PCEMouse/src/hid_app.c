@@ -298,7 +298,7 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
 void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static sony_ds4_report_t prev_report = { 0 };
+  static sony_ds4_report_t prev_report[5] = { 0 };
 
   uint8_t const report_id = report[0];
   report++;
@@ -311,12 +311,12 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     memcpy(&ds4_report, report, sizeof(ds4_report));
 
     // counter is +1, assign to make it easier to compare 2 report
-    prev_report.counter = ds4_report.counter;
+    prev_report[dev_addr-1].counter = ds4_report.counter;
 
     // only print if changes since it is polled ~ 5ms
     // Since count+1 after each report and  x, y, z, rz fluctuate within 1 or 2
     // We need more than memcmp to check if report is different enough
-    if ( ds4_diff_report(&prev_report, &ds4_report) )
+    if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
       printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
       printf("DPad = %s ", dpad_str[ds4_report.dpad]);
@@ -368,22 +368,22 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       post_globals(dev_addr, buttons, 0, 0);
     }
 
-    prev_report = ds4_report;
+    prev_report[dev_addr-1] = ds4_report;
   }
 }
 
 void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static bitdo_psc_report_t prev_report = { 0 };
+  static bitdo_psc_report_t prev_report[5] = { 0 };
 
   bitdo_psc_report_t psc_report;
   memcpy(&psc_report, report, sizeof(psc_report));
 
   // counter is +1, assign to make it easier to compare 2 report
-  prev_report.counter = psc_report.counter;
+  prev_report[dev_addr-1].counter = psc_report.counter;
 
-  if ( psc_diff_report(&prev_report, &psc_report) )
+  if ( psc_diff_report(&prev_report[dev_addr-1], &psc_report) )
   {
     printf("DPad = %d ", psc_report.dpad);
 
@@ -426,18 +426,18 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     post_globals(dev_addr, buttons, 0, 0);
   }
 
-  prev_report = psc_report;
+  prev_report[dev_addr-1] = psc_report;
 }
 
 void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static bitdo_pce_report_t prev_report = { 0 };
+  static bitdo_pce_report_t prev_report[5] = { 0 };
 
   bitdo_pce_report_t pce_report;
   memcpy(&pce_report, report, sizeof(pce_report));
 
-  if ( pce_diff_report(&prev_report, &pce_report) )
+  if ( pce_diff_report(&prev_report[dev_addr-1], &pce_report) )
   {
     printf("DPad = %s ", dpad_str[pce_report.dpad]);
 
@@ -469,7 +469,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     post_globals(dev_addr, buttons, 0, 0);
   }
 
-  prev_report = pce_report;
+  prev_report[dev_addr-1] = pce_report;
 }
 
 // Invoked when received report from device via interrupt endpoint

@@ -193,10 +193,10 @@ void __not_in_flash_func(update_output)(void)
     bytes[i] = byte;
   }
 
-  output_word = (bytes[0])      | // player 1
-                (bytes[1] << 8) | // player 2
-                (bytes[2] << 16)| // player 3
-                (bytes[3] << 24); // player 4
+  output_word = ((bytes[0] & 0xff))      | // player 1
+                ((bytes[1] & 0xff) << 8) | // player 2
+                ((bytes[2] & 0xff) << 16)| // player 3
+                ((bytes[3] & 0xff) << 24); // player 4
 }
 
 
