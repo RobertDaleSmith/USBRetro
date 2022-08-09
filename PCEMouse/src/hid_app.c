@@ -188,7 +188,7 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
 }hid_info[CFG_TUH_HID];
 
-static void process_kbd_report(hid_keyboard_report_t const *report);
+static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report);
 static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
@@ -481,7 +481,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
       TU_LOG2("HID receive boot keyboard report\r\n");
-      process_kbd_report( (hid_keyboard_report_t const*) report );
+      process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
@@ -522,20 +522,39 @@ static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8
   return false;
 }
 
-static void process_kbd_report(hid_keyboard_report_t const *report)
+static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report)
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
+
+  bool is6btn = false;
+  bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
+    btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
+    btns_three = false, btns_four = false, btns_five = false, btns_six = false;
 
   //------------- example code ignore control (non-printable) key affects -------------//
   for(uint8_t i=0; i<6; i++)
   {
     if ( report->keycode[i] )
     {
+      if (report->keycode[i] == 40) btns_run = true; // Enter
+      if (report->keycode[i] == 41) btns_sel = true; // ESC
+      if (report->keycode[i] == 26 || report->keycode[i] == 82) dpad_up = true; // W or Arrow
+      if (report->keycode[i] == 4  || report->keycode[i] == 80) dpad_left = true; // A or Arrow
+      if (report->keycode[i] == 22 || report->keycode[i] == 81) dpad_down = true; // S or Arrow
+      if (report->keycode[i] == 7  || report->keycode[i] == 79) dpad_right = true; // D or Arrow
+      if (report->keycode[i] == 89) btns_one = true;
+      if (report->keycode[i] == 90) btns_two = true;
+      if (report->keycode[i] == 91) btns_three = true;
+      if (report->keycode[i] == 92) btns_four = true;
+      if (report->keycode[i] == 93) btns_five = true;
+      if (report->keycode[i] == 94) btns_six = true;
+
       if ( find_key_in_report(&prev_report, report->keycode[i]) )
       {
         // exist in previous report means the current key is holding
       }else
       {
+        // printf("keycode(%d)\r\n", report->keycode[i]);
         // not existed in previous report means the current key is pressed
         bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
         uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
@@ -547,6 +566,21 @@ static void process_kbd_report(hid_keyboard_report_t const *report)
     }
     // TODO example skips key released
   }
+
+  buttons = (((btns_six)   ? 0x00 : 0x8000) |
+             ((btns_five)  ? 0x00 : 0x4000) |
+             ((btns_four)  ? 0x00 : 0x2000) |
+             ((btns_three) ? 0x00 : 0x1000) |
+             ((is6btn)     ? 0x00 : 0xFF00) |
+             ((dpad_left)  ? 0x00 : 0x0008) |
+             ((dpad_down)  ? 0x00 : 0x0004) |
+             ((dpad_right) ? 0x00 : 0x0002) |
+             ((dpad_up)    ? 0x00 : 0x0001) |
+             ((btns_run)   ? 0x00 : 0x0080) |
+             ((btns_sel)   ? 0x00 : 0x0040) |
+             ((btns_two)   ? 0x00 : 0x0020) |
+             ((btns_one)   ? 0x00 : 0x0010));
+  post_globals(dev_addr, buttons, 0, 0);
 
   prev_report = *report;
 }
@@ -700,7 +734,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       case HID_USAGE_DESKTOP_KEYBOARD:
         TU_LOG1("HID receive keyboard report\r\n");
         // Assume keyboard follow boot report layout
-        process_kbd_report( (hid_keyboard_report_t const*) report );
+        process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
       break;
 
       case HID_USAGE_DESKTOP_MOUSE:
