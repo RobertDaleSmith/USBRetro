@@ -25,6 +25,8 @@ pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/select.pio )
 
 # Example source
 target_sources(pcemouse PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/xinput_host.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/main.c
         ${CMAKE_CURRENT_SOURCE_DIR}/msc_app.c
