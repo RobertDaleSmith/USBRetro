@@ -347,7 +347,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
-      bool is6btn = true;
+      bool is6btn = false;
 
       buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
                  ((ds4_report.l1)       ? 0x00 : 0x4000) |
@@ -405,7 +405,7 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
-    bool is6btn = true;
+    bool is6btn = false;
 
     buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
                ((psc_report.l1)       ? 0x00 : 0x4000) |
