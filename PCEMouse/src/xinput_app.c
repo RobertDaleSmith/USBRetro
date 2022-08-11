@@ -58,10 +58,10 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x1000) |
                ((is6btn) ? 0x00 : 0xFF00) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT || p->sThumbLX < -768) ? 0x00 : 0x08) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -768) ? 0x00 : 0x04) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 768) ? 0x00 : 0x02) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP || p->sThumbLY > 768) ? 0x00 : 0x01) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT || p->sThumbLX < -20000) ? 0x00 : 0x08) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 20000) ? 0x00 : 0x02) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP || p->sThumbLY > 20000) ? 0x00 : 0x01) |
                ((p->wButtons & XINPUT_GAMEPAD_START) ? 0x00 : 0x80) |
                ((p->wButtons & XINPUT_GAMEPAD_BACK) ? 0x00 : 0x40) |
                ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
