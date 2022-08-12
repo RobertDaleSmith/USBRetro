@@ -112,6 +112,8 @@ typedef struct TU_ATTR_PACKED
   int16_t output_buttons;
   int16_t output_x;
   int16_t output_y;
+
+  bool is6btn;
 } Player_t;
 
 Player_t players[5] = { 0 };
@@ -162,14 +164,14 @@ void __not_in_flash_func(update_output)(void)
 
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
-    bool is6Btns = !(players[i].output_buttons & 0x0f00);
+    bool has6Btn = !(players[i].output_buttons & 0x0f00);
     bool isMouse = !(players[i].output_buttons & 0x0f);
 
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
 
     // 6 button extra four buttons (III/IV/V/VI)
-    if (is6Btns && (state == 2)) {
+    if (has6Btn && players[i].is6btn && (state == 2)) {
       byte = ((players[i].output_buttons>>8) & 0xf0);
     }
 
@@ -208,6 +210,7 @@ void __not_in_flash_func(update_output)(void)
 //
 void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
+  bool has6Btn = !(buttons & 0x0f00);
   bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
 
   if (delta_x >= 128) 
@@ -221,6 +224,13 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
     players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
 
   players[dev_addr-1].global_buttons = buttons;
+
+  if (has6Btn && !(buttons & 0b0000000010000001)) {
+    players[dev_addr-1].is6btn = true;
+  }
+  else if (has6Btn && !(buttons & 0b0000000010000100)) {
+    players[dev_addr-1].is6btn = false;
+  }
 
   if (!output_exclude || !isMouse)
   {
@@ -361,6 +371,7 @@ int main(void)
     players[i].output_buttons = 0xFFFF;
     players[i].output_x = 0;
     players[i].output_y = 0;
+    players[i].is6btn = false;
   }
   state = 3;
 

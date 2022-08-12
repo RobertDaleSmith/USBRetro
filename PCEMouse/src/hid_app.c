@@ -347,21 +347,21 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
-      bool is6btn = false;
+      bool has_6btns = true;
 
       buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
                  ((ds4_report.l1)       ? 0x00 : 0x4000) |
                  ((ds4_report.square)   ? 0x00 : 0x2000) |
                  ((ds4_report.triangle) ? 0x00 : 0x1000) |
-                 ((is6btn)              ? 0x00 : 0xFF00) |
+                 ((has_6btns)           ? 0x00 : 0xFF00) |
                  ((dpad_left)           ? 0x00 : 0x08) |
                  ((dpad_down)           ? 0x00 : 0x04) |
                  ((dpad_right)          ? 0x00 : 0x02) |
                  ((dpad_up)             ? 0x00 : 0x01) |
                  ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x80) |
                  ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x40) |
-                 ((ds4_report.cross  || (!is6btn && ds4_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds4_report.circle || (!is6btn && ds4_report.square))   ? 0x00 : 0x10));
+                 ((ds4_report.cross  || (!has_6btns && ds4_report.triangle)) ? 0x00 : 0x20) |
+                 ((ds4_report.circle || (!has_6btns && ds4_report.square))   ? 0x00 : 0x10));
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
@@ -405,21 +405,21 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
-    bool is6btn = false;
+    bool has_6btns = true;
 
     buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
                ((psc_report.l1)       ? 0x00 : 0x4000) |
                ((psc_report.square)   ? 0x00 : 0x2000) |
                ((psc_report.triangle) ? 0x00 : 0x1000) |
-               ((is6btn)              ? 0x00 : 0xFF00) |
+               ((has_6btns)           ? 0x00 : 0xFF00) |
                ((dpad_left)           ? 0x00 : 0x08) |
                ((dpad_down)           ? 0x00 : 0x04) |
                ((dpad_right)          ? 0x00 : 0x02) |
                ((dpad_up)             ? 0x00 : 0x01) |
                ((psc_report.option || psc_report.ps) ? 0x00 : 0x80) |
                ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
-               ((psc_report.cross  || (!is6btn && psc_report.triangle && !psc_report.ps)) ? 0x00 : 0x20) |
-               ((psc_report.circle || (!is6btn && psc_report.square)) ? 0x00 : 0x10));
+               ((psc_report.cross  || (!has_6btns && psc_report.triangle && !psc_report.ps)) ? 0x00 : 0x20) |
+               ((psc_report.circle || (!has_6btns && psc_report.square)) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -452,9 +452,9 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);
     bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
     bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
-    bool is6btn = false;
+    bool has_6btns = false;
 
-    buttons = (((0xFF00)) |
+    buttons = (((has_6btns)      ? 0x00 : 0xFF00) |
                ((dpad_left)      ? 0x00 : 0x08) |
                ((dpad_down)      ? 0x00 : 0x04) |
                ((dpad_right)     ? 0x00 : 0x02) |
@@ -526,7 +526,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
 
-  bool is6btn = false;
+  bool has_6btns = true;
   bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
     btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
     btns_three = false, btns_four = false, btns_five = false, btns_six = false;
@@ -571,7 +571,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
              ((btns_five)  ? 0x00 : 0x4000) |
              ((btns_four)  ? 0x00 : 0x2000) |
              ((btns_three) ? 0x00 : 0x1000) |
-             ((is6btn)     ? 0x00 : 0xFF00) |
+             ((has_6btns)  ? 0x00 : 0xFF00) |
              ((dpad_left)  ? 0x00 : 0x0008) |
              ((dpad_down)  ? 0x00 : 0x0004) |
              ((dpad_right) ? 0x00 : 0x0002) |
