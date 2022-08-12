@@ -133,7 +133,8 @@ volatile bool  output_exclude = false;
 //  - x = mouse 'x' movement; left is {1 - 0x7F} ; right is {0xFF - 0x80 }
 //  - y = mouse 'y' movement;  up  is {1 - 0x7F} ; down  is {0xFF - 0x80 }
 //
-uint32_t output_word = 0;
+uint32_t output_word_0 = 0;
+uint32_t output_word_1 = 0;
 
 int state = 0;          // countdown sequence for shift-register position
 
@@ -193,10 +194,11 @@ void __not_in_flash_func(update_output)(void)
     bytes[i] = byte;
   }
 
-  output_word = ((bytes[0] & 0xff))      | // player 1
-                ((bytes[1] & 0xff) << 8) | // player 2
-                ((bytes[2] & 0xff) << 16)| // player 3
-                ((bytes[3] & 0xff) << 24); // player 4
+  output_word_0 = ((bytes[0] & 0xff))      | // player 1
+                  ((bytes[1] & 0xff) << 8) | // player 2
+                  ((bytes[2] & 0xff) << 16)| // player 3
+                  ((bytes[3] & 0xff) << 24); // player 4
+  output_word_1 = ((bytes[4] & 0xff));       // player 5
 }
 
 
@@ -230,20 +232,6 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
   }
 }
 
-
-//
-// post_to_output - push the current values into the state machine for
-//                  quick-response expression onto the GPIOs
-//
-void __not_in_flash_func(post_to_output)(void)
-{
-  if (!output_exclude) {
-     update_output();
-     pio_sm_put(pio, sm1, output_word);
-  }
-}
-
-
 //
 // process_signals - inner-loop processing of events:
 //                   - USB polling
@@ -273,7 +261,6 @@ static void __not_in_flash_func(process_signals)(void)
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {
       state = 3;
       update_output();
-      // pio_sm_put(pio, sm1, output_word);
       output_exclude = false;
       init_time = get_absolute_time();
     }
@@ -282,7 +269,6 @@ static void __not_in_flash_func(process_signals)(void)
     hid_app_task();
 #endif
 
-    // post_to_output();
   }
 }
 
@@ -306,7 +292,8 @@ static bool rx_bit = 0;
      output_exclude = true;
 
      // assume data is already formatted in output_word and push it to the state machine
-     pio_sm_put(pio, sm1, output_word);
+     pio_sm_put(pio, sm1, output_word_1);
+     pio_sm_put(pio, sm1, output_word_0);
 
      // Sequence from state 3 down through state 0 (show different nybbles to PCE)
      //
@@ -377,7 +364,8 @@ int main(void)
   }
   state = 3;
 
-  output_word = 0x00FFFFFFFF;  // no buttons pushed
+  output_word_0 = 0x00FFFFFFFF;  // no buttons pushed
+  output_word_1 = 0x00000000FF;  // no buttons pushed
 
 
   init_time = get_absolute_time();
