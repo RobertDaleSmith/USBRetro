@@ -52,7 +52,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
       dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
-    bool is6btn = false;
+    bool is6btn = true;
     buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x8000) |
                ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x4000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x2000) |

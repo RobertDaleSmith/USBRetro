@@ -34,7 +34,7 @@ clr:
     set   y, 3     ; count 4-player output 4 bytes from output_word_0
     pull  block	   ; wait and pull output_word_1
     mov   x, osr   ; hold output_word_1 until osr is empty
-    pull  noblock  ; pull output_word_0
+    pull  block    ; pull output_word_0
     wait  0 pin 1  ; wait for clr go low to start player 1
 
 sel:
