@@ -97,11 +97,13 @@
 #endif
 #endif
 
-void print_greeting(void);
 void led_blinking_task(void);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
+
+extern void neopixel_init(void);
+extern void neopixel_task(int pat);
 
 typedef struct TU_ATTR_PACKED
 {
@@ -117,6 +119,7 @@ typedef struct TU_ATTR_PACKED
 } Player_t;
 
 Player_t players[5] = { 0 };
+int playersCount = 0;
 
 
 // When PCE reads, set interlock to ensure atomic update
@@ -254,6 +257,8 @@ static void __not_in_flash_func(process_signals)(void)
   {
     // tinyusb host task
     tuh_task();
+    // neopixel task
+    neopixel_task(playersCount);
 #ifndef ADAFRUIT_QTPY_RP2040
     led_blinking_task();
 #endif
@@ -363,6 +368,8 @@ int main(void)
 
   tusb_init();
 
+  neopixel_init();
+
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
     players[i].global_buttons = 0xFFFF;
@@ -423,12 +430,16 @@ void tuh_mount_cb(uint8_t dev_addr)
   printf("A device with address %d is mounted\r\n", dev_addr);
 
   tuh_cdc_receive(dev_addr, serial_in_buffer, sizeof(serial_in_buffer), true); // schedule first transfer
+
+  playersCount++;
 }
 
 void tuh_umount_cb(uint8_t dev_addr)
 {
   // application tear-down
   printf("A device with address %d is unmounted \r\n", dev_addr);
+
+  playersCount--;
 }
 
 // invoked ISR context
