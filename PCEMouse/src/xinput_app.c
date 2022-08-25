@@ -53,10 +53,10 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
       dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
     bool is6btn = true;
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x8000) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x4000) |
-               ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x2000) |
-               ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x1000) |
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || p->bRightTrigger) ? 0x00 : 0x8000) |
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER || p->bLeftTrigger) ? 0x00 : 0x4000) |
+               ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
+               ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
                ((is6btn) ? 0x00 : 0xFF00) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT || p->sThumbLX < -20000) ? 0x00 : 0x08) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
