@@ -30,7 +30,7 @@ int dir = 1; // direction
 int tic = 0; // ticker
 
 static inline void put_pixel(uint32_t pixel_grb) {
-    pio_sm_put_blocking(pio, sm, pixel_grb << 8u);
+    pio_sm_put(pio, sm, pixel_grb << 8u);
 }
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
