@@ -439,7 +439,7 @@ void tuh_umount_cb(uint8_t dev_addr)
   // application tear-down
   printf("A device with address %d is unmounted \r\n", dev_addr);
 
-  playersCount--;
+  if ((--playersCount) < 0) playersCount = 0;
 }
 
 // invoked ISR context

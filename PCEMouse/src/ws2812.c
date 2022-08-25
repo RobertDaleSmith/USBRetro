@@ -8,7 +8,7 @@
 #include "pico/stdlib.h"
 #include "ws2812.pio.h"
 
-#define NUM_PIXELS 10
+#define NUM_PIXELS 1
 
 #ifdef PICO_DEFAULT_WS2812_PIN
 #define WS2812_PIN PICO_DEFAULT_WS2812_PIN
