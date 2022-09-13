@@ -116,6 +116,32 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_pce_report_t;
 
+// Sega Astro City mini controller
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t id;
+  uint8_t id2;
+  uint8_t id3;
+  uint8_t x;
+  uint8_t y;
+
+  struct {
+    uint8_t null : 4;
+    uint8_t b : 1;
+    uint8_t e : 1;
+    uint8_t d : 1;
+    uint8_t a : 1;
+  };
+
+  struct {
+    uint8_t c : 1;
+    uint8_t f : 3;
+    uint8_t credit : 1;
+    uint8_t start  : 3;
+  };
+
+} astro_city_report_t;
+
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
 {
@@ -138,13 +164,22 @@ static inline bool is_8bit_pce(uint8_t dev_addr)
   return ((vid == 0x0f0d && pid == 0x0138)); // 8BitDo PCE (wireless)
 }
 
-// check if device is 8BitDo PCE Controller
+// check if device is PlayStation Classic Controller
 static inline bool is_8bit_psc(uint8_t dev_addr)
 {
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
-  return ((vid == 0x054c && pid == 0x0cda)); // 8BitDo PS classic receiver
+  return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
+}
+
+// check if device is Astro City mini controller
+static inline bool is_astro_city(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x0ca3 && pid == 0x0027)); // Astro City mini controller
 }
 
 //--------------------------------------------------------------------+
@@ -220,7 +255,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isController = is_sony_ds4(dev_addr) || is_8bit_pce(dev_addr) || is_8bit_psc(dev_addr);
+  bool isController = is_sony_ds4(dev_addr) || is_8bit_pce(dev_addr) || is_8bit_psc(dev_addr) || is_astro_city(dev_addr);
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
@@ -291,6 +326,24 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
   result |= rpt1->run != rpt2->run;
   result |= rpt1->one != rpt2->one;
   result |= rpt1->two != rpt2->two;
+
+  return result;
+}
+
+bool astro_diff_report(astro_city_report_t const* rpt1, astro_city_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->c != rpt2->c;
+  result |= rpt1->d != rpt2->d;
+  result |= rpt1->e != rpt2->e;
+  result |= rpt1->f != rpt2->f;
+  result |= rpt1->credit != rpt2->credit;
+  result |= rpt1->start != rpt2->start;
 
   return result;
 }
@@ -472,6 +525,55 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = pce_report;
 }
 
+void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static astro_city_report_t prev_report[5] = { 0 };
+
+  astro_city_report_t astro_report;
+  memcpy(&astro_report, report, sizeof(astro_report));
+
+  if ( astro_diff_report(&prev_report[dev_addr-1], &astro_report) )
+  {
+    printf("DPad = x:%d, y:%d ", astro_report.x, astro_report.y);
+    if (astro_report.a) printf("A ");
+    if (astro_report.b) printf("B ");
+    if (astro_report.c) printf("C ");
+    if (astro_report.d) printf("D ");
+    if (astro_report.e) printf("E ");
+    if (astro_report.f) printf("F ");
+    if (astro_report.credit) printf("Credit ");
+    if (astro_report.start) printf("Start ");
+    printf("\r\n");
+
+    bool dpad_up    = (astro_report.y < 127);
+    bool dpad_right = (astro_report.x > 127);
+    bool dpad_down  = (astro_report.y > 127);
+    bool dpad_left  = (astro_report.x < 127);
+    bool has_6btns = true;
+
+    buttons = (((astro_report.a) ? 0x00 : 0x8000) |
+               ((astro_report.b) ? 0x00 : 0x4000) |
+               ((astro_report.c) ? 0x00 : 0x2000) |
+               ((astro_report.d) ? 0x00 : 0x1000) |
+               ((has_6btns)      ? 0x00 : 0xFF00) |
+               ((dpad_left)      ? 0x00 : 0x08) |
+               ((dpad_down)      ? 0x00 : 0x04) |
+               ((dpad_right)     ? 0x00 : 0x02) |
+               ((dpad_up)        ? 0x00 : 0x01) |
+               ((astro_report.start)  ? 0x00 : 0x80) |
+               ((astro_report.credit) ? 0x00 : 0x40) |
+               ((astro_report.e) ? 0x00 : 0x20) |
+               ((astro_report.f) ? 0x00 : 0x10));
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1] = astro_report;
+}
+
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
@@ -493,6 +595,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
+      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
