@@ -258,7 +258,7 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
         wait_for_tx_complete(dev_addr, xid_itf->ep_out);
 
         //Init packet for XBONE S/Elite controllers (return from bluetooth mode)
-        if (VID == 0x045e && (PID == 0x02ea || PID == 0x0b00))
+        if (VID == 0x045e && (PID == 0x02ea || PID == 0x0b00 || PID == 0x0b12))
         {
             tuh_xinput_send_report(dev_addr, instance, xboxone_s_init, sizeof(xboxone_s_init));
             wait_for_tx_complete(dev_addr, xid_itf->ep_out);
