@@ -72,6 +72,39 @@ typedef struct TU_ATTR_PACKED
 
 } sony_ds4_report_t;
 
+// Sony DS5 controller
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t x1, y1, x2, y2, rx, ry, rz;
+
+  struct {
+    uint8_t dpad     : 4; // (hat format, 0x08 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
+    uint8_t square   : 1; // west
+    uint8_t cross    : 1; // south
+    uint8_t circle   : 1; // east
+    uint8_t triangle : 1; // north
+  };
+
+  struct {
+    uint8_t l1     : 1;
+    uint8_t r1     : 1;
+    uint8_t l2     : 1;
+    uint8_t r2     : 1;
+    uint8_t share  : 1;
+    uint8_t option : 1;
+    uint8_t l3     : 1;
+    uint8_t r3     : 1;
+  };
+
+  struct {
+    uint8_t ps      : 1; // playstation button
+    uint8_t tpad    : 1; // track pad click
+    uint8_t mute    : 1; // mute button
+    uint8_t counter : 5; // +1 each report
+  };
+
+} sony_ds5_report_t;
+
 // 8BitDo USB Adapter for PS classic
 typedef struct TU_ATTR_PACKED
 {
@@ -182,6 +215,15 @@ static inline bool is_astro_city(uint8_t dev_addr)
   return ((vid == 0x0ca3 && pid == 0x0027)); // Astro City mini controller
 }
 
+// check if device is Sony DS5 controller
+static inline bool is_sony_ds5(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x054c && pid == 0x0ce6)); // Sony DS5 controller
+}
+
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
@@ -255,7 +297,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isController = is_sony_ds4(dev_addr) || is_8bit_pce(dev_addr) || is_8bit_psc(dev_addr) || is_astro_city(dev_addr);
+  bool isController = is_sony_ds4(dev_addr)
+                   || is_sony_ds5(dev_addr)
+                   || is_8bit_pce(dev_addr)
+                   || is_8bit_psc(dev_addr)
+                   || is_astro_city(dev_addr)
+                   ;
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
@@ -293,6 +340,21 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
 
   // check the reset with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds4_report_t)-4);
+
+  return result;
+}
+
+bool ds5_diff_report(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt2)
+{
+  bool result;
+
+  // x1, y1, x2, y2, rx, ry must different than 2 to be counted
+  result = diff_than_2(rpt1->x1, rpt2->x1) || diff_than_2(rpt1->y1, rpt2->y1) ||
+           diff_than_2(rpt1->x2, rpt2->x2) || diff_than_2(rpt1->y2, rpt2->y2) ||
+           diff_than_2(rpt1->rx, rpt2->rx) || diff_than_2(rpt1->ry, rpt2->ry);
+
+  // check the reset with mem compare
+  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds5_report_t)-7);
 
   return result;
 }
@@ -402,8 +464,8 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
       bool has_6btns = true;
 
-      buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
-                 ((ds4_report.l1)       ? 0x00 : 0x4000) |
+      buttons = (((ds4_report.r1 || ds4_report.l2) ? 0x00 : 0x8000) |
+                 ((ds4_report.l1 || ds4_report.r2) ? 0x00 : 0x4000) |
                  ((ds4_report.square)   ? 0x00 : 0x2000) |
                  ((ds4_report.triangle) ? 0x00 : 0x1000) |
                  ((has_6btns)           ? 0x00 : 0xFF00) |
@@ -425,6 +487,80 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   }
 }
 
+void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static sony_ds5_report_t prev_report[5] = { 0 };
+
+  uint8_t const report_id = report[0];
+  report++;
+  len--;
+
+  // all buttons state is stored in ID 1
+  if (report_id == 1)
+  {
+    sony_ds5_report_t ds5_report;
+    memcpy(&ds5_report, report, sizeof(ds5_report));
+
+    // counter is +1, assign to make it easier to compare 2 report
+    prev_report[dev_addr-1].counter = ds5_report.counter;
+
+    if ( ds5_diff_report(&prev_report[dev_addr-1], &ds5_report) )
+    {
+      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
+      printf("DPad = %s ", dpad_str[ds5_report.dpad]);
+
+      if (ds5_report.square   ) printf("Square ");
+      if (ds5_report.cross    ) printf("Cross ");
+      if (ds5_report.circle   ) printf("Circle ");
+      if (ds5_report.triangle ) printf("Triangle ");
+
+      if (ds5_report.l1       ) printf("L1 ");
+      if (ds5_report.r1       ) printf("R1 ");
+      if (ds5_report.l2       ) printf("L2 ");
+      if (ds5_report.r2       ) printf("R2 ");
+
+      if (ds5_report.share    ) printf("Share ");
+      if (ds5_report.option   ) printf("Option ");
+      if (ds5_report.l3       ) printf("L3 ");
+      if (ds5_report.r3       ) printf("R3 ");
+
+      if (ds5_report.ps       ) printf("PS ");
+      if (ds5_report.tpad     ) printf("TPad ");
+      if (ds5_report.mute     ) printf("Mute ");
+
+      printf("\r\n");
+
+      int threshold = 28;
+      bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 ||
+                         ds5_report.dpad == 7 || ds5_report.y1 < (128 - threshold));
+      bool dpad_right = ((ds5_report.dpad >= 1 && ds5_report.dpad <= 3) || ds5_report.x1 > (128 + threshold));
+      bool dpad_down  = ((ds5_report.dpad >= 3 && ds5_report.dpad <= 5) || ds5_report.y1 > (128 + threshold));
+      bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7) || ds5_report.x1 < (128 - threshold));
+      bool has_6btns = true;
+
+      buttons = (((ds5_report.r1 || ds5_report.l2) ? 0x00 : 0x8000) |
+                 ((ds5_report.l1 || ds5_report.r2) ? 0x00 : 0x4000) |
+                 ((ds5_report.square)   ? 0x00 : 0x2000) |
+                 ((ds5_report.triangle) ? 0x00 : 0x1000) |
+                 ((has_6btns)           ? 0x00 : 0xFF00) |
+                 ((dpad_left)           ? 0x00 : 0x08) |
+                 ((dpad_down)           ? 0x00 : 0x04) |
+                 ((dpad_right)          ? 0x00 : 0x02) |
+                 ((dpad_up)             ? 0x00 : 0x01) |
+                 ((ds5_report.option || ds5_report.ps|| ds5_report.mute) ? 0x00 : 0x80) |
+                 ((ds5_report.share  || ds5_report.ps || ds5_report.mute) ? 0x00 : 0x40) |
+                 ((ds5_report.cross  || (!has_6btns && ds5_report.triangle)) ? 0x00 : 0x20) |
+                 ((ds5_report.circle || (!has_6btns && ds5_report.square))   ? 0x00 : 0x10));
+
+      // add to accumulator and post to the state machine
+      // if a scan from the host machine is ongoing, wait
+      post_globals(dev_addr, buttons, 0, 0);
+    }
+
+    prev_report[dev_addr-1] = ds5_report;
+  }
+}
 void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -460,8 +596,8 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
     bool has_6btns = true;
 
-    buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
-               ((psc_report.l1)       ? 0x00 : 0x4000) |
+    buttons = (((psc_report.r1 || psc_report.l2) ? 0x00 : 0x8000) |
+               ((psc_report.l1 || psc_report.r2) ? 0x00 : 0x4000) |
                ((psc_report.square)   ? 0x00 : 0x2000) |
                ((psc_report.triangle) ? 0x00 : 0x1000) |
                ((has_6btns)           ? 0x00 : 0xFF00) |
@@ -593,6 +729,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
     default:
       if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, report, len);
+      else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
