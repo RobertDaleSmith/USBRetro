@@ -149,6 +149,32 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_pce_report_t;
 
+// Sega Genesis mini controller
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t y : 1;
+    uint8_t b : 1;
+    uint8_t a : 1;
+    uint8_t x : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t z : 1;
+    uint8_t c : 1;
+  };
+
+  struct {
+    uint8_t mode  : 1;
+    uint8_t start : 7;
+  };
+
+  uint8_t id;
+
+  uint8_t dpad_x;
+  uint8_t dpad_y;
+
+} sega_mini_report_t;
+
 // Sega Astro City mini controller
 typedef struct TU_ATTR_PACKED
 {
@@ -204,6 +230,15 @@ static inline bool is_8bit_psc(uint8_t dev_addr)
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
+}
+
+// check if device is Sega Genesis mini controller
+static inline bool is_sega_mini(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x0f0d && pid == 0x00c1)); // Sega Genesis mini controller
 }
 
 // check if device is Astro City mini controller
@@ -302,6 +337,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
                    || is_8bit_pce(dev_addr)
                    || is_8bit_psc(dev_addr)
                    || is_astro_city(dev_addr)
+                   || is_sega_mini(dev_addr)
                    ;
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -388,6 +424,26 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
   result |= rpt1->run != rpt2->run;
   result |= rpt1->one != rpt2->one;
   result |= rpt1->two != rpt2->two;
+
+  return result;
+}
+
+bool sega_diff_report(sega_mini_report_t const* rpt1, sega_mini_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->c != rpt2->c;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->z != rpt2->z;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->start != rpt2->start;
+  result |= rpt1->mode != rpt2->mode;
+  result |= rpt1->dpad_x != rpt2->dpad_x;
+  result |= rpt1->dpad_y != rpt2->dpad_y;
 
   return result;
 }
@@ -661,6 +717,58 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = pce_report;
 }
 
+
+void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static sega_mini_report_t prev_report[5] = { 0 };
+
+  sega_mini_report_t sega_report;
+  memcpy(&sega_report, report, sizeof(sega_report));
+
+  if ( sega_diff_report(&prev_report[dev_addr-1], &sega_report) )
+  {
+    printf("DPad = x:%d, y:%d ", sega_report.dpad_x, sega_report.dpad_y);
+    if (sega_report.a) printf("A ");
+    if (sega_report.b) printf("B ");
+    if (sega_report.c) printf("C ");
+    if (sega_report.x) printf("X ");
+    if (sega_report.y) printf("Y ");
+    if (sega_report.z) printf("Z ");
+    if (sega_report.l) printf("L ");
+    if (sega_report.r) printf("R ");
+    if (sega_report.start) printf("Start ");
+    if (sega_report.mode)  printf("Mode ");
+    printf("\r\n");
+
+    bool dpad_up    = (sega_report.dpad_y < 128);
+    bool dpad_right = (sega_report.dpad_x > 128);
+    bool dpad_down  = (sega_report.dpad_y > 128);
+    bool dpad_left  = (sega_report.dpad_x < 128);
+    bool has_6btns = true;
+
+    buttons = (((sega_report.x || sega_report.l) ? 0x00 : 0x8000) |
+               ((sega_report.y) ? 0x00 : 0x4000) |
+               ((sega_report.z || sega_report.r) ? 0x00 : 0x2000) |
+               ((sega_report.a) ? 0x00 : 0x1000) |
+               ((has_6btns)      ? 0x00 : 0xFF00) |
+               ((dpad_left)      ? 0x00 : 0x08) |
+               ((dpad_down)      ? 0x00 : 0x04) |
+               ((dpad_right)     ? 0x00 : 0x02) |
+               ((dpad_up)        ? 0x00 : 0x01) |
+               ((sega_report.start) ? 0x00 : 0x80) |
+               ((sega_report.mode)  ? 0x00 : 0x40) |
+               ((sega_report.b) ? 0x00 : 0x20) |
+               ((sega_report.c) ? 0x00 : 0x10));
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1] = sega_report;
+}
+
 void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -732,6 +840,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
+      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
