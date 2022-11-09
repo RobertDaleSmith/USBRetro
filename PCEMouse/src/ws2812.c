@@ -81,14 +81,14 @@ void pattern_blues(uint len, uint t) {
     int max = 100; // let's not draw too much current!
     t %= max;
     for (int i = 0; i < len; ++i) {
-        put_pixel(t * 0x00001);
+        put_pixel(t * 0x00100);
         if (++t >= max) t = 0;
     }
 }
 
 void pattern_blue(uint len, uint t) {
     int max = 100;
-    put_pixel(max * 0x00001);
+    put_pixel(max * 0x00100);
 }
 
 void pattern_gb(uint len, uint t) {

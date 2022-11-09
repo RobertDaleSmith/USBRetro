@@ -50,6 +50,43 @@
 #include "clock.pio.h"
 #include "select.pio.h"
 
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x200000000 ? '1' : '0'), \
+  (byte & 0x100000000 ? '1' : '0'), \
+  (byte & 0x080000000 ? '1' : '0'), \
+  (byte & 0x040000000 ? '1' : '0'), \
+  (byte & 0x020000000 ? '1' : '0'), \
+  (byte & 0x010000000 ? '1' : '0'), \
+  (byte & 0x008000000 ? '1' : '0'), \
+  (byte & 0x004000000 ? '1' : '0'), \
+  (byte & 0x002000000 ? '1' : '0'), \
+  (byte & 0x001000000 ? '1' : '0'), \
+  (byte & 0x000800000 ? '1' : '0'), \
+  (byte & 0x000400000 ? '1' : '0'), \
+  (byte & 0x000200000 ? '1' : '0'), \
+  (byte & 0x000100000 ? '1' : '0'), \
+  (byte & 0x000080000 ? '1' : '0'), \
+  (byte & 0x000040000 ? '1' : '0'), \
+  (byte & 0x000020000 ? '1' : '0'), \
+  (byte & 0x000010000 ? '1' : '0'), \
+  (byte & 0x000008000 ? '1' : '0'), \
+  (byte & 0x000004000 ? '1' : '0'), \
+  (byte & 0x000002000 ? '1' : '0'), \
+  (byte & 0x000001000 ? '1' : '0'), \
+  (byte & 0x000000800 ? '1' : '0'), \
+  (byte & 0x000000400 ? '1' : '0'), \
+  (byte & 0x000000200 ? '1' : '0'), \
+  (byte & 0x000000100 ? '1' : '0'), \
+  (byte & 0x000000080 ? '1' : '0'), \
+  (byte & 0x000000040 ? '1' : '0'), \
+  (byte & 0x000000020 ? '1' : '0'), \
+  (byte & 0x000000010 ? '1' : '0'), \
+  (byte & 0x000000008 ? '1' : '0'), \
+  (byte & 0x000000004 ? '1' : '0'), \
+  (byte & 0x000000002 ? '1' : '0'), \
+  (byte & 0x000000001 ? '1' : '0') 
+
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
 //--------------------------------------------------------------------+
@@ -57,7 +94,7 @@
 
 #ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
 
-#define DATAIN_PIN      18
+#define DATAIN_PIN      2
 #define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
 #define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
 #define OUTD1_PIN       27
@@ -96,6 +133,8 @@
 #endif
 #endif
 #endif
+
+#define BUF_SIZE 5
 
 void led_blinking_task(void);
 
@@ -143,10 +182,10 @@ uint32_t output_word_1 = 0;
 
 int state = 0;          // countdown sequence for shift-register position
 
-static absolute_time_t init_time;
-static absolute_time_t current_time;
-static absolute_time_t loop_time;
-static const int64_t reset_period = 600;  // at 600us, reset the scan exclude flag
+// static absolute_time_t init_time;
+// static absolute_time_t current_time;
+// static absolute_time_t loop_time;
+// static const int64_t reset_period = 600;  // at 600us, reset the scan exclude flag
 
 PIO pio;
 uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
@@ -271,14 +310,14 @@ static void __not_in_flash_func(process_signals)(void)
 // check time offset in order to detect when a PCE scan is no longer
 // in process (so that fresh values can be sent to the state machine)
 //
-    current_time = get_absolute_time();
+    // current_time = get_absolute_time();
 
-    if (absolute_time_diff_us(init_time, current_time) > reset_period) {
-      state = 3;
-      update_output();
-      output_exclude = false;
-      init_time = get_absolute_time();
-    }
+    // if (absolute_time_diff_us(init_time, current_time) > reset_period) {
+    //   state = 3;
+    //   update_output();
+    //   output_exclude = false;
+    //   init_time = get_absolute_time();
+    // }
 
 #if CFG_TUH_HID
     hid_app_task();
@@ -295,20 +334,28 @@ static void __not_in_flash_func(process_signals)(void)
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-static bool rx_bit = 0;
+static uint64_t packet = 0;
+static uint8_t zeroes = 0;
 
   while (1)
   {
-     // wait for (and sync with) negedge of CLR signal; rx_data is throwaway
-     rx_bit = pio_sm_get_blocking(pio, sm2);
+     for (int i = 0; i < BUF_SIZE; ++i) {
+        uint8_t rxdata = pio_sm_get_blocking(pio, sm2);
 
+        // printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(rxdata));
+
+        packet = ((packet) << 8) | (rxdata & 0xff);
+     }
+
+        printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(packet));
+      printf("\r\n");
      // Now we are in an update-sequence; set a lock
      // to prevent update during output transaction
-     output_exclude = true;
+    //  output_exclude = true;
 
      // assume data is already formatted in output_word and push it to the state machine
-     pio_sm_put(pio, sm1, output_word_1);
-     pio_sm_put(pio, sm1, output_word_0);
+    //  pio_sm_put(pio, sm1, output_word_1);
+    //  pio_sm_put(pio, sm1, output_word_0);
 
      // Sequence from state 3 down through state 0 (show different nybbles to PCE)
      //
@@ -319,40 +366,40 @@ static bool rx_bit = 0;
      // Also note that staying in 'scan' (CLK = low, SEL = high), is not expected
      // last more than about a half of a millisecond
      //
-     loop_time = get_absolute_time();
-     while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIN_PIN) == 1))
-     {
-        if (absolute_time_diff_us(loop_time, get_absolute_time()) > 550) {
-           state = 0;
-           break;
-        }
-     }
+    //  loop_time = get_absolute_time();
+    //  while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIN_PIN) == 1))
+    //  {
+    //     if (absolute_time_diff_us(loop_time, get_absolute_time()) > 550) {
+    //        state = 0;
+    //        break;
+    //     }
+    //  }
 
-     if (state != 0)
-     {
-        state--;
-        update_output();
+    //  if (state != 0)
+    //  {
+    //     state--;
+    //     update_output();
 
-        // renew countdown timeframe
-        init_time = get_absolute_time();
-     }
-     else
-     {
-        update_output();
+    //     // renew countdown timeframe
+    //     init_time = get_absolute_time();
+    //  }
+    //  else
+    //  {
+    //     update_output();
 
-        unsigned short int i;
-        for (i = 0; i < 5; ++i) {
-          // decrement outputs from globals
-          players[i].global_x = (players[i].global_x - players[i].output_x);
-          players[i].global_y = (players[i].global_y - players[i].output_y);
+    //     unsigned short int i;
+    //     for (i = 0; i < 5; ++i) {
+    //       // decrement outputs from globals
+    //       players[i].global_x = (players[i].global_x - players[i].output_x);
+    //       players[i].global_y = (players[i].global_y - players[i].output_y);
 
-          players[i].output_x = 0;
-          players[i].output_y = 0;
-          players[i].output_buttons = players[i].global_buttons;
-        }
+    //       players[i].output_x = 0;
+    //       players[i].output_y = 0;
+    //       players[i].output_buttons = players[i].global_buttons;
+    //     }
 
-        output_exclude = true;            // continue to lock the output values (which are now zero)
-     }
+    //     output_exclude = true;            // continue to lock the output values (which are now zero)
+    //  }
 
   }
 }
@@ -386,7 +433,7 @@ int main(void)
   output_word_1 = 0x00000000FF;  // no buttons pushed
 
 
-  init_time = get_absolute_time();
+  // init_time = get_absolute_time();
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
@@ -394,21 +441,21 @@ int main(void)
   // Load the plex (multiplex output) program, and configure a free state machine
   // to run the program.
 
-  uint offset1 = pio_add_program(pio, &plex_program);
-  sm1 = pio_claim_unused_sm(pio, true);
-  plex_program_init(pio, sm1, offset1, DATAIN_PIN, CLKIN_PIN, OUTD0_PIN);
+  // uint offset1 = pio_add_program(pio, &plex_program);
+  // sm1 = pio_claim_unused_sm(pio, true);
+  // plex_program_init(pio, sm1, offset1, DATAIN_PIN, CLKIN_PIN, OUTD0_PIN);
 
 
   // Load the clock/select (synchronizing input) programs, and configure a free state machines
   // to run the programs.
 
-  uint offset2 = pio_add_program(pio, &clock_program);
+  uint offset2 = pio_add_program(pio, &clocked_input_program);
   sm2 = pio_claim_unused_sm(pio, true);
-  clock_program_init(pio, sm2, offset2, CLKIN_PIN);
+  clocked_input_program_init(pio, sm2, offset2, DATAIN_PIN);
 
-  uint offset3 = pio_add_program(pio, &select_program);
-  sm3 = pio_claim_unused_sm(pio, true);
-  select_program_init(pio, sm3, offset3, DATAIN_PIN);
+  // uint offset3 = pio_add_program(pio, &select_program);
+  // sm3 = pio_claim_unused_sm(pio, true);
+  // select_program_init(pio, sm3, offset3, DATAIN_PIN);
 
   multicore_launch_core1(core1_entry);
 
