@@ -1,61 +1,75 @@
 ;
-; By Dave Shadoff (c) 2021, 2022
+; Copyright (c) 2021 Raspberry Pi (Trading) Ltd.
 ;
-;
-; Interfacing for a PC Engine mouse
-;
-; Two state machines are in use:
-; 
-; 1) Multiplexer, free-running:
-;    - Take a word from FIFO, and output a nybble based on {sequence within poll cycle, state of SEL line}
-;
-; 2) Clocked input, which monitors the CLR joypad line for
-;    high->low transitions, to set the state counter
-;    
-; 
-; This file (clock.pio) implements State Machine #2
-; -------------------------------------------------
-;
-; NOTE: when connected directly to PC Engine, the clock signal is a very short low-high-low signal;
-;       but when connected via multitap, the clock signal is always high except when that port is active
+; SPDX-License-Identifier: BSD-3-Clause
 ;
 
-.program clock
+.program clocked_input
 
-; Sample bits using an external clock (falling edge), and push groups of bits into the RX FIFO.
-; - IN pin 0 is the clock pin (and also the pin with data)
-; - Autopush is enabled, threshold 1
+; Sample bits using an external clock, and push groups of bits into the RX FIFO.
+; - IN pin 0 is the data pin
+; - IN pin 1 is the clock pin
+; - Autopush is enabled, threshold 8
 ;
-; This program samples data with each falling clock edge,
-;  with no wait for data to settle
+; This program samples data with each rising clock edge (like mode 0 or mode 3
+; SPI). The data is actually sampled one system clock cycle after the rising
+; edge is observed, so a clock ratio of at least input_clk < clk_sys / 6 is
+; recommended for good sampling alignment.
 
-clklp:
-    wait 0 pin 0
-    wait 1 pin 0
-    irq 7
-    in pins, 1
-    jmp clklp
+start:
+    set   y, 0
+    mov   isr, y
+    in    y, 6
+
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1
+    mov   y, isr
+    jmp   !y, start
+
+control:
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1
+
+    set   x, 5
+id:
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1
+    jmp   x--, id
+
+    set   y, 27
+data:
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1
+    jmp   y--, data
+    jmp   start
 
 % c-sdk {
-static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin) {
-    pio_sm_config c = clock_program_get_default_config(offset);
+static inline void clocked_input_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = clocked_input_program_get_default_config(offset);
 
     // Set the IN base pin to the provided `pin` parameter. This is the data
     // pin, and the next-numbered GPIO is used as the clock pin.
-    sm_config_set_in_pins(&c, inpin);
-
+    sm_config_set_in_pins(&c, pin);
     // Set the pin directions to input at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, inpin, 1, false);
-
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
     // Connect these GPIOs to this PIO block
-    pio_gpio_init(pio, inpin);
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin + 1);
 
+    // Shifting to left matches the customary MSB-first ordering of SPI.
     sm_config_set_in_shift(
         &c,
         false, // Shift-to-right = false (i.e. shift to left)
         true,  // Autopush enabled
-        1      // Autopush threshold = 1
+        8      // Autopush threshold = 8
     );
+
+    // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
 
     // Load our configuration, and start the program from the beginning
     pio_sm_init(pio, sm, offset, &c);
