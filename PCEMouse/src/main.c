@@ -50,7 +50,8 @@
 #include "clock.pio.h"
 #include "select.pio.h"
 
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY_PATTERN_DAT "%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY_PATTERN_CMD "%c%c %c%c%c%c%c %c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c"
 #define BYTE_TO_BINARY(byte)  \
   (byte & 0x200000000 ? '1' : '0'), \
   (byte & 0x100000000 ? '1' : '0'), \
@@ -137,6 +138,7 @@
 #define BUF_SIZE 5
 
 void led_blinking_task(void);
+uint8_t eparity(uint32_t);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
@@ -335,20 +337,75 @@ static void __not_in_flash_func(process_signals)(void)
 static void __not_in_flash_func(core1_entry)(void)
 {
 static uint64_t packet = 0;
-static uint8_t zeroes = 0;
-
+int switchA = 0;
   while (1)
   {
-     for (int i = 0; i < BUF_SIZE; ++i) {
-        uint8_t rxdata = pio_sm_get_blocking(pio, sm2);
+    for (int i = 0; i < 2; ++i) {
+      uint32_t rxdata = pio_sm_get_blocking(pio, sm2);
 
-        // printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(rxdata));
+      // printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(rxdata));
+      packet = ((packet) << 32) | (rxdata & 0xFFFFFFFF);
+    }
 
-        packet = ((packet) << 8) | (rxdata & 0xff);
-     }
+    uint8_t ctrlBit = ((packet>>32) & 0b00000001);
+    uint8_t _id = ((packet>>27) & 0b00011111);
+    uint8_t type1 = ((packet>>26) & 0b00000001);
+    uint8_t type0 = ((packet>>25) & 0b00000001);
+    uint8_t cmdat = ((packet>>24) & 0b00000001);
+    uint8_t incad = ((packet>>16) & 0b00000001);
+    uint8_t crc = ((packet>>8) & 0b00000001);
+    uint8_t dataA = ((packet>>17) & 0b11111111);
+    uint8_t dataS = ((packet>>9) & 0b01111111);
+    uint8_t dataC = ((packet>>1) & 0b01111111);
+    // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
+    
 
-        printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(packet));
+    switchA++;
+    if (!ctrlBit && switchA <= 1) {
+      switchA++;
+      printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
       printf("\r\n");
+    } else if(ctrlBit && dataA == 0x34 && switchA > 1) {
+      switchA = 0;
+      // printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
+      // printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
+      // printf(type1 ? "DIRECT   " : "INDIRECT ");
+      // printf(type0 ? "READ  " : "WRITE ");
+      // printf(cmdat ? "CMD  " : "DATA ");
+      // printf("IA: %d ", incad);
+      // printf("CRC: %d ", crc);
+      // printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
+      // printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
+      // printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
+      // // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
+      // if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
+      // if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
+      // if (dataA == 0xb1) printf("[RESET] ");
+      // if (dataA == 0xb2) printf("[TAG] ");
+      // if (dataA == 0xb3) printf("[UNBRAND] ");
+      // if (dataA == 0xb4) printf("[BRAND] ");
+      // if (dataA == 0x23) printf("[STROBE] ");
+      // if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
+      // if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
+      // if (dataA == 0x90) printf("[MAGIC?] ");
+      // if (dataA == 0x9a) printf("[CRC?] ");
+      // if (dataA == 0x99) printf("[STATE?] ");
+      // if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
+      // if (dataA == 0x84 || dataA == 0x27) printf("[REQUEST] ");
+      // if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
+      // if (dataA == 0xa0) printf("[NOP?] ");
+      // if (dataA == 0x40) printf("[BAUD?] ");
+      // if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
+      // if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
+      // if (dataA == 0x32) printf("[QUADX] ");
+      // if (dataA == 0x33) printf("[QUADY] ");
+      // if (dataA == 0x34) printf("[CHANNEL] ");
+      // if (dataA == 0x35) printf("[ANALOG] ");
+      // printf("\r\n");
+    }
+
+
+
      // Now we are in an update-sequence; set a lock
      // to prevent update during output transaction
     //  output_exclude = true;
@@ -529,4 +586,14 @@ void led_blinking_task(void)
 
   board_led_write(led_state);
   led_state = 1 - led_state; // toggle
+}
+
+uint8_t eparity(uint32_t data) {
+  uint32_t eparity;
+  eparity = (data>>16)^data;
+  eparity ^= (eparity>>8);
+  eparity ^= (eparity>>4);
+  eparity ^= (eparity>>2);
+  eparity ^= (eparity>>1);
+  return((~eparity)&0x1);
 }

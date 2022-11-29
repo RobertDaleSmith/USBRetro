@@ -19,7 +19,7 @@
 start:
     set   y, 0
     mov   isr, y
-    in    y, 6
+    in    y, 30
 
     wait  0 pin 1
     wait  1 pin 1
@@ -65,7 +65,7 @@ static inline void clocked_input_program_init(PIO pio, uint sm, uint offset, uin
         &c,
         false, // Shift-to-right = false (i.e. shift to left)
         true,  // Autopush enabled
-        8      // Autopush threshold = 8
+        32     // Autopush threshold = 8
     );
 
     // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
