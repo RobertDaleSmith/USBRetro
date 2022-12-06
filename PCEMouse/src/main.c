@@ -337,7 +337,7 @@ static void __not_in_flash_func(process_signals)(void)
 static void __not_in_flash_func(core1_entry)(void)
 {
 static uint64_t packet = 0;
-int switchA = 0;
+bool switchA = false;
   while (1)
   {
     for (int i = 0; i < 2; ++i) {
@@ -359,49 +359,69 @@ int switchA = 0;
     uint8_t dataC = ((packet>>1) & 0b01111111);
     // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
     
-
-    switchA++;
-    if (!ctrlBit && switchA <= 1) {
-      switchA++;
-      printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
-      printf("\r\n");
-    } else if(ctrlBit && dataA == 0x34 && switchA > 1) {
-      switchA = 0;
-      // printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
-      // printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
-      // printf(type1 ? "DIRECT   " : "INDIRECT ");
-      // printf(type0 ? "READ  " : "WRITE ");
-      // printf(cmdat ? "CMD  " : "DATA ");
+    if (!ctrlBit) {
+      if (switchA) {
+        // printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
+        // printf("\r\n");
+        switchA = false;
+      }
+    } else {
+      if (dataA == 0x44) {
+        switchA = true;
+      } else {
+        switchA = false;
+      }
+      printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
+      printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
+      printf(type1 ? "DIRECT   " : "INDIRECT ");
+      printf(type0 ? "READ  " : "WRITE ");
+      printf(cmdat ? "CMD  " : "DATA ");
       // printf("IA: %d ", incad);
       // printf("CRC: %d ", crc);
-      // printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
-      // printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
-      // printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
-      // // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
-      // if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
-      // if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
-      // if (dataA == 0xb1) printf("[RESET] ");
-      // if (dataA == 0xb2) printf("[TAG] ");
-      // if (dataA == 0xb3) printf("[UNBRAND] ");
-      // if (dataA == 0xb4) printf("[BRAND] ");
-      // if (dataA == 0x23) printf("[STROBE] ");
-      // if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
-      // if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
-      // if (dataA == 0x90) printf("[MAGIC?] ");
-      // if (dataA == 0x9a) printf("[CRC?] ");
-      // if (dataA == 0x99) printf("[STATE?] ");
-      // if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
-      // if (dataA == 0x84 || dataA == 0x27) printf("[REQUEST] ");
-      // if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
-      // if (dataA == 0xa0) printf("[NOP?] ");
-      // if (dataA == 0x40) printf("[BAUD?] ");
-      // if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
-      // if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
-      // if (dataA == 0x32) printf("[QUADX] ");
-      // if (dataA == 0x33) printf("[QUADY] ");
-      // if (dataA == 0x34) printf("[CHANNEL] ");
-      // if (dataA == 0x35) printf("[ANALOG] ");
-      // printf("\r\n");
+      printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
+      printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
+      printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
+      // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
+      if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
+      if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
+      if (dataA == 0xb1) printf("[RESET] ");
+      if (dataA == 0xb2) printf("[TAG] ");
+      if (dataA == 0xb3) printf("[UNBRAND] ");
+      if (dataA == 0xb4) printf("[BRAND] ");
+      if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
+      if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
+      if (dataA == 0x90) printf("[MAGIC?] ");
+      if (dataA == 0x9a) printf("[CRC?] ");
+      if (dataA == 0x99) printf("[STATE?] ");
+      if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
+      else if (dataA == 0x80) printf("[CRC] ");
+      if (dataA == 0x84) printf("[REQUEST] ");
+      if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
+      if (dataA == 0xa0) printf("[NOP?] ");
+      if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
+      if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
+      if (dataA == 0x32) printf("[QUADX] ");
+      if (dataA == 0x33) printf("[QUADY] ");
+      if (dataA == 0x34) printf("[CHANNEL] ");
+      if (dataA == 0x35) printf("[ANALOG] ");
+      if (dataA == 0x40) printf("[BAUD?] ");
+      if (dataA == 0x41) printf("[FLAGS0] ");
+      if (dataA == 0x42) printf("[FLAGS1] ");
+      if (dataA == 0x43) printf("[SDATA] ");
+      if (dataA == 0x44) printf("[SSTATUS] ");
+      if (dataA == 0x45) printf("[RSTATUS] ");
+      if (dataA == 0x20) printf("[A0 (A[7:0])] ");
+      if (dataA == 0x21) printf("[A1 (A[15:8])] ");
+      if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
+      if (dataA == 0x23) printf("[STROBE] ");
+      if (dataA == 0x24) printf("[PINOUT] ");
+      if (dataA == 0x25) printf("[CONFIG] ");
+      if (dataA == 0x25) printf("[CONFIG] ");
+      if (dataA == 0x25) printf("[CONFIG] ");
+      if (dataA == 0x26) printf("[INPUTA] ");
+      if (dataA == 0x27) printf("[REQUEST] ");
+      if (dataA == 0x28) printf("[INPUTB] ");
+      printf("\r\n");
     }
 
 
