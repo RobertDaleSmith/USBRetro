@@ -45,10 +45,10 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "pico/multicore.h"
+#include "pico/util/queue.h"
 #include "hardware/pio.h"
-#include "plex.pio.h"
-#include "clock.pio.h"
-#include "select.pio.h"
+#include "clock_out.pio.h"
+#include "clock_in.pio.h"
 
 #define BYTE_TO_BINARY_PATTERN_DAT "%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY_PATTERN_CMD "%c%c %c%c%c%c%c %c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c"
@@ -95,47 +95,31 @@
 
 #ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
 
-#define DATAIN_PIN      2
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
+#define DATAIO_PIN      2
+#define CLKIN_PIN       DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
 
 #else
 #ifdef ADAFRUIT_QTPY_RP2040      // if build for QtPy RP2040 board
 
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
+#define DATAIO_PIN      24
+#define CLKIN_PIN       DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
 
 #else
 #ifdef SEEED_XIAO_RP2040         // else assignments for Seed XIAO RP2040 board - note: needs specific board
 
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
+#define DATAIO_PIN      24
+#define CLKIN_PIN       DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
 
 #else                           // else assume build for RP Pico board
 
-#define DATAIN_PIN      16
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       18              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       19
-#define OUTD2_PIN       20
-#define OUTD3_PIN       21
+#define DATAIO_PIN      16
+#define CLKIN_PIN       DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
 
 #endif
 #endif
 #endif
 
-#define BUF_SIZE 5
+queue_t packet_queue;
 
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
@@ -190,7 +174,7 @@ int state = 0;          // countdown sequence for shift-register position
 // static const int64_t reset_period = 600;  // at 600us, reset the scan exclude flag
 
 PIO pio;
-uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
+uint sm1, sm2;   // sm1 = clock_out; sm2 = clock_in
 
 /*------------- MAIN -------------*/
 
@@ -294,18 +278,129 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
 //
 static void __not_in_flash_func(process_signals)(void)
 {
+  int switchA = 0;
+  bool alive = false;
+  
   while (1)
   {
+
+    if (!queue_is_empty(&packet_queue)) {
+      uint64_t packet;
+      queue_try_remove(&packet_queue, &packet);
+
+      uint8_t ctrlBit = ((packet>>32) & 0b00000001);
+      uint8_t _id = ((packet>>27) & 0b00011111);
+      uint8_t type1 = ((packet>>26) & 0b00000001);
+      uint8_t type0 = ((packet>>25) & 0b00000001);
+      uint8_t cmdat = ((packet>>24) & 0b00000001);
+      uint8_t incad = ((packet>>16) & 0b00000001);
+      uint8_t crc = ((packet>>8) & 0b00000001);
+      uint8_t dataA = ((packet>>17) & 0b11111111);
+      uint8_t dataS = ((packet>>9) & 0b01111111);
+      uint8_t dataC = ((packet>>1) & 0b01111111);
+      // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
+
+      if (!ctrlBit) {
+        if (switchA) {
+          printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
+          printf(" - %d \r\n", switchA);
+          switchA++;
+          if (switchA > 5) {
+            switchA = 0;
+            printf("\r\n");
+          }
+        }
+      } else {
+        if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
+        if (dataA == 0x80) {
+          uint32_t word0 = 0b11111111111111111111111111111111;
+          uint32_t word1 = 0b11111111111111111111111111111111;
+          if (alive) word1 = 2;
+          else alive = true;
+
+          pio_sm_put_blocking(pio1, sm1, word1);
+          pio_sm_put_blocking(pio1, sm1, word0);
+        }
+        if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // error response
+          u_int32_t word0 = 2;
+          u_int32_t word1 = 0;
+          pio_sm_put(pio1, sm1, word1);
+          pio_sm_put(pio1, sm1, word0);
+        }
+        if (dataA == 0x90) {
+          u_int32_t word0 = 2;
+          u_int32_t word1 = 0b01001010010101010100010001000101;
+          pio_sm_put(pio1, sm1, word1);
+          pio_sm_put(pio1, sm1, word0);
+        }
+
+        // if (dataA == 0x84) {
+          switchA = 1;
+          printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
+          printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
+          printf(type1 ? "DIRECT   " : "INDIRECT ");
+          printf(type0 ? "READ  " : "WRITE ");
+          printf(cmdat ? "CMD  " : "DATA ");
+          // printf("IA: %d ", incad);
+          // printf("CRC: %d ", crc);
+          printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
+          printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
+          printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
+          // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
+          if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
+          if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
+          if (dataA == 0xb1) printf("[RESET] ");
+          if (dataA == 0xb2) printf("[TAG] ");
+          if (dataA == 0xb3) printf("[UNBRAND] ");
+          if (dataA == 0xb4) printf("[BRAND] ");
+          if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
+          if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
+          if (dataA == 0x90) printf("[MAGIC] ");
+          if (dataA == 0x9a) printf("[CRC] ");
+          if (dataA == 0x99) printf("[STATE] ");
+          if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
+          else if (dataA == 0x80) printf("[CRC] ");
+          if (dataA == 0x84) printf("[REQUEST] ");
+          if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
+          if (dataA == 0xa0) printf("[NOP] ");
+          if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
+          if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
+          if (dataA == 0x32) printf("[QUADX] ");
+          if (dataA == 0x33) printf("[QUADY] ");
+          if (dataA == 0x34) printf("[CHANNEL] ");
+          if (dataA == 0x35) printf("[ANALOG] ");
+          if (dataA == 0x40) printf("[BAUD] ");
+          if (dataA == 0x41) printf("[FLAGS0] ");
+          if (dataA == 0x42) printf("[FLAGS1] ");
+          if (dataA == 0x43) printf("[SDATA] ");
+          if (dataA == 0x44) printf("[SSTATUS] ");
+          if (dataA == 0x45) printf("[RSTATUS] ");
+          if (dataA == 0x20) printf("[A0 (A[7:0])] ");
+          if (dataA == 0x21) printf("[A1 (A[15:8])] ");
+          if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
+          if (dataA == 0x23) printf("[STROBE] ");
+          if (dataA == 0x24) printf("[PINOUT] ");
+          if (dataA == 0x25) printf("[CONFIG] ");
+          if (dataA == 0x26) printf("[INPUTA] ");
+          if (dataA == 0x27) printf("[REQUEST] ");
+          if (dataA == 0x28) printf("[INPUTB] ");
+          printf("\r\n");
+        // } else {
+        //   switchA = 0;
+        // }
+      }
+    }
+
     // tinyusb host task
-    tuh_task();
+    // tuh_task();
     // neopixel task
-    neopixel_task(playersCount);
+    // neopixel_task(playersCount);
 #ifndef ADAFRUIT_QTPY_RP2040
-    led_blinking_task();
+    // led_blinking_task();
 #endif
 
 #if CFG_TUH_CDC
-    cdc_task();
+    // cdc_task();
 #endif
 
 //
@@ -322,7 +417,7 @@ static void __not_in_flash_func(process_signals)(void)
     // }
 
 #if CFG_TUH_HID
-    hid_app_task();
+    // hid_app_task();
 #endif
 
   }
@@ -337,7 +432,6 @@ static void __not_in_flash_func(process_signals)(void)
 static void __not_in_flash_func(core1_entry)(void)
 {
 static uint64_t packet = 0;
-bool switchA = false;
   while (1)
   {
     for (int i = 0; i < 2; ++i) {
@@ -347,84 +441,7 @@ bool switchA = false;
       packet = ((packet) << 32) | (rxdata & 0xFFFFFFFF);
     }
 
-    uint8_t ctrlBit = ((packet>>32) & 0b00000001);
-    uint8_t _id = ((packet>>27) & 0b00011111);
-    uint8_t type1 = ((packet>>26) & 0b00000001);
-    uint8_t type0 = ((packet>>25) & 0b00000001);
-    uint8_t cmdat = ((packet>>24) & 0b00000001);
-    uint8_t incad = ((packet>>16) & 0b00000001);
-    uint8_t crc = ((packet>>8) & 0b00000001);
-    uint8_t dataA = ((packet>>17) & 0b11111111);
-    uint8_t dataS = ((packet>>9) & 0b01111111);
-    uint8_t dataC = ((packet>>1) & 0b01111111);
-    // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
-    
-    if (!ctrlBit) {
-      if (switchA) {
-        // printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
-        // printf("\r\n");
-        switchA = false;
-      }
-    } else {
-      if (dataA == 0x44) {
-        switchA = true;
-      } else {
-        switchA = false;
-      }
-      printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
-      printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
-      printf(type1 ? "DIRECT   " : "INDIRECT ");
-      printf(type0 ? "READ  " : "WRITE ");
-      printf(cmdat ? "CMD  " : "DATA ");
-      // printf("IA: %d ", incad);
-      // printf("CRC: %d ", crc);
-      printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
-      printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
-      printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
-      // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
-      if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
-      if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
-      if (dataA == 0xb1) printf("[RESET] ");
-      if (dataA == 0xb2) printf("[TAG] ");
-      if (dataA == 0xb3) printf("[UNBRAND] ");
-      if (dataA == 0xb4) printf("[BRAND] ");
-      if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
-      if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
-      if (dataA == 0x90) printf("[MAGIC?] ");
-      if (dataA == 0x9a) printf("[CRC?] ");
-      if (dataA == 0x99) printf("[STATE?] ");
-      if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
-      else if (dataA == 0x80) printf("[CRC] ");
-      if (dataA == 0x84) printf("[REQUEST] ");
-      if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
-      if (dataA == 0xa0) printf("[NOP?] ");
-      if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
-      if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
-      if (dataA == 0x32) printf("[QUADX] ");
-      if (dataA == 0x33) printf("[QUADY] ");
-      if (dataA == 0x34) printf("[CHANNEL] ");
-      if (dataA == 0x35) printf("[ANALOG] ");
-      if (dataA == 0x40) printf("[BAUD?] ");
-      if (dataA == 0x41) printf("[FLAGS0] ");
-      if (dataA == 0x42) printf("[FLAGS1] ");
-      if (dataA == 0x43) printf("[SDATA] ");
-      if (dataA == 0x44) printf("[SSTATUS] ");
-      if (dataA == 0x45) printf("[RSTATUS] ");
-      if (dataA == 0x20) printf("[A0 (A[7:0])] ");
-      if (dataA == 0x21) printf("[A1 (A[15:8])] ");
-      if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
-      if (dataA == 0x23) printf("[STROBE] ");
-      if (dataA == 0x24) printf("[PINOUT] ");
-      if (dataA == 0x25) printf("[CONFIG] ");
-      if (dataA == 0x25) printf("[CONFIG] ");
-      if (dataA == 0x25) printf("[CONFIG] ");
-      if (dataA == 0x26) printf("[INPUTA] ");
-      if (dataA == 0x27) printf("[REQUEST] ");
-      if (dataA == 0x28) printf("[INPUTB] ");
-      printf("\r\n");
-    }
-
-
+    queue_try_add(&packet_queue, &packet);
 
      // Now we are in an update-sequence; set a lock
      // to prevent update during output transaction
@@ -444,7 +461,7 @@ bool switchA = false;
      // last more than about a half of a millisecond
      //
     //  loop_time = get_absolute_time();
-    //  while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIN_PIN) == 1))
+    //  while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIO_PIN) == 1))
     //  {
     //     if (absolute_time_diff_us(loop_time, get_absolute_time()) > 550) {
     //        state = 0;
@@ -509,30 +526,26 @@ int main(void)
   output_word_0 = 0x00FFFFFFFF;  // no buttons pushed
   output_word_1 = 0x00000000FF;  // no buttons pushed
 
-
   // init_time = get_absolute_time();
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
-
-  // Load the plex (multiplex output) program, and configure a free state machine
-  // to run the program.
-
-  // uint offset1 = pio_add_program(pio, &plex_program);
-  // sm1 = pio_claim_unused_sm(pio, true);
-  // plex_program_init(pio, sm1, offset1, DATAIN_PIN, CLKIN_PIN, OUTD0_PIN);
-
 
   // Load the clock/select (synchronizing input) programs, and configure a free state machines
   // to run the programs.
 
   uint offset2 = pio_add_program(pio, &clocked_input_program);
   sm2 = pio_claim_unused_sm(pio, true);
-  clocked_input_program_init(pio, sm2, offset2, DATAIN_PIN);
+  clocked_input_program_init(pio, sm2, offset2, DATAIO_PIN);
 
-  // uint offset3 = pio_add_program(pio, &select_program);
-  // sm3 = pio_claim_unused_sm(pio, true);
-  // select_program_init(pio, sm3, offset3, DATAIN_PIN);
+  // Load the plex (multiplex output) program, and configure a free state machine
+  // to run the program.
+
+  uint offset1 = pio_add_program(pio1, &clocked_output_program);
+  sm1 = pio_claim_unused_sm(pio1, true);
+  clocked_output_program_init(pio1, sm1, offset1, DATAIO_PIN);
+
+  queue_init(&packet_queue, sizeof(int64_t), 1000);
 
   multicore_launch_core1(core1_entry);
 
@@ -595,7 +608,7 @@ void cdc_task(void)
 //--------------------------------------------------------------------+
 void led_blinking_task(void)
 {
-  const uint32_t interval_ms = 1000;
+  const uint32_t interval_ms = 10;
   static uint32_t start_ms = 0;
 
   static bool led_state = false;

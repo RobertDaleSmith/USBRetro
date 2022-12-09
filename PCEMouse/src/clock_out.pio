@@ -1,0 +1,62 @@
+;
+
+.program clocked_output
+
+.define CLK_PIN 3
+
+next_packet:
+    pull  block	   ; wait and pull data bits word (bits 2-33)
+    mov   x, osr   ; hold data bits until osr is empty
+    pull  block    ; pull start bits word (bits 0-1)
+
+    out   NULL, 30 ; shift to start bits
+
+    set   y, 2     ; output start and control bits
+start_bit:
+    wait  0 gpio CLK_PIN
+    out   PINS, 1
+    wait  1 gpio CLK_PIN
+
+    jmp   y--, start_bit
+
+    mov   osr, x   ; move data bits back into osr
+    set   x, 4     ; output 4 data bytes
+data_byte:
+
+    set   y, 8     ; output 8 bits per byte
+data_bit:
+    wait  0 gpio CLK_PIN
+    out   PINS, 1
+    wait  1 gpio CLK_PIN
+    jmp   y--, data_bit
+    jmp   x--, data_byte
+
+    jmp   next_packet
+
+% c-sdk {
+static inline void clocked_output_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = clocked_output_program_get_default_config(offset);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, pin); // data out
+
+    // Set the OUT pin to the provided `outpin` parameter. This is where the data is sent out
+    sm_config_set_out_pins(&c, pin, 1);
+
+    // Set the pin directions to output at the PIO
+    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    sm_config_set_out_shift(
+        &c,
+        false, // Shift-to-right = true
+        false, // Autopull disabled
+        32     // Autopull threshold = 32
+    );
+
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX); // Not using RX FIFO so double TX FIFO length
+
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
