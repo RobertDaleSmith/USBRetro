@@ -1,57 +1,56 @@
 ;
 
-.program clocked_input
+.program polyface_read
 
-start:
+packet:
     set   y, 0
     mov   isr, y
-    in    y, 30
+    in    y, 30           ; fill unused fifo bits
 
-    wait  0 pin 1
+    wait  0 pin 1   
     wait  1 pin 1
     in    pins, 1
+
     mov   y, isr
-    jmp   !y, start
+    jmp   !y, packet ; wait for start bit
 
-control:
+ctrl_bit:
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1         ; read control bit
+
+    set   x, 4            ; read 4 command data bytes
+data_byte:
+    set   y, 8            ; read 8 bits per byte
+data_bit:
     wait  0 pin 1
     wait  1 pin 1
     in    pins, 1
 
-    set   x, 5
-id:
-    wait  0 pin 1
-    wait  1 pin 1
-    in    pins, 1
-    jmp   x--, id
-
-    set   y, 27
-data:
-    wait  0 pin 1
-    wait  1 pin 1
-    in    pins, 1
-    jmp   y--, data
-    jmp   start
+    jmp   y--, data_bit
+    jmp   x--, data_byte
+    jmp   packet
 
 % c-sdk {
-static inline void clocked_input_program_init(PIO pio, uint sm, uint offset, uint pin) {
-    pio_sm_config c = clocked_input_program_get_default_config(offset);
+static inline void polyface_read_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = polyface_read_program_get_default_config(offset);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin + 1);
 
     // Set the IN base pin to the provided `pin` parameter. This is the data
     // pin, and the next-numbered GPIO is used as the clock pin.
     sm_config_set_in_pins(&c, pin);
     // Set the pin directions to input at the PIO
-    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
-    // Connect these GPIOs to this PIO block
-    pio_gpio_init(pio, pin);
-    pio_gpio_init(pio, pin + 1);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
 
     // Shifting to left matches the customary MSB-first ordering of SPI.
     sm_config_set_in_shift(
         &c,
         false, // Shift-to-right = false (i.e. shift to left)
         true,  // Autopush enabled
-        32     // Autopush threshold = 8
+        32     // Autopush threshold = 32
     );
 
     // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
