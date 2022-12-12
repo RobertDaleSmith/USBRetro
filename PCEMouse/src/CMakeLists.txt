@@ -18,9 +18,8 @@ add_executable(pcemouse)
 
 pico_add_extra_outputs(pcemouse)
 
-pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/clock_out.pio )
-pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/clock_in.pio )
-pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/select.pio )
+pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/polyface_read.pio )
+pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/polyface_send.pio )
 pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
 

@@ -47,8 +47,8 @@
 #include "pico/multicore.h"
 #include "pico/util/queue.h"
 #include "hardware/pio.h"
-#include "clock_out.pio.h"
-#include "clock_in.pio.h"
+#include "polyface_read.pio.h"
+#include "polyface_send.pio.h"
 
 #define BYTE_TO_BINARY_PATTERN_DAT "%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY_PATTERN_CMD "%c%c %c%c%c%c%c %c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c"
@@ -283,7 +283,6 @@ static void __not_in_flash_func(process_signals)(void)
   
   while (1)
   {
-
     if (!queue_is_empty(&packet_queue)) {
       uint64_t packet;
       queue_try_remove(&packet_queue, &packet);
@@ -313,26 +312,26 @@ static void __not_in_flash_func(process_signals)(void)
       } else {
         if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
         if (dataA == 0x80) {
-          uint32_t word0 = 0b11111111111111111111111111111111;
-          uint32_t word1 = 0b11111111111111111111111111111111;
-          if (alive) word1 = 2;
-          else alive = true;
+          uint32_t word0 = 0b00000000000000000000000000000010;
+          uint32_t word1 = 0b00000000000000000000000000000001;
+          // if (alive) word1 = 2;
+          // else alive = true;
 
           pio_sm_put_blocking(pio1, sm1, word1);
           pio_sm_put_blocking(pio1, sm1, word0);
         }
-        if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // error response
-          u_int32_t word0 = 2;
-          u_int32_t word1 = 0;
-          pio_sm_put(pio1, sm1, word1);
-          pio_sm_put(pio1, sm1, word0);
-        }
-        if (dataA == 0x90) {
-          u_int32_t word0 = 2;
-          u_int32_t word1 = 0b01001010010101010100010001000101;
-          pio_sm_put(pio1, sm1, word1);
-          pio_sm_put(pio1, sm1, word0);
-        }
+        // if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // error response
+        //   u_int32_t word0 = 2;
+        //   u_int32_t word1 = 0;
+        //   pio_sm_put(pio1, sm1, word1);
+        //   pio_sm_put(pio1, sm1, word0);
+        // }
+        // if (dataA == 0x90) {
+        //   u_int32_t word0 = 2;
+        //   u_int32_t word1 = 0b01001010010101010100010001000101;
+        //   pio_sm_put(pio1, sm1, word1);
+        //   pio_sm_put(pio1, sm1, word0);
+        // }
 
         // if (dataA == 0x84) {
           switchA = 1;
@@ -534,16 +533,18 @@ int main(void)
   // Load the clock/select (synchronizing input) programs, and configure a free state machines
   // to run the programs.
 
-  uint offset2 = pio_add_program(pio, &clocked_input_program);
+  uint offset2 = pio_add_program(pio, &polyface_read_program);
   sm2 = pio_claim_unused_sm(pio, true);
-  clocked_input_program_init(pio, sm2, offset2, DATAIO_PIN);
+  polyface_read_program_init(pio, sm2, offset2, DATAIO_PIN);
 
   // Load the plex (multiplex output) program, and configure a free state machine
   // to run the program.
 
-  uint offset1 = pio_add_program(pio1, &clocked_output_program);
-  sm1 = pio_claim_unused_sm(pio1, true);
-  clocked_output_program_init(pio1, sm1, offset1, DATAIO_PIN);
+  uint offset1 = pio_add_program(pio1, &polyface_send_program);
+  sm1 = pio_claim_unused_sm(pio, true);
+  polyface_send_program_init(pio, sm1, offset1, 4, CLKIN_PIN);
+
+  gpio_disable_pulls(DATAIO_PIN);
 
   queue_init(&packet_queue, sizeof(int64_t), 1000);
 
