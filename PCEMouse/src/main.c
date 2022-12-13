@@ -47,6 +47,7 @@
 #include "pico/multicore.h"
 #include "pico/util/queue.h"
 #include "hardware/pio.h"
+#include "hardware/gpio.h"
 #include "polyface_read.pio.h"
 #include "polyface_send.pio.h"
 
@@ -279,7 +280,6 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
 static void __not_in_flash_func(process_signals)(void)
 {
   int switchA = 0;
-  bool alive = false;
   
   while (1)
   {
@@ -311,27 +311,6 @@ static void __not_in_flash_func(process_signals)(void)
         }
       } else {
         if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
-        if (dataA == 0x80) {
-          uint32_t word0 = 0b00000000000000000000000000000010;
-          uint32_t word1 = 0b00000000000000000000000000000001;
-          // if (alive) word1 = 2;
-          // else alive = true;
-
-          pio_sm_put_blocking(pio1, sm1, word1);
-          pio_sm_put_blocking(pio1, sm1, word0);
-        }
-        // if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // error response
-        //   u_int32_t word0 = 2;
-        //   u_int32_t word1 = 0;
-        //   pio_sm_put(pio1, sm1, word1);
-        //   pio_sm_put(pio1, sm1, word0);
-        // }
-        // if (dataA == 0x90) {
-        //   u_int32_t word0 = 2;
-        //   u_int32_t word1 = 0b01001010010101010100010001000101;
-        //   pio_sm_put(pio1, sm1, word1);
-        //   pio_sm_put(pio1, sm1, word0);
-        // }
 
         // if (dataA == 0x84) {
           switchA = 1;
@@ -430,7 +409,8 @@ static void __not_in_flash_func(process_signals)(void)
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-static uint64_t packet = 0;
+  bool alive = false;
+  static uint64_t packet = 0;
   while (1)
   {
     for (int i = 0; i < 2; ++i) {
@@ -441,6 +421,46 @@ static uint64_t packet = 0;
     }
 
     queue_try_add(&packet_queue, &packet);
+
+    uint8_t dataA = ((packet>>17) & 0b11111111);
+    uint8_t dataS = ((packet>>9) & 0b01111111);
+    uint8_t dataC = ((packet>>1) & 0b01111111);
+    if (dataA == 0x80) { // ALIVE
+      uint32_t word0 = 0b1111111111111111111111111111111;
+      uint32_t word1 = 0b1000000000000000000000000000000;
+      if (alive) word1 = 0b01000000000000000000000000000000;
+      else alive = true;
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    // if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
+    //   u_int32_t word0 = 0b01;
+    //   u_int32_t word1 = 0b00;
+    //   pio_sm_put_blocking(pio1, sm1, word1);
+    //   pio_sm_put_blocking(pio1, sm1, word0);
+    // }
+    // if (dataA == 0x90) { // MAGIC
+    //   u_int32_t word0 = 0b01;
+    //   u_int32_t word1 = 0b10100010001000101010101001010010;
+              
+    //   pio_sm_put_blocking(pio1, sm1, word1);
+    //   pio_sm_put_blocking(pio1, sm1, word0);
+    // }
+    // if (dataA == 0x94) { // PROBE
+    //   uint32_t word0 = 0b01;
+    //   uint32_t word1 = 0b10000000000000000000000000000000;
+
+    //   pio_sm_put_blocking(pio1, sm1, word1);
+    //   pio_sm_put_blocking(pio1, sm1, word0);
+    // }
+    // if (dataA == 0xb1) { // RESET
+    //   uint32_t word0 = 0b00000000000000000000000000000001;
+    //   uint32_t word1 = 0b10000000000000000000000000000000;
+
+    //   pio_sm_put_blocking(pio1, sm1, word1);
+    //   pio_sm_put_blocking(pio1, sm1, word0);
+    // }
 
      // Now we are in an update-sequence; set a lock
      // to prevent update during output transaction
@@ -541,10 +561,8 @@ int main(void)
   // to run the program.
 
   uint offset1 = pio_add_program(pio1, &polyface_send_program);
-  sm1 = pio_claim_unused_sm(pio, true);
-  polyface_send_program_init(pio, sm1, offset1, 4, CLKIN_PIN);
-
-  gpio_disable_pulls(DATAIO_PIN);
+  sm1 = pio_claim_unused_sm(pio1, true);
+  polyface_send_program_init(pio1, sm1, offset1, DATAIO_PIN);
 
   queue_init(&packet_queue, sizeof(int64_t), 1000);
 
