@@ -12,7 +12,7 @@ packet:
     in    pins, 1
 
     mov   y, isr
-    jmp   !y, packet ; wait for start bit
+    jmp   !y, packet      ; wait for start bit
 
 ctrl_bit:
     wait  0 pin 1
@@ -43,7 +43,7 @@ static inline void polyface_read_program_init(PIO pio, uint sm, uint offset, uin
     // pin, and the next-numbered GPIO is used as the clock pin.
     sm_config_set_in_pins(&c, pin);
     // Set the pin directions to input at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
+    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
 
     // Shifting to left matches the customary MSB-first ordering of SPI.
     sm_config_set_in_shift(
