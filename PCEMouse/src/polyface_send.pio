@@ -7,11 +7,19 @@ packet:
 
     set   y, 1
     mov   osr, y
-    out   PINDIRS 1 [31]
+    out   PINDIRS 1; sets data pin to output
+    out   pins, 1  ; sets output low during delay
 
     pull  block    ; pull start bits word (bits 0-1)
 
-    set   y, 10     ; output start and control bits
+    set   y, 31    ; delay some clock cycles before sending
+delay:
+    wait  1 gpio 3
+    wait  0 gpio 3
+
+    jmp   y--, delay
+
+    set   y, 1     ; output start and control bits
 start_bit:
     wait  1 gpio 3
     wait  0 gpio 3
@@ -22,16 +30,13 @@ start_bit:
     ;out   null, 30
     mov   osr, x   ; move data bits back into osr
 
-    set   x, 3     ; output 4 data bytes
-data_byte:
-    set   y, 7     ; output 8 bits per byte
+    set   y, 31
 data_bit:
     wait  1 gpio 3
     wait  0 gpio 3
     out   pins, 1
 
     jmp   y--, data_bit
-    jmp   x--, data_byte
 
     set   y, 0
     mov   osr, y
@@ -57,7 +62,7 @@ static inline void polyface_send_program_init(PIO pio, uint sm, uint offset, uin
 
     sm_config_set_out_shift(
         &c,
-        true,  // Shift-to-right = false (i.e. shift to left)
+        true,  // Shift-to-right
         false, // Autopull disabled
         32     // Autopull threshold = 32
     );

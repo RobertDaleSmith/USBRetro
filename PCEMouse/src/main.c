@@ -41,6 +41,7 @@
 
 #include "bsp/board.h"
 #include "tusb.h"
+#include "pico.h"
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
@@ -48,8 +49,12 @@
 #include "pico/util/queue.h"
 #include "hardware/pio.h"
 #include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
 #include "polyface_read.pio.h"
 #include "polyface_send.pio.h"
+
 
 #define BYTE_TO_BINARY_PATTERN_DAT "%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c %c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY_PATTERN_CMD "%c%c %c%c%c%c%c %c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c %c%c%c%c%c%c%c %c"
@@ -122,6 +127,7 @@
 
 queue_t packet_queue;
 
+uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
 
@@ -178,6 +184,36 @@ PIO pio;
 uint sm1, sm2;   // sm1 = clock_out; sm2 = clock_in
 
 /*------------- MAIN -------------*/
+
+bool __not_in_flash_func(get_bootsel_btn)() {
+    const uint CS_PIN_INDEX = 1;
+
+    // Must disable interrupts, as interrupt handlers may be in flash, and we
+    // are about to temporarily disable flash access!
+    uint32_t flags = save_and_disable_interrupts();
+
+    // Set chip select to Hi-Z
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+    // Note we can't call into any sleep functions in flash right now
+    for (volatile int i = 0; i < 1000; ++i);
+
+    // The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
+    // Note the button pulls the pin *low* when pressed.
+    bool button_state = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
+
+    // Need to restore the state of chip select, else we are going to have a
+    // bad time when we return to code in flash!
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+    restore_interrupts(flags);
+
+    return button_state;
+}
 
 // note that "__not_in_flash_func" functions are loaded
 // and "pinned" in SRAM - not paged in/out from XIP flash
@@ -283,91 +319,91 @@ static void __not_in_flash_func(process_signals)(void)
   
   while (1)
   {
-    if (!queue_is_empty(&packet_queue)) {
-      uint64_t packet;
-      queue_try_remove(&packet_queue, &packet);
+    // if (!queue_is_empty(&packet_queue)) {
+    //   uint64_t packet;
+    //   queue_try_remove(&packet_queue, &packet);
 
-      uint8_t ctrlBit = ((packet>>32) & 0b00000001);
-      uint8_t _id = ((packet>>27) & 0b00011111);
-      uint8_t type1 = ((packet>>26) & 0b00000001);
-      uint8_t type0 = ((packet>>25) & 0b00000001);
-      uint8_t cmdat = ((packet>>24) & 0b00000001);
-      uint8_t incad = ((packet>>16) & 0b00000001);
-      uint8_t crc = ((packet>>8) & 0b00000001);
-      uint8_t dataA = ((packet>>17) & 0b11111111);
-      uint8_t dataS = ((packet>>9) & 0b01111111);
-      uint8_t dataC = ((packet>>1) & 0b01111111);
-      // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
+    //   uint8_t ctrlBit = ((packet>>32) & 0b00000001);
+    //   uint8_t _id = ((packet>>27) & 0b00011111);
+    //   uint8_t type1 = ((packet>>26) & 0b00000001);
+    //   uint8_t type0 = ((packet>>25) & 0b00000001);
+    //   uint8_t cmdat = ((packet>>24) & 0b00000001);
+    //   uint8_t incad = ((packet>>16) & 0b00000001);
+    //   uint8_t crc = ((packet>>8) & 0b00000001);
+    //   uint8_t dataA = ((packet>>17) & 0b11111111);
+    //   uint8_t dataS = ((packet>>9) & 0b01111111);
+    //   uint8_t dataC = ((packet>>1) & 0b01111111);
+    //   // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
 
-      if (!ctrlBit) {
-        if (switchA) {
-          printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
-          printf(" - %d \r\n", switchA);
-          switchA++;
-          if (switchA > 5) {
-            switchA = 0;
-            printf("\r\n");
-          }
-        }
-      } else {
-        if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
+    //   if (!ctrlBit) {
+    //     if (switchA) {
+    //       printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
+    //       printf(" - %d \r\n", switchA);
+    //       switchA++;
+    //       if (switchA > 5) {
+    //         switchA = 0;
+    //         printf("\r\n");
+    //       }
+    //     }
+    //   } else {
+    //     if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
 
-        // if (dataA == 0x84) {
-          switchA = 1;
-          printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
-          printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
-          printf(type1 ? "DIRECT   " : "INDIRECT ");
-          printf(type0 ? "READ  " : "WRITE ");
-          printf(cmdat ? "CMD  " : "DATA ");
-          // printf("IA: %d ", incad);
-          // printf("CRC: %d ", crc);
-          printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
-          printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
-          printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
-          // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
-          if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
-          if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
-          if (dataA == 0xb1) printf("[RESET] ");
-          if (dataA == 0xb2) printf("[TAG] ");
-          if (dataA == 0xb3) printf("[UNBRAND] ");
-          if (dataA == 0xb4) printf("[BRAND] ");
-          if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
-          if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
-          if (dataA == 0x90) printf("[MAGIC] ");
-          if (dataA == 0x9a) printf("[CRC] ");
-          if (dataA == 0x99) printf("[STATE] ");
-          if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
-          else if (dataA == 0x80) printf("[CRC] ");
-          if (dataA == 0x84) printf("[REQUEST] ");
-          if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
-          if (dataA == 0xa0) printf("[NOP] ");
-          if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
-          if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
-          if (dataA == 0x32) printf("[QUADX] ");
-          if (dataA == 0x33) printf("[QUADY] ");
-          if (dataA == 0x34) printf("[CHANNEL] ");
-          if (dataA == 0x35) printf("[ANALOG] ");
-          if (dataA == 0x40) printf("[BAUD] ");
-          if (dataA == 0x41) printf("[FLAGS0] ");
-          if (dataA == 0x42) printf("[FLAGS1] ");
-          if (dataA == 0x43) printf("[SDATA] ");
-          if (dataA == 0x44) printf("[SSTATUS] ");
-          if (dataA == 0x45) printf("[RSTATUS] ");
-          if (dataA == 0x20) printf("[A0 (A[7:0])] ");
-          if (dataA == 0x21) printf("[A1 (A[15:8])] ");
-          if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
-          if (dataA == 0x23) printf("[STROBE] ");
-          if (dataA == 0x24) printf("[PINOUT] ");
-          if (dataA == 0x25) printf("[CONFIG] ");
-          if (dataA == 0x26) printf("[INPUTA] ");
-          if (dataA == 0x27) printf("[REQUEST] ");
-          if (dataA == 0x28) printf("[INPUTB] ");
-          printf("\r\n");
-        // } else {
-        //   switchA = 0;
-        // }
-      }
-    }
+    //     // if (dataA == 0x84) {
+    //       switchA = 1;
+    //       printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
+    //       printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
+    //       printf(type1 ? "DIRECT   " : "INDIRECT ");
+    //       printf(type0 ? "READ  " : "WRITE ");
+    //       printf(cmdat ? "CMD  " : "DATA ");
+    //       // printf("IA: %d ", incad);
+    //       // printf("CRC: %d ", crc);
+    //       printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
+    //       printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
+    //       printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
+    //       // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
+    //       if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
+    //       if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
+    //       if (dataA == 0xb1) printf("[RESET] ");
+    //       if (dataA == 0xb2) printf("[TAG] ");
+    //       if (dataA == 0xb3) printf("[UNBRAND] ");
+    //       if (dataA == 0xb4) printf("[BRAND] ");
+    //       if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
+    //       if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
+    //       if (dataA == 0x90) printf("[MAGIC] ");
+    //       if (dataA == 0x9a) printf("[CRC] ");
+    //       if (dataA == 0x99) printf("[STATE] ");
+    //       if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
+    //       else if (dataA == 0x80) printf("[CRC] ");
+    //       if (dataA == 0x84) printf("[REQUEST] ");
+    //       if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
+    //       if (dataA == 0xa0) printf("[NOP] ");
+    //       if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
+    //       if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
+    //       if (dataA == 0x32) printf("[QUADX] ");
+    //       if (dataA == 0x33) printf("[QUADY] ");
+    //       if (dataA == 0x34) printf("[CHANNEL] ");
+    //       if (dataA == 0x35) printf("[ANALOG] ");
+    //       if (dataA == 0x40) printf("[BAUD] ");
+    //       if (dataA == 0x41) printf("[FLAGS0] ");
+    //       if (dataA == 0x42) printf("[FLAGS1] ");
+    //       if (dataA == 0x43) printf("[SDATA] ");
+    //       if (dataA == 0x44) printf("[SSTATUS] ");
+    //       if (dataA == 0x45) printf("[RSTATUS] ");
+    //       if (dataA == 0x20) printf("[A0 (A[7:0])] ");
+    //       if (dataA == 0x21) printf("[A1 (A[15:8])] ");
+    //       if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
+    //       if (dataA == 0x23) printf("[STROBE] ");
+    //       if (dataA == 0x24) printf("[PINOUT] ");
+    //       if (dataA == 0x25) printf("[CONFIG] ");
+    //       if (dataA == 0x26) printf("[INPUTA] ");
+    //       if (dataA == 0x27) printf("[REQUEST] ");
+    //       if (dataA == 0x28) printf("[INPUTB] ");
+    //       printf("\r\n");
+    //     // } else {
+    //     //   switchA = 0;
+    //     // }
+    //   }
+    // }
 
     // tinyusb host task
     // tuh_task();
@@ -409,58 +445,109 @@ static void __not_in_flash_func(process_signals)(void)
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-  bool alive = false;
   static uint64_t packet = 0;
+  bool alv = false;
   while (1)
   {
+    packet = 0;
     for (int i = 0; i < 2; ++i) {
       uint32_t rxdata = pio_sm_get_blocking(pio, sm2);
-
-      // printf(""BYTE_TO_BINARY_PATTERN"", BYTE_TO_BINARY(rxdata));
       packet = ((packet) << 32) | (rxdata & 0xFFFFFFFF);
     }
 
-    queue_try_add(&packet_queue, &packet);
+    // queue_try_add(&packet_queue, &packet);
 
     uint8_t dataA = ((packet>>17) & 0b11111111);
     uint8_t dataS = ((packet>>9) & 0b01111111);
     uint8_t dataC = ((packet>>1) & 0b01111111);
     if (dataA == 0x80) { // ALIVE
-      uint32_t word0 = 0b1111111111111111111111111111111;
-      uint32_t word1 = 0b1000000000000000000000000000000;
-      if (alive) word1 = 0b01000000000000000000000000000000;
-      else alive = true;
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b01);
+      if (alv) word1 = __rev(0b10);
+      else alv = true;
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    // if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
-    //   u_int32_t word0 = 0b01;
-    //   u_int32_t word1 = 0b00;
-    //   pio_sm_put_blocking(pio1, sm1, word1);
-    //   pio_sm_put_blocking(pio1, sm1, word0);
-    // }
-    // if (dataA == 0x90) { // MAGIC
-    //   u_int32_t word0 = 0b01;
-    //   u_int32_t word1 = 0b10100010001000101010101001010010;
+    if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
+      u_int32_t word0 = 1;
+      u_int32_t word1 = 0;
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x90) { // MAGIC
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b01001010010101010100010001000101);
               
-    //   pio_sm_put_blocking(pio1, sm1, word1);
-    //   pio_sm_put_blocking(pio1, sm1, word0);
-    // }
-    // if (dataA == 0x94) { // PROBE
-    //   uint32_t word0 = 0b01;
-    //   uint32_t word1 = 0b10000000000000000000000000000000;
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x94) { // PROBE
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10001011000000110000000000000000);
 
-    //   pio_sm_put_blocking(pio1, sm1, word1);
-    //   pio_sm_put_blocking(pio1, sm1, word0);
-    // }
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
     // if (dataA == 0xb1) { // RESET
-    //   uint32_t word0 = 0b00000000000000000000000000000001;
-    //   uint32_t word1 = 0b10000000000000000000000000000000;
+    //   uint32_t word0 = 1;
+    //   uint32_t word1 = __rev(0b01);
 
     //   pio_sm_put_blocking(pio1, sm1, word1);
     //   pio_sm_put_blocking(pio1, sm1, word0);
     // }
+    if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (1)
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b11000110000000101001010000000000);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (2)
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b10);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b10111001100000111001010100000000);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b10000000100000110000001100000000);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b10000000100000110000001100000000);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b00000000100000001000001100000011);//none
+      if (get_bootsel_btn() ^ PICO_DEFAULT_LED_PIN_INVERTED) {
+        word1 = __rev(0b10000000100000110000001100000000);
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x99 && dataS == 0x01 && dataC == 0x00) { // STATE (1)
+      u_int32_t word0 = 1;
+      u_int32_t word1 = __rev(0b10000000000000000000000000000000);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
 
      // Now we are in an update-sequence; set a lock
      // to prevent update during output transaction

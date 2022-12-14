@@ -39,6 +39,7 @@ target_include_directories(pcemouse PUBLIC
         )
 
 target_link_libraries(pcemouse PRIVATE
+	pico_bit_ops
 	pico_stdlib
 	pico_multicore
 	hardware_pio
