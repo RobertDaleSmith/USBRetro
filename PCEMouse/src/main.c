@@ -125,6 +125,9 @@
 #endif
 #endif
 
+#define PACKET_TYPE_READ 1
+#define PACKET_TYPE_WRITE 0
+
 queue_t packet_queue;
 
 uint32_t __rev(uint32_t);
@@ -446,7 +449,9 @@ static void __not_in_flash_func(process_signals)(void)
 static void __not_in_flash_func(core1_entry)(void)
 {
   static uint64_t packet = 0;
+  static uint16_t state = 0;
   bool alv = false;
+  int requests = 0;
   while (1)
   {
     packet = 0;
@@ -460,6 +465,7 @@ static void __not_in_flash_func(core1_entry)(void)
     uint8_t dataA = ((packet>>17) & 0b11111111);
     uint8_t dataS = ((packet>>9) & 0b01111111);
     uint8_t dataC = ((packet>>1) & 0b01111111);
+    uint8_t type0 = ((packet>>25) & 0b00000001);
     if (dataA == 0x80) { // ALIVE
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b01);
@@ -483,8 +489,8 @@ static void __not_in_flash_func(core1_entry)(void)
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     if (dataA == 0x94) { // PROBE
-      uint32_t word0 = 1;
-      uint32_t word1 = __rev(0b10001011000000110000000000000000);
+      uint32_t word0 = 3;
+      uint32_t word1 = 0;
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -505,10 +511,18 @@ static void __not_in_flash_func(core1_entry)(void)
     }
     if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (2)
       u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b10);
+      u_int32_t word1 = 0;
+
+      // 
+      if ((0b101001001100 >> requests) & 0b01) {
+        word1 = __rev(0b10);
+      }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
+
+      requests++;
+      if (requests == 12) requests = 7;
     }
     if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
       u_int32_t word0 = 1;
@@ -541,12 +555,19 @@ static void __not_in_flash_func(core1_entry)(void)
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x99 && dataS == 0x01 && dataC == 0x00) { // STATE (1)
+    if (dataA == 0x99 && dataS == 0x01 && type0 == PACKET_TYPE_READ) { // STATE
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b10000000000000000000000000000000);
 
+      if (((state >> 8) | 0xff) == 0x41 && (state | 0xff) == 0x51) {
+        word1 = __rev(0b11100110000000000000000000000000);
+      }
+
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    if (dataA == 0x99 && dataS == 0x01 && type0 == PACKET_TYPE_WRITE) {
+      state = ((state) << 8) | (dataC & 0xFF);
     }
 
      // Now we are in an update-sequence; set a lock
