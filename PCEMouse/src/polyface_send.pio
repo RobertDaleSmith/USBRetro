@@ -3,46 +3,44 @@
 .program polyface_send
 
 packet:
-    pull  block    ; wait and pull data bits word (bits 2-33)
-    mov   x, osr   ; hold data bits until osr is empty
+    pull  block     ; wait and pull data bits word (bits 2-33)
+    mov   x, osr    ; hold data bits until osr is empty
 
-    set   y, 1     ; sets data pin to output mode
+    set   y, 1      ; sets data pin to output mode
     mov   osr, y
     out   PINDIRS 1
 
-    out   pins, 1  ; sets output low during delay
+    out   pins, 1   ; sets output low during delay
 
-    pull  block    ; pull start bits word (bits 0-1)
-    set   y, 31    ; delay a few clock cycles
+    pull  block     ; pull start bits word (bits 0-1)
+    set   y, 29     ; delay a few clock cycles (avoids collisions)
 delay:
     wait  1 gpio 3
     wait  0 gpio 3
     jmp   y--, delay
 
-    set   y, 1     ; loop out start and control (2 bits)
-start_bit:
+    set   y, 1      ; loop out start and control (2 bits)
+start_bits:
     wait  1 gpio 3
     wait  0 gpio 3
     out   pins, 1
-    jmp   y--, start_bit
+    jmp   y--, start_bits
 
-    mov   osr, x   ; move data bits back into osr
-    set   y, 31    ; loop out data bytes (32 bits)
-data_bit:
+    mov   osr, x    ; move data bits back into osr
+    set   x, 6      ; loop out data bytes (32 bits + 16 zeros)
+data_bits_0:
+    set   y, 8 
+data_bits_1:
     wait  1 gpio 3
     wait  0 gpio 3
     out   pins, 1
 
-    jmp   y--, data_bit
+    jmp   y--, data_bits_1
+    jmp   x--, data_bits_0
 
-    wait  1 gpio 3 ; wait for last bit to finish
-    wait  0 gpio 3
+    out   PINDIRS 1 ; sets data pin back to input
 
-    set   y, 0     ; sets data pin back to input mode
-    mov   osr, y
-    out   PINDIRS 1
-
-    jmp   packet   ; send next packet
+    jmp   packet    ; send next packet
 
 % c-sdk {
 static inline void polyface_send_program_init(PIO pio, uint sm, uint offset, uint pin) {
