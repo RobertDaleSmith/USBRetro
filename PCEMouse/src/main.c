@@ -300,14 +300,11 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
     players[dev_addr-1].is6btn = false;
   }
 
-  if (!output_exclude || !isMouse)
-  {
-     players[dev_addr-1].output_x = players[dev_addr-1].global_x;
-     players[dev_addr-1].output_y = players[dev_addr-1].global_y;
-     players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
+  players[dev_addr-1].output_x = players[dev_addr-1].global_x;
+  players[dev_addr-1].output_y = players[dev_addr-1].global_y;
+  players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
 
-     update_output();
-  }
+  update_output();
 }
 
 //
@@ -409,7 +406,7 @@ static void __not_in_flash_func(process_signals)(void)
     // }
 
     // tinyusb host task
-    // tuh_task();
+    tuh_task();
     // neopixel task
     // neopixel_task(playersCount);
 #ifndef ADAFRUIT_QTPY_RP2040
@@ -429,12 +426,12 @@ static void __not_in_flash_func(process_signals)(void)
     // if (absolute_time_diff_us(init_time, current_time) > reset_period) {
     //   state = 3;
     //   update_output();
-    //   output_exclude = false;
+      // output_exclude = false;
     //   init_time = get_absolute_time();
     // }
 
 #if CFG_TUH_HID
-    // hid_app_task();
+    hid_app_task();
 #endif
 
   }
@@ -550,9 +547,11 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b00000000100000001000001100000011);//none
-      if (get_bootsel_btn() ^ PICO_DEFAULT_LED_PIN_INVERTED) {
+      // if (get_bootsel_btn() ^ PICO_DEFAULT_LED_PIN_INVERTED) {
+      if (!((output_word_0>>5)&0b01)) {
         word1 = __rev(0b01000000100000000000001100000101);
       }
+      // printf(""BYTE_TO_BINARY_PATTERN_DAT" \r\n ", BYTE_TO_BINARY((output_word_0>>5)&0b01));
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -572,57 +571,20 @@ static void __not_in_flash_func(core1_entry)(void)
       }
     }
 
-     // Now we are in an update-sequence; set a lock
-     // to prevent update during output transaction
-    //  output_exclude = true;
+    // output_exclude = true;
 
-     // assume data is already formatted in output_word and push it to the state machine
-    //  pio_sm_put(pio, sm1, output_word_1);
-    //  pio_sm_put(pio, sm1, output_word_0);
+    // update_output();
 
-     // Sequence from state 3 down through state 0 (show different nybbles to PCE)
-     //
-     // Note that when state = zero, it doesn't transition to a next state; the reset to
-     // state 3 will happen as part of a timed process on the second CPU & state machine
-     //
+    // unsigned short int i;
+    // for (i = 0; i < 5; ++i) {
+    //   // decrement outputs from globals
+    //   players[i].global_x = (players[i].global_x - players[i].output_x);
+    //   players[i].global_y = (players[i].global_y - players[i].output_y);
 
-     // Also note that staying in 'scan' (CLK = low, SEL = high), is not expected
-     // last more than about a half of a millisecond
-     //
-    //  loop_time = get_absolute_time();
-    //  while ((gpio_get(CLKIN_PIN) == 0) && (gpio_get(DATAIO_PIN) == 1))
-    //  {
-    //     if (absolute_time_diff_us(loop_time, get_absolute_time()) > 550) {
-    //        state = 0;
-    //        break;
-    //     }
-    //  }
-
-    //  if (state != 0)
-    //  {
-    //     state--;
-    //     update_output();
-
-    //     // renew countdown timeframe
-    //     init_time = get_absolute_time();
-    //  }
-    //  else
-    //  {
-    //     update_output();
-
-    //     unsigned short int i;
-    //     for (i = 0; i < 5; ++i) {
-    //       // decrement outputs from globals
-    //       players[i].global_x = (players[i].global_x - players[i].output_x);
-    //       players[i].global_y = (players[i].global_y - players[i].output_y);
-
-    //       players[i].output_x = 0;
-    //       players[i].output_y = 0;
-    //       players[i].output_buttons = players[i].global_buttons;
-    //     }
-
-    //     output_exclude = true;            // continue to lock the output values (which are now zero)
-    //  }
+    //   players[i].output_x = 0;
+    //   players[i].output_y = 0;
+    //   players[i].output_buttons = players[i].global_buttons;
+    // }
 
   }
 }

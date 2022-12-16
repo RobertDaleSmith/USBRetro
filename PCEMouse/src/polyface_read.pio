@@ -14,14 +14,9 @@ packet:
     mov   y, isr
     jmp   !y, packet      ; wait for start bit
 
-ctrl_bit:
-    wait  0 pin 1
-    wait  1 pin 1
-    in    pins, 1         ; read control bit
-
-    set   x, 3            ; read 4 command data bytes
+    set   x, 2 ;(3)       ; read control bit and 32 data bits (33)
 data_byte:
-    set   y, 7            ; read 8 bits per byte
+    set   y, 10;(11)
 data_bit:
     wait  0 pin 1
     wait  1 pin 1
