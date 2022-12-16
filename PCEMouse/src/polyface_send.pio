@@ -6,32 +6,28 @@ packet:
     pull  block    ; wait and pull data bits word (bits 2-33)
     mov   x, osr   ; hold data bits until osr is empty
 
-    set   y, 1
+    set   y, 1     ; sets data pin to output mode
     mov   osr, y
-    out   PINDIRS 1; sets data pin to output
+    out   PINDIRS 1
+
     out   pins, 1  ; sets output low during delay
 
     pull  block    ; pull start bits word (bits 0-1)
-
-    set   y, 31    ; delay some clock cycles before sending
+    set   y, 31    ; delay a few clock cycles
 delay:
     wait  1 gpio 3
     wait  0 gpio 3
-
     jmp   y--, delay
 
-    set   y, 1     ; output start and control bits
+    set   y, 1     ; loop out start and control (2 bits)
 start_bit:
     wait  1 gpio 3
     wait  0 gpio 3
     out   pins, 1
-
     jmp   y--, start_bit
 
-    ;out   null, 30
     mov   osr, x   ; move data bits back into osr
-
-    set   y, 31
+    set   y, 31    ; loop out data bytes (32 bits)
 data_bit:
     wait  1 gpio 3
     wait  0 gpio 3
@@ -39,11 +35,14 @@ data_bit:
 
     jmp   y--, data_bit
 
-    set   y, 0
+    wait  1 gpio 3 ; wait for last bit to finish
+    wait  0 gpio 3
+
+    set   y, 0     ; sets data pin back to input mode
     mov   osr, y
     out   PINDIRS 1
 
-    jmp   packet
+    jmp   packet   ; send next packet
 
 % c-sdk {
 static inline void polyface_send_program_init(PIO pio, uint sm, uint offset, uint pin) {
