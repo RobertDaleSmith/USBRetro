@@ -1,6 +1,7 @@
 ;
 
 .program polyface_send
+
 packet:
     pull  block    ; wait and pull data bits word (bits 2-33)
     mov   x, osr   ; hold data bits until osr is empty

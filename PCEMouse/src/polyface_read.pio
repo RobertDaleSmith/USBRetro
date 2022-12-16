@@ -19,9 +19,9 @@ ctrl_bit:
     wait  1 pin 1
     in    pins, 1         ; read control bit
 
-    set   x, 4            ; read 4 command data bytes
+    set   x, 3            ; read 4 command data bytes
 data_byte:
-    set   y, 8            ; read 8 bits per byte
+    set   y, 7            ; read 8 bits per byte
 data_bit:
     wait  0 pin 1
     wait  1 pin 1
