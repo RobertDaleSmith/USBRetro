@@ -451,7 +451,8 @@ static void __not_in_flash_func(core1_entry)(void)
   static uint64_t packet = 0;
   static uint16_t state = 0;
   bool alv = false;
-  int requests = 0;
+  int requestsA = 0;
+  int requestsB = 0;
   while (1)
   {
     packet = 0;
@@ -475,99 +476,100 @@ static void __not_in_flash_func(core1_entry)(void)
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
+    else if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
       u_int32_t word0 = 1;
       u_int32_t word1 = 0;
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x90) { // MAGIC
+    else if (dataA == 0x90) { // MAGIC
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b01001010010101010100010001000101);
               
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x94) { // PROBE
-      uint32_t word0 = 3;
-      uint32_t word1 = 0;
+    else if (dataA == 0x94) { // PROBE
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10001011000000110000000000000000);
+      //DEFCFG VERSION      TYPE      MFG TAGGED BRANDED    ID P
+      //   0b1  0001011 00000011 00000000      0       0 00000 0
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    // if (dataA == 0xb1) { // RESET
-    //   uint32_t word0 = 1;
-    //   uint32_t word1 = __rev(0b01);
-
-    //   pio_sm_put_blocking(pio1, sm1, word1);
-    //   pio_sm_put_blocking(pio1, sm1, word0);
-    // }
-    if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (1)
+    else if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (A)
       u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b11000110000000101001010000000000);
+      u_int32_t word1 = __rev(0b11000100100000101001101100000000);
+
+      if (requestsA) {
+        word1 = __rev(0b11000110000000101001010000000000);
+      } else {
+        requestsA = 1;
+      }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (2)
+    else if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (B)
       u_int32_t word0 = 1;
       u_int32_t word1 = 0;
 
       // 
-      if ((0b101001001100 >> requests) & 0b01) {
+      if ((0b101001001100 >> requestsB) & 0b01) {
         word1 = __rev(0b10);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
 
-      requests++;
-      if (requests == 12) requests = 7;
+      requestsB++;
+      if (requestsB == 12) requestsB = 7;
     }
-    if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
+    else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b10111001100000111001010100000000);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
+    else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b10000000100000110000001100000000);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
+    else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b10000000100000110000001100000000);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
+    else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
       u_int32_t word0 = 1;
       u_int32_t word1 = __rev(0b00000000100000001000001100000011);//none
       if (get_bootsel_btn() ^ PICO_DEFAULT_LED_PIN_INVERTED) {
-        word1 = __rev(0b10000000100000110000001100000000);
+        word1 = __rev(0b01000000100000000000001100000101);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    if (dataA == 0x99 && dataS == 0x01 && type0 == PACKET_TYPE_READ) { // STATE
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b10000000000000000000000000000000);
+    else if (dataA == 0x99 && dataS == 0x01) { // STATE
+      if (type0 == PACKET_TYPE_READ) {
+        u_int32_t word0 = 1;
+        u_int32_t word1 = __rev(0b10000000000000000000000000000000);
 
-      if (((state >> 8) | 0xff) == 0x41 && (state | 0xff) == 0x51) {
-        word1 = __rev(0b11100110000000000000000000000000);
+        if (((state >> 8) | 0xff) == 0x41 && (state | 0xff) == 0x51) {
+          word1 = __rev(0b11000000000000101000000000000000);
+        }
+        pio_sm_put_blocking(pio1, sm1, word1);
+        pio_sm_put_blocking(pio1, sm1, word0);
+      } else { // type0 == PACKET_TYPE_WRITE
+        state = ((state) << 8) | (dataC & 0xff);
       }
-
-      pio_sm_put_blocking(pio1, sm1, word1);
-      pio_sm_put_blocking(pio1, sm1, word0);
-    }
-    if (dataA == 0x99 && dataS == 0x01 && type0 == PACKET_TYPE_WRITE) {
-      state = ((state) << 8) | (dataC & 0xFF);
     }
 
      // Now we are in an update-sequence; set a lock
