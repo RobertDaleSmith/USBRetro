@@ -157,38 +157,118 @@ Player_t players[5] = { 0 };
 int playersCount = 0;
 
 
-// When PCE reads, set interlock to ensure atomic update
+// When Nuon reads, set interlock to ensure atomic update
 //
 volatile bool  output_exclude = false;
 
-
-// output_word -> is the word sent to the state machine for output
-//
-// Structure of the word sent to the FIFO from the ARM:
-// |00000000|00ssbbbb|xxxxxxxx|yyyyyyyy
-// Where:
-//  - 0 = must be zero
-//  - s = state (which nybble to output, 3/2/1/0)
-//  - b = button values, arranged in Run/Sel/II/I sequence for PC Engine use
-//  - x = mouse 'x' movement; left is {1 - 0x7F} ; right is {0xFF - 0x80 }
-//  - y = mouse 'y' movement;  up  is {1 - 0x7F} ; down  is {0xFF - 0x80 }
-//
 uint32_t output_word_0 = 0;
-uint32_t output_word_1 = 0;
-
-int state = 0;          // countdown sequence for shift-register position
-
-// static absolute_time_t init_time;
-// static absolute_time_t current_time;
-// static absolute_time_t loop_time;
-// static const int64_t reset_period = 600;  // at 600us, reset the scan exclude flag
 
 PIO pio;
-uint sm1, sm2;   // sm1 = clock_out; sm2 = clock_in
+uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
 
 /*------------- MAIN -------------*/
 
-bool __not_in_flash_func(get_bootsel_btn)() {
+// note that "__not_in_flash_func" functions are loaded
+// and "pinned" in SRAM - not paged in/out from XIP flash
+//
+
+//
+// update_output - updates output_word with multi-tap plex data that
+//                 is sent to PCE based on state and device types
+//
+void __not_in_flash_func(update_output)(void)
+{
+  int16_t buttons = (players[0].output_buttons & 0xffff);
+  int16_t checksum = (eparity(buttons & 0b1101111111111111) << 15) |
+                     (eparity(buttons & 0b0011000000000000) << 14) |
+                     (eparity(buttons & 0b0001100000000000) << 13) |
+                     (eparity(buttons & 0b0000110000000000) << 12) |
+                     (eparity(buttons & 0b0000011000000000) << 11) |
+                     (eparity(buttons & 0b0000001100000000) << 10) |
+                     (eparity(buttons & 0b0000000110000000) << 9) |
+                     (eparity(buttons & 0b0000000011000000) << 8) |
+
+                     (eparity(buttons & 0b0000000001100000) << 7) |
+                     (eparity(buttons & 0b0000000000110000) << 6) |
+                     (eparity(buttons & 0b0000000000011000) << 5) |
+                     (eparity(buttons & 0b0000000000001100) << 4) |
+                     (eparity(buttons & 0b1000000000000110) << 3) |
+                     (eparity(buttons & 0b0100000000000011) << 2) |
+                     (eparity(buttons & 0b0111111111111110) << 1) |
+                     (eparity(buttons & 0b1011111111111111) << 0) ;
+
+  output_word_0 = (buttons << 16) | (checksum & 0xffff);
+}
+
+//
+// post_globals - accumulate the many intermediate mouse scans (~1ms)
+//                into an accumulator which will be reported back to PCE
+//
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
+{
+  if (delta_x >= 128) 
+    players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
+  else
+    players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
+
+  if (delta_y >= 128) 
+    players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
+  else
+    players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
+
+  players[dev_addr-1].global_buttons = buttons;
+
+
+  players[dev_addr-1].output_x = players[dev_addr-1].global_x;
+  players[dev_addr-1].output_y = players[dev_addr-1].global_y;
+  players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
+
+  update_output();
+}
+
+//
+// process_signals - inner-loop processing of events:
+//                   - USB polling
+//                   - event processing
+//                   - detection of when a PCE scan is no longer in process (reset period)
+//
+static void __not_in_flash_func(process_signals)(void)
+{
+  while (1)
+  {
+    // tinyusb host task
+    tuh_task();
+    // neopixel task
+    neopixel_task(playersCount);
+#ifndef ADAFRUIT_QTPY_RP2040
+    // led_blinking_task();
+#endif
+
+#if CFG_TUH_CDC
+    cdc_task();
+#endif
+
+//
+// check time offset in order to detect when a PCE scan is no longer
+// in process (so that fresh values can be sent to the state machine)
+//
+    // current_time = get_absolute_time();
+
+    // if (absolute_time_diff_us(init_time, current_time) > reset_period) {
+    //   state = 3;
+    //   update_output();
+      // output_exclude = false;
+    //   init_time = get_absolute_time();
+    // }
+
+#if CFG_TUH_HID
+    hid_app_task();
+#endif
+
+  }
+}
+
+static bool __not_in_flash_func(get_bootsel_btn)() {
     const uint CS_PIN_INDEX = 1;
 
     // Must disable interrupts, as interrupt handlers may be in flash, and we
@@ -217,226 +297,6 @@ bool __not_in_flash_func(get_bootsel_btn)() {
 
     return button_state;
 }
-
-// note that "__not_in_flash_func" functions are loaded
-// and "pinned" in SRAM - not paged in/out from XIP flash
-//
-
-//
-// update_output - updates output_word with multi-tap plex data that
-//                 is sent to PCE based on state and device types
-//
-void __not_in_flash_func(update_output)(void)
-{
-  int8_t bytes[5] = { 0 };
-
-  unsigned short int i;
-  for (i = 0; i < 5; ++i) {
-    bool has6Btn = !(players[i].output_buttons & 0x0f00);
-    bool isMouse = !(players[i].output_buttons & 0x0f);
-
-    // base controller/mouse buttons
-    int8_t byte = (players[i].output_buttons & 0xff);
-
-    // 6 button extra four buttons (III/IV/V/VI)
-    if (has6Btn && players[i].is6btn && (state == 2)) {
-      byte = ((players[i].output_buttons>>8) & 0xf0);
-    }
-
-    // mouse x/y states
-    if (isMouse) {
-      switch (state) {
-        case 3: // state 3: x most significant nybble
-          byte |= (((players[i].output_x>>1) & 0xf0) >> 4);
-          break;
-        case 2: // state 2: x least significant nybble
-          byte |= (((players[i].output_x>>1) & 0x0f));
-          break;
-        case 1: // state 1: y most significant nybble
-          byte |= (((players[i].output_y>>1) & 0xf0) >> 4);
-          break;
-        case 0: // state 0: y least significant nybble
-          byte |= (((players[i].output_y>>1) & 0x0f));
-          break;
-      }
-    }
-
-    bytes[i] = byte;
-  }
-
-  output_word_0 = ((bytes[0] & 0xff))      | // player 1
-                  ((bytes[1] & 0xff) << 8) | // player 2
-                  ((bytes[2] & 0xff) << 16)| // player 3
-                  ((bytes[3] & 0xff) << 24); // player 4
-  output_word_1 = ((bytes[4] & 0xff));       // player 5
-}
-
-
-//
-// post_globals - accumulate the many intermediate mouse scans (~1ms)
-//                into an accumulator which will be reported back to PCE
-//
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
-{
-  bool has6Btn = !(buttons & 0x0f00);
-  bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
-
-  if (delta_x >= 128) 
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
-  else
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
-
-  if (delta_y >= 128) 
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
-  else
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
-
-  players[dev_addr-1].global_buttons = buttons;
-
-  if (has6Btn && !(buttons & 0b0000000010000001)) {
-    players[dev_addr-1].is6btn = true;
-  }
-  else if (has6Btn && !(buttons & 0b0000000010000100)) {
-    players[dev_addr-1].is6btn = false;
-  }
-
-  players[dev_addr-1].output_x = players[dev_addr-1].global_x;
-  players[dev_addr-1].output_y = players[dev_addr-1].global_y;
-  players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
-
-  update_output();
-}
-
-//
-// process_signals - inner-loop processing of events:
-//                   - USB polling
-//                   - event processing
-//                   - detection of when a PCE scan is no longer in process (reset period)
-//
-static void __not_in_flash_func(process_signals)(void)
-{
-  int switchA = 0;
-  
-  while (1)
-  {
-    // if (!queue_is_empty(&packet_queue)) {
-    //   uint64_t packet;
-    //   queue_try_remove(&packet_queue, &packet);
-
-    //   uint8_t ctrlBit = ((packet>>32) & 0b00000001);
-    //   uint8_t _id = ((packet>>27) & 0b00011111);
-    //   uint8_t type1 = ((packet>>26) & 0b00000001);
-    //   uint8_t type0 = ((packet>>25) & 0b00000001);
-    //   uint8_t cmdat = ((packet>>24) & 0b00000001);
-    //   uint8_t incad = ((packet>>16) & 0b00000001);
-    //   uint8_t crc = ((packet>>8) & 0b00000001);
-    //   uint8_t dataA = ((packet>>17) & 0b11111111);
-    //   uint8_t dataS = ((packet>>9) & 0b01111111);
-    //   uint8_t dataC = ((packet>>1) & 0b01111111);
-    //   // uint8_t eParity = eparity((packet & 0xFFFFFFFF));
-
-    //   if (!ctrlBit) {
-    //     if (switchA) {
-    //       printf(""BYTE_TO_BINARY_PATTERN_DAT" | ", BYTE_TO_BINARY(packet));
-    //       printf(" - %d \r\n", switchA);
-    //       switchA++;
-    //       if (switchA > 5) {
-    //         switchA = 0;
-    //         printf("\r\n");
-    //       }
-    //     }
-    //   } else {
-    //     if (pio_sm_is_tx_fifo_full(pio1, sm1)) printf("FULL.");
-
-    //     // if (dataA == 0x84) {
-    //       switchA = 1;
-    //       printf(""BYTE_TO_BINARY_PATTERN_CMD" | ", BYTE_TO_BINARY(packet));
-    //       printf("ID: "); printf(_id<16 ? "0x0%x " : "0x%x ", _id);
-    //       printf(type1 ? "DIRECT   " : "INDIRECT ");
-    //       printf(type0 ? "READ  " : "WRITE ");
-    //       printf(cmdat ? "CMD  " : "DATA ");
-    //       // printf("IA: %d ", incad);
-    //       // printf("CRC: %d ", crc);
-    //       printf("A: "); printf(dataA<16 ? "0x0%x " : "0x%x ", dataA);
-    //       printf("S: "); printf(dataS<16 ? "0x0%x " : "0x%x ", dataS);
-    //       printf("C: "); printf(dataC<16 ? "0x0%x " : "0x%x ", dataC);
-    //       // printf("Parity: "); printf((eParity ? "PASS " : "FAIL "));
-    //       if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x01) printf("[FOCUS] ");
-    //       if (dataA == 0xb0 && dataS == 0x00 && dataC == 0x02) printf("[BLUR] ");
-    //       if (dataA == 0xb1) printf("[RESET] ");
-    //       if (dataA == 0xb2) printf("[TAG] ");
-    //       if (dataA == 0xb3) printf("[UNBRAND] ");
-    //       if (dataA == 0xb4) printf("[BRAND] ");
-    //       if (dataA == 0x94 && dataS == 0x04 && dataC == 0x00) printf("[PROBE] ");
-    //       if (dataA == 0xb1 && dataS == 0x04 && dataC == 0x00) printf("[MAGIC] ");
-    //       if (dataA == 0x90) printf("[MAGIC] ");
-    //       if (dataA == 0x9a) printf("[CRC] ");
-    //       if (dataA == 0x99) printf("[STATE] ");
-    //       if (dataA == 0x80 && dataS == 0x04 && dataC == 0x40) printf("[ALIVE] ");
-    //       else if (dataA == 0x80) printf("[CRC] ");
-    //       if (dataA == 0x84) printf("[REQUEST] ");
-    //       if (dataA == 0x85 || dataA == 0x88 || dataA == 0x98) printf("[ERROR] ");
-    //       if (dataA == 0xa0) printf("[NOP] ");
-    //       if (dataA == 0x30) printf("[{SWITCH[8:1]}] ");
-    //       if (dataA == 0x31) printf("[{SWITCH[16:9]}] ");
-    //       if (dataA == 0x32) printf("[QUADX] ");
-    //       if (dataA == 0x33) printf("[QUADY] ");
-    //       if (dataA == 0x34) printf("[CHANNEL] ");
-    //       if (dataA == 0x35) printf("[ANALOG] ");
-    //       if (dataA == 0x40) printf("[BAUD] ");
-    //       if (dataA == 0x41) printf("[FLAGS0] ");
-    //       if (dataA == 0x42) printf("[FLAGS1] ");
-    //       if (dataA == 0x43) printf("[SDATA] ");
-    //       if (dataA == 0x44) printf("[SSTATUS] ");
-    //       if (dataA == 0x45) printf("[RSTATUS] ");
-    //       if (dataA == 0x20) printf("[A0 (A[7:0])] ");
-    //       if (dataA == 0x21) printf("[A1 (A[15:8])] ");
-    //       if (dataA == 0x22) printf("[A2 (sticky_cs,A[23:16])] ");
-    //       if (dataA == 0x23) printf("[STROBE] ");
-    //       if (dataA == 0x24) printf("[PINOUT] ");
-    //       if (dataA == 0x25) printf("[CONFIG] ");
-    //       if (dataA == 0x26) printf("[INPUTA] ");
-    //       if (dataA == 0x27) printf("[REQUEST] ");
-    //       if (dataA == 0x28) printf("[INPUTB] ");
-    //       printf("\r\n");
-    //     // } else {
-    //     //   switchA = 0;
-    //     // }
-    //   }
-    // }
-
-    // tinyusb host task
-    tuh_task();
-    // neopixel task
-    // neopixel_task(playersCount);
-#ifndef ADAFRUIT_QTPY_RP2040
-    // led_blinking_task();
-#endif
-
-#if CFG_TUH_CDC
-    // cdc_task();
-#endif
-
-//
-// check time offset in order to detect when a PCE scan is no longer
-// in process (so that fresh values can be sent to the state machine)
-//
-    // current_time = get_absolute_time();
-
-    // if (absolute_time_diff_us(init_time, current_time) > reset_period) {
-    //   state = 3;
-    //   update_output();
-      // output_exclude = false;
-    //   init_time = get_absolute_time();
-    // }
-
-#if CFG_TUH_HID
-    hid_app_task();
-#endif
-
-  }
-}
-
 
 //
 // core1_entry - inner-loop for the second core
@@ -546,12 +406,7 @@ static void __not_in_flash_func(core1_entry)(void)
     }
     else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
       u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b00000000100000001000001100000011);//none
-      // if (get_bootsel_btn() ^ PICO_DEFAULT_LED_PIN_INVERTED) {
-      if (!((output_word_0>>5)&0b01)) {
-        word1 = __rev(0b01000000100000000000001100000101);
-      }
-      // printf(""BYTE_TO_BINARY_PATTERN_DAT" \r\n ", BYTE_TO_BINARY((output_word_0>>5)&0b01));
+      u_int32_t word1 = __rev(output_word_0);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -604,20 +459,16 @@ int main(void)
 
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
-    players[i].global_buttons = 0xFFFF;
+    players[i].global_buttons = 0x80;
     players[i].global_x = 0;
     players[i].global_y = 0;
-    players[i].output_buttons = 0xFFFF;
+    players[i].output_buttons = 0x80;
     players[i].output_x = 0;
     players[i].output_y = 0;
     players[i].is6btn = false;
   }
-  state = 3;
 
-  output_word_0 = 0x00FFFFFFFF;  // no buttons pushed
-  output_word_1 = 0x00000000FF;  // no buttons pushed
-
-  // init_time = get_absolute_time();
+  output_word_0 = 0b00000000100000001000001100000011;  // no buttons pushed
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
@@ -690,28 +541,6 @@ void cdc_task(void)
 
 #endif
 
-//--------------------------------------------------------------------+
-// TinyUSB Callbacks
-//--------------------------------------------------------------------+
-
-//--------------------------------------------------------------------+
-// Blinking Task
-//--------------------------------------------------------------------+
-void led_blinking_task(void)
-{
-  const uint32_t interval_ms = 10;
-  static uint32_t start_ms = 0;
-
-  static bool led_state = false;
-
-  // Blink every interval ms
-  if ( board_millis() - start_ms < interval_ms) return; // not enough time
-  start_ms += interval_ms;
-
-  board_led_write(led_state);
-  led_state = 1 - led_state; // toggle
-}
-
 uint8_t eparity(uint32_t data) {
   uint32_t eparity;
   eparity = (data>>16)^data;
@@ -719,5 +548,5 @@ uint8_t eparity(uint32_t data) {
   eparity ^= (eparity>>4);
   eparity ^= (eparity>>2);
   eparity ^= (eparity>>1);
-  return((~eparity)&0x1);
+  return((eparity)&0x1);
 }
