@@ -650,21 +650,23 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
-    bool has_6btns = true;
 
-    buttons = (((psc_report.r1 || psc_report.l2) ? 0x00 : 0x8000) |
-               ((psc_report.l1 || psc_report.r2) ? 0x00 : 0x4000) |
-               ((psc_report.square)   ? 0x00 : 0x2000) |
-               ((psc_report.triangle) ? 0x00 : 0x1000) |
-               ((has_6btns)           ? 0x00 : 0xFF00) |
-               ((dpad_left)           ? 0x00 : 0x08) |
-               ((dpad_down)           ? 0x00 : 0x04) |
-               ((dpad_right)          ? 0x00 : 0x02) |
-               ((dpad_up)             ? 0x00 : 0x01) |
-               ((psc_report.option || psc_report.ps) ? 0x00 : 0x80) |
-               ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
-               ((psc_report.cross  || (!has_6btns && psc_report.triangle && !psc_report.ps)) ? 0x00 : 0x20) |
-               ((psc_report.circle || (!has_6btns && psc_report.square)) ? 0x00 : 0x10));
+    buttons = (((psc_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
+               ((psc_report.cross)    ? 0x4000 : 0x00) | //A
+               ((psc_report.option)   ? 0x2000 : 0x00) | //START
+               ((psc_report.share)    ? 0x1000 : 0x00) | //NUON
+               ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
+               ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
+               ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
+               ((dpad_right)          ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)                   ? 0x0080 : 0x00) |
+               ((0)                   ? 0x0040 : 0x00) |
+               ((psc_report.l1)       ? 0x0020 : 0x00) | //L
+               ((psc_report.r1)       ? 0x0010 : 0x00) | //R
+               ((psc_report.square)   ? 0x0008 : 0x00) | //B
+               ((psc_report.triangle) ? 0x0004 : 0x00) | //C-LEFT
+               ((psc_report.l2)       ? 0x0002 : 0x00) | //C-UP
+               ((psc_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
