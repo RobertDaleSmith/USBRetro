@@ -128,6 +128,13 @@
 #define PACKET_TYPE_READ 1
 #define PACKET_TYPE_WRITE 0
 
+#define ATOD_CHANNEL_NONE 0x00
+#define ATOD_CHANNEL_MODE 0x01
+#define ATOD_CHANNEL_X1 0x02
+#define ATOD_CHANNEL_Y1 0x03
+#define ATOD_CHANNEL_X2 0x04
+#define ATOD_CHANNEL_Y2 0x05
+
 queue_t packet_queue;
 
 uint32_t __rev(uint32_t);
@@ -305,10 +312,17 @@ static bool __not_in_flash_func(get_bootsel_btn)() {
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-  static uint64_t packet = 0;
-  static uint16_t state = 0;
-  bool alv = false;
-  int requestsA = 0;
+  uint64_t packet = 0;
+  uint16_t state = 0;
+  uint8_t channel = 0;
+  uint8_t defcfg = 1;
+  uint8_t version = 11;
+  uint8_t type = 3;
+  uint8_t mfg = 0;
+  uint8_t id = 0;
+  bool alive = false;
+  bool tagged = false;
+  bool branded = false;
   int requestsB = 0;
   while (1)
   {
@@ -327,50 +341,59 @@ static void __not_in_flash_func(core1_entry)(void)
     if (dataA == 0x80) { // ALIVE
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b01);
-      if (alv) word1 = __rev(0b10);
-      else alv = true;
+      if (alive) word1 = __rev(0b10);
+      else alive = true;
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
-      u_int32_t word0 = 1;
-      u_int32_t word1 = 0;
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x90) { // MAGIC
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b01001010010101010100010001000101);
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b01001010010101010100010001000101);
               
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x94) { // PROBE
       uint32_t word0 = 1;
-      uint32_t word1 = __rev(0b10001011000000110000000000000000);
-      //DEFCFG VERSION      TYPE      MFG TAGGED BRANDED    ID P
-      //   0b1  0001011 00000011 00000000      0       0 00000 0
+      uint32_t word1 = __rev(0b10001011000000110000000000000000); // res from HPI controller
+
+      //DEFCFG VERSION     TYPE      MFG TAGGED BRANDED    ID P
+      //   0b1 0001011 00000011 00000000      0       0 00000 0
+      word1 = ((defcfg  & 1)<<31) |
+              ((version & 0b01111111)<<24) |
+              ((type    & 0b11111111)<<16) |
+              ((mfg     & 0b11111111)<<8) |
+              (((tagged ? 1:0) & 1)<<7) |
+              (((branded? 1:0) & 1)<<6) |
+              ((id      & 0b00011111)<<1);
+      word1 = __rev(word1 | eparity(word1));
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    else if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (A)
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b11000100100000101001101100000000);
+    else if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (ADDRESS)
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
 
-      if (requestsA) {
-        word1 = __rev(0b11000110000000101001010000000000);
+      if (channel == ATOD_CHANNEL_MODE) {
+        word1 = __rev(0b11000100100000101001101100000000);
       } else {
-        requestsA = 1;
+        word1 = __rev(0b11000110000000101001010000000000);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (B)
-      u_int32_t word0 = 1;
-      u_int32_t word1 = 0;
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
 
       // 
       if ((0b101001001100 >> requestsB) & 0b01) {
@@ -383,38 +406,51 @@ static void __not_in_flash_func(core1_entry)(void)
       requestsB++;
       if (requestsB == 12) requestsB = 7;
     }
+    else if (dataA == 0x34 && dataS == 0x01) { // CHANNEL
+      channel = dataC;
+    }
     else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b10111001100000111001010100000000);
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10111001100000111001010100000000);
+
+      if (channel == ATOD_CHANNEL_MODE) {
+        word1 = __rev(0b00000001000000000000000000000000);
+      }
+      else if (channel == ATOD_CHANNEL_X1) {
+        word1 = __rev(0b11000110000000101001010000000000); //70 == 0b1000110
+      }
+      else if (channel == ATOD_CHANNEL_Y1) {
+        word1 = __rev(0b10111001100000111001010100000000); //-57 == 0b0111001
+      }
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b10000000100000110000001100000000);
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(0b10000000100000110000001100000000);
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
-      u_int32_t word0 = 1;
-      u_int32_t word1 = __rev(output_word_0);
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(output_word_0);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x99 && dataS == 0x01) { // STATE
       if (type0 == PACKET_TYPE_READ) {
-        u_int32_t word0 = 1;
-        u_int32_t word1 = __rev(0b10000000000000000000000000000000);
+        uint32_t word0 = 1;
+        uint32_t word1 = __rev(0b10000000000000000000000000000000);
 
         if (((state >> 8) | 0xff) == 0x41 && (state | 0xff) == 0x51) {
           word1 = __rev(0b11000000000000101000000000000000);
