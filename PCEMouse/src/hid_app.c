@@ -518,25 +518,27 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
-      bool has_6btns = true;
 
-      buttons = (((ds4_report.r1 || ds4_report.l2) ? 0x00 : 0x8000) |
-                 ((ds4_report.l1 || ds4_report.r2) ? 0x00 : 0x4000) |
-                 ((ds4_report.square)   ? 0x00 : 0x2000) |
-                 ((ds4_report.triangle) ? 0x00 : 0x1000) |
-                 ((has_6btns)           ? 0x00 : 0xFF00) |
-                 ((dpad_left)           ? 0x00 : 0x08) |
-                 ((dpad_down)           ? 0x00 : 0x04) |
-                 ((dpad_right)          ? 0x00 : 0x02) |
-                 ((dpad_up)             ? 0x00 : 0x01) |
-                 ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x80) |
-                 ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x40) |
-                 ((ds4_report.cross  || (!has_6btns && ds4_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds4_report.circle || (!has_6btns && ds4_report.square))   ? 0x00 : 0x10));
+      buttons = (((ds4_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
+                 ((ds4_report.cross)    ? 0x4000 : 0x00) | //A
+                 ((ds4_report.option)   ? 0x2000 : 0x00) | //START
+                 ((ds4_report.share)    ? 0x1000 : 0x00) | //NUON
+                 ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
+                 ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
+                 ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
+                 ((dpad_right)          ? 0x0100 : 0x00) | //D-RIGHT
+                 ((1)                   ? 0x0080 : 0x00) |
+                 ((0)                   ? 0x0040 : 0x00) |
+                 ((ds4_report.l1)       ? 0x0020 : 0x00) | //L
+                 ((ds4_report.r1)       ? 0x0010 : 0x00) | //R
+                 ((ds4_report.square)   ? 0x0008 : 0x00) | //B
+                 ((ds4_report.triangle) ? 0x0004 : 0x00) | //C-LEFT
+                 ((ds4_report.l2)       ? 0x0002 : 0x00) | //C-UP
+                 ((ds4_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, 0, 0);
+      post_globals(dev_addr, buttons, ds4_report.x, ds4_report.y);
     }
 
     prev_report[dev_addr-1] = ds4_report;
@@ -595,23 +597,26 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7) || ds5_report.x1 < (128 - threshold));
       bool has_6btns = true;
 
-      buttons = (((ds5_report.r1 || ds5_report.l2) ? 0x00 : 0x8000) |
-                 ((ds5_report.l1 || ds5_report.r2) ? 0x00 : 0x4000) |
-                 ((ds5_report.square)   ? 0x00 : 0x2000) |
-                 ((ds5_report.triangle) ? 0x00 : 0x1000) |
-                 ((has_6btns)           ? 0x00 : 0xFF00) |
-                 ((dpad_left)           ? 0x00 : 0x08) |
-                 ((dpad_down)           ? 0x00 : 0x04) |
-                 ((dpad_right)          ? 0x00 : 0x02) |
-                 ((dpad_up)             ? 0x00 : 0x01) |
-                 ((ds5_report.option || ds5_report.ps|| ds5_report.mute) ? 0x00 : 0x80) |
-                 ((ds5_report.share  || ds5_report.ps || ds5_report.mute) ? 0x00 : 0x40) |
-                 ((ds5_report.cross  || (!has_6btns && ds5_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds5_report.circle || (!has_6btns && ds5_report.square))   ? 0x00 : 0x10));
+      buttons = (((ds5_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
+                 ((ds5_report.cross)    ? 0x4000 : 0x00) | //A
+                 ((ds5_report.option)   ? 0x2000 : 0x00) | //START
+                 ((ds5_report.share)    ? 0x1000 : 0x00) | //NUON
+                 ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
+                 ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
+                 ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
+                 ((dpad_right)          ? 0x0100 : 0x00) | //D-RIGHT
+                 ((1)                   ? 0x0080 : 0x00) |
+                 ((0)                   ? 0x0040 : 0x00) |
+                 ((ds5_report.l1)       ? 0x0020 : 0x00) | //L
+                 ((ds5_report.r1)       ? 0x0010 : 0x00) | //R
+                 ((ds5_report.square)   ? 0x0008 : 0x00) | //B
+                 ((ds5_report.triangle) ? 0x0004 : 0x00) | //C-LEFT
+                 ((ds5_report.l2)       ? 0x0002 : 0x00) | //C-UP
+                 ((ds5_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, 0, 0);
+      post_globals(dev_addr, buttons, ds5_report.x1, ds5_report.y1);
     }
 
     prev_report[dev_addr-1] = ds5_report;
