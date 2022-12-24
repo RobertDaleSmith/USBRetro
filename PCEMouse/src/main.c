@@ -140,6 +140,7 @@ queue_t packet_queue;
 uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
+uint8_t checkbit(uint8_t, uint8_t, bool);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
@@ -168,7 +169,9 @@ int playersCount = 0;
 //
 volatile bool  output_exclude = false;
 
-uint32_t output_word_0 = 0;
+uint32_t output_buttons_0 = 0;
+uint32_t output_analogx_0 = 0;
+uint32_t output_analogy_0 = 0;
 
 PIO pio;
 uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
@@ -204,7 +207,27 @@ void __not_in_flash_func(update_output)(void)
                      (eparity(buttons & 0b0111111111111110) << 1) |
                      (eparity(buttons & 0b1011111111111111) << 0) ;
 
-  output_word_0 = (buttons << 16) | (checksum & 0xffff);
+  output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
+  int8_t xval = players[0].output_x-127;
+  if (xval > 126) xval = 126;
+  bool is_pos = (xval >= 0);
+  uint8_t delta = ((is_pos ? xval : (-1 * xval)) & 0b01111111);
+  uint8_t value_byte = ((((is_pos)?1:0) & 1) << 7) |  // value is positive
+                       (((is_pos ? delta : (~delta)) & 0b01111111) << 0);// value
+
+  output_analogx_0 = (value_byte << 24) |
+                     (((eparity(value_byte)) & 1) << 23) | // value_byte[7-0] is even parity
+                     ((((is_pos)?1:0) & 1) << 17) | // value is positive
+                     ((((delta <= 63) ? 1:0) & 1) << 16) | // [-63 - 63] 128
+                   //(((checkbit(delta, 128, true)) & 1) << 16) | // 128, is zero
+                     (((checkbit(delta, 64, false)) & 1) << 15) | // 64, not zero
+                     (((checkbit(delta, 32, false)) & 1) << 14) | // 32, not zero
+                     (((checkbit(delta, 16, false)) & 1) << 13) | // 16, not zero
+                     (((checkbit(delta, 8, false)) & 1) << 12) |  // 8, not zero
+                     (((checkbit(delta, 4, false)) & 1) << 11) |  // 4, not zero
+                     (((checkbit(delta, 2, false)) & 1) << 10) |  // 2, not zero
+                     (((eparity(value_byte & 0b11111110)) & 1) << 9) | // value_byte[7-1] is even parity
+                     (((eparity(value_byte)) & 1) << 8); // value_byte[7-0] is even parity
 }
 
 //
@@ -213,16 +236,19 @@ void __not_in_flash_func(update_output)(void)
 //
 void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
-  if (delta_x >= 128) 
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
-  else
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
+  // if (delta_x >= 128) 
+  //   players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
+  // else
+  //   players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
 
-  if (delta_y >= 128) 
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
-  else
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
+  // if (delta_y >= 128) 
+  //   players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
+  // else
+  //   players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
 
+
+  players[dev_addr-1].global_x = delta_x;
+  players[dev_addr-1].global_y = delta_y;
   players[dev_addr-1].global_buttons = buttons;
 
 
@@ -411,16 +437,16 @@ static void __not_in_flash_func(core1_entry)(void)
     }
     else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
       uint32_t word0 = 1;
-      uint32_t word1 = __rev(0b10111001100000111001010100000000);
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
       if (channel == ATOD_CHANNEL_MODE) {
         word1 = __rev(0b00000001000000000000000000000000);
       }
       else if (channel == ATOD_CHANNEL_X1) {
-        word1 = __rev(0b11000110000000101001010000000000); //70 == 0b1000110
+        word1 = __rev(output_analogx_0); //70 == 0b1000110
       }
       else if (channel == ATOD_CHANNEL_Y1) {
-        word1 = __rev(0b10111001100000111001010100000000); //-57 == 0b0111001
+        word1 = __rev(output_analogy_0); //-57 == 0b0111001
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -442,7 +468,7 @@ static void __not_in_flash_func(core1_entry)(void)
     }
     else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
       uint32_t word0 = 1;
-      uint32_t word1 = __rev(output_word_0);
+      uint32_t word1 = __rev(output_buttons_0);
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -504,7 +530,9 @@ int main(void)
     players[i].is6btn = false;
   }
 
-  output_word_0 = 0b00000000100000001000001100000011;  // no buttons pushed
+  output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
+  output_analogx_0 = 0b10000000100000110000001100000000; // x = 0
+  output_analogy_0 = 0b10000000100000110000001100000000; // y = 0
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
@@ -584,5 +612,24 @@ uint8_t eparity(uint32_t data) {
   eparity ^= (eparity>>4);
   eparity ^= (eparity>>2);
   eparity ^= (eparity>>1);
-  return((eparity)&0x1);
+  return ((eparity)&0x1);
+}
+
+uint8_t checkbit(uint8_t value, uint8_t size, bool zero) {
+  bool inSet = false;
+  bool skip = !zero;
+
+  int i = 0;
+  do {
+    if (!skip) {
+      if (value >= i && value <= i+(size-1)) {
+        inSet = true;
+      }
+    }
+
+    i = i + ((!i) ? (size/2) : size);
+    skip = !skip;
+  } while (i < 128 && !inSet);
+
+  return (inSet ? 1 : 0);
 }
