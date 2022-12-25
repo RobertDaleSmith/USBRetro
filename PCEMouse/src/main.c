@@ -156,10 +156,10 @@ typedef struct TU_ATTR_PACKED
   int16_t global_y;
 
   int16_t output_buttons;
-  int16_t output_x;
-  int16_t output_y;
-
-  bool is6btn;
+  int16_t output_x1;
+  int16_t output_y1;
+  int16_t output_x2;
+  int16_t output_y2;
 } Player_t;
 
 Player_t players[5] = { 0 };
@@ -173,6 +173,8 @@ volatile bool  output_exclude = false;
 uint32_t output_buttons_0 = 0;
 uint32_t output_analogx_0 = 0;
 uint32_t output_analogy_0 = 0;
+uint32_t output_analogx_1 = 0;
+uint32_t output_analogy_1 = 0;
 
 PIO pio;
 uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
@@ -209,35 +211,40 @@ void __not_in_flash_func(update_output)(void)
                      (eparity(buttons & 0b1011111111111111) << 0) ;
 
   output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
-  output_analogx_0 = genAnalogPacket(119 /*players[0].output_x*/);
-  // output_analogy_0 = genAnalogPacket(players[0].output_y);
+  output_analogx_0 = genAnalogPacket(players[0].output_x1);
+  output_analogy_0 = genAnalogPacket(players[0].output_y1);
+  output_analogx_1 = genAnalogPacket(players[0].output_x2);
+  output_analogy_1 = genAnalogPacket(players[0].output_y2);
 }
 
 //
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2)
 {
+  // TODO: Mouse stuffs
   // if (delta_x >= 128) 
   //   players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
   // else
   //   players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
-
   // if (delta_y >= 128) 
   //   players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
   // else
   //   players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
+  // players[dev_addr-1].global_x = delta_x;
+  // players[dev_addr-1].global_y = delta_y;
+  // players[dev_addr-1].global_buttons = buttons;
+  // players[dev_addr-1].output_x = players[dev_addr-1].global_x;
+  // players[dev_addr-1].output_y = players[dev_addr-1].global_y;
+  // players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
 
-
-  players[dev_addr-1].global_x = delta_x;
-  players[dev_addr-1].global_y = delta_y;
-  players[dev_addr-1].global_buttons = buttons;
-
-
-  players[dev_addr-1].output_x = players[dev_addr-1].global_x;
-  players[dev_addr-1].output_y = players[dev_addr-1].global_y;
-  players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
+  // Controller with analog processing
+  players[dev_addr-1].output_buttons = buttons;
+  players[dev_addr-1].output_x1 = analog_x1;
+  players[dev_addr-1].output_y1 = analog_y1;
+  players[dev_addr-1].output_x2 = analog_x2;
+  players[dev_addr-1].output_y2 = analog_y2;
 
   update_output();
 }
@@ -425,11 +432,17 @@ static void __not_in_flash_func(core1_entry)(void)
       if (channel == ATOD_CHANNEL_MODE) {
         word1 = __rev(0b00000001000000000000000000000000);
       }
-      else if (channel == ATOD_CHANNEL_X1) {
+      if (channel == ATOD_CHANNEL_X1) {
         word1 = __rev(output_analogx_0);
       }
       else if (channel == ATOD_CHANNEL_Y1) {
         word1 = __rev(output_analogy_0);
+      }
+      else if (channel == ATOD_CHANNEL_X2) {
+        word1 = __rev(output_analogx_1);
+      }
+      else if (channel == ATOD_CHANNEL_Y2) {
+        word1 = __rev(output_analogy_1);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -508,14 +521,17 @@ int main(void)
     players[i].global_x = 0;
     players[i].global_y = 0;
     players[i].output_buttons = 0x80;
-    players[i].output_x = 0;
-    players[i].output_y = 0;
-    players[i].is6btn = false;
+    players[i].output_x1 = 0;
+    players[i].output_y1 = 0;
+    players[i].output_x2 = 0;
+    players[i].output_y2 = 0;
   }
 
   output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
-  output_analogx_0 = 0b10000000100000110000001100000000; // x = 0
-  output_analogy_0 = 0b10000000100000110000001100000000; // y = 0
+  output_analogx_0 = 0b10000000100000110000001100000000; // x1 = 0
+  output_analogy_0 = 0b10000000100000110000001100000000; // y1 = 0
+  output_analogx_1 = 0b10000000100000110000001100000000; // x2 = 0
+  output_analogy_1 = 0b10000000100000110000001100000000; // y2 = 0
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
