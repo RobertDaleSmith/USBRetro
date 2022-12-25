@@ -141,6 +141,7 @@ uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
 uint8_t checkbit(uint8_t, uint8_t, bool);
+uint32_t genAnalogPacket(int16_t);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
@@ -208,26 +209,8 @@ void __not_in_flash_func(update_output)(void)
                      (eparity(buttons & 0b1011111111111111) << 0) ;
 
   output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
-  int8_t xval = players[0].output_x-127;
-  if (xval > 126) xval = 126;
-  bool is_pos = (xval >= 0);
-  uint8_t delta = ((is_pos ? xval : (-1 * xval)) & 0b01111111);
-  uint8_t value_byte = ((((is_pos)?1:0) & 1) << 7) |  // value is positive
-                       (((is_pos ? delta : (~delta)) & 0b01111111) << 0);// value
-
-  output_analogx_0 = (value_byte << 24) |
-                     (((eparity(value_byte)) & 1) << 23) | // value_byte[7-0] is even parity
-                     ((((is_pos)?1:0) & 1) << 17) | // value is positive
-                     ((((delta <= 63) ? 1:0) & 1) << 16) | // [-63 - 63] 128
-                   //(((checkbit(delta, 128, true)) & 1) << 16) | // 128, is zero
-                     (((checkbit(delta, 64, false)) & 1) << 15) | // 64, not zero
-                     (((checkbit(delta, 32, false)) & 1) << 14) | // 32, not zero
-                     (((checkbit(delta, 16, false)) & 1) << 13) | // 16, not zero
-                     (((checkbit(delta, 8, false)) & 1) << 12) |  // 8, not zero
-                     (((checkbit(delta, 4, false)) & 1) << 11) |  // 4, not zero
-                     (((checkbit(delta, 2, false)) & 1) << 10) |  // 2, not zero
-                     (((eparity(value_byte & 0b11111110)) & 1) << 9) | // value_byte[7-1] is even parity
-                     (((eparity(value_byte)) & 1) << 8); // value_byte[7-0] is even parity
+  output_analogx_0 = genAnalogPacket(119 /*players[0].output_x*/);
+  // output_analogy_0 = genAnalogPacket(players[0].output_y);
 }
 
 //
@@ -443,10 +426,10 @@ static void __not_in_flash_func(core1_entry)(void)
         word1 = __rev(0b00000001000000000000000000000000);
       }
       else if (channel == ATOD_CHANNEL_X1) {
-        word1 = __rev(output_analogx_0); //70 == 0b1000110
+        word1 = __rev(output_analogx_0);
       }
       else if (channel == ATOD_CHANNEL_Y1) {
-        word1 = __rev(output_analogy_0); //-57 == 0b0111001
+        word1 = __rev(output_analogy_0);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -615,6 +598,7 @@ uint8_t eparity(uint32_t data) {
   return ((eparity)&0x1);
 }
 
+// checks whether value exist within every other subgroup of n(size).
 uint8_t checkbit(uint8_t value, uint8_t size, bool zero) {
   bool inSet = false;
   bool skip = !zero;
@@ -633,3 +617,31 @@ uint8_t checkbit(uint8_t value, uint8_t size, bool zero) {
 
   return (inSet ? 1 : 0);
 }
+
+// checks whether value exist within every other subgroup of n(size).
+uint32_t genAnalogPacket(int16_t value) { // 0 - 254
+  value -= 127;
+  // if (value < -127) value = -127;
+  if (value > 127) value = 127;
+
+  bool positive = (value >= 0);
+  uint8_t delta = ((positive ? value : (-1 * value)) & 0b01111111);
+  uint8_t value_byte = (((positive ? 1 : 0) & 1) << 7) |  // value is positive
+                       ((positive ? delta : (~delta)) & 0b01111111); // value, ones' complement if negative
+
+  return (value_byte << 24) |
+         (((eparity(value_byte)) & 1) << 23) | // value_byte[7-0] is even parity
+         ((((positive)?1:0) & 1) << 17) | // value is positive
+       //(((checkbit(delta, 128, true)) & 1) << 16) | // 128, is zero
+         ((((delta <= 63) ? 1:0) & 1) << 16) | // [-63 - 63] 128
+         (((checkbit(delta, 64, false)) & 1) << 15) | // 64, not zero
+         (((checkbit(delta, 32, false)) & 1) << 14) | // 32, not zero
+         (((checkbit(delta, 16, false)) & 1) << 13) | // 16, not zero
+         (((checkbit(delta, 8, false)) & 1) << 12) |  // 8, not zero
+         (((checkbit(delta, 4, false)) & 1) << 11) |  // 4, not zero
+         (((checkbit(delta, 2, false)) & 1) << 10) |  // 2, not zero
+         (((eparity(value_byte & 0b11111110)) & 1) << 9) | // value_byte[7-1] is even parity
+         (((eparity(value_byte)) & 1) << 8); // value_byte[7-0] is even parity
+}
+
+  

@@ -513,11 +513,10 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       printf("\r\n");
 
       int threshold = 28;
-      bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 ||
-                         ds4_report.dpad == 7 || ds4_report.y < (128 - threshold));
-      bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
-      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
-      bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
+      bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
+      bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
+      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5));
+      bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7));
 
       buttons = (((ds4_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
                  ((ds4_report.cross)    ? 0x4000 : 0x00) | //A
@@ -590,11 +589,10 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       printf("\r\n");
 
       int threshold = 28;
-      bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 ||
-                         ds5_report.dpad == 7 || ds5_report.y1 < (128 - threshold));
-      bool dpad_right = ((ds5_report.dpad >= 1 && ds5_report.dpad <= 3) || ds5_report.x1 > (128 + threshold));
-      bool dpad_down  = ((ds5_report.dpad >= 3 && ds5_report.dpad <= 5) || ds5_report.y1 > (128 + threshold));
-      bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7) || ds5_report.x1 < (128 - threshold));
+      bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 || ds5_report.dpad == 7);
+      bool dpad_right = ((ds5_report.dpad >= 1 && ds5_report.dpad <= 3));
+      bool dpad_down  = ((ds5_report.dpad >= 3 && ds5_report.dpad <= 5));
+      bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7));
       bool has_6btns = true;
 
       buttons = (((ds5_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
