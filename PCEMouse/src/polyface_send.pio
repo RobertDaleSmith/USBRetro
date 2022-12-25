@@ -27,7 +27,7 @@ start_bits:
     jmp   y--, start_bits
 
     mov   osr, x    ; move data bits back into osr
-    set   x, 6      ; loop out data bytes (32 bits + 16 zeros)
+    set   x, 4      ; loop out data bytes (32 bits + 16 zeros)
 data_bits_0:
     set   y, 8 
 data_bits_1:
@@ -37,6 +37,10 @@ data_bits_1:
 
     jmp   y--, data_bits_1
     jmp   x--, data_bits_0
+
+    wait  1 gpio 3
+    wait  0 gpio 3
+    set   pins, 0
 
     out   PINDIRS 1 ; sets data pin back to input
 

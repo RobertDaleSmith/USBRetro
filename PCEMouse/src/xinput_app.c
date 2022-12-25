@@ -52,22 +52,27 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
       dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
-    bool is6btn = true;
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || p->bRightTrigger) ? 0x00 : 0x8000) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER || p->bLeftTrigger) ? 0x00 : 0x4000) |
-               ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
-               ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
-               ((is6btn) ? 0x00 : 0xFF00) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT || p->sThumbLX < -20000) ? 0x00 : 0x08) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 20000) ? 0x00 : 0x02) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP || p->sThumbLY > 20000) ? 0x00 : 0x01) |
-               ((p->wButtons & XINPUT_GAMEPAD_START) ? 0x00 : 0x80) |
-               ((p->wButtons & XINPUT_GAMEPAD_BACK) ? 0x00 : 0x40) |
-               ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
-               ((p->wButtons & XINPUT_GAMEPAD_B) ? 0x00 : 0x10));
+              //  ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
+              //  ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 20000) ? 0x00 : 0x02) |
 
-    post_globals(dev_addr, buttons, 0, 0);
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_B)     ? 0x8000 : 0x00) | //C-DOWN
+               ((p->wButtons & XINPUT_GAMEPAD_A)     ? 0x4000 : 0x00) | //A
+               ((p->wButtons & XINPUT_GAMEPAD_START) ? 0x2000 : 0x00) | //START
+               ((p->wButtons & XINPUT_GAMEPAD_BACK)  ? 0x1000 : 0x00) | //NUON
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN)  ? 0x0800 : 0x00) | //D-DOWN
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT)  ? 0x0400 : 0x00) | //D-LEFT
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP)    ? 0x0200 : 0x00) | //D-UP
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)                ? 0x0080 : 0x00) |
+               ((0)                ? 0x0040 : 0x00) |
+               ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)  ? 0x0020 : 0x00) | //L
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x0010 : 0x00) | //R
+               ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x0008 : 0x00) | //B
+               ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x0004 : 0x00) | //C-LEFT
+               ((p->bLeftTrigger)  ? 0x0002 : 0x00) | //C-UP
+               ((p->bRightTrigger) ? 0x0001 : 0x00)); //C-RIGHT
+
+    post_globals(dev_addr, buttons, p->sThumbLX, p->sThumbLY);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
