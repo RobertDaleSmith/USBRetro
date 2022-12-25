@@ -194,7 +194,9 @@ typedef struct TU_ATTR_PACKED
 
   struct {
     uint8_t c : 1;
-    uint8_t f : 3;
+    uint8_t f : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
     uint8_t credit : 1;
     uint8_t start  : 3;
   };
@@ -247,7 +249,10 @@ static inline bool is_astro_city(uint8_t dev_addr)
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
-  return ((vid == 0x0ca3 && pid == 0x0027)); // Astro City mini controller
+  return ((vid == 0x0ca3 && (
+           pid == 0x0027 ||  // Astro City mini controller
+           pid == 0x0024    // 8BitDo M30 6-button controller
+         )));
 }
 
 // check if device is Sony DS5 controller
@@ -460,6 +465,8 @@ bool astro_diff_report(astro_city_report_t const* rpt1, astro_city_report_t cons
   result |= rpt1->d != rpt2->d;
   result |= rpt1->e != rpt2->e;
   result |= rpt1->f != rpt2->f;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
   result |= rpt1->credit != rpt2->credit;
   result |= rpt1->start != rpt2->start;
 
@@ -780,13 +787,15 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   if ( astro_diff_report(&prev_report[dev_addr-1], &astro_report) )
   {
     printf("DPad = x:%d, y:%d ", astro_report.x, astro_report.y);
-    if (astro_report.a) printf("A ");
-    if (astro_report.b) printf("B ");
-    if (astro_report.c) printf("C ");
-    if (astro_report.d) printf("D ");
-    if (astro_report.e) printf("E ");
-    if (astro_report.f) printf("F ");
-    if (astro_report.credit) printf("Credit ");
+    if (astro_report.a) printf("A "); // X   <-M30 buttons
+    if (astro_report.b) printf("B "); // Y
+    if (astro_report.c) printf("C "); // Z
+    if (astro_report.d) printf("D "); // A
+    if (astro_report.e) printf("E "); // B
+    if (astro_report.f) printf("F "); // C
+    if (astro_report.l) printf("L ");
+    if (astro_report.r) printf("R ");
+    if (astro_report.credit) printf("Credit "); // Select
     if (astro_report.start) printf("Start ");
     printf("\r\n");
 
@@ -807,8 +816,8 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
                ((dpad_up)        ? 0x00 : 0x01) |
                ((astro_report.start)  ? 0x00 : 0x80) |
                ((astro_report.credit) ? 0x00 : 0x40) |
-               ((astro_report.e) ? 0x00 : 0x20) |
-               ((astro_report.f) ? 0x00 : 0x10));
+               ((astro_report.e || astro_report.l) ? 0x00 : 0x20) |
+               ((astro_report.f || astro_report.r) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
