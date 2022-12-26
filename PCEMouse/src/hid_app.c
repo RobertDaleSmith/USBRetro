@@ -201,6 +201,33 @@ typedef struct TU_ATTR_PACKED
 
 } astro_city_report_t;
 
+// Logitech WingMan controller
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t analog_x;
+  uint8_t analog_y;
+  uint8_t analog_z;
+
+  struct {
+    uint8_t dpad : 4;
+    uint8_t a : 1;
+    uint8_t b : 1;
+    uint8_t c : 1;
+    uint8_t x : 1;
+  };
+
+  struct {
+    uint8_t y : 1;
+    uint8_t z : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t s : 1;
+    uint8_t mode : 1;
+    uint8_t null : 2;
+  };
+
+} wing_man_report_t;
+
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
 {
@@ -257,6 +284,15 @@ static inline bool is_sony_ds5(uint8_t dev_addr)
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DS5 controller
+}
+
+// check if device is Logitech WingMan Action controller
+static inline bool is_wing_man(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x046d && pid == 0xc20b)); // Logitech WingMan Action controller
 }
 
 //--------------------------------------------------------------------+
@@ -338,6 +374,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
                    || is_8bit_psc(dev_addr)
                    || is_astro_city(dev_addr)
                    || is_sega_mini(dev_addr)
+                   || is_wing_man(dev_addr)
                    ;
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -462,6 +499,28 @@ bool astro_diff_report(astro_city_report_t const* rpt1, astro_city_report_t cons
   result |= rpt1->f != rpt2->f;
   result |= rpt1->credit != rpt2->credit;
   result |= rpt1->start != rpt2->start;
+
+  return result;
+}
+
+bool wingman_diff_report(wing_man_report_t const* rpt1, wing_man_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->analog_x != rpt2->analog_x;
+  result |= rpt1->analog_y != rpt2->analog_y;
+  result |= rpt1->analog_z != rpt2->analog_z;
+  result |= rpt1->dpad != rpt2->dpad;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->c != rpt2->c;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->z != rpt2->z;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->mode != rpt2->mode;
+  result |= rpt1->s != rpt2->s;
 
   return result;
 }
@@ -702,17 +761,17 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);
     bool dpad_down  = (pce_report.dpad >= 3 && pce_report.dpad <= 5);
     bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
-    bool has_6btns = false;
 
-    buttons = (((has_6btns)      ? 0x00 : 0xFF00) |
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((pce_report.run) ? 0x00 : 0x80) |
-               ((pce_report.sel) ? 0x00 : 0x40) |
-               ((pce_report.two) ? 0x00 : 0x20) |
-               ((pce_report.one) ? 0x00 : 0x10));
+    buttons = (((pce_report.two) ? 0x4000 : 0x00) | //A
+               ((pce_report.run) ? 0x2000 : 0x00) | //START
+               ((pce_report.sel) ? 0x1000 : 0x00) | //NUON
+               ((dpad_down)      ? 0x0800 : 0x00) | //D-DOWN
+               ((dpad_left)      ? 0x0400 : 0x00) | //D-LEFT
+               ((dpad_up)        ? 0x0200 : 0x00) | //D-UP
+               ((dpad_right)     ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)              ? 0x0080 : 0x00) |
+               ((0)              ? 0x0040 : 0x00) |
+               ((pce_report.one) ? 0x0008 : 0x00) ; //B
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -750,21 +809,21 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (sega_report.dpad_x > 128);
     bool dpad_down  = (sega_report.dpad_y > 128);
     bool dpad_left  = (sega_report.dpad_x < 128);
-    bool has_6btns = true;
 
-    buttons = (((sega_report.x || sega_report.l) ? 0x00 : 0x8000) |
-               ((sega_report.y) ? 0x00 : 0x4000) |
-               ((sega_report.z || sega_report.r) ? 0x00 : 0x2000) |
-               ((sega_report.a) ? 0x00 : 0x1000) |
-               ((has_6btns)      ? 0x00 : 0xFF00) |
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((sega_report.start) ? 0x00 : 0x80) |
-               ((sega_report.mode)  ? 0x00 : 0x40) |
-               ((sega_report.b) ? 0x00 : 0x20) |
-               ((sega_report.c) ? 0x00 : 0x10));
+    buttons = (((sega_report.b)     ? 0x8000 : 0x00) | //C-DOWN
+               ((sega_report.x)     ? 0x4000 : 0x00) | //A
+               ((sega_report.start) ? 0x2000 : 0x00) | //START
+               ((sega_report.mode)  ? 0x1000 : 0x00) | //NUON
+               ((dpad_down)         ? 0x0800 : 0x00) | //D-DOWN
+               ((dpad_left)         ? 0x0400 : 0x00) | //D-LEFT
+               ((dpad_up)           ? 0x0200 : 0x00) | //D-UP
+               ((dpad_right)        ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)                 ? 0x0080 : 0x00) |
+               ((0)                 ? 0x0040 : 0x00) |
+               ((sega_report.a)     ? 0x0008 : 0x00) | //B
+               ((sega_report.y)     ? 0x0004 : 0x00) | //C-LEFT
+               ((sega_report.z)     ? 0x0002 : 0x00) | //C-UP
+               ((sega_report.c)     ? 0x0001 : 0x00)); //C-RIGHT
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -799,21 +858,23 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     bool dpad_right = (astro_report.x > 127);
     bool dpad_down  = (astro_report.y > 127);
     bool dpad_left  = (astro_report.x < 127);
-    bool has_6btns = true;
 
-    buttons = (((astro_report.a) ? 0x00 : 0x8000) |
-               ((astro_report.b) ? 0x00 : 0x4000) |
-               ((astro_report.c) ? 0x00 : 0x2000) |
-               ((astro_report.d) ? 0x00 : 0x1000) |
-               ((has_6btns)      ? 0x00 : 0xFF00) |
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((astro_report.start)  ? 0x00 : 0x80) |
-               ((astro_report.credit) ? 0x00 : 0x40) |
-               ((astro_report.e) ? 0x00 : 0x20) |
-               ((astro_report.f) ? 0x00 : 0x10));
+    buttons = (((astro_report.b)      ? 0x8000 : 0x00) | //C-DOWN
+               ((astro_report.f)      ? 0x4000 : 0x00) | //A
+               ((astro_report.start)  ? 0x2000 : 0x00) | //START
+               ((astro_report.credit) ? 0x1000 : 0x00) | //NUON
+               ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
+               ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
+               ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
+               ((dpad_right)          ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)                   ? 0x0080 : 0x00) |
+               ((0)                   ? 0x0040 : 0x00) |
+               ((astro_report.l)      ? 0x0020 : 0x00) | //L
+               ((astro_report.r)      ? 0x0010 : 0x00) | //R
+               ((astro_report.c)      ? 0x0008 : 0x00) | //B
+               ((astro_report.e)      ? 0x0004 : 0x00) | //C-LEFT
+               ((astro_report.d)      ? 0x0002 : 0x00) | //C-UP
+               ((astro_report.a)      ? 0x0001 : 0x00)); //C-RIGHT
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -821,6 +882,60 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   }
 
   prev_report[dev_addr-1] = astro_report;
+}
+
+void process_wing_man(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static wing_man_report_t prev_report[5] = { 0 };
+
+  wing_man_report_t wingman_report;
+  memcpy(&wingman_report, report, sizeof(wingman_report));
+
+  if ( wingman_diff_report(&prev_report[dev_addr-1], &wingman_report) )
+  {
+    printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
+    printf("DPad = %d ", wingman_report.dpad);
+    if (wingman_report.a) printf("A ");
+    if (wingman_report.b) printf("B ");
+    if (wingman_report.c) printf("C ");
+    if (wingman_report.x) printf("X ");
+    if (wingman_report.y) printf("Y ");
+    if (wingman_report.z) printf("Z ");
+    if (wingman_report.l) printf("L ");
+    if (wingman_report.r) printf("R ");
+    if (wingman_report.mode) printf("Mode ");
+    if (wingman_report.s) printf("S ");
+    printf("\r\n");
+
+    bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 || wingman_report.dpad == 7);
+    bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3));
+    bool dpad_down  = ((wingman_report.dpad >= 3 && wingman_report.dpad <= 5));
+    bool dpad_left  = ((wingman_report.dpad >= 5 && wingman_report.dpad <= 7));
+
+    buttons = (((wingman_report.b)    ? 0x8000 : 0x00) | //C-DOWN
+               ((wingman_report.a)    ? 0x4000 : 0x00) | //A
+               ((wingman_report.s)    ? 0x2000 : 0x00) | //START
+               ((wingman_report.mode) ? 0x1000 : 0x00) | //NUON
+               ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
+               ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
+               ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
+               ((dpad_right)          ? 0x0100 : 0x00) | //D-RIGHT
+               ((1)                   ? 0x0080 : 0x00) |
+               ((0)                   ? 0x0040 : 0x00) |
+               ((wingman_report.l)    ? 0x0020 : 0x00) | //L
+               ((wingman_report.r)    ? 0x0010 : 0x00) | //R
+               ((wingman_report.x)    ? 0x0008 : 0x00) | //B
+               ((wingman_report.y)    ? 0x0004 : 0x00) | //C-LEFT
+               ((wingman_report.z)    ? 0x0002 : 0x00) | //C-UP
+               ((wingman_report.c)    ? 0x0001 : 0x00)); //C-RIGHT
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 0);
+  }
+
+  prev_report[dev_addr-1] = wingman_report;
 }
 
 // Invoked when received report from device via interrupt endpoint
@@ -847,6 +962,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
       else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
+      else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
