@@ -392,7 +392,7 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
       if (channel == ATOD_CHANNEL_MODE) {
-        word1 = __rev(0b00000001000000000000000000000000);
+        word1 = __rev(0b10000000100000110000001100000000);
       }
       if (channel == ATOD_CHANNEL_X1) {
         word1 = __rev(output_analogx_0);
