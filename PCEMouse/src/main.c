@@ -97,6 +97,13 @@
 #define ATOD_CHANNEL_X2 0x04
 #define ATOD_CHANNEL_Y2 0x05
 
+
+// NUON Controller Probe Options
+#define DEFCFG 1
+#define VERSION 11
+#define TYPE 3
+#define MFG 0
+
 queue_t packet_queue;
 
 uint32_t __rev(uint32_t);
@@ -126,7 +133,6 @@ typedef struct TU_ATTR_PACKED
 
 Player_t players[5] = { 0 };
 int playersCount = 0;
-
 
 // When Nuon reads, set interlock to ensure atomic update
 //
@@ -293,10 +299,6 @@ static void __not_in_flash_func(core1_entry)(void)
   uint64_t packet = 0;
   uint16_t state = 0;
   uint8_t channel = 0;
-  uint8_t defcfg = 1;
-  uint8_t version = 11;
-  uint8_t type = 3;
-  uint8_t mfg = 0;
   uint8_t id = 0;
   bool alive = false;
   bool tagged = false;
@@ -316,10 +318,18 @@ static void __not_in_flash_func(core1_entry)(void)
     uint8_t dataS = ((packet>>9) & 0b01111111);
     uint8_t dataC = ((packet>>1) & 0b01111111);
     uint8_t type0 = ((packet>>25) & 0b00000001);
+    if (dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) { // RESET
+      id = 0;
+      alive = false;
+      tagged = false;
+      branded = false;
+      state = 0;
+      channel = 0;
+    }
     if (dataA == 0x80) { // ALIVE
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b01);
-      if (alive) word1 = __rev(0b10);
+      if (alive) word1 = __rev(((id & 0b01111111) << 1));
       else alive = true;
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -331,7 +341,7 @@ static void __not_in_flash_func(core1_entry)(void)
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
-    else if (dataA == 0x90) { // MAGIC
+    else if (dataA == 0x90 && !branded) { // MAGIC
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b01001010010101010100010001000101);
               
@@ -344,10 +354,10 @@ static void __not_in_flash_func(core1_entry)(void)
 
       //DEFCFG VERSION     TYPE      MFG TAGGED BRANDED    ID P
       //   0b1 0001011 00000011 00000000      0       0 00000 0
-      word1 = ((defcfg  & 1)<<31) |
-              ((version & 0b01111111)<<24) |
-              ((type    & 0b11111111)<<16) |
-              ((mfg     & 0b11111111)<<8) |
+      word1 = ((DEFCFG  & 1)<<31) |
+              ((VERSION & 0b01111111)<<24) |
+              ((TYPE    & 0b11111111)<<16) |
+              ((MFG     & 0b11111111)<<8) |
               (((tagged ? 1:0) & 1)<<7) |
               (((branded? 1:0) & 1)<<6) |
               ((id      & 0b00011111)<<1);
@@ -391,9 +401,12 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
-      if (channel == ATOD_CHANNEL_MODE) {
-        word1 = __rev(0b10000000100000110000001100000000);
+      if (channel == ATOD_CHANNEL_NONE) {
+        word1 = __rev(0b10111001100000111001010100000000);
       }
+      // if (channel == ATOD_CHANNEL_MODE) {
+      //   word1 = __rev(0b10000000100000110000001100000000);
+      // }
       if (channel == ATOD_CHANNEL_X1) {
         word1 = __rev(output_analogx_0);
       }
@@ -434,16 +447,20 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x99 && dataS == 0x01) { // STATE
       if (type0 == PACKET_TYPE_READ) {
         uint32_t word0 = 1;
-        uint32_t word1 = __rev(0b10000000000000000000000000000000);
+        uint32_t word1 = __rev(0b11000000000000101000000000000000);
 
-        if (((state >> 8) | 0xff) == 0x41 && (state | 0xff) == 0x51) {
-          word1 = __rev(0b11000000000000101000000000000000);
+        if (((state >> 8) & 0xff) == 0x41 && (state & 0xff) == 0x51) {
+          word1 = __rev(0b11010001000000101110011000000000);
         }
         pio_sm_put_blocking(pio1, sm1, word1);
         pio_sm_put_blocking(pio1, sm1, word0);
       } else { // type0 == PACKET_TYPE_WRITE
         state = ((state) << 8) | (dataC & 0xff);
       }
+    }
+    else if (dataA == 0xb4 && dataS == 0x00) { // BRAND
+      id = dataC;
+      branded = true;
     }
 
     // output_exclude = true;
