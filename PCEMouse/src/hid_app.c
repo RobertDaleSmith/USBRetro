@@ -360,6 +360,8 @@ uint16_t buttons;
 uint8_t local_x;
 uint8_t local_y;
 
+uint16_t spinner = 0;
+
 // Each HID instance can has multiple reports
 static struct
 {
@@ -1100,7 +1102,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
 // Mouse
 //--------------------------------------------------------------------+
 
-void cursor_movement(int8_t x, int8_t y, int8_t wheel)
+void cursor_movement(int8_t x, int8_t y, int8_t wheel, uint8_t spinner)
 {
 
 uint8_t x1, y1;
@@ -1135,7 +1137,7 @@ uint8_t x1, y1;
 
   printf("\r\n");
 #else
-  printf("(%d %d %d)\r\n", x, y, wheel);
+  printf("(%d %d %d %d)\r\n", x, y, wheel, spinner);
 #endif
 }
 
@@ -1163,32 +1165,64 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
     previous_middle_button = (report->buttons & MOUSE_BUTTON_MIDDLE);
   }
 
-  if (buttons_swapped)
-  {
-     buttons = (((0xFF00)) | // no six button controller byte
-                ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x10));
-  }
-  else
-  {
-     buttons = (((0xFF00)) |
-                ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
-  }
+  // if (buttons_swapped)
+  // {
+  //    buttons = (((0xFF00)) | // no six button controller byte
+  //               ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+  //               ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
+  //               ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
+  //               ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x10));
+  // }
+  // else
+  // {
+  //    buttons = (((0xFF00)) |
+  //               ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x00 : 0x80) |
+  //               ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
+  //               ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
+  //               ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
+  // }
+
+
+  buttons = (((0)                   ? 0x8000 : 0x00) | //C-DOWN
+             ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x4000 : 0x00) | //A
+             ((report->buttons & MOUSE_BUTTON_FORWARD)  ? 0x2000 : 0x00) | //START
+             ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x1000 : 0x00) | //NUON
+             ((0)                   ? 0x0800 : 0x00) | //D-DOWN
+             ((0)                   ? 0x0400 : 0x00) | //D-LEFT
+             ((0)                   ? 0x0200 : 0x00) | //D-UP
+             ((0)                   ? 0x0100 : 0x00) | //D-RIGHT
+             ((1)                   ? 0x0080 : 0x00) |
+             ((0)                   ? 0x0040 : 0x00) |
+             ((0)                   ? 0x0020 : 0x00) | //L
+             ((0)                   ? 0x0010 : 0x00) | //R
+             ((report->buttons & MOUSE_BUTTON_RIGHT) ? 0x0008 : 0x00) | //B
+             ((0)                   ? 0x0004 : 0x00) | //C-LEFT
+             ((0)                   ? 0x0002 : 0x00) | //C-UP
+             ((0)                   ? 0x0001 : 0x00)); //C-RIGHT
 
   local_x = (0 - report->x);
   local_y = (0 - report->y);
 
+  if (report->wheel != 0) {
+    if (report->wheel < 0) { // clockwise
+      spinner += ((-1 * report->wheel) + 3);
+      if (spinner > 255) spinner -= 255;
+    } else { // counter-clockwise
+      if (spinner >= ((report->wheel) + 3)) {
+        spinner += report->wheel;
+        spinner -= 3;
+      } else {
+        spinner = 255 - ((report->wheel) - spinner) - 3;
+      }
+    }
+  }
+
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, buttons, local_x, local_y, 0, 0);
+  post_globals(dev_addr, buttons, local_x, local_y, spinner, 0);
 
   //------------- cursor movement -------------//
-  cursor_movement(report->x, report->y, report->wheel);
+  cursor_movement(report->x, report->y, report->wheel, spinner);
 }
 
 //--------------------------------------------------------------------+
