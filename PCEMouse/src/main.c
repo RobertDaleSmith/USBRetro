@@ -371,9 +371,9 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word1 = 0;
 
       if (channel == ATOD_CHANNEL_MODE) {
-        word1 = __rev(0b11000100100000101001101100000000);
+        word1 = __rev(0b11000100100000101001101100000000); // 68
       } else {
-        word1 = __rev(0b11000110000000101001010000000000);
+        word1 = __rev(0b11000110000000101001010000000000); // 70
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -397,12 +397,33 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x34 && dataS == 0x01) { // CHANNEL
       channel = dataC;
     }
+    else if (dataA == 0x32 && dataS == 0x02 && dataC == 0x00) { // QUADX
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
+
+      word1 = __rev(output_analogx_1);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
     else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
+      // ALL_BUTTONS: CTRLR_STDBUTTONS & CTRLR_DPAD & CTRLR_SHOULDER & CTRLR_EXTBUTTONS
+
+      // <= 23 - 0x51f CTRLR_TWIST & CTRLR_THROTTLE & CTRLR_ANALOG1 & ALL_BUTTONS
+      // 29-47 - 0x83f CTRLR_MOUSE & CTRLR_ANALOG1 & CTRLR_ANALOG2 & ALL_BUTTONS
+      // 48-69 - 0x01f CTRLR_ANALOG1 & ALL_BUTTONS
+      // 70-92 - 0x808 CTRLR_MOUSE & CTRLR_EXTBUTTONS
+      // >= 93 - ERROR?
+ 
       if (channel == ATOD_CHANNEL_NONE) {
-        word1 = __rev(0b10111001100000111001010100000000);
+        word1 = __rev(0b10000000100000110000001100000000); // 0  - 0x51f 1 analog
+        // word1 = __rev(0b10011101100000110100110100000000); // 29 - 0x83f 2 analog
+        // word1 = __rev(0b10111001100000111001010100000000); // 57 - 0x01f 1 analog
+        // word1 = __rev(0b11000110000000101001010000000000); // 70 - 0x808 0 analog
+        word1 = __rev(genAnalogPacket((127)+127));
       }
       // if (channel == ATOD_CHANNEL_MODE) {
       //   word1 = __rev(0b10000000100000110000001100000000);
@@ -638,5 +659,3 @@ uint32_t genAnalogPacket(int16_t value) { // 0 - 254
          (((eparity(value_byte & 0b11111110)) & 1) << 9) | // value_byte[7-1] is even parity
          (((eparity(value_byte)) & 1) << 8); // value_byte[7-0] is even parity
 }
-
-  
