@@ -70,6 +70,32 @@ typedef struct TU_ATTR_PACKED
     uint8_t counter : 6; // +1 each report
   };
 
+  // comment out since not used by this example
+  uint8_t l2_trigger; // 0 released, 0xff fully pressed
+  uint8_t r2_trigger; // as above
+
+  uint16_t timestamp;
+  uint8_t  battery;
+  int16_t  gyro[3];  // x, y, z;
+  int16_t  accel[3]; // x, y, z
+  int8_t   unknown_a[5]; // who knows?
+  uint8_t  headset;
+  int8_t   unknown_b[2]; // future use?
+
+  struct {
+    uint8_t tpad_event : 4; // track pad event 0x01 = 2 finger tap; 0x02 last on edge?
+    uint8_t unknown_c  : 4; // future use?
+  };
+
+  uint8_t  tpad_counter;
+
+  struct {
+    uint8_t tpad_f1_count : 7;
+    uint8_t tpad_f1_down  : 1;
+  };
+
+  int8_t tpad_f1_pos[3];
+
 } sony_ds4_report_t;
 
 // Sony DS5 controller
@@ -575,6 +601,12 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       if (ds4_report.ps       ) printf("PS ");
       if (ds4_report.tpad     ) printf("TPad ");
+
+      if (!ds4_report.tpad_f1_down) printf("F1 ");
+
+      uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
+      uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
+      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
 
       printf("\r\n");
 

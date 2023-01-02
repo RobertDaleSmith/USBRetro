@@ -419,11 +419,11 @@ static void __not_in_flash_func(core1_entry)(void)
       // >= 93 - ERROR?
  
       if (channel == ATOD_CHANNEL_NONE) {
-        word1 = __rev(0b10000000100000110000001100000000); // 0  - 0x51f 1 analog
+        // word1 = __rev(0b10000000100000110000001100000000); // 0  - 0x51f 1 analog
         // word1 = __rev(0b10011101100000110100110100000000); // 29 - 0x83f 2 analog
-        // word1 = __rev(0b10111001100000111001010100000000); // 57 - 0x01f 1 analog
+        word1 = __rev(0b10111001100000111001010100000000); // 57 - 0x01f 1 analog
         // word1 = __rev(0b11000110000000101001010000000000); // 70 - 0x808 0 analog
-        word1 = __rev(genAnalogPacket((127)+127));
+        // word1 = __rev(genAnalogPacket((127)+127)); //testing
       }
       // if (channel == ATOD_CHANNEL_MODE) {
       //   word1 = __rev(0b10000000100000110000001100000000);
@@ -447,6 +447,7 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000);
+        word1 = __rev(genAnalogPacket((64)+127)); //testing
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -454,6 +455,7 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000);
+        word1 = __rev(genAnalogPacket((64)+127)); //testing
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
