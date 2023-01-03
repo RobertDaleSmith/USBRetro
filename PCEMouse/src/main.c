@@ -129,6 +129,7 @@ typedef struct TU_ATTR_PACKED
   int16_t output_y1;
   int16_t output_x2;
   int16_t output_y2;
+  int16_t output_qx;
 } Player_t;
 
 Player_t players[5] = { 0 };
@@ -139,10 +140,11 @@ int playersCount = 0;
 volatile bool  output_exclude = false;
 
 uint32_t output_buttons_0 = 0;
-uint32_t output_analogx_0 = 0;
-uint32_t output_analogy_0 = 0;
-uint32_t output_analogx_1 = 0;
-uint32_t output_analogy_1 = 0;
+uint32_t output_analog_x1 = 0;
+uint32_t output_analog_y1 = 0;
+uint32_t output_analog_x2 = 0;
+uint32_t output_analog_y2 = 0;
+uint32_t output_quadx = 0;
 
 PIO pio;
 uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
@@ -179,17 +181,18 @@ void __not_in_flash_func(update_output)(void)
                      (eparity(buttons & 0b1011111111111111) << 0) ;
 
   output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
-  output_analogx_0 = genAnalogPacket(players[0].output_x1);
-  output_analogy_0 = genAnalogPacket(players[0].output_y1);
-  output_analogx_1 = genAnalogPacket(players[0].output_x2);
-  output_analogy_1 = genAnalogPacket(players[0].output_y2);
+  output_analog_x1 = genAnalogPacket(players[0].output_x1);
+  output_analog_y1 = genAnalogPacket(players[0].output_y1);
+  output_analog_x2 = genAnalogPacket(players[0].output_x2);
+  output_analog_y2 = genAnalogPacket(players[0].output_y2);
+  output_quadx     = genAnalogPacket(players[0].output_qx);
 }
 
 //
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2)
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2, uint8_t quad_x)
 {
   // TODO: Mouse stuffs
   // if (delta_x >= 128) 
@@ -213,6 +216,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
   players[dev_addr-1].output_y1 = analog_y1;
   players[dev_addr-1].output_x2 = analog_x2;
   players[dev_addr-1].output_y2 = analog_y2;
+  players[dev_addr-1].output_qx = quad_x;
 
   update_output();
 }
@@ -401,7 +405,8 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
-      word1 = __rev(output_analogx_1);
+      word1 = __rev(output_quadx);
+      // TODO: solve how to set unique values to first two bytes plus checksum
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -429,16 +434,16 @@ static void __not_in_flash_func(core1_entry)(void)
       //   word1 = __rev(0b10000000100000110000001100000000);
       // }
       if (channel == ATOD_CHANNEL_X1) {
-        word1 = __rev(output_analogx_0);
+        word1 = __rev(output_analog_x1);
       }
       else if (channel == ATOD_CHANNEL_Y1) {
-        word1 = __rev(output_analogy_0);
+        word1 = __rev(output_analog_y1);
       }
       else if (channel == ATOD_CHANNEL_X2) {
-        word1 = __rev(output_analogx_1);
+        word1 = __rev(output_analog_x2);
       }
       else if (channel == ATOD_CHANNEL_Y2) {
-        word1 = __rev(output_analogy_1);
+        word1 = __rev(output_analog_y2);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -527,13 +532,15 @@ int main(void)
     players[i].output_y1 = 0;
     players[i].output_x2 = 0;
     players[i].output_y2 = 0;
+    players[i].output_qx = 0;
   }
 
   output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
-  output_analogx_0 = 0b10000000100000110000001100000000; // x1 = 0
-  output_analogy_0 = 0b10000000100000110000001100000000; // y1 = 0
-  output_analogx_1 = 0b10000000100000110000001100000000; // x2 = 0
-  output_analogy_1 = 0b10000000100000110000001100000000; // y2 = 0
+  output_analog_x1 = 0b10000000100000110000001100000000; // x1 = 0
+  output_analog_y1 = 0b10000000100000110000001100000000; // y1 = 0
+  output_analog_x2 = 0b10000000100000110000001100000000; // x2 = 0
+  output_analog_y2 = 0b10000000100000110000001100000000; // y2 = 0
+  output_quadx = 0b10000000100000110000001100000000; // quadx = 0
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
