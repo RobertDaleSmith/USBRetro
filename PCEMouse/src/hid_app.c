@@ -361,6 +361,8 @@ uint8_t local_x;
 uint8_t local_y;
 
 uint16_t spinner = 0;
+uint16_t tpadLastPos = 0;
+bool tpadDragging = false;
 
 // Each HID instance can has multiple reports
 static struct
@@ -373,7 +375,15 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
 static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2);
+extern void __not_in_flash_func(post_globals)(
+    uint8_t dev_addr,
+    uint16_t buttons,
+    uint8_t analog_x1,
+    uint8_t analog_y1,
+    uint8_t analog_x2,
+    uint8_t analog_y2,
+    uint8_t quad_x
+);
 
 void hid_app_task(void)
 {
@@ -583,8 +593,8 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // We need more than memcmp to check if report is different enough
     if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
-      printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
-      printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+      // printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+      // printf("DPad = %s ", dpad_str[ds4_report.dpad]);
 
       if (ds4_report.square   ) printf("Square ");
       if (ds4_report.cross    ) printf("Cross ");
@@ -608,9 +618,9 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
-      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
 
-      printf("\r\n");
+      // printf("\r\n");
 
       int threshold = 28;
       bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
@@ -635,9 +645,44 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
                  ((ds4_report.l2)       ? 0x0002 : 0x00) | //C-UP
                  ((ds4_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
+
+      // tpad - atari50 like spinner
+
+      if (!ds4_report.tpad_f1_down) {
+        int16_t diff = 0;
+        uint8_t offs = 0;
+
+        if (tpadDragging) {
+          if (tx >= tpadLastPos) {
+            diff = tx - tpadLastPos;
+          } else {
+            diff = (-1) * (tpadLastPos - tx);
+          }
+
+          if (diff < 0) { // clockwise
+            spinner += ((-1 * diff) + offs);
+          } else { // counter-clockwise
+            if (spinner >= ((diff) + offs)) {
+              spinner += diff;
+              spinner -= offs;
+            } else {
+              spinner = 255 - ((diff) - spinner) - offs;
+            }
+            if (spinner > 255) spinner -= 255;
+          }
+        }
+
+        tpadLastPos = tx;
+        tpadDragging = true;
+      } else {
+        tpadDragging = false;
+      }
+
+      printf(" (spinner) = (%u)\r\n", spinner);
+
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+      post_globals(dev_addr, buttons, ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, spinner);
     }
 
     prev_report[dev_addr-1] = ds4_report;
@@ -714,7 +759,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2);
+      post_globals(dev_addr, buttons, ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, 0);
     }
 
     prev_report[dev_addr-1] = ds5_report;
@@ -773,7 +818,7 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
   }
 
   prev_report[dev_addr-1] = psc_report;
@@ -816,7 +861,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
   }
 
   prev_report[dev_addr-1] = pce_report;
@@ -868,7 +913,7 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
   }
 
   prev_report[dev_addr-1] = sega_report;
@@ -921,7 +966,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0);
+    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
   }
 
   prev_report[dev_addr-1] = astro_report;
@@ -975,7 +1020,7 @@ void process_wing_man(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 0);
+    post_globals(dev_addr, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 0, 0);
   }
 
   prev_report[dev_addr-1] = wingman_report;
@@ -1093,7 +1138,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, buttons, 0, 0, 0, 0);
+  post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
 
   prev_report = *report;
 }
@@ -1219,7 +1264,7 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, buttons, local_x, local_y, spinner, 0);
+  post_globals(dev_addr, buttons, local_x, local_y, 0, 0, spinner);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel, spinner);

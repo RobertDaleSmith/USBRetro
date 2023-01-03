@@ -27,8 +27,15 @@
 
 uint16_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2);
-
+extern void __not_in_flash_func(post_globals)(
+    uint8_t dev_addr,
+    uint16_t buttons,
+    uint8_t analog_x1,
+    uint8_t analog_y1,
+    uint8_t analog_x2,
+    uint8_t analog_y2,
+    uint8_t quad_x
+);
 //--------------------------------------------------------------------+
 // USB X-input
 //--------------------------------------------------------------------+
@@ -72,7 +79,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->bLeftTrigger)  ? 0x0002 : 0x00) | //C-UP
                ((p->bRightTrigger) ? 0x0001 : 0x00)); //C-RIGHT
 
-    post_globals(dev_addr, buttons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
+    post_globals(dev_addr, buttons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, 0);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
