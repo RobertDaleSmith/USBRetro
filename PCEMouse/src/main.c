@@ -146,6 +146,10 @@ uint32_t output_analog_x2 = 0;
 uint32_t output_analog_y2 = 0;
 uint32_t output_quadx = 0;
 
+uint32_t device_mode = 0b10111001100000111001010100000000;
+uint32_t device_config = 0b10000000100000110000001100000000;
+uint32_t device_switch = 0b10000000100000110000001100000000;
+
 PIO pio;
 uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
 
@@ -416,7 +420,6 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
 
       // ALL_BUTTONS: CTRLR_STDBUTTONS & CTRLR_DPAD & CTRLR_SHOULDER & CTRLR_EXTBUTTONS
-
       // <= 23 - 0x51f CTRLR_TWIST & CTRLR_THROTTLE & CTRLR_ANALOG1 & ALL_BUTTONS
       // 29-47 - 0x83f CTRLR_MOUSE & CTRLR_ANALOG1 & CTRLR_ANALOG2 & ALL_BUTTONS
       // 48-69 - 0x01f CTRLR_ANALOG1 & ALL_BUTTONS
@@ -424,11 +427,7 @@ static void __not_in_flash_func(core1_entry)(void)
       // >= 93 - ERROR?
  
       if (channel == ATOD_CHANNEL_NONE) {
-        // word1 = __rev(0b10000000100000110000001100000000); // 0  - 0x51f 1 analog
-        // word1 = __rev(0b10011101100000110100110100000000); // 29 - 0x83f 2 analog
-        word1 = __rev(0b10111001100000111001010100000000); // 57 - 0x01f 1 analog
-        // word1 = __rev(0b11000110000000101001010000000000); // 70 - 0x808 0 analog
-        // word1 = __rev(genAnalogPacket((127)+127)); //testing
+        word1 = __rev(device_mode); // device mode packet?
       }
       // if (channel == ATOD_CHANNEL_MODE) {
       //   word1 = __rev(0b10000000100000110000001100000000);
@@ -452,7 +451,8 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000);
-        word1 = __rev(genAnalogPacket((64)+127)); //testing
+
+      word1 = __rev(device_config); // device config packet?
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -460,7 +460,8 @@ static void __not_in_flash_func(core1_entry)(void)
     else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
       uint32_t word0 = 1;
       uint32_t word1 = __rev(0b10000000100000110000001100000000);
-        word1 = __rev(genAnalogPacket((64)+127)); //testing
+
+      word1 = __rev(device_switch); // device switch packet?
 
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
@@ -541,6 +542,36 @@ int main(void)
   output_analog_x2 = 0b10000000100000110000001100000000; // x2 = 0
   output_analog_y2 = 0b10000000100000110000001100000000; // y2 = 0
   output_quadx = 0b10000000100000110000001100000000; // quadx = 0
+
+  // ANALOG_1 - default single analog config properties [0x01f]
+  // device_mode   = 0b10111001100000111001010100000000; // 57
+  // device_config = 0b10000000100000110000001100000000; // 0
+  // device_switch = 0b10000000100000110000001100000000; // 0
+
+  // ANALOG_2 - dual analog config properties [0x83f]
+  // device_mode   = 0b10011101100000110100110100000000; // 29
+  // device_config = 0b10000000100000110000001100000000; // 0
+  // device_switch = 0b10000000100000110000001100000000; // 0
+
+  // WHEEL - .. [0x51f]
+  // device_mode   = 0b10000000100000110000001100000000; // 0
+  // device_config = 0b10000000100000110000001100000000; // 0
+  // device_switch = 0b10000000100000110000001100000000; // 0
+
+  // MOUSE - .. [0x808]
+  // device_mode   = 0b11000110000000101001010000000000; // 70
+  // device_config = 0b10000000100000110000001100000000; // 0
+  // device_switch = 0b10000000100000110000001100000000; // 0
+
+  // SPINNER - default single analog config properties [0x0]
+  // device_mode   = 0b10111001100000111001010100000000; // 57
+  // device_config = 0b11000000000000101000000000000000; // 64
+  // device_switch = 0b11000000000000101000000000000000; // 64
+
+  // TESTING
+  device_mode   = genAnalogPacket((57)+127);
+  device_config = genAnalogPacket((64)+127);
+  device_switch = genAnalogPacket((64)+127);
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
