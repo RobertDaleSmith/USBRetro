@@ -96,6 +96,20 @@ typedef struct TU_ATTR_PACKED
 
   int8_t tpad_f1_pos[3];
 
+  // struct {
+  //   uint8_t tpad_f2_count : 7;
+  //   uint8_t tpad_f2_down  : 1;
+  // };
+
+  // int8_t tpad_f2_pos[3];
+
+  // struct {
+  //   uint8_t tpad_f1_count_prev : 7;
+  //   uint8_t tpad_f1_down_prev  : 1;
+  // };
+
+  // int8_t [3];
+
 } sony_ds4_report_t;
 
 // Sony DS5 controller
@@ -360,7 +374,7 @@ uint16_t buttons;
 uint8_t local_x;
 uint8_t local_y;
 
-uint16_t spinner = 0;
+int16_t spinner = 0;
 uint16_t tpadLastPos = 0;
 bool tpadDragging = false;
 
@@ -593,8 +607,8 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // We need more than memcmp to check if report is different enough
     if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
-      // printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
-      // printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+      printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+      printf("DPad = %s ", dpad_str[ds4_report.dpad]);
 
       if (ds4_report.square   ) printf("Square ");
       if (ds4_report.cross    ) printf("Cross ");
@@ -618,18 +632,18 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
-      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-
-      // printf("\r\n");
+      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      printf("\r\n");
 
       int threshold = 28;
       bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7));
+      bool buttons_a  = (ds4_report.cross || ds4_report.tpad);
 
       buttons = (((ds4_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
-                 ((ds4_report.cross)    ? 0x4000 : 0x00) | //A
+                 ((buttons_a)           ? 0x4000 : 0x00) | //A
                  ((ds4_report.option)   ? 0x2000 : 0x00) | //START
                  ((ds4_report.share)    ? 0x1000 : 0x00) | //NUON
                  ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
@@ -645,31 +659,25 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
                  ((ds4_report.l2)       ? 0x0002 : 0x00) | //C-UP
                  ((ds4_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
-
-      // tpad - atari50 like spinner
-
+      // Touch Pad - Atari50 Tempest like spinner input
       if (!ds4_report.tpad_f1_down) {
-        int16_t diff = 0;
-        uint8_t offs = 0;
-
+        // scroll spinner value while swipping
         if (tpadDragging) {
-          if (tx >= tpadLastPos) {
-            diff = tx - tpadLastPos;
-          } else {
-            diff = (-1) * (tpadLastPos - tx);
-          }
+          // get directional difference delta
+          int16_t delta = 0;
+          if (tx >= tpadLastPos) delta = tx - tpadLastPos;
+          else delta = (-1) * (tpadLastPos - tx);
 
-          if (diff < 0) { // clockwise
-            spinner += ((-1 * diff) + offs);
-          } else { // counter-clockwise
-            if (spinner >= ((diff) + offs)) {
-              spinner += diff;
-              spinner -= offs;
-            } else {
-              spinner = 255 - ((diff) - spinner) - offs;
-            }
-            if (spinner > 255) spinner -= 255;
-          }
+          // check max/min delta value
+          if (delta > 12) delta = 12;
+          if (delta < -12) delta = -12;
+
+          // inc global spinner value by delta
+          spinner += delta;
+
+          // check max/min spinner value
+          if (spinner > 255) spinner -= 255;
+          if (spinner < 0) spinner = 256 - (-1 * spinner);
         }
 
         tpadLastPos = tx;
@@ -677,8 +685,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       } else {
         tpadDragging = false;
       }
-
-      printf(" (spinner) = (%u)\r\n", spinner);
+      // printf(" (spinner) = (%u)\r\n", spinner);
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
