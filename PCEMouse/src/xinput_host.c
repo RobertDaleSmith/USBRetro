@@ -301,7 +301,7 @@ bool xinputh_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, ui
 
     if (dir == TUSB_DIR_IN)
     {
-        printf("Get Report callback (%u, %u, %u bytes)\r\n", dev_addr, instance, xferred_bytes);
+        TU_LOG2("Get Report callback (%u, %u, %u bytes)\r\n", dev_addr, instance, xferred_bytes);
         TU_LOG2_MEM(xid_itf->epin_buf, xferred_bytes, 2);
         if (xid_itf->type == XBOX360_WIRED)
         {
