@@ -140,10 +140,10 @@ int playersCount = 0;
 volatile bool  output_exclude = false;
 
 uint32_t output_buttons_0 = 0;
-uint32_t output_analog_x1 = 0;
-uint32_t output_analog_y1 = 0;
-uint32_t output_analog_x2 = 0;
-uint32_t output_analog_y2 = 0;
+uint32_t output_analog_1x = 0;
+uint32_t output_analog_1y = 0;
+uint32_t output_analog_2x = 0;
+uint32_t output_analog_2y = 0;
 uint32_t output_quadx = 0;
 
 uint32_t device_mode = 0b10111001100000111001010100000000;
@@ -185,10 +185,10 @@ void __not_in_flash_func(update_output)(void)
                      (eparity(buttons & 0b1011111111111111) << 0) ;
 
   output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
-  output_analog_x1 = genAnalogPacket(players[0].output_x1);
-  output_analog_y1 = genAnalogPacket(players[0].output_y1);
-  output_analog_x2 = genAnalogPacket(players[0].output_x2);
-  output_analog_y2 = genAnalogPacket(players[0].output_y2);
+  output_analog_1x = genAnalogPacket(players[0].output_x1);
+  output_analog_1y = genAnalogPacket(players[0].output_y1);
+  output_analog_2x = genAnalogPacket(players[0].output_x2);
+  output_analog_2y = genAnalogPacket(players[0].output_y2);
   output_quadx     = genAnalogPacket(players[0].output_qx);
 }
 
@@ -196,8 +196,18 @@ void __not_in_flash_func(update_output)(void)
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t analog_x1, uint8_t analog_y1, uint8_t analog_x2, uint8_t analog_y2, uint8_t quad_x)
-{
+void __not_in_flash_func(post_globals)(
+  uint8_t dev_addr,
+  uint16_t buttons,
+  bool analog_1,
+  uint8_t analog_1x,
+  uint8_t analog_1y,
+  bool analog_2,
+  uint8_t analog_2x,
+  uint8_t analog_2y,
+  bool quad,
+  uint8_t quad_x
+) {
   // TODO: Mouse stuffs
   // if (delta_x >= 128) 
   //   players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
@@ -216,11 +226,11 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8
 
   // Controller with analog processing
   players[dev_addr-1].output_buttons = buttons;
-  players[dev_addr-1].output_x1 = analog_x1;
-  players[dev_addr-1].output_y1 = analog_y1;
-  players[dev_addr-1].output_x2 = analog_x2;
-  players[dev_addr-1].output_y2 = analog_y2;
-  players[dev_addr-1].output_qx = quad_x;
+  if (analog_1) players[dev_addr-1].output_x1 = analog_1x;
+  if (analog_1) players[dev_addr-1].output_y1 = analog_1y;
+  if (analog_2) players[dev_addr-1].output_x2 = analog_2x;
+  if (analog_2) players[dev_addr-1].output_y2 = analog_2y;
+  if (quad) players[dev_addr-1].output_qx = quad_x;
 
   update_output();
 }
@@ -433,16 +443,16 @@ static void __not_in_flash_func(core1_entry)(void)
       //   word1 = __rev(0b10000000100000110000001100000000);
       // }
       if (channel == ATOD_CHANNEL_X1) {
-        word1 = __rev(output_analog_x1);
+        word1 = __rev(output_analog_1x);
       }
       else if (channel == ATOD_CHANNEL_Y1) {
-        word1 = __rev(output_analog_y1);
+        word1 = __rev(output_analog_1y);
       }
       else if (channel == ATOD_CHANNEL_X2) {
-        word1 = __rev(output_analog_x2);
+        word1 = __rev(output_analog_2x);
       }
       else if (channel == ATOD_CHANNEL_Y2) {
-        word1 = __rev(output_analog_y2);
+        word1 = __rev(output_analog_2y);
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -537,10 +547,10 @@ int main(void)
   }
 
   output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
-  output_analog_x1 = 0b10000000100000110000001100000000; // x1 = 0
-  output_analog_y1 = 0b10000000100000110000001100000000; // y1 = 0
-  output_analog_x2 = 0b10000000100000110000001100000000; // x2 = 0
-  output_analog_y2 = 0b10000000100000110000001100000000; // y2 = 0
+  output_analog_1x = 0b10000000100000110000001100000000; // x1 = 0
+  output_analog_1y = 0b10000000100000110000001100000000; // y1 = 0
+  output_analog_2x = 0b10000000100000110000001100000000; // x2 = 0
+  output_analog_2y = 0b10000000100000110000001100000000; // y2 = 0
   output_quadx = 0b10000000100000110000001100000000; // quadx = 0
 
   // ANALOG [0x0000001f]
@@ -700,7 +710,7 @@ uint8_t checkbit(uint8_t value, uint8_t size, bool zero) {
 // checks whether value exist within every other subgroup of n(size).
 uint32_t genAnalogPacket(int16_t value) { // 0 - 254
   value -= 127;
-  // if (value < -127) value = -127;
+  if (value < -126) value = -126;
   if (value > 127) value = 127;
 
   bool positive = (value >= 0);
