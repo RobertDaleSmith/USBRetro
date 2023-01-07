@@ -390,13 +390,16 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 extern void __not_in_flash_func(post_globals)(
-    uint8_t dev_addr,
-    uint16_t buttons,
-    uint8_t analog_x1,
-    uint8_t analog_y1,
-    uint8_t analog_x2,
-    uint8_t analog_y2,
-    uint8_t quad_x
+  uint8_t dev_addr,
+  uint16_t buttons,
+  bool analog_1,
+  uint8_t analog_1x,
+  uint8_t analog_1y,
+  bool analog_2,
+  uint8_t analog_2x,
+  uint8_t analog_2y,
+  bool quad,
+  uint8_t quad_x
 );
 
 void hid_app_task(void)
@@ -689,7 +692,18 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, spinner);
+      post_globals(
+        dev_addr,
+        buttons,
+        true,          // analog_1 enabled
+        ds4_report.x,  // analog_1x
+        ds4_report.y,  // analog_1y
+        true,          // analog_2 enabled
+        ds4_report.z,  // analog_2x
+        ds4_report.rz, // analog_2y
+        true,          // quad enabled
+        spinner        // quad_x
+      );
     }
 
     prev_report[dev_addr-1] = ds4_report;
@@ -745,7 +759,6 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       bool dpad_right = ((ds5_report.dpad >= 1 && ds5_report.dpad <= 3));
       bool dpad_down  = ((ds5_report.dpad >= 3 && ds5_report.dpad <= 5));
       bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7));
-      bool has_6btns = true;
 
       buttons = (((ds5_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
                  ((ds5_report.cross)    ? 0x4000 : 0x00) | //A
@@ -766,7 +779,18 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, 0);
+      post_globals(
+        dev_addr,
+        buttons,
+        true,          // analog_1 enabled
+        ds5_report.x1, // analog_1x
+        ds5_report.y1, // analog_1y
+        true,          // analog_2 enabled
+        ds5_report.x2, // analog_2x
+        ds5_report.y2, // analog_2y
+        false,         // quad enabled
+        0              // quad_x
+      );
     }
 
     prev_report[dev_addr-1] = ds5_report;
@@ -825,7 +849,18 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
+    post_globals(
+      dev_addr,
+      buttons,
+      false, // analog_1 enabled
+      0,     // analog_1x
+      0,     // analog_1y
+      false, // analog_2 enabled
+      0,     // analog_2x
+      0,     // analog_2y
+      false, // quad enabled
+      0      // quad_x
+    );
   }
 
   prev_report[dev_addr-1] = psc_report;
@@ -868,7 +903,18 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
+    post_globals(
+      dev_addr,
+      buttons,
+      false, // analog_1 enabled
+      0,     // analog_1x
+      0,     // analog_1y
+      false, // analog_2 enabled
+      0,     // analog_2x
+      0,     // analog_2y
+      false, // quad enabled
+      0      // quad_x
+    );
   }
 
   prev_report[dev_addr-1] = pce_report;
@@ -920,7 +966,18 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
+    post_globals(
+      dev_addr,
+      buttons,
+      false, // analog_1 enabled
+      0,     // analog_1x
+      0,     // analog_1y
+      false, // analog_2 enabled
+      0,     // analog_2x
+      0,     // analog_2y
+      false, // quad enabled
+      0      // quad_x
+    );
   }
 
   prev_report[dev_addr-1] = sega_report;
@@ -973,7 +1030,18 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
+    post_globals(
+      dev_addr,
+      buttons,
+      false,  // analog_1 enabled
+      0,      // analog_1x
+      0,      // analog_1y
+      false,  // analog_2 enabled
+      0,      // analog_2x
+      0,      // analog_2y
+      false,  // quad enabled
+      0       // quad_x
+    );
   }
 
   prev_report[dev_addr-1] = astro_report;
@@ -1027,7 +1095,18 @@ void process_wing_man(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 0, 0);
+    post_globals(
+      dev_addr,
+      buttons,
+      true,                   // analog_1 enabled
+      wingman_report.analog_x,// analog_1x
+      wingman_report.analog_y,// analog_1y
+      false,                  // analog_2 enabled
+      0,                      // analog_2x
+      0,                      // analog_2y
+      true,                   // quad enabled
+      wingman_report.analog_z // quad_x
+    );
   }
 
   prev_report[dev_addr-1] = wingman_report;
@@ -1091,28 +1170,25 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
 
-  bool has_6btns = true;
-  bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
-    btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
-    btns_three = false, btns_four = false, btns_five = false, btns_six = false;
+  bool btns_cd, btns_a, btns_nuon, btns_start, btns_l, btns_r, btns_b,
+  btns_cl, btns_cu, btns_cr, dpad_left, dpad_down, dpad_right, dpad_up;
 
   //------------- example code ignore control (non-printable) key affects -------------//
   for(uint8_t i=0; i<6; i++)
   {
     if ( report->keycode[i] )
     {
-      if (report->keycode[i] == 40) btns_run = true; // Enter
-      if (report->keycode[i] == 41) btns_sel = true; // ESC
-      if (report->keycode[i] == 26 || report->keycode[i] == 82) dpad_up = true; // W or Arrow
-      if (report->keycode[i] == 4  || report->keycode[i] == 80) dpad_left = true; // A or Arrow
-      if (report->keycode[i] == 22 || report->keycode[i] == 81) dpad_down = true; // S or Arrow
-      if (report->keycode[i] == 7  || report->keycode[i] == 79) dpad_right = true; // D or Arrow
-      if (report->keycode[i] == 89) btns_one = true;
-      if (report->keycode[i] == 90) btns_two = true;
-      if (report->keycode[i] == 91) btns_three = true;
-      if (report->keycode[i] == 92) btns_four = true;
-      if (report->keycode[i] == 93) btns_five = true;
-      if (report->keycode[i] == 94) btns_six = true;
+      // btns_enter = (report->keycode[i] == 40); // Enter
+      // btns_esc = (report->keycode[i] == 41); // ESC
+      dpad_up = (report->keycode[i] == 26 || report->keycode[i] == 82); // W or Arrow
+      dpad_left = (report->keycode[i] == 4  || report->keycode[i] == 80); // A or Arrow
+      dpad_down = (report->keycode[i] == 22 || report->keycode[i] == 81); // S or Arrow
+      dpad_right = (report->keycode[i] == 7  || report->keycode[i] == 79); // D or Arrow
+
+      btns_cl = (report->keycode[i] == 89); // 1
+      btns_cd = (report->keycode[i] == 90); // 2
+      btns_cl = (report->keycode[i] == 91); // 3
+      btns_cu = (report->keycode[i] == 92); // 4
 
       if ( find_key_in_report(&prev_report, report->keycode[i]) )
       {
@@ -1132,20 +1208,35 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
     // TODO example skips key released
   }
 
-  buttons = (((btns_six)   ? 0x00 : 0x8000) |
-             ((btns_five)  ? 0x00 : 0x4000) |
-             ((btns_four)  ? 0x00 : 0x2000) |
-             ((btns_three) ? 0x00 : 0x1000) |
-             ((has_6btns)  ? 0x00 : 0xFF00) |
-             ((dpad_left)  ? 0x00 : 0x0008) |
-             ((dpad_down)  ? 0x00 : 0x0004) |
-             ((dpad_right) ? 0x00 : 0x0002) |
-             ((dpad_up)    ? 0x00 : 0x0001) |
-             ((btns_run)   ? 0x00 : 0x0080) |
-             ((btns_sel)   ? 0x00 : 0x0040) |
-             ((btns_two)   ? 0x00 : 0x0020) |
-             ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, buttons, 0, 0, 0, 0, 0);
+  buttons = (((btns_cd)    ? 0x8000 : 0x00) | //C-DOWN  (2)
+             ((btns_a)     ? 0x4000 : 0x00) | //A       (f)
+             ((btns_nuon)  ? 0x2000 : 0x00) | //START   (n)
+             ((btns_start) ? 0x1000 : 0x00) | //NUON    (m)
+             ((dpad_down)  ? 0x0800 : 0x00) | //D-DOWN
+             ((dpad_left)  ? 0x0400 : 0x00) | //D-LEFT
+             ((dpad_up)    ? 0x0200 : 0x00) | //D-UP
+             ((dpad_right) ? 0x0100 : 0x00) | //D-RIGHT
+             ((1)          ? 0x0080 : 0x00) |
+             ((0)          ? 0x0040 : 0x00) |
+             ((btns_l)     ? 0x0020 : 0x00) | //L       (q)
+             ((btns_r)     ? 0x0010 : 0x00) | //R       (e)
+             ((btns_b)     ? 0x0008 : 0x00) | //B       (b)
+             ((btns_cl)    ? 0x0004 : 0x00) | //C-LEFT  (1)
+             ((btns_cu)    ? 0x0002 : 0x00) | //C-UP    (4)
+             ((btns_cr)    ? 0x0001 : 0x00)); //C-RIGHT (3)
+
+  post_globals(
+    dev_addr,
+    buttons,
+    false,  // analog_1 enabled
+    0,      // analog_1x
+    0,      // analog_1y
+    false,  // analog_2 enabled
+    0,      // analog_2x
+    0,      // analog_2y
+    false,  // quad enabled
+    0       // quad_x
+  );
 
   prev_report = *report;
 }
@@ -1271,7 +1362,18 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, buttons, local_x, local_y, 0, 0, spinner);
+  post_globals(
+    dev_addr,
+    buttons,
+    false,  // analog_1 enabled
+    0,      // analog_1x
+    0,      // analog_1y
+    false,  // analog_2 enabled
+    0,      // analog_2x
+    0,      // analog_2y
+    true,   // quad enabled
+    spinner // quad_x
+  );
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel, spinner);

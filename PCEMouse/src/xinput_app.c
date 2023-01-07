@@ -28,13 +28,16 @@
 uint16_t buttons;
 
 extern void __not_in_flash_func(post_globals)(
-    uint8_t dev_addr,
-    uint16_t buttons,
-    uint8_t analog_x1,
-    uint8_t analog_y1,
-    uint8_t analog_x2,
-    uint8_t analog_y2,
-    uint8_t quad_x
+  uint8_t dev_addr,
+  uint16_t buttons,
+  bool analog_1,
+  uint8_t analog_1x,
+  uint8_t analog_1y,
+  bool analog_2,
+  uint8_t analog_2x,
+  uint8_t analog_2y,
+  bool quad,
+  uint8_t quad_x
 );
 //--------------------------------------------------------------------+
 // USB X-input
@@ -56,11 +59,8 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
 
   if (xid_itf->connected && xid_itf->new_pad_data)
   {
-    printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
+    TU_LOG2("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
       dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
-
-              //  ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
-              //  ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 20000) ? 0x00 : 0x02) |
 
     buttons = (((p->wButtons & XINPUT_GAMEPAD_B)     ? 0x8000 : 0x00) | //C-DOWN
                ((p->wButtons & XINPUT_GAMEPAD_A)     ? 0x4000 : 0x00) | //A
@@ -79,7 +79,27 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->bLeftTrigger)  ? 0x0002 : 0x00) | //C-UP
                ((p->bRightTrigger) ? 0x0001 : 0x00)); //C-RIGHT
 
-    post_globals(dev_addr, buttons, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY, 0);
+    float max_thresh = 32768;
+    float left1X = (128 * (p->sThumbLX / max_thresh)) + ((p->sThumbLX >= 0) ? 127 : 128);
+    float left1Y = (128 * (-1 * p->sThumbLY / max_thresh)) + ((-1 * p->sThumbLY >= 0) ? 127 : 128);
+    // float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
+    // float left2Y = (128 * (-1 * p->sThumbRY / max_thresh)) + ((-1 * p->sThumbRY >= 0) ? 127 : 128);
+
+    if (p->sThumbLX == 0) left1X = 127;
+    if (p->sThumbLY == 0) left1Y = 127;
+
+    post_globals(
+      dev_addr,
+      buttons,
+      true,   // analog_1
+      left1X, // analog_1x
+      left1Y, // analog_1y
+      false,  // analog_2
+      0,      // analog_2x
+      0,      // analog_2y
+      false,  // quad
+      0       // quad_x
+    );
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
@@ -94,9 +114,10 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
     tuh_xinput_receive_report(dev_addr, instance);
     return;
   }
-  tuh_xinput_set_led(dev_addr, instance, 0, true);
-  tuh_xinput_set_led(dev_addr, instance, 1, true);
-  tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
+  // DISABLED FOR INPUTLABS ALPAKKA - fix on their end and renable later here
+  // tuh_xinput_set_led(dev_addr, instance, 0, true);
+  // tuh_xinput_set_led(dev_addr, instance, 1, true);
+  // tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
   tuh_xinput_receive_report(dev_addr, instance);
 }
 
