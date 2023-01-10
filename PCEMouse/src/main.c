@@ -548,10 +548,10 @@ int main(void)
     players[i].global_y = 0;
     players[i].output_buttons = 0x80;
     players[i].output_buttons_alt = 0x80;
-    players[i].output_x1 = 0;
-    players[i].output_y1 = 0;
-    players[i].output_x2 = 0;
-    players[i].output_y2 = 0;
+    players[i].output_x1 = 127;
+    players[i].output_y1 = 127;
+    players[i].output_x2 = 127;
+    players[i].output_y2 = 127;
     players[i].output_qx = 0;
   }
 
