@@ -1310,11 +1310,11 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
        report->buttons & MOUSE_BUTTON_MIDDLE    ? 'M' : '-',
        report->buttons & MOUSE_BUTTON_RIGHT     ? '1' : '-');
 
-    if (buttons_swappable && (report->buttons & MOUSE_BUTTON_MIDDLE) &&
-        (previous_middle_button == false))
-       buttons_swapped = (buttons_swapped ? false : true);
+    // if (buttons_swappable && (report->buttons & MOUSE_BUTTON_MIDDLE) &&
+    //     (previous_middle_button == false))
+    //    buttons_swapped = (buttons_swapped ? false : true);
 
-    previous_middle_button = (report->buttons & MOUSE_BUTTON_MIDDLE);
+    // previous_middle_button = (report->buttons & MOUSE_BUTTON_MIDDLE);
   }
 
   // if (buttons_swapped)
@@ -1337,7 +1337,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 
   buttons = (((0)                   ? 0x8000 : 0x00) | //C-DOWN
              ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x4000 : 0x00) | //A
-             ((report->buttons & MOUSE_BUTTON_FORWARD)  ? 0x2000 : 0x00) | //START
+             ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x2000 : 0x00) | //START
              ((report->buttons & MOUSE_BUTTON_BACKWARD) ? 0x1000 : 0x00) | //NUON
              ((0)                   ? 0x0800 : 0x00) | //D-DOWN
              ((0)                   ? 0x0400 : 0x00) | //D-LEFT
@@ -1355,6 +1355,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   local_x = (0 - report->x);
   local_y = (0 - report->y);
 
+  // mouse wheel to spinner rotation conversion
   if (report->wheel != 0) {
     if (report->wheel < 0) { // clockwise
       spinner += ((-1 * report->wheel) + 3);
@@ -1365,6 +1366,26 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
         spinner -= 3;
       } else {
         spinner = 255 - ((report->wheel) - spinner) - 3;
+      }
+    }
+  }
+
+  int16_t delta = report->x;
+
+  // check max/min delta value
+  if (delta > 13) delta = 13;
+  if (delta < -13) delta = -13;
+
+  // mouse x-axis to spinner rotation conversion
+  if (delta != 0) {
+    if (delta < 0) { // clockwise
+      spinner += delta;
+      if (spinner > 255) spinner -= 255;
+    } else { // counter-clockwise
+      if (spinner >= ((delta))) {
+        spinner += delta;
+      } else {
+        spinner = 255 - delta - spinner;
       }
     }
   }
