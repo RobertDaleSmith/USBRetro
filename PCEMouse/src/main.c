@@ -125,6 +125,7 @@ typedef struct TU_ATTR_PACKED
   int16_t global_y;
 
   int16_t output_buttons;
+  int16_t output_buttons_alt;
   int16_t output_x1;
   int16_t output_y1;
   int16_t output_x2;
@@ -165,7 +166,8 @@ uint sm1, sm2;   // sm1 = clocked_out; sm2 = clocked_in
 //
 void __not_in_flash_func(update_output)(void)
 {
-  int16_t buttons = (players[0].output_buttons & 0xffff);
+  int16_t buttons = (players[0].output_buttons & 0xffff) |
+                    (players[0].output_buttons_alt & 0xffff);
   int16_t checksum = (eparity(buttons & 0b1101111111111111) << 15) |
                      (eparity(buttons & 0b0011000000000000) << 14) |
                      (eparity(buttons & 0b0001100000000000) << 13) |
@@ -198,6 +200,7 @@ void __not_in_flash_func(update_output)(void)
 //
 void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
+  uint8_t instance,
   uint16_t buttons,
   bool analog_1,
   uint8_t analog_1x,
@@ -225,7 +228,12 @@ void __not_in_flash_func(post_globals)(
   // players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
 
   // Controller with analog processing
-  players[dev_addr-1].output_buttons = buttons;
+  if (!instance) {
+    players[dev_addr-1].output_buttons = buttons;
+  } else {
+    players[dev_addr-1].output_buttons_alt = buttons;
+  }
+
   if (analog_1) players[dev_addr-1].output_x1 = analog_1x;
   if (analog_1) players[dev_addr-1].output_y1 = analog_1y;
   if (analog_2) players[dev_addr-1].output_x2 = analog_2x;
@@ -539,6 +547,7 @@ int main(void)
     players[i].global_x = 0;
     players[i].global_y = 0;
     players[i].output_buttons = 0x80;
+    players[i].output_buttons_alt = 0x80;
     players[i].output_x1 = 0;
     players[i].output_y1 = 0;
     players[i].output_x2 = 0;
