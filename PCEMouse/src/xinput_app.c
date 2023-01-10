@@ -29,6 +29,7 @@ uint16_t buttons;
 
 extern void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
+  uint8_t instance,
   uint16_t buttons,
   bool analog_1,
   uint8_t analog_1x,
@@ -90,6 +91,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
 
     post_globals(
       dev_addr,
+      instance,
       buttons,
       true,   // analog_1
       left1X, // analog_1x

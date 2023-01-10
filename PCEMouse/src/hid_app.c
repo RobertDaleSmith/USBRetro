@@ -385,12 +385,13 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
 }hid_info[CFG_TUH_HID];
 
-static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report);
-static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report);
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 extern void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
+  uint8_t instance,
   uint16_t buttons,
   bool analog_1,
   uint8_t analog_1x,
@@ -587,7 +588,7 @@ bool wingman_diff_report(wing_man_report_t const* rpt1, wing_man_report_t const*
   return result;
 }
 
-void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds4_report_t prev_report[5] = { 0 };
@@ -694,6 +695,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       // if a scan from the host machine is ongoing, wait
       post_globals(
         dev_addr,
+        instance,
         buttons,
         true,          // analog_1 enabled
         ds4_report.x,  // analog_1x
@@ -710,7 +712,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   }
 }
 
-void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds5_report_t prev_report[5] = { 0 };
@@ -781,6 +783,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
       // if a scan from the host machine is ongoing, wait
       post_globals(
         dev_addr,
+        instance,
         buttons,
         true,          // analog_1 enabled
         ds5_report.x1, // analog_1x
@@ -796,7 +799,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     prev_report[dev_addr-1] = ds5_report;
   }
 }
-void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_8bit_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_psc_report_t prev_report[5] = { 0 };
@@ -851,6 +854,7 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // if a scan from the host machine is ongoing, wait
     post_globals(
       dev_addr,
+      instance,
       buttons,
       false, // analog_1 enabled
       0,     // analog_1x
@@ -866,7 +870,7 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = psc_report;
 }
 
-void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_pce_report_t prev_report[5] = { 0 };
@@ -905,6 +909,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // if a scan from the host machine is ongoing, wait
     post_globals(
       dev_addr,
+      instance,
       buttons,
       false, // analog_1 enabled
       0,     // analog_1x
@@ -921,7 +926,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 }
 
 
-void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sega_mini_report_t prev_report[5] = { 0 };
@@ -968,6 +973,7 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // if a scan from the host machine is ongoing, wait
     post_globals(
       dev_addr,
+      instance,
       buttons,
       false, // analog_1 enabled
       0,     // analog_1x
@@ -983,7 +989,7 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = sega_report;
 }
 
-void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static astro_city_report_t prev_report[5] = { 0 };
@@ -1032,6 +1038,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // if a scan from the host machine is ongoing, wait
     post_globals(
       dev_addr,
+      instance,
       buttons,
       false,  // analog_1 enabled
       0,      // analog_1x
@@ -1047,7 +1054,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = astro_report;
 }
 
-void process_wing_man(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static wing_man_report_t prev_report[5] = { 0 };
@@ -1097,6 +1104,7 @@ void process_wing_man(uint8_t dev_addr, uint8_t const* report, uint16_t len)
     // if a scan from the host machine is ongoing, wait
     post_globals(
       dev_addr,
+      instance,
       buttons,
       true,                   // analog_1 enabled
       wingman_report.analog_x,// analog_1x
@@ -1121,22 +1129,22 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
       TU_LOG2("HID receive boot keyboard report\r\n");
-      process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
+      process_kbd_report(dev_addr, instance, (hid_keyboard_report_t const*) report );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
       TU_LOG2("HID receive boot mouse report\r\n");
-      process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
+      process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
     break;
 
     default:
-      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, report, len);
-      else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, report, len);
-      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
-      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
-      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, report, len);
-      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
-      else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, report, len);
+      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
+      else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, instance, report, len);
+      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
+      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, instance, report, len);
+      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, instance, report, len);
+      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
+      else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
@@ -1166,7 +1174,7 @@ static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8
   return false;
 }
 
-static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report)
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report)
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
 
@@ -1227,6 +1235,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
 
   post_globals(
     dev_addr,
+    instance,
     buttons,
     false,  // analog_1 enabled
     0,      // analog_1x
@@ -1284,7 +1293,7 @@ uint8_t x1, y1;
 #endif
 }
 
-static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report)
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report)
 {
   static hid_mouse_report_t prev_report = { 0 };
 
@@ -1364,6 +1373,7 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
   // if a scan from the host machine is ongoing, wait
   post_globals(
     dev_addr,
+    1, // instance,
     buttons,
     false,  // analog_1 enabled
     0,      // analog_1x
@@ -1433,13 +1443,13 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       case HID_USAGE_DESKTOP_KEYBOARD:
         TU_LOG1("HID receive keyboard report\r\n");
         // Assume keyboard follow boot report layout
-        process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
+        process_kbd_report(dev_addr, instance, (hid_keyboard_report_t const*) report );
       break;
 
       case HID_USAGE_DESKTOP_MOUSE:
         TU_LOG1("HID receive mouse report\r\n");
         // Assume mouse follow boot report layout
-        process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
+        process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
       break;
 
       default: break;
