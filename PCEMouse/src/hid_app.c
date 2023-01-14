@@ -1303,7 +1303,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
   if ( button_changed_mask & report->buttons)
   {
-    printf(" %c%c%c%c%c ",
+    TU_LOG1(" %c%c%c%c%c ",
        report->buttons & MOUSE_BUTTON_BACKWARD  ? 'R' : '-',
        report->buttons & MOUSE_BUTTON_FORWARD   ? 'S' : '-',
        report->buttons & MOUSE_BUTTON_LEFT      ? '2' : '-',
@@ -1373,8 +1373,8 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   int16_t delta = report->x;
 
   // check max/min delta value
-  if (delta > 13) delta = 13;
-  if (delta < -13) delta = -13;
+  if (delta > 15) delta = 15;
+  if (delta < -15) delta = -15;
 
   // mouse x-axis to spinner rotation conversion
   if (delta != 0) {
@@ -1407,7 +1407,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   );
 
   //------------- cursor movement -------------//
-  cursor_movement(report->x, report->y, report->wheel, spinner);
+  // cursor_movement(report->x, report->y, report->wheel, spinner);
 }
 
 //--------------------------------------------------------------------+
