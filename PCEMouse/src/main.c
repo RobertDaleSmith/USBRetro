@@ -114,7 +114,8 @@ queue_t packet_queue;
 uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
-uint32_t genAnalogPacket(int16_t);
+uint32_t genAnalogPacket(int8_t);
+uint32_t genQuadXPacket(int8_t valueX, int8_t valueY);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
@@ -195,7 +196,7 @@ void __not_in_flash_func(update_output)(void)
   output_analog_1y = genAnalogPacket(players[0].output_y1);
   output_analog_2x = genAnalogPacket(players[0].output_x2);
   output_analog_2y = genAnalogPacket(players[0].output_y2);
-  output_quadx     = genAnalogPacket(players[0].output_qx);
+  output_quadx     = genQuadXPacket(players[0].output_qx, 0);
 }
 
 //
@@ -566,13 +567,13 @@ int main(void)
   output_analog_1y = 0b10000000100000110000001100000000; // y1 = 0
   output_analog_2x = 0b10000000100000110000001100000000; // x2 = 0
   output_analog_2y = 0b10000000100000110000001100000000; // y2 = 0
-  output_quadx = 0b10000000100000110000001100000000; // quadx = 0
+  output_quadx = 0b10000000000000000000000000000000; // quadx = 0
 
   // ANALOG        [0x0000001f]
   // ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
-  // device_mode   = 0b10111001100000111001010100000000; // 57
-  // device_config = 0b10000000100000110000001100000000; // 0
-  // device_switch = 0b10000000100000110000001100000000; // 0
+  device_mode   = 0b10111001100000111001010100000000; // 57
+  device_config = 0b10000000100000110000001100000000; // 0
+  device_switch = 0b10000000100000110000001100000000; // 0
 
   // ANALOG2       [0x0000083f]
   // MOUSE|TRACKBALL, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
@@ -617,9 +618,9 @@ int main(void)
   // device_switch = 0b11000000000000101000000000000000; // 64
 
   // TESTING
-  device_mode   = genAnalogPacket((29)+127);
-  device_config = genAnalogPacket((64)+127);
-  device_switch = genAnalogPacket((64)+127);
+  device_mode   = genAnalogPacket((29)+128);
+  device_config = genAnalogPacket((64)+128);
+  device_switch = genAnalogPacket((64)+128);
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
@@ -702,10 +703,20 @@ uint8_t eparity(uint32_t data) {
   return ((eparity)&0x1);
 }
 
-// checks whether value exist within every other subgroup of n(size).
-uint32_t genAnalogPacket(int16_t value) { // 0 - 254
-  value += 1;
-  return (((value & 0xff) << 24) | ((crc_calc(value, 0) & 0xffff) << 8));
+// generates single byte analog packet with CRC check bytes
+uint32_t genAnalogPacket(int8_t value) { // 0 - 254
+  u_int16_t crc = 0;
+  if (value == 0) value = 1;
+  crc = (crc_calc(value, crc) & 0xffff);
+  return (((value & 0xff) << 24) | (crc << 8));
+}
+
+// generates double byte quadx packet with CRC check bytes
+uint32_t genQuadXPacket(int8_t valueX, int8_t valueY) {
+  u_int16_t crc = 0;
+  crc = (crc_calc(valueX, crc) & 0xffff);
+  crc = (crc_calc(valueY, crc) & 0xffff);
+  return (((valueX & 0xff) << 24) | ((valueY & 0xff) << 16) | (crc << 0));
 }
 
 int crc_build_lut() {
