@@ -104,12 +104,16 @@
 #define TYPE 3
 #define MFG 0
 
+#define CRC16 0x8005
+
+int crc_calc(unsigned char data,int crc);
+static int crc_lut[256]; // crc look up table
+
 queue_t packet_queue;
 
 uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
-uint8_t checkbit(uint8_t, uint8_t, bool);
 uint32_t genAnalogPacket(int16_t);
 
 extern void cdc_task(void);
@@ -699,47 +703,22 @@ uint8_t eparity(uint32_t data) {
 }
 
 // checks whether value exist within every other subgroup of n(size).
-uint8_t checkbit(uint8_t value, uint8_t size, bool zero) {
-  bool inSet = false;
-  bool skip = !zero;
-
-  int i = 0;
-  do {
-    if (!skip) {
-      if (value >= i && value <= i+(size-1)) {
-        inSet = true;
-      }
-    }
-
-    i = i + ((!i) ? (size/2) : size);
-    skip = !skip;
-  } while (i < 128 && !inSet);
-
-  return (inSet ? 1 : 0);
+uint32_t genAnalogPacket(int16_t value) { // 0 - 254
+  value += 1;
+  return (((value & 0xff) << 24) | ((crc_calc(value, 0) & 0xffff) << 8));
 }
 
-// checks whether value exist within every other subgroup of n(size).
-uint32_t genAnalogPacket(int16_t value) { // 0 - 254
-  value -= 127;
-  if (value < -126) value = -126;
-  if (value > 127) value = 127;
+int crc_build_lut() {
+	int i,j,k;
+	for (i=0; i<256; i++) {
+		for(j=i<<8,k=0; k<8; k++) {
+			j=(j&0x8000) ? (j<<1)^CRC16 : (j<<1); crc_lut[i]=j;
+		}
+	}
+	return(0);
+}
 
-  bool positive = (value >= 0);
-  uint8_t delta = ((positive ? value : (-1 * value)) & 0b01111111);
-  uint8_t value_byte = (((positive ? 1 : 0) & 1) << 7) |  // value is positive
-                       ((positive ? delta : (~delta)) & 0b01111111); // value, ones' complement if negative
-
-  return (value_byte << 24) |
-         (((eparity(value_byte)) & 1) << 23) | // value_byte[7-0] is even parity
-         ((((positive)?1:0) & 1) << 17) | // value is positive
-       //(((checkbit(delta, 128, true)) & 1) << 16) | // 128, is zero
-         ((((delta <= 63) ? 1:0) & 1) << 16) | // [-63 - 63] 128
-         (((checkbit(delta, 64, false)) & 1) << 15) | // 64, not zero
-         (((checkbit(delta, 32, false)) & 1) << 14) | // 32, not zero
-         (((checkbit(delta, 16, false)) & 1) << 13) | // 16, not zero
-         (((checkbit(delta, 8, false)) & 1) << 12) |  // 8, not zero
-         (((checkbit(delta, 4, false)) & 1) << 11) |  // 4, not zero
-         (((checkbit(delta, 2, false)) & 1) << 10) |  // 2, not zero
-         (((eparity(value_byte & 0b11111110)) & 1) << 9) | // value_byte[7-1] is even parity
-         (((eparity(value_byte)) & 1) << 8); // value_byte[7-0] is even parity
+int crc_calc(unsigned char data, int crc) {
+	if (crc_lut[1]==0) crc_build_lut();
+	return(((crc_lut[((crc>>8)^data)&0xff])^(crc<<8))&0xffff);
 }
