@@ -108,14 +108,13 @@
 
 int crc_calc(unsigned char data,int crc);
 static int crc_lut[256]; // crc look up table
+uint32_t crc_data_packet(int32_t value, int8_t size);
 
 queue_t packet_queue;
 
 uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
-uint32_t genAnalogPacket(int8_t);
-uint32_t genQuadXPacket(int8_t valueX, int8_t valueY);
 
 extern void cdc_task(void);
 extern void hid_app_task(void);
@@ -173,30 +172,13 @@ void __not_in_flash_func(update_output)(void)
 {
   int16_t buttons = (players[0].output_buttons & 0xffff) |
                     (players[0].output_buttons_alt & 0xffff);
-  int16_t checksum = (eparity(buttons & 0b1101111111111111) << 15) |
-                     (eparity(buttons & 0b0011000000000000) << 14) |
-                     (eparity(buttons & 0b0001100000000000) << 13) |
-                     (eparity(buttons & 0b0000110000000000) << 12) |
-                     (eparity(buttons & 0b0000011000000000) << 11) |
-                     (eparity(buttons & 0b0000001100000000) << 10) |
-                     (eparity(buttons & 0b0000000110000000) << 9) |
-                     (eparity(buttons & 0b0000000011000000) << 8) |
 
-                     (eparity(buttons & 0b0000000001100000) << 7) |
-                     (eparity(buttons & 0b0000000000110000) << 6) |
-                     (eparity(buttons & 0b0000000000011000) << 5) |
-                     (eparity(buttons & 0b0000000000001100) << 4) |
-                     (eparity(buttons & 0b1000000000000110) << 3) |
-                     (eparity(buttons & 0b0100000000000011) << 2) |
-                     (eparity(buttons & 0b0111111111111110) << 1) |
-                     (eparity(buttons & 0b1011111111111111) << 0) ;
-
-  output_buttons_0 = (buttons << 16) | (checksum & 0xffff);
-  output_analog_1x = genAnalogPacket(players[0].output_x1);
-  output_analog_1y = genAnalogPacket(players[0].output_y1);
-  output_analog_2x = genAnalogPacket(players[0].output_x2);
-  output_analog_2y = genAnalogPacket(players[0].output_y2);
-  output_quadx     = genQuadXPacket(players[0].output_qx, 0);
+  output_buttons_0 = crc_data_packet(buttons, 2);
+  output_analog_1x = crc_data_packet(players[0].output_x1, 1);
+  output_analog_1y = crc_data_packet(players[0].output_y1, 1);
+  output_analog_2x = crc_data_packet(players[0].output_x2, 1);
+  output_analog_2y = crc_data_packet(players[0].output_y2, 1);
+  output_quadx     = crc_data_packet(players[0].output_qx<<8, 2);
 }
 
 //
@@ -402,11 +384,11 @@ static void __not_in_flash_func(core1_entry)(void)
       uint32_t word1 = 0;
 
       if (channel == ATOD_CHANNEL_MODE) {
-        word1 = __rev(0b11000100100000101001101100000000); // 68
-        // word1 = __rev(genAnalogPacket((116)+127)); // send & recv?
+        // word1 = __rev(0b11000100100000101001101100000000); // 68
+        word1 = __rev(crc_data_packet((116)+128, 1)); // send & recv?
       } else {
-        word1 = __rev(0b11000110000000101001010000000000); // 70
-        // word1 = __rev(genAnalogPacket((118)+127)); // send & recv?
+        // word1 = __rev(0b11000110000000101001010000000000); // 70
+        word1 = __rev(crc_data_packet((118)+128, 1)); // send & recv?
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
@@ -571,9 +553,9 @@ int main(void)
 
   // ANALOG        [0x0000001f]
   // ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
-  device_mode   = 0b10111001100000111001010100000000; // 57
-  device_config = 0b10000000100000110000001100000000; // 0
-  device_switch = 0b10000000100000110000001100000000; // 0
+  // device_mode   = 0b10111001100000111001010100000000; // 57
+  // device_config = 0b10000000100000110000001100000000; // 0
+  // device_switch = 0b10000000100000110000001100000000; // 0
 
   // ANALOG2       [0x0000083f]
   // MOUSE|TRACKBALL, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
@@ -607,9 +589,9 @@ int main(void)
 
   // SPINANALOG   [0x0000103f]
   // QUADSPINNER1, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
-  // device_mode   = 0b10011101100000110100110100000000; // 29
-  // device_config = 0b11000000000000101000000000000000; // 64
-  // device_switch = 0b11000000000000101000000000000000; // 64
+  device_mode   = 0b10011101100000110100110100000000; // 29
+  device_config = 0b11000000000000101000000000000000; // 64
+  device_switch = 0b11000000000000101000000000000000; // 64
 
   // WHEEL        [0x00001301]
   // QUADSPINNER1, BRAKE, THROTTLE, STDBUTTONS
@@ -618,9 +600,9 @@ int main(void)
   // device_switch = 0b11000000000000101000000000000000; // 64
 
   // TESTING
-  device_mode   = genAnalogPacket((29)+128);
-  device_config = genAnalogPacket((64)+128);
-  device_switch = genAnalogPacket((64)+128);
+  // device_mode   = crc_data_packet((57)+128, 1);
+  // device_config = crc_data_packet((0)+128, 1);
+  // device_switch = crc_data_packet((0)+128, 1);
 
   // Both state machines can run on the same PIO processor
   pio = pio0;
@@ -703,20 +685,22 @@ uint8_t eparity(uint32_t data) {
   return ((eparity)&0x1);
 }
 
-// generates single byte analog packet with CRC check bytes
-uint32_t genAnalogPacket(int8_t value) { // 0 - 254
+// generates data response packet with crc check bytes
+uint32_t crc_data_packet(int32_t value, int8_t size) {
+  u_int32_t packet = 0;
   u_int16_t crc = 0;
-  if (value == 0) value = 1;
-  crc = (crc_calc(value, crc) & 0xffff);
-  return (((value & 0xff) << 24) | (crc << 8));
-}
 
-// generates double byte quadx packet with CRC check bytes
-uint32_t genQuadXPacket(int8_t valueX, int8_t valueY) {
-  u_int16_t crc = 0;
-  crc = (crc_calc(valueX, crc) & 0xffff);
-  crc = (crc_calc(valueY, crc) & 0xffff);
-  return (((valueX & 0xff) << 24) | ((valueY & 0xff) << 16) | (crc << 0));
+  // calculate crc and place bytes into packet position
+  for (int i=0; i<size; i++) {
+    u_int8_t byte_val = (((value>>((size-i-1)*8)) & 0xff));
+    crc = (crc_calc(byte_val, crc) & 0xffff);
+    packet |= (byte_val << ((3-i)*8));
+  }
+
+  // place crc check bytes in packet position
+  packet |= (crc << ((2-size)*8));
+
+  return (packet);
 }
 
 int crc_build_lut() {
