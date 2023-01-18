@@ -177,7 +177,7 @@ void __not_in_flash_func(update_output)(void)
   output_analog_1y = crc_data_packet(players[0].output_y1, 1);
   output_analog_2x = crc_data_packet(players[0].output_x2, 1);
   output_analog_2y = crc_data_packet(players[0].output_y2, 1);
-  output_quadx     = crc_data_packet(players[0].output_qx<<8, 2);
+  output_quadx     = crc_data_packet(players[0].output_qx, 1);
 }
 
 //
