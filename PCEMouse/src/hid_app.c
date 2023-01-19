@@ -143,6 +143,26 @@ typedef struct TU_ATTR_PACKED
     uint8_t counter : 5; // +1 each report
   };
 
+  int16_t  gyro[3];  // x, y, z;
+  int16_t  accel[3]; // x, y, z
+  int8_t   unknown_a[5]; // who knows?
+  uint8_t  headset;
+  int8_t   unknown_b[2]; // future use?
+
+  struct {
+    uint8_t tpad_event : 4; // track pad event 0x01 = 2 finger tap; 0x02 last on edge?
+    uint8_t unknown_c  : 4; // future use?
+  };
+
+  uint8_t  tpad_counter;
+
+  struct {
+    uint8_t tpad_f1_count : 7;
+    uint8_t tpad_f1_down  : 1;
+  };
+
+  int8_t tpad_f1_pos[3];
+
 } sony_ds5_report_t;
 
 // 8BitDo USB Adapter for PS classic
@@ -763,6 +783,11 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       if (ds5_report.tpad     ) printf("TPad ");
       if (ds5_report.mute     ) printf("Mute ");
 
+      if (!ds5_report.tpad_f1_down) printf("F1 ");
+
+      uint16_t tx = (((ds5_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds5_report.tpad_f1_pos[0] & 0xff) << 0);
+      uint16_t ty = (((ds5_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds5_report.tpad_f1_pos[2] & 0xff) << 4);
+      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
       printf("\r\n");
 
       int threshold = 28;
@@ -774,7 +799,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       buttons = (((ds5_report.circle)   ? 0x8000 : 0x00) | //C-DOWN
                  ((ds5_report.cross)    ? 0x4000 : 0x00) | //A
                  ((ds5_report.option)   ? 0x2000 : 0x00) | //START
-                 ((ds5_report.share)    ? 0x1000 : 0x00) | //NUON
+                 ((ds5_report.share || ds5_report.ps) ? 0x1000 : 0x00) | //NUON
                  ((dpad_down)           ? 0x0800 : 0x00) | //D-DOWN
                  ((dpad_left)           ? 0x0400 : 0x00) | //D-LEFT
                  ((dpad_up)             ? 0x0200 : 0x00) | //D-UP
@@ -787,6 +812,34 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                  ((ds5_report.triangle) ? 0x0004 : 0x00) | //C-LEFT
                  ((ds5_report.l2)       ? 0x0002 : 0x00) | //C-UP
                  ((ds5_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
+
+      // Touch Pad - Atari50 Tempest like spinner input
+      if (!ds5_report.tpad_f1_down) {
+        // scroll spinner value while swipping
+        if (tpadDragging) {
+          // get directional difference delta
+          int16_t delta = 0;
+          if (tx >= tpadLastPos) delta = tx - tpadLastPos;
+          else delta = (-1) * (tpadLastPos - tx);
+
+          // check max/min delta value
+          if (delta > 12) delta = 12;
+          if (delta < -12) delta = -12;
+
+          // inc global spinner value by delta
+          spinner += delta;
+
+          // check max/min spinner value
+          if (spinner > 255) spinner -= 255;
+          if (spinner < 0) spinner = 256 - (-1 * spinner);
+        }
+
+        tpadLastPos = tx;
+        tpadDragging = true;
+      } else {
+        tpadDragging = false;
+      }
+      // printf(" (spinner) = (%u)\r\n", spinner);
 
       uint8_t analog_1x = ds5_report.x1+1;
       uint8_t analog_1y = ds5_report.y1+1;
@@ -809,8 +862,8 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
         true,      // analog_2 enabled
         analog_2x, // analog_2x
         analog_2y, // analog_2y
-        false,     // quad enabled
-        0          // quad_x
+        true,      // quad enabled
+        spinner    // quad_x
       );
     }
 
