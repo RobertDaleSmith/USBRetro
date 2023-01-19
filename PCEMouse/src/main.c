@@ -99,11 +99,12 @@
 
 
 // NUON Controller Probe Options
-#define DEFCFG 0
+#define DEFCFG 1
 #define VERSION 11
 #define TYPE 3
 #define MFG 0
 #define CRC16 0x8005
+#define MAGIC 0x4A554445 // HEX to ASCII == "JUDE" (The Polyface inventor)
 
 int crc_calc(unsigned char data,int crc);
 static int crc_lut[256]; // crc look up table
@@ -355,14 +356,13 @@ static void __not_in_flash_func(core1_entry)(void)
     }
     else if (dataA == 0x90 && !branded) { // MAGIC
       uint32_t word0 = 1;
-      uint32_t word1 = __rev(0b01001010010101010100010001000101);
-              
+      uint32_t word1 = __rev(MAGIC);
       pio_sm_put_blocking(pio1, sm1, word1);
       pio_sm_put_blocking(pio1, sm1, word0);
     }
     else if (dataA == 0x94) { // PROBE
-      uint32_t word0 = 1;
-      uint32_t word1 = __rev(0b10001011000000110000000000000000); // res from HPI controller
+      uint32_t word0 = 1; // default res from HPI controller
+      uint32_t word1 = __rev(0b10001011000000110000000000000000);
 
       //DEFCFG VERSION     TYPE      MFG TAGGED BRANDED    ID P
       //   0b1 0001011 00000011 00000000      0       0 00000 0
