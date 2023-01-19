@@ -631,33 +631,33 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // We need more than memcmp to check if report is different enough
     if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
-      printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
-      printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+      // printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+      // printf("DPad = %s ", dpad_str[ds4_report.dpad]);
 
-      if (ds4_report.square   ) printf("Square ");
-      if (ds4_report.cross    ) printf("Cross ");
-      if (ds4_report.circle   ) printf("Circle ");
-      if (ds4_report.triangle ) printf("Triangle ");
+      // if (ds4_report.square   ) printf("Square ");
+      // if (ds4_report.cross    ) printf("Cross ");
+      // if (ds4_report.circle   ) printf("Circle ");
+      // if (ds4_report.triangle ) printf("Triangle ");
 
-      if (ds4_report.l1       ) printf("L1 ");
-      if (ds4_report.r1       ) printf("R1 ");
-      if (ds4_report.l2       ) printf("L2 ");
-      if (ds4_report.r2       ) printf("R2 ");
+      // if (ds4_report.l1       ) printf("L1 ");
+      // if (ds4_report.r1       ) printf("R1 ");
+      // if (ds4_report.l2       ) printf("L2 ");
+      // if (ds4_report.r2       ) printf("R2 ");
 
-      if (ds4_report.share    ) printf("Share ");
-      if (ds4_report.option   ) printf("Option ");
-      if (ds4_report.l3       ) printf("L3 ");
-      if (ds4_report.r3       ) printf("R3 ");
+      // if (ds4_report.share    ) printf("Share ");
+      // if (ds4_report.option   ) printf("Option ");
+      // if (ds4_report.l3       ) printf("L3 ");
+      // if (ds4_report.r3       ) printf("R3 ");
 
-      if (ds4_report.ps       ) printf("PS ");
-      if (ds4_report.tpad     ) printf("TPad ");
+      // if (ds4_report.ps       ) printf("PS ");
+      // if (ds4_report.tpad     ) printf("TPad ");
 
-      if (!ds4_report.tpad_f1_down) printf("F1 ");
+      // if (!ds4_report.tpad_f1_down) printf("F1 ");
 
       uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
-      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-      printf("\r\n");
+      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      // printf("\r\n");
 
       int threshold = 28;
       bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
@@ -761,34 +761,34 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     if ( ds5_diff_report(&prev_report[dev_addr-1], &ds5_report) )
     {
-      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
-      printf("DPad = %s ", dpad_str[ds5_report.dpad]);
+      // printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
+      // printf("DPad = %s ", dpad_str[ds5_report.dpad]);
 
-      if (ds5_report.square   ) printf("Square ");
-      if (ds5_report.cross    ) printf("Cross ");
-      if (ds5_report.circle   ) printf("Circle ");
-      if (ds5_report.triangle ) printf("Triangle ");
+      // if (ds5_report.square   ) printf("Square ");
+      // if (ds5_report.cross    ) printf("Cross ");
+      // if (ds5_report.circle   ) printf("Circle ");
+      // if (ds5_report.triangle ) printf("Triangle ");
 
-      if (ds5_report.l1       ) printf("L1 ");
-      if (ds5_report.r1       ) printf("R1 ");
-      if (ds5_report.l2       ) printf("L2 ");
-      if (ds5_report.r2       ) printf("R2 ");
+      // if (ds5_report.l1       ) printf("L1 ");
+      // if (ds5_report.r1       ) printf("R1 ");
+      // if (ds5_report.l2       ) printf("L2 ");
+      // if (ds5_report.r2       ) printf("R2 ");
 
-      if (ds5_report.share    ) printf("Share ");
-      if (ds5_report.option   ) printf("Option ");
-      if (ds5_report.l3       ) printf("L3 ");
-      if (ds5_report.r3       ) printf("R3 ");
+      // if (ds5_report.share    ) printf("Share ");
+      // if (ds5_report.option   ) printf("Option ");
+      // if (ds5_report.l3       ) printf("L3 ");
+      // if (ds5_report.r3       ) printf("R3 ");
 
-      if (ds5_report.ps       ) printf("PS ");
-      if (ds5_report.tpad     ) printf("TPad ");
-      if (ds5_report.mute     ) printf("Mute ");
+      // if (ds5_report.ps       ) printf("PS ");
+      // if (ds5_report.tpad     ) printf("TPad ");
+      // if (ds5_report.mute     ) printf("Mute ");
 
-      if (!ds5_report.tpad_f1_down) printf("F1 ");
+      // if (!ds5_report.tpad_f1_down) printf("F1 ");
 
       uint16_t tx = (((ds5_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds5_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds5_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds5_report.tpad_f1_pos[2] & 0xff) << 4);
-      printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-      printf("\r\n");
+      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      // printf("\r\n");
 
       int threshold = 28;
       bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 || ds5_report.dpad == 7);
