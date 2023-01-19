@@ -24,8 +24,13 @@
  */
 
 #include "tusb.h"
+#include <math.h>
+
+#define PI 3.14159265
 
 uint16_t buttons;
+int16_t jsSpinner = 0;
+int16_t lastAngle = 0;
 
 extern void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
@@ -40,6 +45,12 @@ extern void __not_in_flash_func(post_globals)(
   bool quad,
   uint8_t quad_x
 );
+
+
+const double Rad2Deg = 180.0 / PI;
+const double Deg2Rad = PI / 180.0;
+int16_t Angle(int16_t x, int16_t y);
+
 //--------------------------------------------------------------------+
 // USB X-input
 //--------------------------------------------------------------------+
@@ -91,6 +102,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (p->sThumbRX == 0) left2X = 127;
     if (p->sThumbRY == 0) left2Y = 127;
 
+    // shift axis values for nuon
     uint8_t analog_1x = left1X+1;
     uint8_t analog_1y = left1Y+1;
     uint8_t analog_2x = left2X+1;
@@ -99,6 +111,33 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (analog_1y == 0) analog_1y = 255;
     if (analog_2x == 0) analog_2x = 255;
     if (analog_2y == 0) analog_2y = 255;
+
+    printf("x: %d y: %d angle: %d \r\n", analog_2x, analog_2y);
+
+    // calc right thumb stick angle for simulated spinner
+    if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
+      int16_t angle = 0;
+      angle = Angle(analog_2x-128, analog_2y-128)+179; // 0-359 (360deg)
+      printf("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
+
+      // get directional difference delta
+      int16_t delta = 0;
+      if (angle >= lastAngle) delta = angle - lastAngle;
+      else delta = (-1) * (lastAngle - angle);
+
+      // check max/min delta value
+      if (delta > 16) delta = 16;
+      if (delta < -16) delta = -16;
+
+      // inc global spinner value by delta
+      jsSpinner += delta;
+
+      // check max/min spinner value
+      if (jsSpinner > 255) jsSpinner -= 255;
+      if (jsSpinner < 0) jsSpinner = 256 - (-1 * jsSpinner);
+
+      lastAngle = angle;
+    }
 
     post_globals(
       dev_addr,
@@ -110,8 +149,8 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
       true,      // analog_2
       analog_2x, // analog_2x
       analog_2y, // analog_2y
-      false,     // quad
-      0          // quad_x
+      true,      // quad
+      jsSpinner  // quad_x
     );
   }
   tuh_xinput_receive_report(dev_addr, instance);
@@ -137,6 +176,11 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
 void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
+}
+
+int16_t Angle(int16_t x, int16_t y)
+{
+    return atan2(y, x) * Rad2Deg;
 }
 
 #endif
