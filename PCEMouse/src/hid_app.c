@@ -691,20 +691,29 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       }
       // printf(" (spinner) = (%u)\r\n", spinner);
 
+      uint8_t analog_1x = ds4_report.x+1;
+      uint8_t analog_1y = ds4_report.y+1;
+      uint8_t analog_2x = ds4_report.z+1;
+      uint8_t analog_2y = ds4_report.rz+1;
+      if (analog_1x == 0) analog_1x = 255;
+      if (analog_1y == 0) analog_1y = 255;
+      if (analog_2x == 0) analog_2x = 255;
+      if (analog_2y == 0) analog_2y = 255;
+
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       post_globals(
         dev_addr,
         instance,
         buttons,
-        true,          // analog_1 enabled
-        ds4_report.x,  // analog_1x
-        ds4_report.y,  // analog_1y
-        true,          // analog_2 enabled
-        ds4_report.z,  // analog_2x
-        ds4_report.rz, // analog_2y
-        true,          // quad enabled
-        spinner        // quad_x
+        true,      // analog_1 enabled
+        analog_1x, // analog_1x
+        analog_1y, // analog_1y
+        true,      // analog_2 enabled
+        analog_2x, // analog_2x
+        analog_2y, // analog_2y
+        true,      // quad enabled
+        spinner    // quad_x
       );
     }
 
@@ -779,20 +788,29 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                  ((ds5_report.l2)       ? 0x0002 : 0x00) | //C-UP
                  ((ds5_report.r2)       ? 0x0001 : 0x00)); //C-RIGHT
 
+      uint8_t analog_1x = ds5_report.x1+1;
+      uint8_t analog_1y = ds5_report.y1+1;
+      uint8_t analog_2x = ds5_report.x2+1;
+      uint8_t analog_2y = ds5_report.y2+1;
+      if (analog_1x == 0) analog_1x = 255;
+      if (analog_1y == 0) analog_1y = 255;
+      if (analog_2x == 0) analog_2x = 255;
+      if (analog_2y == 0) analog_2y = 255;
+
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       post_globals(
         dev_addr,
         instance,
         buttons,
-        true,          // analog_1 enabled
-        ds5_report.x1, // analog_1x
-        ds5_report.y1, // analog_1y
-        true,          // analog_2 enabled
-        ds5_report.x2, // analog_2x
-        ds5_report.y2, // analog_2y
-        false,         // quad enabled
-        0              // quad_x
+        true,      // analog_1 enabled
+        analog_1x, // analog_1x
+        analog_1y, // analog_1y
+        true,      // analog_2 enabled
+        analog_2x, // analog_2x
+        analog_2y, // analog_2y
+        false,     // quad enabled
+        0          // quad_x
       );
     }
 
@@ -1100,6 +1118,11 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((wingman_report.z)    ? 0x0002 : 0x00) | //C-UP
                ((wingman_report.c)    ? 0x0001 : 0x00)); //C-RIGHT
 
+    uint8_t analog_1x = wingman_report.analog_x+1;
+    uint8_t analog_1y = wingman_report.analog_y+1;
+    if (analog_1x == 0) analog_1x = 255;
+    if (analog_1y == 0) analog_1y = 255;
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(
@@ -1107,8 +1130,8 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       instance,
       buttons,
       true,                   // analog_1 enabled
-      wingman_report.analog_x,// analog_1x
-      wingman_report.analog_y,// analog_1y
+      analog_1x,              // analog_1x
+      analog_1y,              // analog_1y
       false,                  // analog_2 enabled
       0,                      // analog_2x
       0,                      // analog_2y

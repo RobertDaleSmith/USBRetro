@@ -89,18 +89,23 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (p->sThumbLX == 0) left1X = 127;
     if (p->sThumbLY == 0) left1Y = 127;
 
+    uint8_t analog_1x = left1X+1;
+    uint8_t analog_1y = left1Y+1;
+    if (analog_1x == 0) analog_1x = 255;
+    if (analog_1y == 0) analog_1y = 255;
+
     post_globals(
       dev_addr,
       instance,
       buttons,
-      true,   // analog_1
-      left1X, // analog_1x
-      left1Y, // analog_1y
-      false,  // analog_2
-      0,      // analog_2x
-      0,      // analog_2y
-      false,  // quad
-      0       // quad_x
+      true,      // analog_1
+      analog_1x, // analog_1x
+      analog_1y, // analog_1y
+      false,     // analog_2
+      0,         // analog_2x
+      0,         // analog_2y
+      false,     // quad
+      0          // quad_x
     );
   }
   tuh_xinput_receive_report(dev_addr, instance);
