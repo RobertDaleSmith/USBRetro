@@ -118,7 +118,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
       int16_t angle = 0;
       angle = Angle(analog_2x-128, analog_2y-128)+179; // 0-359 (360deg)
-      printf("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
+      // printf("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
 
       // get directional difference delta
       int16_t delta = 0;
@@ -130,7 +130,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
       if (delta < -16) delta = -16;
 
       // inc global spinner value by delta
-      jsSpinner += delta;
+      jsSpinner -= delta;
 
       // check max/min spinner value
       if (jsSpinner > 255) jsSpinner -= 255;
