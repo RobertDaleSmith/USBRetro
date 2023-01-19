@@ -83,16 +83,22 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     float max_thresh = 32768;
     float left1X = (128 * (p->sThumbLX / max_thresh)) + ((p->sThumbLX >= 0) ? 127 : 128);
     float left1Y = (128 * (-1 * p->sThumbLY / max_thresh)) + ((-1 * p->sThumbLY >= 0) ? 127 : 128);
-    // float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
-    // float left2Y = (128 * (-1 * p->sThumbRY / max_thresh)) + ((-1 * p->sThumbRY >= 0) ? 127 : 128);
+    float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
+    float left2Y = (128 * (-1 * p->sThumbRY / max_thresh)) + ((-1 * p->sThumbRY >= 0) ? 127 : 128);
 
     if (p->sThumbLX == 0) left1X = 127;
     if (p->sThumbLY == 0) left1Y = 127;
+    if (p->sThumbRX == 0) left2X = 127;
+    if (p->sThumbRY == 0) left2Y = 127;
 
     uint8_t analog_1x = left1X+1;
     uint8_t analog_1y = left1Y+1;
+    uint8_t analog_2x = left2X+1;
+    uint8_t analog_2y = left2Y+1;
     if (analog_1x == 0) analog_1x = 255;
     if (analog_1y == 0) analog_1y = 255;
+    if (analog_2x == 0) analog_2x = 255;
+    if (analog_2y == 0) analog_2y = 255;
 
     post_globals(
       dev_addr,
@@ -101,9 +107,9 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
       true,      // analog_1
       analog_1x, // analog_1x
       analog_1y, // analog_1y
-      false,     // analog_2
-      0,         // analog_2x
-      0,         // analog_2y
+      true,      // analog_2
+      analog_2x, // analog_2x
+      analog_2y, // analog_2y
       false,     // quad
       0          // quad_x
     );
