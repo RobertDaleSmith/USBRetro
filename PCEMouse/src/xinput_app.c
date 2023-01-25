@@ -112,8 +112,6 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (analog_2x == 0) analog_2x = 255;
     if (analog_2y == 0) analog_2y = 255;
 
-    printf("x: %d y: %d angle: %d \r\n", analog_2x, analog_2y);
-
     // calc right thumb stick angle for simulated spinner
     if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
       int16_t angle = 0;
