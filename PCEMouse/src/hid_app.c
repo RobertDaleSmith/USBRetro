@@ -1446,7 +1446,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
     }
   }
 
-  int16_t delta = report->x;
+  int16_t delta = (report->x * -1);
 
   // check max/min delta value
   if (delta > 15) delta = 15;
