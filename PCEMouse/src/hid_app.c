@@ -1135,19 +1135,19 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
   if ( wingman_diff_report(&prev_report[dev_addr-1], &wingman_report) )
   {
-    printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
-    printf("DPad = %d ", wingman_report.dpad);
-    if (wingman_report.a) printf("A ");
-    if (wingman_report.b) printf("B ");
-    if (wingman_report.c) printf("C ");
-    if (wingman_report.x) printf("X ");
-    if (wingman_report.y) printf("Y ");
-    if (wingman_report.z) printf("Z ");
-    if (wingman_report.l) printf("L ");
-    if (wingman_report.r) printf("R ");
-    if (wingman_report.mode) printf("Mode ");
-    if (wingman_report.s) printf("S ");
-    printf("\r\n");
+    // printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
+    // printf("DPad = %d ", wingman_report.dpad);
+    // if (wingman_report.a) printf("A ");
+    // if (wingman_report.b) printf("B ");
+    // if (wingman_report.c) printf("C ");
+    // if (wingman_report.x) printf("X ");
+    // if (wingman_report.y) printf("Y ");
+    // if (wingman_report.z) printf("Z ");
+    // if (wingman_report.l) printf("L ");
+    // if (wingman_report.r) printf("R ");
+    // if (wingman_report.mode) printf("Mode ");
+    // if (wingman_report.s) printf("S ");
+    // printf("\r\n");
 
     bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 || wingman_report.dpad == 7);
     bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3));
