@@ -384,10 +384,10 @@ static void __not_in_flash_func(core1_entry)(void)
 
       if (channel == ATOD_CHANNEL_MODE) {
         // word1 = __rev(0b11000100100000101001101100000000); // 68
-        word1 = __rev(crc_data_packet((116)+128, 1)); // send & recv?
+        word1 = __rev(crc_data_packet(0b11110100, 1)); // send & recv?
       } else {
         // word1 = __rev(0b11000110000000101001010000000000); // 70
-        word1 = __rev(crc_data_packet((118)+128, 1)); // send & recv?
+        word1 = __rev(crc_data_packet(0b11110110, 1)); // send & recv?
       }
 
       pio_sm_put_blocking(pio1, sm1, word1);
