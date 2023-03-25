@@ -45,10 +45,15 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "pico/multicore.h"
+#include "hardware/clocks.h"
 #include "hardware/pio.h"
 #include "plex.pio.h"
 #include "clock.pio.h"
 #include "select.pio.h"
+
+uint32_t cpu_frequency;
+uint32_t timer_threshold;
+uint32_t turbo_frequency;
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -163,7 +168,16 @@ uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
 //
 void __not_in_flash_func(update_output)(void)
 {
+  static uint32_t turbo_timer = 0;
+  static bool turbo_state = false;
   int8_t bytes[5] = { 0 };
+
+  // Increment the timer and check if it reaches the threshold
+  turbo_timer++;
+  if (turbo_timer >= timer_threshold) {
+    turbo_timer = 0;
+    turbo_state = !turbo_state;
+  }
 
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
@@ -172,6 +186,14 @@ void __not_in_flash_func(update_output)(void)
 
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
+
+    // Update the button state based on the turbo_state
+    if (turbo_state) {
+      // Set the button state as pressed
+    } else {
+      // Set the button state as released
+      byte |= 0xf0;
+    }
 
     // 6 button extra four buttons (III/IV/V/VI)
     if (has6Btn && players[i].is6btn && (state == 2)) {
@@ -357,8 +379,15 @@ static bool rx_bit = 0;
   }
 }
 
+void init_cpu_frequency() {
+    cpu_frequency = clock_get_hz(clk_sys);
+    turbo_frequency = 1100000; // Default turbo frequency
+    timer_threshold = cpu_frequency / (turbo_frequency * 2);
+}
+
 int main(void)
 {
+  init_cpu_frequency();
   board_init();
 
   // Pause briefly for stability before starting activity
