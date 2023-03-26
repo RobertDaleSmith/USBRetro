@@ -51,9 +51,11 @@
 #include "clock.pio.h"
 #include "select.pio.h"
 
-uint32_t cpu_frequency;
-uint32_t timer_threshold;
-uint32_t turbo_frequency;
+uint64_t cpu_frequency;
+uint64_t timer_threshold;
+uint64_t timer_threshold_a;
+uint64_t timer_threshold_b;
+uint64_t turbo_frequency;
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -183,21 +185,30 @@ void __not_in_flash_func(update_output)(void)
   for (i = 0; i < 5; ++i) {
     bool has6Btn = !(players[i].output_buttons & 0x0f00);
     bool isMouse = !(players[i].output_buttons & 0x0f);
+    bool is6btn = has6Btn && players[i].is6btn;
 
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
 
-    // Update the button state based on the turbo_state
-    if (turbo_state) {
-      // Set the button state as pressed
-    } else {
-      // Set the button state as released
-      byte |= 0xf0;
-    }
 
     // 6 button extra four buttons (III/IV/V/VI)
-    if (has6Btn && players[i].is6btn && (state == 2)) {
+    if (is6btn && (state == 2)) {
       byte = ((players[i].output_buttons>>8) & 0xf0);
+    }
+
+    // Simulated Turbo buttons X/Y for II/I and L/R for speeds 1/2
+    if (!is6btn) {
+      // Update the button state based on the turbo_state
+      if (turbo_state) {
+        // Set the button state as pressed
+        if ((~(players[i].output_buttons>>8)) & 0x20) byte &= 0b11011111;
+        if ((~(players[i].output_buttons>>8)) & 0x10) byte &= 0b11101111;
+      } else {
+        // Set the button state as released
+      }
+
+      if ((~(players[i].output_buttons>>8)) & 0x40) timer_threshold = timer_threshold_a;
+      if ((~(players[i].output_buttons>>8)) & 0x80) timer_threshold = timer_threshold_b;
     }
 
     // mouse x/y states
@@ -379,16 +390,18 @@ static bool rx_bit = 0;
   }
 }
 
-void init_cpu_frequency() {
+void turbo_init() {
     cpu_frequency = clock_get_hz(clk_sys);
-    turbo_frequency = 1100000; // Default turbo frequency
-    timer_threshold = cpu_frequency / (turbo_frequency * 2);
+    turbo_frequency = 1000000; // Default turbo frequency
+    timer_threshold_a = cpu_frequency / (turbo_frequency * 2);
+    timer_threshold_b = cpu_frequency / (turbo_frequency * 100);
+    timer_threshold = timer_threshold_a;
 }
 
 int main(void)
 {
-  init_cpu_frequency();
   board_init();
+  turbo_init();
 
   // Pause briefly for stability before starting activity
   sleep_ms(1000);
