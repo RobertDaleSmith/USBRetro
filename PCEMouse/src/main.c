@@ -394,7 +394,7 @@ void turbo_init() {
     cpu_frequency = clock_get_hz(clk_sys);
     turbo_frequency = 1000000; // Default turbo frequency
     timer_threshold_a = cpu_frequency / (turbo_frequency * 2);
-    timer_threshold_b = cpu_frequency / (turbo_frequency * 100);
+    timer_threshold_b = cpu_frequency / (turbo_frequency * 20);
     timer_threshold = timer_threshold_a;
 }
 
