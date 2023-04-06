@@ -232,13 +232,20 @@ void __not_in_flash_func(update_output)(void)
     bytes[i] = byte;
   }
 
-  output_word_0 = ((bytes[0] & 0xff))      | // player 1
-                  ((bytes[1] & 0xff) << 8) | // player 2
-                  ((bytes[2] & 0xff) << 16)| // player 3
-                  ((bytes[3] & 0xff) << 24); // player 4
-  output_word_1 = ((bytes[4] & 0xff));       // player 5
+  if (playersCount > 1) { // simulate multitap output
+    output_word_0 = ((bytes[0] & 0xff))      | // player 1
+                    ((bytes[1] & 0xff) << 8) | // player 2
+                    ((bytes[2] & 0xff) << 16)| // player 3
+                    ((bytes[3] & 0xff) << 24); // player 4
+    output_word_1 = ((bytes[4] & 0xff));       // player 5
+  } else {
+    output_word_0 = ((bytes[0] & 0xff))      | // player 1
+                    ((bytes[0] & 0xff) << 8) |
+                    ((bytes[0] & 0xff) << 16)|
+                    ((bytes[0] & 0xff) << 24);
+    output_word_1 = ((bytes[0] & 0xff));
+  }
 }
-
 
 //
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
