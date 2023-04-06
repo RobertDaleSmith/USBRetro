@@ -203,6 +203,33 @@ typedef struct TU_ATTR_PACKED
 
 } astro_city_report_t;
 
+// Logitech WingMan controller
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t analog_x;
+  uint8_t analog_y;
+  uint8_t analog_z;
+
+  struct {
+    uint8_t dpad : 4;
+    uint8_t a : 1;
+    uint8_t b : 1;
+    uint8_t c : 1;
+    uint8_t x : 1;
+  };
+
+  struct {
+    uint8_t y : 1;
+    uint8_t z : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t s : 1;
+    uint8_t mode : 1;
+    uint8_t null : 2;
+  };
+
+} wing_man_report_t;
+
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
 {
@@ -262,6 +289,15 @@ static inline bool is_sony_ds5(uint8_t dev_addr)
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DS5 controller
+}
+
+// check if device is Logitech WingMan Action controller
+static inline bool is_wing_man(uint8_t dev_addr)
+{
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+  return ((vid == 0x046d && pid == 0xc20b)); // Logitech WingMan Action controller
 }
 
 //--------------------------------------------------------------------+
@@ -343,6 +379,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
                    || is_8bit_psc(dev_addr)
                    || is_astro_city(dev_addr)
                    || is_sega_mini(dev_addr)
+                   || is_wing_man(dev_addr)
                    ;
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -472,6 +509,29 @@ bool astro_diff_report(astro_city_report_t const* rpt1, astro_city_report_t cons
 
   return result;
 }
+
+bool wingman_diff_report(wing_man_report_t const* rpt1, wing_man_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->analog_x != rpt2->analog_x;
+  result |= rpt1->analog_y != rpt2->analog_y;
+  result |= rpt1->analog_z != rpt2->analog_z;
+  result |= rpt1->dpad != rpt2->dpad;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->c != rpt2->c;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->z != rpt2->z;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->mode != rpt2->mode;
+  result |= rpt1->s != rpt2->s;
+
+  return result;
+}
+
 
 void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 {
@@ -827,6 +887,60 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   prev_report[dev_addr-1] = astro_report;
 }
 
+void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static wing_man_report_t prev_report[5] = { 0 };
+
+  wing_man_report_t wingman_report;
+  memcpy(&wingman_report, report, sizeof(wingman_report));
+
+  if ( wingman_diff_report(&prev_report[dev_addr-1], &wingman_report) )
+  {
+    // printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
+    // printf("DPad = %d ", wingman_report.dpad);
+    // if (wingman_report.a) printf("A ");
+    // if (wingman_report.b) printf("B ");
+    // if (wingman_report.c) printf("C ");
+    // if (wingman_report.x) printf("X ");
+    // if (wingman_report.y) printf("Y ");
+    // if (wingman_report.z) printf("Z ");
+    // if (wingman_report.l) printf("L ");
+    // if (wingman_report.r) printf("R ");
+    // if (wingman_report.mode) printf("Mode ");
+    // if (wingman_report.s) printf("S ");
+    // printf("\r\n");
+
+    int threshold = 28;
+    bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 ||
+                        wingman_report.dpad == 7 || wingman_report.analog_y < (128 - threshold));
+    bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3) || wingman_report.analog_x > (128 + threshold));
+    bool dpad_down  = ((wingman_report.dpad >= 3 && wingman_report.dpad <= 5) || wingman_report.analog_y > (128 + threshold));
+    bool dpad_left  = ((wingman_report.dpad >= 5 && wingman_report.dpad <= 7) || wingman_report.analog_x < (128 - threshold));
+    bool has_6btns = true;
+
+    buttons = (((wingman_report.x) ? 0x00 : 0x8000) | // VI
+               ((wingman_report.y) ? 0x00 : 0x4000) | // V
+               ((wingman_report.z) ? 0x00 : 0x2000) | // IV
+               ((wingman_report.a) ? 0x00 : 0x1000) | // III
+               ((has_6btns)        ? 0x00 : 0xFF00) |
+               ((dpad_left)        ? 0x00 : 0x08) |
+               ((dpad_down)        ? 0x00 : 0x04) |
+               ((dpad_right)       ? 0x00 : 0x02) |
+               ((dpad_up)          ? 0x00 : 0x01) |
+               ((wingman_report.s) ? 0x00 : 0x80) |                     // Run
+               ((wingman_report.mode) ? 0x00 : 0x40) |                  // Select
+               ((wingman_report.b || wingman_report.l) ? 0x00 : 0x20) | // II
+               ((wingman_report.c || wingman_report.r) ? 0x00 : 0x10)); // I
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1] = wingman_report;
+}
+
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
@@ -851,6 +965,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
       else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
+      else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
