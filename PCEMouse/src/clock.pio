@@ -21,6 +21,7 @@
 ;
 
 .program clock
+.side_set 4 optional
 
 ; Sample bits using an external clock (falling edge), and push groups of bits into the RX FIFO.
 ; - IN pin 0 is the clock pin (and also the pin with data)
@@ -32,12 +33,12 @@
 clklp:
     wait 0 pin 0
     wait 1 pin 0
-    irq 7
+    irq 7 side 0
     in pins, 1
     jmp clklp
 
 % c-sdk {
-static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin) {
+static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin, uint outpin) {
     pio_sm_config c = clock_program_get_default_config(offset);
 
     // Set the IN base pin to the provided `pin` parameter. This is the data
@@ -50,6 +51,7 @@ static inline void clock_program_init(PIO pio, uint sm, uint offset, uint inpin)
     // Connect these GPIOs to this PIO block
     pio_gpio_init(pio, inpin);
 
+    sm_config_set_sideset_pins(&c, outpin);
     sm_config_set_in_shift(
         &c,
         false, // Shift-to-right = false (i.e. shift to left)
