@@ -173,6 +173,7 @@ void __not_in_flash_func(update_output)(void)
   static uint32_t turbo_timer = 0;
   static bool turbo_state = false;
   int8_t bytes[5] = { 0 };
+  int16_t hotkey = 0;
 
   // Increment the timer and check if it reaches the threshold
   turbo_timer++;
@@ -181,6 +182,7 @@ void __not_in_flash_func(update_output)(void)
     turbo_state = !turbo_state;
   }
 
+  
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
     bool has6Btn = !(players[i].output_buttons & 0x0f00);
@@ -190,6 +192,14 @@ void __not_in_flash_func(update_output)(void)
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
 
+    // Turbo EverDrive Pro hot-key fix
+    if (hotkey) byte &= hotkey;
+    else if (i == 0) {
+      int16_t btns= (~players[i].output_buttons & 0xff);
+      if     (btns == 0x82) hotkey = ~0x82; // RUN + RIGHT
+      else if(btns == 0x88) hotkey = ~0x88; // RUN + LEFT
+      else if(btns == 0x84) hotkey = ~0x84; // RUN + DOWN
+    }
 
     // 6 button extra four buttons (III/IV/V/VI)
     if (is6btn && (state == 2)) {
@@ -232,19 +242,11 @@ void __not_in_flash_func(update_output)(void)
     bytes[i] = byte;
   }
 
-  if (playersCount > 1) { // simulate multitap output
-    output_word_0 = ((bytes[0] & 0xff))      | // player 1
-                    ((bytes[1] & 0xff) << 8) | // player 2
-                    ((bytes[2] & 0xff) << 16)| // player 3
-                    ((bytes[3] & 0xff) << 24); // player 4
-    output_word_1 = ((bytes[4] & 0xff));       // player 5
-  } else {
-    output_word_0 = ((bytes[0] & 0xff))      | // player 1
-                    ((bytes[0] & 0xff) << 8) |
-                    ((bytes[0] & 0xff) << 16)|
-                    ((bytes[0] & 0xff) << 24);
-    output_word_1 = ((bytes[0] & 0xff));
-  }
+  output_word_0 = ((bytes[0] & 0xff))      | // player 1
+                  ((bytes[1] & 0xff) << 8) | // player 2
+                  ((bytes[2] & 0xff) << 16)| // player 3
+                  ((bytes[3] & 0xff) << 24); // player 4
+  output_word_1 = ((bytes[4] & 0xff));       // player 5
 }
 
 //
@@ -453,7 +455,7 @@ int main(void)
 
   uint offset2 = pio_add_program(pio, &clock_program);
   sm2 = pio_claim_unused_sm(pio, true);
-  clock_program_init(pio, sm2, offset2, CLKIN_PIN);
+  clock_program_init(pio, sm2, offset2, CLKIN_PIN, OUTD0_PIN);
 
   uint offset3 = pio_add_program(pio, &select_program);
   sm3 = pio_claim_unused_sm(pio, true);

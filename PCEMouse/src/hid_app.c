@@ -919,19 +919,19 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = ((wingman_report.dpad >= 5 && wingman_report.dpad <= 7) || wingman_report.analog_x < (128 - threshold));
     bool has_6btns = true;
 
-    buttons = (((wingman_report.x) ? 0x00 : 0x8000) | // VI
-               ((wingman_report.y) ? 0x00 : 0x4000) | // V
-               ((wingman_report.z) ? 0x00 : 0x2000) | // IV
-               ((wingman_report.a) ? 0x00 : 0x1000) | // III
+    buttons = (((wingman_report.z) ? 0x00 : 0x8000) |  // VI
+               ((wingman_report.y) ? 0x00 : 0x4000) |  // V
+               ((wingman_report.x) ? 0x00 : 0x2000) |  // IV
+               ((wingman_report.a) ? 0x00 : 0x1000) |  // III
                ((has_6btns)        ? 0x00 : 0xFF00) |
                ((dpad_left)        ? 0x00 : 0x08) |
                ((dpad_down)        ? 0x00 : 0x04) |
                ((dpad_right)       ? 0x00 : 0x02) |
                ((dpad_up)          ? 0x00 : 0x01) |
-               ((wingman_report.s) ? 0x00 : 0x80) |                     // Run
-               ((wingman_report.mode) ? 0x00 : 0x40) |                  // Select
-               ((wingman_report.b || wingman_report.l) ? 0x00 : 0x20) | // II
-               ((wingman_report.c || wingman_report.r) ? 0x00 : 0x10)); // I
+               ((wingman_report.s) ? 0x00 : 0x80) |    // Run
+               ((wingman_report.mode) ? 0x00 : 0x40) | // Select
+               ((wingman_report.b) ? 0x00 : 0x20) |    // II
+               ((wingman_report.c) ? 0x00 : 0x10));    // I
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
