@@ -277,7 +277,8 @@ static inline bool is_astro_city(uint8_t dev_addr)
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   return ((vid == 0x0ca3 && (
-           pid == 0x0027 ||  // Astro City mini controller
+           pid == 0x0028 || // Astro City mini joystick
+           pid == 0x0027 || // Astro City mini controller
            pid == 0x0024    // 8BitDo M30 6-button controller
          )));
 }
