@@ -33,8 +33,7 @@ and after about 1 second, all four LEDs should light up briefly as part of the b
 
 ### Compilation
 
-This was updated to use Pico-SDK version 1.4.0 .
-This was originally built on SDK 1.3.0 (but needed a board definition file to be manually added to the SDK source, which is no longer needed).
+This was updated to use Pico-SDK version 1.5.0 .
 
 pico_sdk_import.cmake is from the SDK, but is required by CMake (and thus replicated here)
 

@@ -56,15 +56,15 @@
  * Tinyusb use follows macros to declare transferring memory so that they can be put
  * into those specific section.
  * e.g
- * - CFG_TUSB_MEM SECTION : __attribute__ (( section(".usb_ram") ))
- * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
+ * - CFG_TUD_MEM_SECTION : __attribute__ (( section(".usb_ram") ))
+ * - CFG_TUD_MEM_ALIGN   : __attribute__ ((aligned(4)))
  */
-#ifndef CFG_TUSB_MEM_SECTION
-#define CFG_TUSB_MEM_SECTION
+#ifndef CFG_TUD_MEM_SECTION
+#define CFG_TUD_MEM_SECTION
 #endif
 
-#ifndef CFG_TUSB_MEM_ALIGN
-#define CFG_TUSB_MEM_ALIGN          __attribute__ ((aligned(4)))
+#ifndef CFG_TUD_MEM_ALIGN
+#define CFG_TUD_MEM_ALIGN          __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
@@ -74,10 +74,18 @@
 // Size of buffer to hold descriptors and other data used for enumeration
 #define CFG_TUH_ENUMERATION_BUFSIZE 1280
 
+#ifndef CFG_TUH_MEM_SECTION
+#define CFG_TUH_MEM_SECTION
+#endif
+
+#ifndef CFG_TUH_MEM_ALIGN
+#define CFG_TUH_MEM_ALIGN        __attribute__ ((aligned(4)))
+#endif
+
 #define CFG_TUH_HUB                 2
-#define CFG_TUH_CDC                 1
+#define CFG_TUH_CDC                 0
 #define CFG_TUH_HID                 5 // typical keyboard + mouse device can have 3-4 HID interfaces
-#define CFG_TUH_MSC                 1
+#define CFG_TUH_MSC                 0
 #define CFG_TUH_VENDOR              0
 #define CFG_TUH_XINPUT              5
 
