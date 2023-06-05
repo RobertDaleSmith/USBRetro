@@ -111,8 +111,14 @@ extern void hid_app_task(void);
 extern void neopixel_init(void);
 extern void neopixel_task(int pat);
 
+#define MAX_PLAYERS 5
+
 typedef struct TU_ATTR_PACKED
 {
+  int device_address;
+  int instance_number;
+  int player_number;
+
   int16_t global_buttons;
   int16_t global_x;
   int16_t global_y;
@@ -124,7 +130,7 @@ typedef struct TU_ATTR_PACKED
   bool is6btn;
 } Player_t;
 
-Player_t players[5] = { 0 };
+Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 
 
@@ -162,6 +168,40 @@ uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
 // note that "__not_in_flash_func" functions are loaded
 // and "pinned" in SRAM - not paged in/out from XIP flash
 //
+
+// Function to find a player in the array based on their device_address and instance_number.
+static int __not_in_flash_func(find_player_index)(int device_address, int instance_number) {
+    for(int i = 0; i < playersCount; i++) {
+        if(players[i].device_address == device_address && players[i].instance_number == instance_number) {
+            return i;
+        }
+    }
+    // If we reached here, the player was not found.
+    return -1;
+}
+
+// An example function to add a player to the array.
+static int __not_in_flash_func(add_player)(int device_address, int instance_number) {
+    if(playersCount == MAX_PLAYERS) {
+        return -1;
+    }
+
+    players[playersCount].device_address = device_address;
+    players[playersCount].instance_number = instance_number;
+    players[playersCount].player_number = playersCount + 1;
+
+    players[playersCount].global_buttons = 0xFFFF;
+    players[playersCount].global_x = 0;
+    players[playersCount].global_y = 0;
+
+    players[playersCount].output_buttons = 0xFFFF;
+    players[playersCount].output_x = 0;
+    players[playersCount].output_y = 0;
+    players[playersCount].is6btn = false;
+
+    playersCount++;
+    return playersCount-1; // returns player_index
+}
 
 //
 // update_output - updates output_word with multi-tap plex data that
@@ -252,37 +292,48 @@ void __not_in_flash_func(update_output)(void)
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
   bool has6Btn = !(buttons & 0x0f00);
   bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
 
-  if (delta_x >= 128) 
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x - (256-delta_x);
-  else
-    players[dev_addr-1].global_x = players[dev_addr-1].global_x + delta_x;
-
-  if (delta_y >= 128) 
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y - (256-delta_y);
-  else
-    players[dev_addr-1].global_y = players[dev_addr-1].global_y + delta_y;
-
-  players[dev_addr-1].global_buttons = buttons;
-
-  if (has6Btn && !(buttons & 0b0000000010000001)) {
-    players[dev_addr-1].is6btn = true;
-  }
-  else if (has6Btn && !(buttons & 0b0000000010000100)) {
-    players[dev_addr-1].is6btn = false;
+  int player_index = find_player_index(dev_addr, instance);
+  uint16_t buttons_pressed = (~(buttons | 0x0f00));
+  if (player_index < 0 && buttons_pressed) {
+    printf("[add player] [%d, %d]\n", dev_addr, instance);
+    player_index = add_player(dev_addr, instance);
   }
 
-  if (!output_exclude || !isMouse)
-  {
-     players[dev_addr-1].output_x = players[dev_addr-1].global_x;
-     players[dev_addr-1].output_y = players[dev_addr-1].global_y;
-     players[dev_addr-1].output_buttons = players[dev_addr-1].global_buttons;
+  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
 
-     update_output();
+  if (player_index >= 0) {
+      if (delta_x >= 128)
+        players[player_index].global_x = players[player_index].global_x - (256-delta_x);
+      else
+        players[player_index].global_x = players[player_index].global_x + delta_x;
+
+      if (delta_y >= 128)
+        players[player_index].global_y = players[player_index].global_y - (256-delta_y);
+      else
+        players[player_index].global_y = players[player_index].global_y + delta_y;
+
+      players[player_index].global_buttons = buttons;
+
+      if (has6Btn && !(buttons & 0b0000000010000001)) {
+        players[player_index].is6btn = true;
+      }
+      else if (has6Btn && !(buttons & 0b0000000010000100)) {
+        players[player_index].is6btn = false;
+      }
+
+      if (!output_exclude || !isMouse)
+      {
+        players[player_index].output_x = players[player_index].global_x;
+        players[player_index].output_y = players[player_index].global_y;
+        players[player_index].output_buttons = players[player_index].global_buttons;
+
+        update_output();
+      }
   }
 }
 
@@ -464,6 +515,34 @@ int main(void)
 }
 
 //--------------------------------------------------------------------+
+// Player Managment Functions
+//--------------------------------------------------------------------+
+
+
+
+// Function to remove all players with a certain device_address and shift the remaining players
+void remove_players_by_address(int device_address) {
+    int i = 0;
+    while(i < playersCount) {
+        if(players[i].device_address == device_address) {
+            // Shift all the players after this one up in the array
+            for(int j = i; j < playersCount - 1; j++) {
+                players[j] = players[j+1];
+            }
+            // Decrement playersCount because a player was removed
+            playersCount--;
+        } else {
+            i++;
+        }
+    }
+
+    // Update the player numbers
+    for(i = 0; i < playersCount; i++) {
+        players[i].player_number = i + 1;
+    }
+}
+
+//--------------------------------------------------------------------+
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
 #if CFG_TUH_HID
@@ -473,7 +552,7 @@ void tuh_mount_cb(uint8_t dev_addr)
   // application set-up
   printf("A device with address %d is mounted\r\n", dev_addr);
 
-  playersCount++;
+  // playersCount++;
 }
 
 void tuh_umount_cb(uint8_t dev_addr)
@@ -481,7 +560,8 @@ void tuh_umount_cb(uint8_t dev_addr)
   // application tear-down
   printf("A device with address %d is unmounted \r\n", dev_addr);
 
-  if ((--playersCount) < 0) playersCount = 0;
+  // if ((--playersCount) < 0) playersCount = 0;
+  remove_players_by_address(dev_addr);
 }
 
 #endif

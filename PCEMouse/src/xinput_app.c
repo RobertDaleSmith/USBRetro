@@ -27,7 +27,7 @@
 
 uint16_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 
 //--------------------------------------------------------------------+
 // USB X-input
@@ -67,7 +67,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
                ((p->wButtons & XINPUT_GAMEPAD_B) ? 0x00 : 0x10));
 
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
