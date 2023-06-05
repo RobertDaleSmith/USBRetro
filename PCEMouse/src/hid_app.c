@@ -38,7 +38,12 @@
 #include "bsp/board.h"
 #include "tusb.h"
 
+#define LANGUAGE_ID 0x0409
+
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
+uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'S', 'I', 'S'};
+uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
+uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E', 'N', '-', 'V', '2'};
 
 // Sony DS4 report layout detail https://www.psdevwiki.com/ps4/DS4-USB
 typedef struct TU_ATTR_PACKED
@@ -274,6 +279,80 @@ typedef struct TU_ATTR_PACKED
 
 } wing_man_report_t;
 
+// TripleController v2 (Arduino based HID)
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t b : 1;
+    uint8_t a : 1;
+    uint8_t y : 1;
+    uint8_t x : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t select : 1;
+    uint8_t start : 1;
+  };
+
+  struct {
+    uint8_t ntt_0 : 1;
+    uint8_t ntt_1 : 1;
+    uint8_t ntt_2 : 1;
+    uint8_t ntt_3 : 1;
+    uint8_t ntt_4 : 1;
+    uint8_t ntt_5 : 1;
+    uint8_t ntt_6 : 1;
+    uint8_t ntt_7 : 1;
+  };
+
+  struct {
+    uint8_t ntt_8 : 1;
+    uint8_t ntt_9 : 1;
+    uint8_t ntt_star : 1;
+    uint8_t ntt_hash : 1;
+    uint8_t ntt_dot : 1;
+    uint8_t ntt_clear : 1;
+    uint8_t ntt_null : 1;
+    uint8_t ntt_end : 1;
+  };
+
+  uint8_t axis_x;
+  uint8_t axis_y;
+
+} triple_v2_report_t;
+
+// TripleController v1 (Arduino based HID)
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t b : 1; // A
+    uint8_t a : 1; // B
+    uint8_t y : 1; // C
+    uint8_t x : 1; // X
+    uint8_t l : 1; // Y
+    uint8_t r : 1; // Z
+    uint8_t select : 1; // Mode
+    uint8_t start : 1;
+  };
+
+  struct {
+    uint8_t home : 1;
+    uint8_t null : 7;
+  };
+
+  uint8_t axis_x;
+  uint8_t axis_y;
+
+} triple_v1_report_t;
+
+// TripleController v1 (Arduino based HID)
+typedef struct TU_ATTR_PACKED
+{
+  uint16_t serial[20];
+  uint16_t vid, pid;
+
+} device_t;
+
+device_t devices[10];
 static bool ds4_mounted = false;
 static uint8_t ds4_dev_addr = 0;
 static uint8_t ds4_instance = 0;
@@ -283,8 +362,8 @@ static uint8_t motor_right = 0;
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ( (vid == 0x054c && (pid == 0x09cc || pid == 0x05c4)) // Sony DualShock4 
            || (vid == 0x0f0d && pid == 0x005e)                 // Hori FC4 
@@ -296,8 +375,8 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
 // check if device is 8BitDo PCE Controller
 static inline bool is_8bit_pce(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x0f0d && pid == 0x0138)); // 8BitDo PCE (wireless)
 }
@@ -305,8 +384,8 @@ static inline bool is_8bit_pce(uint8_t dev_addr)
 // check if device is PlayStation Classic Controller
 static inline bool is_8bit_psc(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
 }
@@ -314,8 +393,8 @@ static inline bool is_8bit_psc(uint8_t dev_addr)
 // check if device is Sega Genesis mini controller
 static inline bool is_sega_mini(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x0f0d && pid == 0x00c1)); // Sega Genesis mini controller
 }
@@ -323,8 +402,8 @@ static inline bool is_sega_mini(uint8_t dev_addr)
 // check if device is Astro City mini controller
 static inline bool is_astro_city(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x0ca3 && (
            pid == 0x0028 || // Astro City mini joystick
@@ -336,8 +415,8 @@ static inline bool is_astro_city(uint8_t dev_addr)
 // check if device is Sony DS5 controller
 static inline bool is_sony_ds5(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DS5 controller
 }
@@ -345,10 +424,60 @@ static inline bool is_sony_ds5(uint8_t dev_addr)
 // check if device is Logitech WingMan Action controller
 static inline bool is_wing_man(uint8_t dev_addr)
 {
-  uint16_t vid, pid;
-  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x046d && pid == 0xc20b)); // Logitech WingMan Action controller
+}
+
+bool compare_utf16(uint16_t* s1, uint16_t* s2, size_t n) {
+    for(size_t i = 0; i < n; i++) {
+        if(s1[i] != s2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// check if device is TripleController (Arduino based HID)
+static inline bool is_triple_v2(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  bool serial_match = false;
+  bool vidpid_match = (vid == 0x2341 && pid == 0x8036); // Arduino Leonardo
+
+  if (!vidpid_match) return false;
+
+  // Compare the the fetched serial with "S-NES-GEN-V2" or "NES-NTT-GENESIS"
+  if(memcmp(devices[dev_addr].serial, tplctr_serial_v2, sizeof(tplctr_serial_v2)) == 0 ||
+     memcmp(devices[dev_addr].serial, tplctr_serial_v2_1, sizeof(tplctr_serial_v2_1)) == 0)
+  {
+    serial_match = true;
+  }
+
+  return serial_match;
+}
+
+// check if device is TripleController (Arduino based HID)
+static inline bool is_triple_v1(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  bool serial_match = false;
+  bool vidpid_match = (vid == 0x2341 && pid == 0x8036); // Arduino Leonardo
+
+  if (!vidpid_match) return false;
+
+  // Compare the the fetched serial with "NES-SNES-GENESIS"
+  if(memcmp(devices[dev_addr].serial, tplctr_serial_v1, sizeof(tplctr_serial_v1)) == 0)
+  {
+    serial_match = true;
+  }
+
+  return serial_match;
 }
 
 //--------------------------------------------------------------------+
@@ -361,7 +490,7 @@ static inline bool is_wing_man(uint8_t dev_addr)
 
 #define MAX_REPORT  4
 
-// Uncomment the following line if you desire button-swap when middle button is clicked:
+// Uncomment the following line if you desire button-swap when middle button is clicd:
 // #define MID_BUTTON_SWAPPABLE  true
 
 
@@ -392,11 +521,11 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
 }hid_info[CFG_TUH_HID];
 
-static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report);
-static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report);
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report);
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 
 void hid_app_task(void)
 {
@@ -448,18 +577,32 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isController = is_sony_ds4(dev_addr)
-                   || is_sony_ds5(dev_addr)
-                   || is_8bit_pce(dev_addr)
-                   || is_8bit_psc(dev_addr)
-                   || is_astro_city(dev_addr)
-                   || is_sega_mini(dev_addr)
-                   || is_wing_man(dev_addr)
-                   ;
+  bool isController = false;
+  if      (is_sony_ds4(dev_addr)  ) isController = true;
+  else if (is_sony_ds5(dev_addr)  ) isController = true;
+  else if (is_8bit_pce(dev_addr)  ) isController = true;
+  else if (is_8bit_psc(dev_addr)  ) isController = true;
+  else if (is_sega_mini(dev_addr) ) isController = true;
+  else if (is_astro_city(dev_addr)) isController = true;
+  else if (is_wing_man(dev_addr)  ) isController = true;
+  else if (is_triple_v2(dev_addr) ) isController = true;
+  else if (is_triple_v1(dev_addr) ) isController = true;
+
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     printf("HID has %u reports \r\n", hid_info[instance].report_count);
+  }
+
+  // Stash device vid/pid/serial device type detection
+  devices[dev_addr].vid = vid;
+  devices[dev_addr].pid = pid;
+  uint16_t temp_buf[128];
+  if (0 == tuh_descriptor_get_serial_string_sync(dev_addr, LANGUAGE_ID, temp_buf, sizeof(temp_buf)))
+  {
+    for(int i=0; i<20; i++){
+      devices[dev_addr].serial[i] = temp_buf[i];
+    }
   }
 
   if (is_sony_ds4(dev_addr) && !ds4_mounted)
@@ -492,7 +635,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 // check if different than 2
 bool diff_than_2(uint8_t x, uint8_t y)
 {
-  return (x - y > 2) || (y - x > 2);
+  return (x - y > 1) || (y - x > 1);
 }
 
 // check if 2 reports are different enough
@@ -620,8 +763,45 @@ bool wingman_diff_report(wing_man_report_t const* rpt1, wing_man_report_t const*
   return result;
 }
 
+bool triple_v2_diff_report(triple_v2_report_t const* rpt1, triple_v2_report_t const* rpt2)
+{
+  bool result;
 
-void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+  result |= rpt1->axis_x != rpt2->axis_x;
+  result |= rpt1->axis_y != rpt2->axis_y;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->select != rpt2->select;
+  result |= rpt1->start != rpt2->start;
+  result |= rpt1->ntt_0 != rpt2->ntt_0;
+
+  return result;
+}
+
+bool triple_v1_diff_report(triple_v1_report_t const* rpt1, triple_v1_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->axis_x != rpt2->axis_x;
+  result |= rpt1->axis_y != rpt2->axis_y;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->select != rpt2->select;
+  result |= rpt1->start != rpt2->start;
+  result |= rpt1->home != rpt2->home;
+
+  return result;
+}
+
+void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds4_report_t prev_report[5] = { 0 };
@@ -691,7 +871,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, 0, 0);
+      post_globals(dev_addr, instance, buttons, 0, 0);
 
       // The left and right triggers control the intensity of the left and right rumble motors
       // motor_left = ds4_report.l2_trigger;
@@ -702,7 +882,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t const* report, uint16_t len)
   }
 }
 
-void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds5_report_t prev_report[5] = { 0 };
@@ -770,13 +950,13 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, buttons, 0, 0);
+      post_globals(dev_addr, instance, buttons, 0, 0);
     }
 
     prev_report[dev_addr-1] = ds5_report;
   }
 }
-void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_8bit_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_psc_report_t prev_report[5] = { 0 };
@@ -827,13 +1007,13 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
 
   prev_report[dev_addr-1] = psc_report;
 }
 
-void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static bitdo_pce_report_t prev_report[5] = { 0 };
@@ -870,14 +1050,14 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
 
   prev_report[dev_addr-1] = pce_report;
 }
 
 
-void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sega_mini_report_t prev_report[5] = { 0 };
@@ -922,13 +1102,13 @@ void process_sega_mini(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
 
   prev_report[dev_addr-1] = sega_report;
 }
 
-void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
+void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static astro_city_report_t prev_report[5] = { 0 };
@@ -973,7 +1153,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t const* report, uint16_t len)
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
 
   prev_report[dev_addr-1] = astro_report;
@@ -1027,10 +1207,110 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 0, 0);
   }
 
   prev_report[dev_addr-1] = wingman_report;
+}
+
+void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static triple_v2_report_t prev_report[5][5];
+
+  triple_v2_report_t update_report;
+  memcpy(&update_report, report, sizeof(update_report));
+
+  if ( triple_v2_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  {
+    printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
+    if (update_report.b) printf("B ");
+    if (update_report.a) printf("A ");
+    if (update_report.y) printf("Y ");
+    if (update_report.x) printf("X ");
+    if (update_report.l) printf("L ");
+    if (update_report.r) printf("R ");
+    if (update_report.select) printf("Select ");
+    if (update_report.start) printf("Start ");
+    printf("\r\n");
+
+    int threshold = 28;
+    bool dpad_up    = update_report.axis_y ? (update_report.axis_y > (128 - threshold)) : 0;
+    bool dpad_right = update_report.axis_x ? (update_report.axis_x < (128 + threshold)) : 0;
+    bool dpad_down  = update_report.axis_y ? (update_report.axis_y < (128 + threshold)) : 0;
+    bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
+    bool has_6btns = true;
+
+    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+               ((update_report.l)      ? 0x00 : 0x4000) | // V
+               ((update_report.y)      ? 0x00 : 0x2000) | // IV
+               ((update_report.x)      ? 0x00 : 0x1000) | // III
+               ((has_6btns)            ? 0x00 : 0xFF00) |
+               ((dpad_left)            ? 0x00 : 0x0008) |
+               ((dpad_down)            ? 0x00 : 0x0004) |
+               ((dpad_right)           ? 0x00 : 0x0002) |
+               ((dpad_up)              ? 0x00 : 0x0001) |
+               ((update_report.start)  ? 0x00 : 0x0080) | // Run
+               ((update_report.select) ? 0x00 : 0x0040) | // Select
+               ((update_report.b)      ? 0x00 : 0x0020) | // II
+               ((update_report.a)      ? 0x00 : 0x0010)); // I
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1][instance] = update_report;
+}
+
+void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static triple_v1_report_t prev_report[5][5];
+
+  triple_v1_report_t update_report;
+  memcpy(&update_report, report, sizeof(update_report));
+
+  if ( triple_v1_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  {
+    printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
+    if (update_report.b) printf("B ");
+    if (update_report.a) printf("A ");
+    if (update_report.y) printf("Y ");
+    if (update_report.x) printf("X ");
+    if (update_report.l) printf("L ");
+    if (update_report.r) printf("R ");
+    if (update_report.select) printf("Select ");
+    if (update_report.start) printf("Start ");
+    printf("\r\n");
+
+    int threshold = 28;
+    bool dpad_up    = update_report.axis_y ? (update_report.axis_y > (128 - threshold)) : 0;
+    bool dpad_right = update_report.axis_x ? (update_report.axis_x < (128 + threshold)) : 0;
+    bool dpad_down  = update_report.axis_y ? (update_report.axis_y < (128 + threshold)) : 0;
+    bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
+    bool has_6btns = true;
+
+    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+               ((update_report.l)      ? 0x00 : 0x4000) | // V
+               ((update_report.y)      ? 0x00 : 0x2000) | // IV
+               ((update_report.x)      ? 0x00 : 0x1000) | // III
+               ((has_6btns)            ? 0x00 : 0xFF00) |
+               ((dpad_left)            ? 0x00 : 0x0008) |
+               ((dpad_down)            ? 0x00 : 0x0004) |
+               ((dpad_right)           ? 0x00 : 0x0002) |
+               ((dpad_up)              ? 0x00 : 0x0001) |
+               ((update_report.start)  ? 0x00 : 0x0080) | // Run
+               ((update_report.select) ? 0x00 : 0x0040) | // Select
+               ((update_report.b)      ? 0x00 : 0x0020) | // II
+               ((update_report.a)      ? 0x00 : 0x0010)); // I
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1][instance] = update_report;
 }
 
 // Invoked when received report from device via interrupt endpoint
@@ -1042,22 +1322,24 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
       TU_LOG2("HID receive boot keyboard report\r\n");
-      process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
+      process_kbd_report(dev_addr, instance, (hid_keyboard_report_t const*) report );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
       TU_LOG2("HID receive boot mouse report\r\n");
-      process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
+      process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
     break;
 
     default:
-      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, report, len);
-      else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, report, len);
-      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, report, len);
-      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, report, len);
-      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, report, len);
-      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, report, len);
+      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
+      else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, instance, report, len);
+      else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
+      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, instance, report, len);
+      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, instance, report, len);
+      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
+      else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
+      else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
@@ -1087,7 +1369,7 @@ static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8
   return false;
 }
 
-static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *report)
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report)
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
 
@@ -1145,7 +1427,7 @@ static void process_kbd_report(uint8_t dev_addr, hid_keyboard_report_t const *re
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, buttons, 0, 0);
+  post_globals(dev_addr, instance, buttons, 0, 0);
 
   prev_report = *report;
 }
@@ -1193,7 +1475,7 @@ uint8_t x1, y1;
 #endif
 }
 
-static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * report)
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report)
 {
   static hid_mouse_report_t prev_report = { 0 };
 
@@ -1239,7 +1521,7 @@ static void process_mouse_report(uint8_t dev_addr, hid_mouse_report_t const * re
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, buttons, local_x, local_y);
+  post_globals(dev_addr, instance, buttons, local_x, local_y);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel);
@@ -1299,13 +1581,13 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       case HID_USAGE_DESKTOP_KEYBOARD:
         TU_LOG1("HID receive keyboard report\r\n");
         // Assume keyboard follow boot report layout
-        process_kbd_report(dev_addr, (hid_keyboard_report_t const*) report );
+        process_kbd_report(dev_addr, instance, (hid_keyboard_report_t const*) report );
       break;
 
       case HID_USAGE_DESKTOP_MOUSE:
         TU_LOG1("HID receive mouse report\r\n");
         // Assume mouse follow boot report layout
-        process_mouse_report(dev_addr, (hid_mouse_report_t const*) report );
+        process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
       break;
 
       default: break;
