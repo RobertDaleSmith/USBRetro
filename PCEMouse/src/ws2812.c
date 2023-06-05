@@ -135,6 +135,22 @@ void pattern_rgby(uint len, uint t) {
     }
 }
 
+void pattern_rgbyp(uint len, uint t) {
+    for (uint i = 0; i < len; ++i) {
+        uint x = (i + (t >> 1)) % 64;
+        if (x < 10)
+            put_pixel(urgb_u32(0xff, 0, 0));
+        else if (x >= 10 && x < 20)
+            put_pixel(urgb_u32(0, 0xff, 0));
+        else if (x >= 20 && x < 30)
+            put_pixel(urgb_u32(0, 0, 0xff));
+        else if (x >= 30 && x < 40)
+            put_pixel(urgb_u32(0xff, 0xff, 0));
+        else
+            put_pixel(urgb_u32(20, 0, 40));
+    }
+}
+
 typedef void (*pattern)(uint len, uint t);
 const struct {
     pattern pat;
@@ -145,7 +161,8 @@ const struct {
         {pattern_gb,      "Green Blue"},            // 2 controllers
         {pattern_rgb,     "Red Green Blue"},        // 3 controllers
         {pattern_rgby,    "Red Green Blue Yellow"}, // 4 controllers
-        {pattern_random,  "Random data"},           // 5 controllers
+        {pattern_rgbyp,   "Red Green Blue Yellow Purple"}, // 5 controllers
+        {pattern_random,  "Random data"},           
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},
         {pattern_greys,   "Greys"},
