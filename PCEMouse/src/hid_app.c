@@ -344,7 +344,34 @@ typedef struct TU_ATTR_PACKED
 
 } triple_v1_report_t;
 
-// TripleController v1 (Arduino based HID)
+// Pokken Wii U USB Controller
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t y : 1;
+    uint8_t b : 1;
+    uint8_t a : 1;
+    uint8_t x : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t zl : 1;
+    uint8_t zr : 1;
+  };
+
+  struct {
+    uint8_t select : 1;
+    uint8_t start  : 1;
+    uint8_t noop_a : 6;
+  };
+
+  struct {
+    uint8_t dpad   : 4;
+    uint8_t noop_b : 4;
+  };
+
+} pokken_report_t;
+
+// Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
 {
   uint16_t serial[20];
@@ -370,6 +397,15 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
            || (vid == 0x0f0d && pid == 0x00ee)                 // Hori PS4 Mini (PS4-099U) 
            || (vid == 0x1f4f && pid == 0x1002)                 // ASW GG xrd controller
          );
+}
+
+// check if device is 8BitDo Ultimate C Wired Controller
+static inline bool is_pokken(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x0f0d && pid == 0x0092)); // 8BitDo Ultimate Cs
 }
 
 // check if device is 8BitDo PCE Controller
@@ -587,6 +623,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_wing_man(dev_addr)  ) isController = true;
   else if (is_triple_v2(dev_addr) ) isController = true;
   else if (is_triple_v1(dev_addr) ) isController = true;
+  else if (is_pokken(dev_addr)    ) isController = true;
 
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -797,6 +834,25 @@ bool triple_v1_diff_report(triple_v1_report_t const* rpt1, triple_v1_report_t co
   result |= rpt1->select != rpt2->select;
   result |= rpt1->start != rpt2->start;
   result |= rpt1->home != rpt2->home;
+
+  return result;
+}
+
+bool pokken_diff_report(pokken_report_t const* rpt1, pokken_report_t const* rpt2)
+{
+  bool result;
+
+  result |= rpt1->dpad != rpt2->dpad;
+  result |= rpt1->b != rpt2->b;
+  result |= rpt1->a != rpt2->a;
+  result |= rpt1->y != rpt2->y;
+  result |= rpt1->x != rpt2->x;
+  result |= rpt1->l != rpt2->l;
+  result |= rpt1->r != rpt2->r;
+  result |= rpt1->zl != rpt2->zl;
+  result |= rpt1->zr != rpt2->zr;
+  result |= rpt1->select != rpt2->select;
+  result |= rpt1->start != rpt2->start;
 
   return result;
 }
@@ -1313,6 +1369,57 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
   prev_report[dev_addr-1][instance] = update_report;
 }
 
+void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static pokken_report_t prev_report[5][5];
+
+  pokken_report_t update_report;
+  memcpy(&update_report, report, sizeof(update_report));
+
+  if ( pokken_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  {
+    printf("DPad = %d ", update_report.dpad);
+    if (update_report.y) printf("Y ");
+    if (update_report.b) printf("B ");
+    if (update_report.a) printf("A ");
+    if (update_report.x) printf("X ");
+    if (update_report.l) printf("L ");
+    if (update_report.r) printf("R ");
+    if (update_report.zl) printf("ZL ");
+    if (update_report.zr) printf("ZR ");
+    if (update_report.select) printf("Select ");
+    if (update_report.start) printf("Start ");
+    printf("\r\n");
+
+    bool dpad_up    = (update_report.dpad == 0 || update_report.dpad == 1 || update_report.dpad == 7);
+    bool dpad_right = (update_report.dpad >= 1 && update_report.dpad <= 3);
+    bool dpad_down  = (update_report.dpad >= 3 && update_report.dpad <= 5);
+    bool dpad_left  = (update_report.dpad >= 5 && update_report.dpad <= 7);
+    bool has_6btns = true;
+
+    buttons = (((update_report.r || update_report.zr) ? 0x00 : 0x8000) | // VI
+               ((update_report.l || update_report.zl) ? 0x00 : 0x4000) | // V
+               ((update_report.y)      ? 0x00 : 0x2000) | // IV
+               ((update_report.x)      ? 0x00 : 0x1000) | // III
+               ((has_6btns)            ? 0x00 : 0xFF00) |
+               ((dpad_left)            ? 0x00 : 0x0008) |
+               ((dpad_down)            ? 0x00 : 0x0004) |
+               ((dpad_right)           ? 0x00 : 0x0002) |
+               ((dpad_up)              ? 0x00 : 0x0001) |
+               ((update_report.start)  ? 0x00 : 0x0080) | // Run
+               ((update_report.select) ? 0x00 : 0x0040) | // Select
+               ((update_report.b)      ? 0x00 : 0x0020) | // II
+               ((update_report.a)      ? 0x00 : 0x0010)); // I
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+  }
+
+  prev_report[dev_addr-1][instance] = update_report;
+}
+
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
@@ -1340,6 +1447,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
+      else if ( is_pokken(dev_addr) ) process_pokken(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
