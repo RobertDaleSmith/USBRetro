@@ -170,7 +170,7 @@ uint sm1, sm2, sm3;   // sm1 = plex; sm2 = clock, sm3 = select
 //
 
 // Function to find a player in the array based on their device_address and instance_number.
-static int __not_in_flash_func(find_player_index)(int device_address, int instance_number) {
+int __not_in_flash_func(find_player_index)(int device_address, int instance_number) {
     for(int i = 0; i < playersCount; i++) {
         if(players[i].device_address == device_address && players[i].instance_number == instance_number) {
             return i;

@@ -371,20 +371,31 @@ typedef struct TU_ATTR_PACKED
 
 } pokken_report_t;
 
+
+#define MAX_DEVICES 10
+#define MAX_REPORT  5
+
+// Each HID instance can has multiple reports
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t report_count;
+  tuh_hid_report_info_t report_info[MAX_REPORT];
+  bool ds4_mounted;
+  uint8_t motor_left;
+  uint8_t motor_right;
+
+} instance_t;
+
 // Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
 {
   uint16_t serial[20];
   uint16_t vid, pid;
+  instance_t instances[CFG_TUH_HID];
 
 } device_t;
 
-device_t devices[10];
-static bool ds4_mounted = false;
-static uint8_t ds4_dev_addr = 0;
-static uint8_t ds4_instance = 0;
-static uint8_t motor_left = 0;
-static uint8_t motor_right = 0;
+static device_t devices[MAX_DEVICES];
 
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
@@ -524,13 +535,8 @@ static inline bool is_triple_v1(uint8_t dev_addr)
 // it can be use to simulate mouse cursor movement within terminal
 #define USE_ANSI_ESCAPE   0
 
-#define MAX_REPORT  4
-
 // Uncomment the following line if you desire button-swap when middle button is clicd:
 // #define MID_BUTTON_SWAPPABLE  true
-
-
-
 
 // Button swap functionality
 // -------------------------
@@ -550,38 +556,69 @@ uint16_t buttons;
 uint8_t local_x;
 uint8_t local_y;
 
-// Each HID instance can has multiple reports
-static struct
-{
-  uint8_t report_count;
-  tuh_hid_report_info_t report_info[MAX_REPORT];
-}hid_info[CFG_TUH_HID];
-
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report);
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 
 void hid_app_task(void)
 {
-  if (ds4_mounted)
-  {
-    const uint32_t interval_ms = 200;
-    static uint32_t start_ms = 0;
+  // iterate devices and instances that can receive responses
+  for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
+    for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
 
-    uint32_t current_time_ms = board_millis();
-    if ( current_time_ms - start_ms >= interval_ms)
-    {
-      start_ms = current_time_ms;
+      // send DS4 LED and rumble response
+      if (devices[dev_addr].instances[instance].ds4_mounted) {
+        const uint32_t interval_ms = 200;
+        static uint32_t start_ms = 0;
 
-      sony_ds4_output_report_t output_report = {0};
-      output_report.set_rumble = 1;
-      output_report.set_led = 1;
-      output_report.lightbar_blue = 64;
-      output_report.motor_left = motor_left;
-      output_report.motor_right = motor_right;
-      tuh_hid_send_report(ds4_dev_addr, ds4_instance, 5, &output_report, sizeof(output_report));
+        int player_index = find_player_index(dev_addr, instance);
+
+        uint32_t current_time_ms = board_millis();
+        if ( current_time_ms - start_ms >= interval_ms)
+        {
+          start_ms = current_time_ms;
+
+          sony_ds4_output_report_t output_report = {0};
+          output_report.set_led = 1;
+          switch (player_index+1)
+          {
+          case 1:
+            output_report.lightbar_blue = 64;
+            break;
+
+          case 2:
+            output_report.lightbar_green = 64;
+            break;
+
+          case 3:
+            output_report.lightbar_red = 64;
+            break;
+
+          case 4: // yellow
+            output_report.lightbar_red = 64;
+            output_report.lightbar_green = 64;
+            break;
+
+          case 5: // purple
+            output_report.lightbar_red = 20;
+            output_report.lightbar_blue = 40;
+            break;
+
+          default: // white
+            output_report.lightbar_blue = 64;
+            output_report.lightbar_green = 64;
+            output_report.lightbar_red = 64;
+            break;
+          }
+          // output_report.set_rumble = 1;
+          // output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
+          // output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
+          tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
+        }
+      }
     }
   }
 }
@@ -627,8 +664,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
-    hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
-    printf("HID has %u reports \r\n", hid_info[instance].report_count);
+    devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
+    printf("HID has %u reports \r\n", devices[dev_addr].instances[instance].report_count);
   }
 
   // Stash device vid/pid/serial device type detection
@@ -642,13 +679,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     }
   }
 
-  if (is_sony_ds4(dev_addr) && !ds4_mounted)
+  if (is_sony_ds4(dev_addr))
   {
-    ds4_dev_addr = dev_addr;
-    ds4_instance = instance;
-    motor_left = 0;
-    motor_right = 0;
-    ds4_mounted = true;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].ds4_mounted = true;
+  } else {
+    devices[dev_addr].instances[instance].ds4_mounted = false;
   }
 
   // request to receive report
@@ -663,9 +700,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
-  if (ds4_mounted && ds4_dev_addr == dev_addr && ds4_instance == instance)
+  if (devices[dev_addr].instances[instance].ds4_mounted)
   {
-    ds4_mounted = false;
+    devices[dev_addr].instances[instance].ds4_mounted = false;
   }
 }
 
@@ -1079,7 +1116,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
   if ( pce_diff_report(&prev_report[dev_addr-1], &pce_report) )
   {
-    printf("DPad = %s ", dpad_str[pce_report.dpad]);
+    printf("DPad = %d ", pce_report.dpad);
 
     if (pce_report.sel) printf("Select ");
     if (pce_report.run) printf("Run ");
@@ -1642,8 +1679,8 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
 {
   (void) dev_addr;
 
-  uint8_t const rpt_count = hid_info[instance].report_count;
-  tuh_hid_report_info_t* rpt_info_arr = hid_info[instance].report_info;
+  uint8_t const rpt_count = devices[dev_addr].instances[instance].report_count;
+  tuh_hid_report_info_t* rpt_info_arr = devices[dev_addr].instances[instance].report_info;
   tuh_hid_report_info_t* rpt_info = NULL;
 
   if ( rpt_count == 1 && rpt_info_arr[0].report_id == 0)
