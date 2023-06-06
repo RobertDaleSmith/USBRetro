@@ -21,6 +21,8 @@
 
 #define IS_RGBW true
 
+extern bool is_fun;
+
 PIO pio;
 uint sm;
 
@@ -145,9 +147,9 @@ void pattern_rgbpy(uint len, uint t) {
         else if (x >= 20 && x < 30)
             put_pixel(urgb_u32(0, 0, 0xff));
         else if (x >= 30 && x < 40)
-            put_pixel(urgb_u32(0xff, 0xff, 0));
-        else
             put_pixel(urgb_u32(20, 0, 40));
+        else
+            put_pixel(urgb_u32(0xff, 0xff, 0));
     }
 }
 
@@ -158,11 +160,11 @@ const struct {
 } pattern_table[] = {
         {pattern_blues,   "Blues"},                 // 0 controllers
         {pattern_blue,    "Blue"},                  // 1 controller
-        {pattern_rb,      "Red Blue"},            // 2 controllers
+        {pattern_rb,      "Red Blue"},              // 2 controllers
         {pattern_rgb,     "Red Green Blue"},        // 3 controllers
         {pattern_rgbp,    "Red Green Blue Purple"}, // 4 controllers
         {pattern_rgbpy,   "Red Green Blue Purple Yellow"}, // 5 controllers
-        {pattern_random,  "Random data"},           
+        {pattern_random,  "Random data"},
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},
         {pattern_greys,   "Greys"},
@@ -181,6 +183,7 @@ void neopixel_init()
 void neopixel_task(int pat)
 {
     if (pat > 5) pat = 5;
+    if (pat && is_fun) pat = 6;
 
     current_time = get_absolute_time();
 

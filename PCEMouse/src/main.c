@@ -132,12 +132,11 @@ typedef struct TU_ATTR_PACKED
 
 Player_t players[MAX_PLAYERS];
 int playersCount = 0;
-
+bool is_fun = false;
 
 // When PCE reads, set interlock to ensure atomic update
 //
 volatile bool  output_exclude = false;
-
 
 // output_word -> is the word sent to the state machine for output
 //
@@ -562,6 +561,8 @@ void tuh_umount_cb(uint8_t dev_addr)
 
   // if ((--playersCount) < 0) playersCount = 0;
   remove_players_by_address(dev_addr);
+
+  is_fun = false;
 }
 
 #endif

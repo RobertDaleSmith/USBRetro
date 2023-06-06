@@ -623,8 +623,19 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 
+extern bool is_fun;
+unsigned char fun = 0;
+unsigned char player = 1;
+
 void hid_app_task(void)
 {
+  if (is_fun) {
+    fun++;
+    if (!fun) {
+      player = ++player%0x20;
+    }
+  }
+
   // iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
@@ -649,11 +660,11 @@ void hid_app_task(void)
             output_report.lightbar_blue = 64;
             break;
 
-          case 3:
+          case 2:
             output_report.lightbar_red = 64;
             break;
 
-          case 2:
+          case 3:
             output_report.lightbar_green = 64;
             break;
 
@@ -673,6 +684,14 @@ void hid_app_task(void)
             output_report.lightbar_red = 32;
             break;
           }
+
+          // fun
+          if (player_index+1 && is_fun) {
+            output_report.lightbar_red = fun;
+            output_report.lightbar_green = (fun%2 == 0) ? fun+64 : 0;
+            output_report.lightbar_blue = (fun%2 == 0) ? 0 : fun+128;
+          }
+
           // output_report.set_rumble = 1;
           // output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
           // output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
@@ -694,10 +713,27 @@ void hid_app_task(void)
 
           ds5_feedback_t ds5_fb = {0};
 
-          // set flags for lightbar, and player_led
+          // set flags for trigger_r, trigger_l, lightbar, and player_led
+          // ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
+          // ds5_fb.flags |= (1 << 2); // trigger_r
+          // ds5_fb.flags |= (1 << 3); // trigger_l
           ds5_fb.flags |= (1 << 10); // lightbar
           ds5_fb.flags |= (1 << 12); // player_led
-          ds5_fb.flags |= 0x07; // rumble enum
+
+          // haptic feedback example
+          // ds5_fb.trigger_r.type = 2; // Set type
+          // ds5_fb.trigger_r.params[0] = 0x5f;
+          // ds5_fb.trigger_r.params[1] = 0xff;
+
+          // left trigger with similar effect as the PS5 demo
+          // ds5_fb.trigger_l.type = (fun % 32 < 16) ? 0 : 2; // Set type
+          // ds5_fb.trigger_l.params[0] = 0x00;
+          // ds5_fb.trigger_l.params[1] = 0xff;
+          // ds5_fb.trigger_l.params[2] = 0xff;
+
+          // for(int i = 0; i < 10; i++) {
+          //     ds5_fb.trigger_r.params[i] = 255;
+          // }
 
           switch (player_index+1)
           {
@@ -735,6 +771,15 @@ void hid_app_task(void)
             ds5_fb.lightbar_r = 32;
             break;
           }
+
+          // fun
+          if (player_index+1 && is_fun) {
+            ds5_fb.player_led = player;
+            ds5_fb.lightbar_r = fun;
+            ds5_fb.lightbar_g = fun+64;
+            ds5_fb.lightbar_b = fun+128;
+          }
+
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
       }
