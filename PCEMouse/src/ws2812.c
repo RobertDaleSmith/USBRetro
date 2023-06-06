@@ -95,61 +95,77 @@ void pattern_blue(uint len, uint t) {
     put_pixel(max * 0x00001);
 }
 
-void pattern_rb(uint len, uint t) {
+void pattern_red(uint len, uint t) {
+    put_pixel(urgb_u32(0xff, 0, 0)); // red
+}
+
+void pattern_green(uint len, uint t) {
+    put_pixel(urgb_u32(0, 0xff, 0)); // green
+}
+
+void pattern_purple(uint len, uint t) {
+    put_pixel(urgb_u32(20, 0, 40)); // purple
+}
+
+void pattern_yellow(uint len, uint t) {
+    put_pixel(urgb_u32(0xff, 0xff, 0)); // yellow
+}
+
+void pattern_br(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
-            put_pixel(urgb_u32(0, 0, 0xff));
-        else if (x >= 15 && x < 25)
             put_pixel(urgb_u32(0xff, 0, 0));
+        else if (x >= 15 && x < 25)
+            put_pixel(urgb_u32(0, 0, 0xff));
         else if (x >= 30 && x < 40)
-            put_pixel(urgb_u32(0, 0, 0xff));
+            put_pixel(urgb_u32(0xff, 0, 0));
         else
-            put_pixel(urgb_u32(0, 0, 0xff));
+            put_pixel(urgb_u32(0xff, 0, 0));
     }
 }
 
-void pattern_rgb(uint len, uint t) {
+void pattern_brg(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
-            put_pixel(urgb_u32(0, 0, 0xff));
-        else if (x >= 15 && x < 25)
-            put_pixel(urgb_u32(0xff, 0, 0));
-        else if (x >= 30 && x < 40)
             put_pixel(urgb_u32(0, 0xff, 0));
-        else
-            put_pixel(urgb_u32(0, 0, 0xff));
-    }
-}
-
-void pattern_rgbp(uint len, uint t) {
-    for (uint i = 0; i < len; ++i) {
-        uint x = (i + (t >> 1)) % 64;
-        if (x < 10)
-            put_pixel(urgb_u32(0xff, 0, 0));
         else if (x >= 15 && x < 25)
-            put_pixel(urgb_u32(0, 0xff, 0));
-        else if (x >= 30 && x < 40)
             put_pixel(urgb_u32(0, 0, 0xff));
+        else if (x >= 30 && x < 40)
+            put_pixel(urgb_u32(0xff, 0, 0));
         else
-            put_pixel(urgb_u32(20, 0, 40));
+            put_pixel(urgb_u32(0, 0xff, 0));
     }
 }
 
-void pattern_rgbpy(uint len, uint t) {
+void pattern_brgp(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
-            put_pixel(urgb_u32(0xff, 0, 0));
+            put_pixel(urgb_u32(0, 0, 0xff)); // blue
+        else if (x >= 15 && x < 25)
+            put_pixel(urgb_u32(0xff, 0, 0)); // red
+        else if (x >= 30 && x < 40)
+            put_pixel(urgb_u32(0, 0xff, 0)); // green
+        else
+            put_pixel(urgb_u32(20, 0, 40)); // purple
+    }
+}
+
+void pattern_brgpy(uint len, uint t) {
+    for (uint i = 0; i < len; ++i) {
+        uint x = (i + (t >> 1)) % 64;
+        if (x < 10)
+            put_pixel(urgb_u32(0, 0, 0xff)); // blue
         else if (x >= 10 && x < 20)
-            put_pixel(urgb_u32(0, 0xff, 0));
+            put_pixel(urgb_u32(0xff, 0, 0)); // red
         else if (x >= 20 && x < 30)
-            put_pixel(urgb_u32(0, 0, 0xff));
+            put_pixel(urgb_u32(0, 0xff, 0)); // green
         else if (x >= 30 && x < 40)
-            put_pixel(urgb_u32(20, 0, 40));
+            put_pixel(urgb_u32(20, 0, 40)); // purple
         else
-            put_pixel(urgb_u32(0xff, 0xff, 0));
+            put_pixel(urgb_u32(0xff, 0xff, 0)); // yellow
     }
 }
 
@@ -158,16 +174,20 @@ const struct {
     pattern pat;
     const char *name;
 } pattern_table[] = {
-        {pattern_blues,   "Blues"},                 // 0 controllers
-        {pattern_blue,    "Blue"},                  // 1 controller
-        {pattern_rb,      "Red Blue"},              // 2 controllers
-        {pattern_rgb,     "Red Green Blue"},        // 3 controllers
-        {pattern_rgbp,    "Red Green Blue Purple"}, // 4 controllers
-        {pattern_rgbpy,   "Red Green Blue Purple Yellow"}, // 5 controllers
-        {pattern_random,  "Random data"},
+        {pattern_blues,   "Blues"},      // 0 controllers
+        {pattern_blue,    "Blue"},       // 1 controller
+        {pattern_red,     "Red"},        // 2 controllers
+        {pattern_green,   "Green"},      // 3 controllers
+        {pattern_purple,  "Purple"},     // 4 controllers
+        {pattern_yellow,  "Yellow"},     // 5 controllers
+        {pattern_random,  "Random data"},// fun
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},
         {pattern_greys,   "Greys"},
+        {pattern_br,      "B R"},        // 2 controllers alt
+        {pattern_brg,     "B R G"},      // 3 controllers alt
+        {pattern_brgp,    "B R G P"},    // 4 controllers alt
+        {pattern_brgpy,   "B R G P Y"},  // 5 controllers alt
 };
 
 void neopixel_init()
