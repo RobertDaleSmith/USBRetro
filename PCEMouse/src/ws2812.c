@@ -93,13 +93,13 @@ void pattern_blue(uint len, uint t) {
     put_pixel(max * 0x00001);
 }
 
-void pattern_gb(uint len, uint t) {
+void pattern_rb(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
             put_pixel(urgb_u32(0, 0, 0xff));
         else if (x >= 15 && x < 25)
-            put_pixel(urgb_u32(0, 0xff, 0));
+            put_pixel(urgb_u32(0xff, 0, 0));
         else if (x >= 30 && x < 40)
             put_pixel(urgb_u32(0, 0, 0xff));
         else
@@ -121,7 +121,7 @@ void pattern_rgb(uint len, uint t) {
     }
 }
 
-void pattern_rgby(uint len, uint t) {
+void pattern_rgbp(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
@@ -131,11 +131,11 @@ void pattern_rgby(uint len, uint t) {
         else if (x >= 30 && x < 40)
             put_pixel(urgb_u32(0, 0, 0xff));
         else
-            put_pixel(urgb_u32(0xff, 0xff, 0));
+            put_pixel(urgb_u32(20, 0, 40));
     }
 }
 
-void pattern_rgbyp(uint len, uint t) {
+void pattern_rgbpy(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
         uint x = (i + (t >> 1)) % 64;
         if (x < 10)
@@ -158,10 +158,10 @@ const struct {
 } pattern_table[] = {
         {pattern_blues,   "Blues"},                 // 0 controllers
         {pattern_blue,    "Blue"},                  // 1 controller
-        {pattern_gb,      "Green Blue"},            // 2 controllers
+        {pattern_rb,      "Red Blue"},            // 2 controllers
         {pattern_rgb,     "Red Green Blue"},        // 3 controllers
-        {pattern_rgby,    "Red Green Blue Yellow"}, // 4 controllers
-        {pattern_rgbyp,   "Red Green Blue Yellow Purple"}, // 5 controllers
+        {pattern_rgbp,    "Red Green Blue Purple"}, // 4 controllers
+        {pattern_rgbpy,   "Red Green Blue Purple Yellow"}, // 5 controllers
         {pattern_random,  "Random data"},           
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},

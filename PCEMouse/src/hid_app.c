@@ -121,6 +121,34 @@ typedef struct TU_ATTR_PACKED {
   uint8_t other[9];
 } sony_ds4_output_report_t;
 
+typedef struct {
+    // Screw this I'll leave it to hid-sony maintainer's internal doc S:
+    // No he won't implement it. So maybe use DS4Windows docs for now.
+    uint8_t type; // TODO. 0x6: vibrating, 0x23: 2step
+    uint8_t params[10]; // 0x6: 0: frequency (1-255), 1: off time (1-255). 0x23: 0: step1 resistance (0-15), 1: step2 resistance (0-15)
+} ds5_trigger_t;
+
+typedef struct {
+    uint16_t flags; // @ 0-1. bitfield fedcba9876543210. 012: rumble emulation (seems that the lowest nibble has to be 0x7 (????????????0111) in order to trigger this), 2: trigger_r, 3: trigger_l, 8: mic_led, a: lightbar, c: player_led
+    uint8_t rumble_r; // @ 2
+    uint8_t rumble_l; // @ 3
+    uint8_t unk3[4]; // @ 4-7
+    uint8_t mic_led; // @ 8. 0: off, 1: on, 2: pulse
+    uint8_t unk9; // @ 9
+    ds5_trigger_t trigger_r;// 10-20
+    ds5_trigger_t trigger_l; // 21-31
+    uint8_t unk28[11]; // @ 32-42
+    uint8_t player_led; // @ 43. 5-bit. LSB is left.
+    union {
+        uint8_t lightbar_rgb[3];
+        struct {
+            uint8_t lightbar_r;
+            uint8_t lightbar_g;
+            uint8_t lightbar_b;
+        };
+    }; // @ 44-46
+} ds5_feedback_t;
+
 // Sony DS5 controller
 typedef struct TU_ATTR_PACKED
 {
@@ -403,6 +431,7 @@ typedef struct TU_ATTR_PACKED
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
   bool ds4_mounted;
+  bool ds5_mounted;
   uint8_t motor_left;
   uint8_t motor_right;
 
@@ -620,34 +649,93 @@ void hid_app_task(void)
             output_report.lightbar_blue = 64;
             break;
 
-          case 2:
-            output_report.lightbar_green = 64;
-            break;
-
           case 3:
             output_report.lightbar_red = 64;
             break;
 
-          case 4: // yellow
-            output_report.lightbar_red = 64;
+          case 2:
             output_report.lightbar_green = 64;
             break;
 
-          case 5: // purple
+          case 4: // purple
             output_report.lightbar_red = 20;
             output_report.lightbar_blue = 40;
             break;
 
-          default: // white
-            output_report.lightbar_blue = 64;
-            output_report.lightbar_green = 64;
+          case 5: // yellow
             output_report.lightbar_red = 64;
+            output_report.lightbar_green = 64;
+            break;
+
+          default: // white
+            output_report.lightbar_blue = 32;
+            output_report.lightbar_green = 32;
+            output_report.lightbar_red = 32;
             break;
           }
           // output_report.set_rumble = 1;
           // output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
           // output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
           tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
+        }
+      }
+
+      // send DS4 LED and rumble response
+      if (devices[dev_addr].instances[instance].ds5_mounted) {
+        const uint32_t interval_ms = 200;
+        static uint32_t start_ms = 0;
+
+        int player_index = find_player_index(dev_addr, instance);
+
+        uint32_t current_time_ms = board_millis();
+        if ( current_time_ms - start_ms >= interval_ms)
+        {
+          start_ms = current_time_ms;
+
+          ds5_feedback_t ds5_fb = {0};
+
+          // set flags for lightbar, and player_led
+          ds5_fb.flags |= (1 << 10); // lightbar
+          ds5_fb.flags |= (1 << 12); // player_led
+          ds5_fb.flags |= 0x07; // rumble enum
+
+          switch (player_index+1)
+          {
+          case 1:
+            ds5_fb.player_led = 0b00100;
+            ds5_fb.lightbar_b = 64;
+            break;
+
+          case 2:
+            ds5_fb.player_led = 0b01010;
+            ds5_fb.lightbar_r = 64;
+            break;
+
+          case 3:
+            ds5_fb.player_led = 0b10101;
+            ds5_fb.lightbar_g = 64;
+            break;
+
+          case 4: // purple
+            ds5_fb.player_led = 0b11011;
+            ds5_fb.lightbar_r = 20;
+            ds5_fb.lightbar_b = 40;
+            break;
+
+          case 5: // yellow
+            ds5_fb.player_led = 0b11111;
+            ds5_fb.lightbar_r = 64;
+            ds5_fb.lightbar_g = 64;
+            break;
+
+          default: // white
+            ds5_fb.player_led = 0;
+            ds5_fb.lightbar_b = 32;
+            ds5_fb.lightbar_g = 32;
+            ds5_fb.lightbar_r = 32;
+            break;
+          }
+          tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
       }
     }
@@ -720,6 +808,15 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].ds4_mounted = false;
   }
 
+  if (is_sony_ds5(dev_addr))
+  {
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].ds5_mounted = true;
+  } else {
+    devices[dev_addr].instances[instance].ds5_mounted = false;
+  }
+
   // request to receive report
   // tuh_hid_report_received_cb() will be invoked when report is available
   if ( !tuh_hid_receive_report(dev_addr, instance) )
@@ -735,6 +832,10 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   if (devices[dev_addr].instances[instance].ds4_mounted)
   {
     devices[dev_addr].instances[instance].ds4_mounted = false;
+  }
+  else if (devices[dev_addr].instances[instance].ds5_mounted)
+  {
+    devices[dev_addr].instances[instance].ds5_mounted = false;
   }
 }
 
