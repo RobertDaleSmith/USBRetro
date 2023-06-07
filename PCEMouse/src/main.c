@@ -104,6 +104,13 @@ uint64_t turbo_frequency;
 #endif
 #endif
 
+// is fun easter egg
+#define BUFFER_SIZE 10
+#define KONAMI_CODE {0x01, 0x01, 0x04, 0x04, 0x08, 0x02, 0x08, 0x02, 0x20, 0x10}
+uint16_t buffer[BUFFER_SIZE] = {0};
+uint16_t konami_code[BUFFER_SIZE] = KONAMI_CODE;
+int buffer_index = 0;
+
 void led_blinking_task(void);
 
 extern void hid_app_task(void);
@@ -126,6 +133,8 @@ typedef struct TU_ATTR_PACKED
   int16_t output_buttons;
   int16_t output_x;
   int16_t output_y;
+
+  int16_t prev_buttons;
 
   bool is6btn;
 } Player_t;
@@ -198,8 +207,38 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].output_y = 0;
     players[playersCount].is6btn = false;
 
+    players[playersCount].prev_buttons = 0xFFFF;
+
     playersCount++;
     return playersCount-1; // returns player_index
+}
+
+// is_fun easter egg
+void __not_in_flash_func(shift_buffer_and_insert)(uint16_t new_value) {
+    // Shift all elements to the left by 1
+    for (int i = 0; i < BUFFER_SIZE - 1; i++) {
+        buffer[i] = buffer[i + 1];
+    }
+
+    // Insert the new value at the end
+    buffer[BUFFER_SIZE - 1] = new_value;
+}
+
+void __not_in_flash_func(check_for_konami_code)(void)
+{
+  // printf("Buffer content: ");
+  // for (int i = 0; i < BUFFER_SIZE; i++) {
+  //     printf("%x ", buffer[i]);
+  // }
+  // printf("\n");
+
+  for (int i = 0; i < BUFFER_SIZE; i++) {
+    if (buffer[i] != konami_code[i]) {
+      return;
+    }
+  }
+  // The Konami Code has been entered
+  is_fun = !is_fun;
 }
 
 //
@@ -219,7 +258,6 @@ void __not_in_flash_func(update_output)(void)
     turbo_timer = 0;
     turbo_state = !turbo_state;
   }
-
   
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
@@ -285,6 +323,20 @@ void __not_in_flash_func(update_output)(void)
                   ((bytes[2] & 0xff) << 16)| // player 3
                   ((bytes[3] & 0xff) << 24); // player 4
   output_word_1 = ((bytes[4] & 0xff));       // player 5
+
+
+  int16_t btns= (~players[0].output_buttons & 0xff);
+  int16_t prev_btns= (~players[0].prev_buttons & 0xff);
+
+  // Stash previous buttons to detect release
+  if (!btns || btns != prev_btns) {
+    players[0].prev_buttons = players[0].output_buttons;
+  }
+  // Check if the Konami Code has been entered
+  if (btns && btns != prev_btns) {
+    shift_buffer_and_insert(btns);
+    check_for_konami_code();
+  }
 }
 
 //
@@ -474,6 +526,7 @@ int main(void)
     players[i].output_buttons = 0xFFFF;
     players[i].output_x = 0;
     players[i].output_y = 0;
+    players[i].prev_buttons = 0xFFFF;
     players[i].is6btn = false;
   }
   state = 3;
