@@ -41,9 +41,84 @@
 #define LANGUAGE_ID 0x0409
 
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
-uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'S', 'I', 'S'};
+uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
 uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
 uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E', 'N', '-', 'V', '2'};
+
+// Sony DS3/SIXAXIS https://github.com/torvalds/linux/blob/master/drivers/hid/hid-sony.c
+typedef struct TU_ATTR_PACKED {
+  uint8_t reportId; // 0x01 for HID data
+
+  struct {
+    uint8_t select  : 1;
+    uint8_t l3      : 1;
+    uint8_t r3      : 1;
+    uint8_t start   : 1;
+    uint8_t up      : 1;
+    uint8_t right   : 1;
+    uint8_t down    : 1;
+    uint8_t left    : 1;
+  };
+
+  struct {
+    uint8_t l2      : 1;
+    uint8_t r2      : 1;
+    uint8_t l1      : 1;
+    uint8_t r1      : 1;
+    uint8_t triangle: 1;
+    uint8_t circle  : 1;
+    uint8_t cross   : 1;
+    uint8_t square  : 1;
+  };
+
+  uint8_t ps;
+
+  uint8_t notUsed;
+  uint8_t lx, ly, rx, ry; // joystick data
+  uint8_t pressure[12]; // pressure levels for select, L3, R3, start, up, right, down, left, L2, R2, L1, R1, triangle, circle, cross, square
+  uint8_t unused[36];
+  uint8_t charge;       // battery level
+  uint8_t connection;   // connection state, 0x02: connected
+  uint8_t power_rating; // unknown
+  uint8_t communication_rating; // unknown
+  uint8_t pad[5];       // padding
+
+  uint8_t counter; // +1 each report
+} sony_ds3_report_t;
+
+typedef struct
+{
+  uint8_t time_enabled; // the total time the led is active (0xff means forever)
+  uint8_t duty_length; // how long a cycle is in deciseconds (0 means "really fast")
+  uint8_t enabled;
+  uint8_t duty_off; // % of duty_length the led is off (0xff means 100%)
+  uint8_t duty_on; // % of duty_length the led is on (0xff mean 100%)
+} sony_ds3_led_t;
+
+typedef struct
+{
+  uint8_t padding;
+  uint8_t right_duration; // Right motor duration (0xff means forever)
+  uint8_t right_motor_on; // Right (small) motor on/off, only supports values of 0 or 1 (off/on) */
+  uint8_t left_duration; // Left motor duration (0xff means forever)
+  uint8_t left_motor_force; // Left (large) motor, supports force values from 0 to 255
+} sony_ds3_rumble_t;
+
+typedef struct
+{
+  uint8_t report_id;
+  sony_ds3_rumble_t rumble;
+  uint8_t padding[4];
+  uint8_t leds_bitmap; // bitmap of enabled LEDs: LED_1 = 0x02, LED_2 = 0x04, ...
+  sony_ds3_led_t led[4]; // LEDx at (4 - x)
+  sony_ds3_led_t _reserved; // LED5, not actually soldered
+} sony_ds3_output_report_t;
+
+typedef union
+{
+  sony_ds3_output_report_t data;
+  uint8_t buf[36];
+} sony_ds3_output_report_01_t;
 
 // Sony DS4 report layout detail https://www.psdevwiki.com/ps4/DS4-USB
 typedef struct TU_ATTR_PACKED
@@ -78,11 +153,11 @@ typedef struct TU_ATTR_PACKED
   uint8_t l2_trigger; // 0 released, 0xff fully pressed
   uint8_t r2_trigger; // as above
 
-  //  uint16_t timestamp;
-  //  uint8_t  battery;
-  //
-  //  int16_t gyro[3];  // x, y, z;
-  //  int16_t accel[3]; // x, y, z
+   uint16_t timestamp;
+   uint8_t  battery;
+
+   int16_t gyro[3];  // x, y, z;
+   int16_t accel[3]; // x, y, z
 
   // there is still lots more info
 
@@ -121,34 +196,6 @@ typedef struct TU_ATTR_PACKED {
   uint8_t other[9];
 } sony_ds4_output_report_t;
 
-typedef struct {
-    // Screw this I'll leave it to hid-sony maintainer's internal doc S:
-    // No he won't implement it. So maybe use DS4Windows docs for now.
-    uint8_t type; // TODO. 0x6: vibrating, 0x23: 2step
-    uint8_t params[10]; // 0x6: 0: frequency (1-255), 1: off time (1-255). 0x23: 0: step1 resistance (0-15), 1: step2 resistance (0-15)
-} ds5_trigger_t;
-
-typedef struct {
-    uint16_t flags; // @ 0-1. bitfield fedcba9876543210. 012: rumble emulation (seems that the lowest nibble has to be 0x7 (????????????0111) in order to trigger this), 2: trigger_r, 3: trigger_l, 8: mic_led, a: lightbar, c: player_led
-    uint8_t rumble_r; // @ 2
-    uint8_t rumble_l; // @ 3
-    uint8_t unk3[4]; // @ 4-7
-    uint8_t mic_led; // @ 8. 0: off, 1: on, 2: pulse
-    uint8_t unk9; // @ 9
-    ds5_trigger_t trigger_r;// 10-20
-    ds5_trigger_t trigger_l; // 21-31
-    uint8_t unk28[11]; // @ 32-42
-    uint8_t player_led; // @ 43. 5-bit. LSB is left.
-    union {
-        uint8_t lightbar_rgb[3];
-        struct {
-            uint8_t lightbar_r;
-            uint8_t lightbar_g;
-            uint8_t lightbar_b;
-        };
-    }; // @ 44-46
-} ds5_feedback_t;
-
 // Sony DS5 controller
 typedef struct TU_ATTR_PACKED
 {
@@ -181,6 +228,34 @@ typedef struct TU_ATTR_PACKED
   };
 
 } sony_ds5_report_t;
+
+typedef struct {
+    // Screw this I'll leave it to hid-sony maintainer's internal doc S:
+    // No he won't implement it. So maybe use DS4Windows docs for now.
+    uint8_t type; // TODO. 0x6: vibrating, 0x23: 2step
+    uint8_t params[10]; // 0x6: 0: frequency (1-255), 1: off time (1-255). 0x23: 0: step1 resistance (0-15), 1: step2 resistance (0-15)
+} ds5_trigger_t;
+
+typedef struct {
+    uint16_t flags; // @ 0-1. bitfield fedcba9876543210. 012: rumble emulation (seems that the lowest nibble has to be 0x7 (????????????0111) in order to trigger this), 2: trigger_r, 3: trigger_l, 8: mic_led, a: lightbar, c: player_led
+    uint8_t rumble_r; // @ 2
+    uint8_t rumble_l; // @ 3
+    uint8_t unk3[4]; // @ 4-7
+    uint8_t mic_led; // @ 8. 0: off, 1: on, 2: pulse
+    uint8_t unk9; // @ 9
+    ds5_trigger_t trigger_r;// 10-20
+    ds5_trigger_t trigger_l; // 21-31
+    uint8_t unk28[11]; // @ 32-42
+    uint8_t player_led; // @ 43. 5-bit. LSB is left.
+    union {
+        uint8_t lightbar_rgb[3];
+        struct {
+            uint8_t lightbar_r;
+            uint8_t lightbar_g;
+            uint8_t lightbar_b;
+        };
+    }; // @ 44-46
+} ds5_feedback_t;
 
 // 8BitDo USB Adapter for PS classic
 typedef struct TU_ATTR_PACKED
@@ -430,6 +505,9 @@ typedef struct TU_ATTR_PACKED
 {
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
+  bool ds3_init;
+  bool ds3_led_set;
+  bool ds3_mounted;
   bool ds4_mounted;
   bool ds5_mounted;
   uint8_t motor_left;
@@ -447,6 +525,15 @@ typedef struct TU_ATTR_PACKED
 } device_t;
 
 static device_t devices[MAX_DEVICES];
+
+// check if device is Sony DualShock 3
+static inline bool is_sony_ds3(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x054c && pid == 0x0268)); // Sony DualShock3
+}
 
 // check if device is Sony DualShock 4
 static inline bool is_sony_ds4(uint8_t dev_addr)
@@ -639,6 +726,55 @@ void hid_app_task(void)
   // iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
+      // send DS3 Init, LED and rumble responses
+      if (devices[dev_addr].instances[instance].ds3_mounted) {
+        if (!devices[dev_addr].instances[instance].ds3_init) {
+          /*
+          * The Sony Sixaxis does not handle HID Output Reports on the
+          * Interrupt EP like it could, so we need to force HID Output
+          * Reports to use tuh_hid_set_report on the Control EP.
+          *
+          * There is also another issue about HID Output Reports via USB,
+          * the Sixaxis does not want the report_id as part of the data
+          * packet, so we have to discard buf[0] when sending the actual
+          * control message, even for numbered reports, humpf!
+          */
+          printf("PS3 Init..\n");
+
+          uint8_t cmd_buf[4];
+          cmd_buf[0] = 0x42; // Special PS3 Controller enable commands
+          cmd_buf[1] = 0x0c;
+          cmd_buf[2] = 0x00;
+          cmd_buf[3] = 0x00;
+
+          // Send a Set Report request to the control endpoint
+          tuh_hid_set_report(dev_addr, instance, 0xF4, HID_REPORT_TYPE_FEATURE, &(cmd_buf), sizeof(cmd_buf));
+
+          devices[dev_addr].instances[instance].ds3_init = true;
+        } else if (!devices[dev_addr].instances[instance].ds3_led_set) {
+          sony_ds3_output_report_01_t output_report = {
+            .buf = {
+              0x01,
+              0x00, 0xff, 0x00, 0xff, 0x00,
+              0x00, 0x00, 0x00, 0x00, 0x00,
+              0xff, 0x27, 0x10, 0x00, 0x32,
+              0xff, 0x27, 0x10, 0x00, 0x32,
+              0xff, 0x27, 0x10, 0x00, 0x32,
+              0xff, 0x27, 0x10, 0x00, 0x32,
+              0x00, 0x00, 0x00, 0x00, 0x00
+            }
+          };
+
+          // output_report.data.rumble.right_motor_on = 1;
+          // output_report.data.rumble.left_motor_force = 1;
+          // output_report.data.rumble.left_duration = 127;
+          // output_report.data.rumble.right_duration = 127;
+
+          // Send report without the report ID, start at index 1 instead of 0
+          tuh_hid_set_report(dev_addr, instance, output_report.data.report_id, HID_REPORT_TYPE_OUTPUT, &(output_report.buf[1]), sizeof(output_report) - 1);
+          devices[dev_addr].instances[instance].ds3_led_set = true;
+        }
+      }
 
       // send DS4 LED and rumble response
       if (devices[dev_addr].instances[instance].ds4_mounted) {
@@ -699,7 +835,7 @@ void hid_app_task(void)
         }
       }
 
-      // send DS4 LED and rumble response
+      // send DS5 LED and rumble response
       if (devices[dev_addr].instances[instance].ds5_mounted) {
         const uint32_t interval_ms = 200;
         static uint32_t start_ms = 0;
@@ -806,6 +942,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   printf("HID device address = %d, instance = %d is mounted\r\n", dev_addr, instance);
   printf("VID = %04x, PID = %04x\r\n", vid, pid);
 
+  // Stash device vid/pid/serial device type detection
+  devices[dev_addr].vid = vid;
+  devices[dev_addr].pid = pid;
+
   // Interface protocol (hid_interface_protocol_enum_t)
   const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
@@ -815,7 +955,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
   bool isController = false;
-  if      (is_sony_ds4(dev_addr)  ) isController = true;
+  if      (is_sony_ds3(dev_addr)  ) isController = true;
+  else if (is_sony_ds4(dev_addr)  ) isController = true;
   else if (is_sony_ds5(dev_addr)  ) isController = true;
   else if (is_8bit_pce(dev_addr)  ) isController = true;
   else if (is_8bit_psc(dev_addr)  ) isController = true;
@@ -827,15 +968,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_pokken(dev_addr)    ) isController = true;
   else if (is_nes_usb(dev_addr)   ) isController = true;
 
+  printf("isController: %d, dev: %d, instance: %d", isController?1:0, dev_addr, instance);
+
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
     devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
     printf("HID has %u reports \r\n", devices[dev_addr].instances[instance].report_count);
   }
 
-  // Stash device vid/pid/serial device type detection
-  devices[dev_addr].vid = vid;
-  devices[dev_addr].pid = pid;
   uint16_t temp_buf[128];
   if (0 == tuh_descriptor_get_serial_string_sync(dev_addr, LANGUAGE_ID, temp_buf, sizeof(temp_buf)))
   {
@@ -844,22 +984,25 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     }
   }
 
-  if (is_sony_ds4(dev_addr))
+  if (is_sony_ds3(dev_addr))
+  {
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].ds3_init = false;
+    devices[dev_addr].instances[instance].ds3_led_set = false;
+    devices[dev_addr].instances[instance].ds3_mounted = true;
+  }
+  else if (is_sony_ds4(dev_addr))
   {
     devices[dev_addr].instances[instance].motor_left = 0;
     devices[dev_addr].instances[instance].motor_right = 0;
     devices[dev_addr].instances[instance].ds4_mounted = true;
-  } else {
-    devices[dev_addr].instances[instance].ds4_mounted = false;
   }
-
-  if (is_sony_ds5(dev_addr))
+  else if (is_sony_ds5(dev_addr))
   {
     devices[dev_addr].instances[instance].motor_left = 0;
     devices[dev_addr].instances[instance].motor_right = 0;
     devices[dev_addr].instances[instance].ds5_mounted = true;
-  } else {
-    devices[dev_addr].instances[instance].ds5_mounted = false;
   }
 
   // request to receive report
@@ -874,20 +1017,30 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
-  if (devices[dev_addr].instances[instance].ds4_mounted)
-  {
-    devices[dev_addr].instances[instance].ds4_mounted = false;
-  }
-  else if (devices[dev_addr].instances[instance].ds5_mounted)
-  {
-    devices[dev_addr].instances[instance].ds5_mounted = false;
-  }
+  devices[dev_addr].instances[instance].ds3_mounted = false;
+  devices[dev_addr].instances[instance].ds4_mounted = false;
+  devices[dev_addr].instances[instance].ds5_mounted = false;
 }
 
 // check if different than 2
 bool diff_than_2(uint8_t x, uint8_t y)
 {
-  return (x - y > 1) || (y - x > 1);
+  return (x - y > 2) || (y - x > 2);
+}
+
+// check if 2 reports are different enough
+bool ds3_diff_report(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt2)
+{
+  bool result;
+
+  // x, y, z, rz must different than 2 to be counted
+  result = diff_than_2(rpt1->lx, rpt2->lx) || diff_than_2(rpt1->ly, rpt2->ly ) ||
+           diff_than_2(rpt1->rx, rpt2->rx) || diff_than_2(rpt1->ry, rpt2->ry);
+
+  // check the reset with mem compare
+  result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3);
+
+  return result;
 }
 
 // check if 2 reports are different enough
@@ -900,7 +1053,7 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
            diff_than_2(rpt1->z, rpt2->z) || diff_than_2(rpt1->rz, rpt2->rz);
 
   // check the reset with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds4_report_t)-4);
+  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 5);
 
   return result;
 }
@@ -1090,6 +1243,90 @@ bool nes_usb_diff_report(nes_usb_report_t const* rpt1, nes_usb_report_t const* r
   return result;
 }
 
+void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static sony_ds3_report_t prev_report[5] = { 0 };
+
+  uint8_t const report_id = report[0];
+  report++;
+  len--;
+
+  // all buttons state is stored in ID 1
+  if (report_id == 1)
+  {
+    sony_ds3_report_t ds3_report;
+    memcpy(&ds3_report, report, sizeof(ds3_report));
+
+    // counter is +1, assign to make it easier to compare 2 report
+    prev_report[dev_addr-1].counter = ds3_report.counter;
+
+    // only print if changes since it is polled ~ 5ms
+    // Since count+1 after each report and  x, y, z, rz fluctuate within 1 or 2
+    // We need more than memcmp to check if report is different enough
+    if ( ds3_diff_report(&prev_report[dev_addr-1], &ds3_report) )
+    {
+      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", ds3_report.lx, ds3_report.ly, ds3_report.rx, ds3_report.ry);
+      printf("DPad = ");
+
+      if (ds3_report.up       ) printf("Up ");
+      if (ds3_report.down     ) printf("Down ");
+      if (ds3_report.left     ) printf("Left ");
+      if (ds3_report.right    ) printf("Right ");
+
+      if (ds3_report.square   ) printf("Square ");
+      if (ds3_report.cross    ) printf("Cross ");
+      if (ds3_report.circle   ) printf("Circle ");
+      if (ds3_report.triangle ) printf("Triangle ");
+
+      if (ds3_report.l1       ) printf("L1 ");
+      if (ds3_report.r1       ) printf("R1 ");
+      if (ds3_report.l2       ) printf("L2 ");
+      if (ds3_report.r2       ) printf("R2 ");
+
+      if (ds3_report.select   ) printf("Select ");
+      if (ds3_report.start    ) printf("Start ");
+      if (ds3_report.l3       ) printf("L3 ");
+      if (ds3_report.r3       ) printf("R3 ");
+
+      if (ds3_report.ps       ) printf("PS ");
+
+      printf("\r\n");
+
+      int threshold = 28;
+      bool dpad_up    = (ds3_report.up || ds3_report.ly < (128 - threshold));
+      bool dpad_right = (ds3_report.right || ds3_report.lx > (128 + threshold));
+      bool dpad_down  = (ds3_report.down || ds3_report.ly > (128 + threshold));
+      bool dpad_left  = (ds3_report.left || ds3_report.lx < (128 - threshold));
+      bool has_6btns = true;
+
+      buttons = (((ds3_report.r1 || ds3_report.l2) ? 0x00 : 0x8000) |
+                 ((ds3_report.l1 || ds3_report.r2) ? 0x00 : 0x4000) |
+                 ((ds3_report.square)   ? 0x00 : 0x2000) |
+                 ((ds3_report.triangle) ? 0x00 : 0x1000) |
+                 ((has_6btns)           ? 0x00 : 0xFF00) |
+                 ((dpad_left)           ? 0x00 : 0x08) |
+                 ((dpad_down)           ? 0x00 : 0x04) |
+                 ((dpad_right)          ? 0x00 : 0x02) |
+                 ((dpad_up)             ? 0x00 : 0x01) |
+                 ((ds3_report.start || ds3_report.ps)    ? 0x00 : 0x80) |
+                 ((ds3_report.select || ds3_report.ps)   ? 0x00 : 0x40) |
+                 ((ds3_report.cross  || (!has_6btns && ds3_report.triangle)) ? 0x00 : 0x20) |
+                 ((ds3_report.circle || (!has_6btns && ds3_report.square))   ? 0x00 : 0x10));
+
+      // add to accumulator and post to the state machine
+      // if a scan from the host machine is ongoing, wait
+      post_globals(dev_addr, instance, buttons, 0, 0);
+
+      // The left and right triggers control the intensity of the left and right rumble motors
+      // motor_left = ds3_report.l2_trigger;
+      // motor_right = ds3_report.r2_trigger;
+
+      prev_report[dev_addr-1] = ds3_report;
+    }
+  }
+}
+
 void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -1165,9 +1402,9 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       // The left and right triggers control the intensity of the left and right rumble motors
       // motor_left = ds4_report.l2_trigger;
       // motor_right = ds4_report.r2_trigger;
-    }
 
-    prev_report[dev_addr-1] = ds4_report;
+      prev_report[dev_addr-1] = ds4_report;
+    }
   }
 }
 
@@ -1240,9 +1477,10 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       post_globals(dev_addr, instance, buttons, 0, 0);
+
+      prev_report[dev_addr-1] = ds5_report;
     }
 
-    prev_report[dev_addr-1] = ds5_report;
   }
 }
 void process_8bit_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1297,9 +1535,9 @@ void process_8bit_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1] = psc_report;
+    prev_report[dev_addr-1] = psc_report;
+  }
 }
 
 void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1340,9 +1578,9 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1] = pce_report;
+    prev_report[dev_addr-1] = pce_report;
+  }
 }
 
 
@@ -1392,9 +1630,10 @@ void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
+
+    prev_report[dev_addr-1] = sega_report;
   }
 
-  prev_report[dev_addr-1] = sega_report;
 }
 
 void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1443,9 +1682,9 @@ void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1] = astro_report;
+    prev_report[dev_addr-1] = astro_report;
+  }
 }
 
 void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1497,9 +1736,9 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1] = wingman_report;
+    prev_report[dev_addr-1] = wingman_report;
+  }
 }
 
 void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1547,9 +1786,9 @@ void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1][instance] = update_report;
+    prev_report[dev_addr-1][instance] = update_report;
+  }
 }
 
 void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1597,9 +1836,9 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1][instance] = update_report;
+    prev_report[dev_addr-1][instance] = update_report;
+  }
 }
 
 void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1648,9 +1887,9 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1][instance] = update_report;
+    prev_report[dev_addr-1][instance] = update_report;
+  }
 }
 
 void process_nes_usb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1698,9 +1937,9 @@ void process_nes_usb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 0, 0);
-  }
 
-  prev_report[dev_addr-1][instance] = update_report;
+    prev_report[dev_addr-1][instance] = update_report;
+  }
 }
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -1720,7 +1959,8 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     break;
 
     default:
-      if      ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
+      if      ( is_sony_ds3(dev_addr) ) process_sony_ds3(dev_addr, instance, report, len);
+      else if ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
       else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, instance, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
       else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, instance, report, len);
