@@ -224,8 +224,10 @@ typedef struct TU_ATTR_PACKED
     uint8_t ps      : 1; // playstation button
     uint8_t tpad    : 1; // track pad click
     uint8_t mute    : 1; // mute button
-    uint8_t counter : 5; // +1 each report
+    uint8_t padding : 5;
   };
+
+  uint8_t counter; // +1 each report
 
 } sony_ds5_report_t;
 
@@ -1130,7 +1132,7 @@ bool ds5_diff_report(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
            diff_than_2(rpt1->rx, rpt2->rx) || diff_than_2(rpt1->ry, rpt2->ry);
 
   // check the reset with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds5_report_t)-7);
+  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 3);
 
   return result;
 }
