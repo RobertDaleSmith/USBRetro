@@ -711,15 +711,29 @@ extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 
 extern bool is_fun;
-unsigned char fun = 0;
-unsigned char player = 1;
+unsigned char fun_inc = 0;
+unsigned char fun_player = 1;
+/** Used to set the LEDs on the controllers */
+const uint8_t PS3_LEDS[] = {
+  0x00, // OFF
+  0x01, // LED1  0001
+  0x02, // LED2  0010
+  0x04, // LED3  0100
+  0x08, // LED4  1000
+  0x09, // LED5  1001
+  0x0A, // LED6  1010
+  0x0C, // LED7  1100
+  0x0D, // LED8  1101
+  0x0E, // LED9  1110
+  0x0F, // LED10 1111
+};
 
 void hid_app_task(void)
 {
   if (is_fun) {
-    fun++;
-    if (!fun) {
-      player = ++player%0x20;
+    fun_inc++;
+    if (!fun_inc) {
+      fun_player = ++fun_player%0x20;
     }
   }
 
@@ -777,37 +791,40 @@ void hid_app_task(void)
               }
             };
 
+            // led player indicator
             switch (player_index+1)
             {
             case 1:
-              output_report.data.leds_bitmap = 0b00000010;
-              break;
-
             case 2:
-              output_report.data.leds_bitmap = 0b00000100;
-              break;
-
             case 3:
-              output_report.data.leds_bitmap = 0b00001000;
+            case 4:
+            case 5:
+              output_report.data.leds_bitmap = (PS3_LEDS[player_index+1] << 1);
               break;
 
-            case 4: // purple
-              output_report.data.leds_bitmap = 0b00010000;
-              break;
+            default: // unassigned
+              // turn all leds on
+              output_report.data.leds_bitmap = (PS3_LEDS[10] << 1);
 
-            case 5: // yellow
-              output_report.data.leds_bitmap = 0b00010010;
-              break;
-
-            default: // white
-              output_report.data.leds_bitmap = 0b00011110;
+              // make all leds dim
+              for (int n = 0; n < 4; n++) {
+                output_report.data.led[n].duty_length = 0;
+                output_report.data.led[n].duty_on = 32;
+                output_report.data.led[n].duty_off = 223;
+              }
               break;
             }
 
             // fun
             if (player_index+1 && is_fun) {
+              output_report.data.leds_bitmap = (fun_inc & 0b00011110);
 
-              output_report.data.leds_bitmap = (fun & 0b00011110);
+              // led brightness
+              for (int n = 0; n < 4; n++) {
+                output_report.data.led[n].duty_length = (fun_inc & 0x07);
+                output_report.data.led[n].duty_on = fun_inc;
+                output_report.data.led[n].duty_off = 255 - fun_inc;
+              }
             }
 
             // output_report.data.rumble.right_motor_on = 1;
@@ -868,9 +885,9 @@ void hid_app_task(void)
 
           // fun
           if (player_index+1 && is_fun) {
-            output_report.lightbar_red = fun;
-            output_report.lightbar_green = (fun%2 == 0) ? fun+64 : 0;
-            output_report.lightbar_blue = (fun%2 == 0) ? 0 : fun+128;
+            output_report.lightbar_red = fun_inc;
+            output_report.lightbar_green = (fun_inc%2 == 0) ? fun_inc+64 : 0;
+            output_report.lightbar_blue = (fun_inc%2 == 0) ? 0 : fun_inc+128;
           }
 
           // output_report.set_rumble = 1;
@@ -907,7 +924,7 @@ void hid_app_task(void)
           // ds5_fb.trigger_r.params[1] = 0xff;
 
           // left trigger with similar effect as the PS5 demo
-          // ds5_fb.trigger_l.type = (fun % 32 < 16) ? 0 : 2; // Set type
+          // ds5_fb.trigger_l.type = (fun_inc % 32 < 16) ? 0 : 2; // Set type
           // ds5_fb.trigger_l.params[0] = 0x00;
           // ds5_fb.trigger_l.params[1] = 0xff;
           // ds5_fb.trigger_l.params[2] = 0xff;
@@ -955,10 +972,10 @@ void hid_app_task(void)
 
           // fun
           if (player_index+1 && is_fun) {
-            ds5_fb.player_led = player;
-            ds5_fb.lightbar_r = fun;
-            ds5_fb.lightbar_g = fun+64;
-            ds5_fb.lightbar_b = fun+128;
+            ds5_fb.player_led = fun_player;
+            ds5_fb.lightbar_r = fun_inc;
+            ds5_fb.lightbar_g = fun_inc+64;
+            ds5_fb.lightbar_b = fun_inc+128;
           }
 
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
