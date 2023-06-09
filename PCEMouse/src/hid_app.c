@@ -117,7 +117,7 @@ typedef struct
 typedef union
 {
   sony_ds3_output_report_t data;
-  uint8_t buf[36];
+  uint8_t buf[49];
 } sony_ds3_output_report_01_t;
 
 // Sony DS4 report layout detail https://www.psdevwiki.com/ps4/DS4-USB
@@ -728,6 +728,9 @@ void hid_app_task(void)
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
       // send DS3 Init, LED and rumble responses
       if (devices[dev_addr].instances[instance].ds3_mounted) {
+        const uint32_t interval_ms = 200;
+        static uint32_t start_ms = 0;
+
         if (!devices[dev_addr].instances[instance].ds3_init) {
           /*
           * The Sony Sixaxis does not handle HID Output Reports on the
@@ -752,27 +755,69 @@ void hid_app_task(void)
 
           devices[dev_addr].instances[instance].ds3_init = true;
         } else if (!devices[dev_addr].instances[instance].ds3_led_set) {
-          sony_ds3_output_report_01_t output_report = {
-            .buf = {
-              0x01,
-              0x00, 0xff, 0x00, 0xff, 0x00,
-              0x00, 0x00, 0x00, 0x00, 0x00,
-              0xff, 0x27, 0x10, 0x00, 0x32,
-              0xff, 0x27, 0x10, 0x00, 0x32,
-              0xff, 0x27, 0x10, 0x00, 0x32,
-              0xff, 0x27, 0x10, 0x00, 0x32,
-              0x00, 0x00, 0x00, 0x00, 0x00
+          int player_index = find_player_index(dev_addr, instance);
+
+          uint32_t current_time_ms = board_millis();
+          if ( current_time_ms - start_ms >= interval_ms)
+          {
+            start_ms = current_time_ms;
+
+            sony_ds3_output_report_01_t output_report = {
+              .buf = {
+                0x01,
+                0x00, 0xff, 0x00, 0xff, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00,
+                0xff, 0x27, 0x10, 0x00, 0x32,
+                0xff, 0x27, 0x10, 0x00, 0x32,
+                0xff, 0x27, 0x10, 0x00, 0x32,
+                0xff, 0x27, 0x10, 0x00, 0x32,
+                0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+              }
+            };
+
+            switch (player_index+1)
+            {
+            case 1:
+              output_report.data.leds_bitmap = 0b00000010;
+              break;
+
+            case 2:
+              output_report.data.leds_bitmap = 0b00000100;
+              break;
+
+            case 3:
+              output_report.data.leds_bitmap = 0b00001000;
+              break;
+
+            case 4: // purple
+              output_report.data.leds_bitmap = 0b00010000;
+              break;
+
+            case 5: // yellow
+              output_report.data.leds_bitmap = 0b00010010;
+              break;
+
+            default: // white
+              output_report.data.leds_bitmap = 0b00011110;
+              break;
             }
-          };
 
-          // output_report.data.rumble.right_motor_on = 1;
-          // output_report.data.rumble.left_motor_force = 1;
-          // output_report.data.rumble.left_duration = 127;
-          // output_report.data.rumble.right_duration = 127;
+            // fun
+            if (player_index+1 && is_fun) {
 
-          // Send report without the report ID, start at index 1 instead of 0
-          tuh_hid_set_report(dev_addr, instance, output_report.data.report_id, HID_REPORT_TYPE_OUTPUT, &(output_report.buf[1]), sizeof(output_report) - 1);
-          devices[dev_addr].instances[instance].ds3_led_set = true;
+              output_report.data.leds_bitmap = (fun & 0b00011110);
+            }
+
+            // output_report.data.rumble.right_motor_on = 1;
+            // output_report.data.rumble.left_motor_force = 1;
+            // output_report.data.rumble.left_duration = 16;
+            // output_report.data.rumble.right_duration = 16;
+            // Send report without the report ID, start at index 1 instead of 0
+            tuh_hid_send_report(dev_addr, instance, output_report.data.report_id, &(output_report.buf[1]), sizeof(output_report) - 1);
+          }
+          // devices[dev_addr].instances[instance].ds3_led_set = true;
         }
       }
 
