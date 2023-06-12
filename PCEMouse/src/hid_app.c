@@ -576,7 +576,8 @@ typedef struct TU_ATTR_PACKED
   bool switch_baud_sets;
   bool switch_handshake;
   bool switch_enabled;
-  bool switch_homeled;
+  bool switch_change_home_led;
+  int switch_player_led_set;
   uint8_t motor_left;
   uint8_t motor_right;
 
@@ -795,7 +796,7 @@ extern bool is_fun;
 unsigned char fun_inc = 0;
 unsigned char fun_player = 1;
 /** Used to set the LEDs on the controllers */
-const uint8_t PS3_LEDS[] = {
+const uint8_t PLAYER_LEDS[] = {
   0x00, // OFF
   0x01, // LED1  0001
   0x02, // LED2  0010
@@ -808,6 +809,22 @@ const uint8_t PS3_LEDS[] = {
   0x0E, // LED9  1110
   0x0F, // LED10 1111
 };
+
+bool switch_send_command(uint8_t dev_addr, uint8_t instance, uint8_t *data, uint8_t len) {
+  uint8_t buf[8 + len];
+  buf[0] = 0x80; // PROCON_REPORT_SEND_USB
+  buf[1] = 0x92; // PROCON_USB_DO_CMD
+  buf[2] = 0x00;
+  buf[3] = 0x31;
+  buf[4] = 0x00;
+  buf[5] = 0x00;
+  buf[6] = 0x00;
+  buf[7] = 0x00;
+
+  memcpy(buf + 8, data, len);
+
+  tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
+}
 
 void hid_app_task(void)
 {
@@ -885,12 +902,12 @@ void hid_app_task(void)
             case 3:
             case 4:
             case 5:
-              output_report.data.leds_bitmap = (PS3_LEDS[player_index+1] << 1);
+              output_report.data.leds_bitmap = (PLAYER_LEDS[player_index+1] << 1);
               break;
 
             default: // unassigned
               // turn all leds on
-              output_report.data.leds_bitmap = (PS3_LEDS[10] << 1);
+              output_report.data.leds_bitmap = (PLAYER_LEDS[10] << 1);
 
               // make all leds dim
               for (int n = 0; n < 4; n++) {
@@ -1073,55 +1090,84 @@ void hid_app_task(void)
 
           if (!devices[dev_addr].instances[instance].switch_baud_sets) {
             devices[dev_addr].instances[instance].switch_baud_sets = true;
-            uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
 
             printf("SWITCH: Baud\n");
+            uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
             tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
 
           } else if (!devices[dev_addr].instances[instance].switch_handshake) {
             devices[dev_addr].instances[instance].switch_handshake = true;
-            uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
 
             printf("SWITCH: Handshake\n");
+            uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
             tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
 
           } else if (!devices[dev_addr].instances[instance].switch_enabled) {
             devices[dev_addr].instances[instance].switch_enabled = true;
-            uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
 
             printf("SWITCH: Enable USB\n");
+            uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
             tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
 
-          } else if (!devices[dev_addr].instances[instance].switch_homeled) {
-            devices[dev_addr].instances[instance].switch_homeled = true;
-            int player_index = find_player_index(dev_addr, instance);
-
+          } else {
+            // SWITCH SUB-COMMANDS
+            //
             // Based on: https://github.com/Dan611/hid-procon
-            uint8_t len = 14;
+            //           https://github.com/nicman23/dkms-hid-nintendo
+            //
             uint8_t data[14] = { 0 };
-
             data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
-            data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
 
-            // COMMAND: Enable Home LED
-            data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
-            data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
-            data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
-            data[0x0A + 3] = (0x1 /* Mini Cycle 1 LED intensity */ << 4) | 0x0 /* Mini Cycle 2 LED intensity */;
+            if (!devices[dev_addr].instances[instance].switch_change_home_led) {
+              devices[dev_addr].instances[instance].switch_change_home_led = true;
 
-            uint8_t buf[8 + len];
-            buf[0] = 0x80; // PROCON_REPORT_SEND_USB
-            buf[1] = 0x92; // PROCON_USB_DO_CMD
-            buf[2] = 0x00;
-            buf[3] = 0x31;
-            buf[4] = 0x00;
-            buf[5] = 0x00;
-            buf[6] = 0x00;
-            buf[7] = 0x00;
+              // It is possible set up to 15 mini cycles, but we simply just set the LED constantly on after momentary off.
+              // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x38-set-home-light
+              data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
 
-	          memcpy(buf + 8, data, len);
+              data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
+              data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
+              data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
+              data[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
 
-            tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
+              switch_send_command(dev_addr, instance, data, 10 + 4);
+
+            } else {
+              int player_index = find_player_index(dev_addr, instance);
+
+              if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
+                devices[dev_addr].instances[instance].switch_player_led_set = player_index;
+
+                // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
+                data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
+
+                data[0x0A + 0] = 0x30; // PROCON_CMD_LED
+
+                // led player indicator
+                switch (player_index+1)
+                {
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                  data[0x0A + 1] = PLAYER_LEDS[player_index+1];
+                  break;
+
+                default: // unassigned
+                  // turn all leds on
+                  data[0x0A + 1] = 0x0f;
+                  break;
+                }
+
+                // fun
+                if (player_index+1 && is_fun) {
+                  data[0x0A + 1] = (fun_inc & 0b00001111);
+                }
+
+                switch_send_command(dev_addr, instance, data, 10 + 2);
+              }
+            }
           }
         }
       }
@@ -1235,6 +1281,11 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].ds4_mounted = false;
   devices[dev_addr].instances[instance].ds5_mounted = false;
   devices[dev_addr].instances[instance].switch_mounted = false;
+  devices[dev_addr].instances[instance].switch_baud_sets = false;
+  devices[dev_addr].instances[instance].switch_handshake = false;
+  devices[dev_addr].instances[instance].switch_enabled = false;
+  devices[dev_addr].instances[instance].switch_change_home_led = false;
+  devices[dev_addr].instances[instance].switch_player_led_set = -1;
 }
 
 // check if different than 2
@@ -2140,13 +2191,16 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   switch_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if ( switch_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  if (update_report.report_id == 48 &&
+    devices[dev_addr].instances[instance].switch_enabled &&
+    switch_diff_report(&prev_report[dev_addr-1][instance], &update_report))
   {
     uint16_t left_stick_x = update_report.left_stick[0] | ((update_report.left_stick[1] & 0x0F) << 8);
     uint16_t left_stick_y = (update_report.left_stick[1] >> 4) | (update_report.left_stick[2] << 4);
     uint16_t right_stick_x = update_report.right_stick[0] | ((update_report.right_stick[1] & 0x0F) << 8);
     uint16_t right_stick_y = (update_report.right_stick[1] >> 4) | (update_report.right_stick[2] << 4);
 
+    printf("SWITCH: Report ID = %u\r\n", update_report.report_id);
     printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", left_stick_x, left_stick_y, right_stick_x, right_stick_y);
     printf("DPad = ");
 
@@ -2190,8 +2244,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                ((dpad_down)            ? 0x00 : 0x0004) |
                ((dpad_right)           ? 0x00 : 0x0002) |
                ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select) ? 0x00 : 0x0040) | // Select
+               ((update_report.start || update_report.home)  ? 0x00 : 0x0080) | // Run
+               ((update_report.select || update_report.home) ? 0x00 : 0x0040) | // Select
                ((update_report.b)      ? 0x00 : 0x0020) | // II
                ((update_report.a)      ? 0x00 : 0x0010)); // I
 
@@ -2200,6 +2254,12 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     post_globals(dev_addr, instance, buttons, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
+  }
+  else if (update_report.report_id != 48) {
+    // TODO: figure out what this report is all about.
+    // Also possible command ack and joycon removed/added state
+
+    printf("SWITCH: Report ID = %u\r\n", update_report.report_id);
   }
 }
 
