@@ -40,10 +40,27 @@
 
 #define LANGUAGE_ID 0x0409
 
+// SWITCH PRO
+#define PROCON_REPORT_SEND_USB 0x80
+
+#define PROCON_USB_HANDSHAKE   0x02
+#define PROCON_USB_BAUD        0x03
+#define PROCON_USB_ENABLE      0x04
+#define PROCON_USB_DO_CMD      0x92
+
+#define PROCON_CMD_AND_RUMBLE  0x01
+
+#define PROCON_CMD_MODE				0x03
+#define PROCON_CMD_LED_HOME		0x38
+
+#define PROCON_ARG_INPUT_FULL	0x30
+
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
 uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
 uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E', 'N', '-', 'V', '2'};
+
+uint8_t output_sequence_counter = 0;
 
 // Sony DS3/SIXAXIS https://github.com/torvalds/linux/blob/master/drivers/hid/hid-sony.c
 typedef struct TU_ATTR_PACKED {
@@ -466,15 +483,58 @@ typedef struct TU_ATTR_PACKED
   struct {
     uint8_t select : 1;
     uint8_t start  : 1;
-    uint8_t noop_a : 6;
+    uint8_t padding1 : 6;
   };
 
   struct {
     uint8_t dpad   : 4;
-    uint8_t noop_b : 4;
+    uint8_t padding2 : 4;
   };
 
 } pokken_report_t;
+
+// Nintedo Switch Pro USB Controller
+typedef struct {
+    uint8_t  report_id;   // The first byte is always the report ID
+    uint8_t  timer;       // Timer tick (1 tick = 5ms)
+    uint8_t  battery_level_and_connection_info; // Battery level and connection info
+    struct {
+      uint8_t y    : 1;
+      uint8_t x    : 1;
+      uint8_t b    : 1;
+      uint8_t a    : 1;
+      uint8_t sr_r : 1;
+      uint8_t sl_r : 1;
+      uint8_t r    : 1;
+      uint8_t zr   : 1;
+    };
+
+    struct {
+      uint8_t select  : 1;
+      uint8_t start   : 1;
+      uint8_t rstick  : 1;
+      uint8_t lstick  : 1;
+      uint8_t home    : 1;
+      uint8_t cap     : 1;
+      uint8_t padding : 2;
+    };
+
+    struct {
+      uint8_t down  : 1;
+      uint8_t up    : 1;
+      uint8_t right : 1;
+      uint8_t left  : 1;
+      uint8_t sr_l  : 1;
+      uint8_t sl_l  : 1;
+      uint8_t l     : 1;
+      uint8_t zl    : 1;
+    };
+    uint8_t  left_stick[3]; // 12 bits for X and Y each (little endian)
+    uint8_t  right_stick[3]; // 12 bits for X and Y each (little endian)
+    uint8_t  vibration_ack; // Acknowledge output reports that trigger vibration
+    uint8_t  subcommand_ack; // Acknowledge if a subcommand was executed
+    uint8_t  subcommand_reply_data[35]; // Reply data for executed subcommands
+} switch_report_t;
 
 // Generic NES USB Controller
 typedef struct TU_ATTR_PACKED
@@ -512,6 +572,11 @@ typedef struct TU_ATTR_PACKED
   bool ds3_mounted;
   bool ds4_mounted;
   bool ds5_mounted;
+  bool switch_mounted;
+  bool switch_baud_sets;
+  bool switch_handshake;
+  bool switch_enabled;
+  bool switch_homeled;
   uint8_t motor_left;
   uint8_t motor_right;
 
@@ -557,6 +622,20 @@ static inline bool is_pokken(uint8_t dev_addr)
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x0f0d && pid == 0x0092)); // 8BitDo Ultimate Cs
+}
+
+// check if device is 8BitDo Ultimate C Wired Controller
+static inline bool is_switch(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x057e && (pid == 0x2009 || pid == 0x200e)));
+
+  return ((vid == 0x057e && (
+           pid == 0x2009 || // Nintendo Switch Pro
+           pid == 0x200e    // JoyCon Charge Grip
+         )));
 }
 
 // check if device is generic NES USB Controller
@@ -732,6 +811,14 @@ const uint8_t PS3_LEDS[] = {
 
 void hid_app_task(void)
 {
+  const uint32_t interval_ms = 200;
+  static uint32_t start_ms_ds3 = 0;
+  static uint32_t start_ms_ds4 = 0;
+  static uint32_t start_ms_ds5 = 0;
+  static uint32_t start_ms_nsw = 0;
+
+  const uint32_t interval_switch_ms = 250;
+
   if (is_fun) {
     fun_inc++;
     if (!fun_inc) {
@@ -744,9 +831,6 @@ void hid_app_task(void)
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
       // send DS3 Init, LED and rumble responses
       if (devices[dev_addr].instances[instance].ds3_mounted) {
-        const uint32_t interval_ms = 200;
-        static uint32_t start_ms = 0;
-
         if (!devices[dev_addr].instances[instance].ds3_init) {
           /*
           * The Sony Sixaxis does not handle HID Output Reports on the
@@ -774,9 +858,9 @@ void hid_app_task(void)
           int player_index = find_player_index(dev_addr, instance);
 
           uint32_t current_time_ms = board_millis();
-          if ( current_time_ms - start_ms >= interval_ms)
+          if ( current_time_ms - start_ms_ds3 >= interval_ms)
           {
-            start_ms = current_time_ms;
+            start_ms_ds3 = current_time_ms;
 
             sony_ds3_output_report_01_t output_report = {
               .buf = {
@@ -842,15 +926,11 @@ void hid_app_task(void)
 
       // send DS4 LED and rumble response
       if (devices[dev_addr].instances[instance].ds4_mounted) {
-        const uint32_t interval_ms = 200;
-        static uint32_t start_ms = 0;
-
-        int player_index = find_player_index(dev_addr, instance);
-
         uint32_t current_time_ms = board_millis();
-        if ( current_time_ms - start_ms >= interval_ms)
+        if ( current_time_ms - start_ms_ds4 >= interval_ms)
         {
-          start_ms = current_time_ms;
+          int player_index = find_player_index(dev_addr, instance);
+          start_ms_ds4 = current_time_ms;
 
           sony_ds4_output_report_t output_report = {0};
           output_report.set_led = 1;
@@ -901,15 +981,12 @@ void hid_app_task(void)
 
       // send DS5 LED and rumble response
       if (devices[dev_addr].instances[instance].ds5_mounted) {
-        const uint32_t interval_ms = 200;
-        static uint32_t start_ms = 0;
-
-        int player_index = find_player_index(dev_addr, instance);
 
         uint32_t current_time_ms = board_millis();
-        if ( current_time_ms - start_ms >= interval_ms)
+        if ( current_time_ms - start_ms_ds5 >= interval_ms)
         {
-          start_ms = current_time_ms;
+          int player_index = find_player_index(dev_addr, instance);
+          start_ms_ds5 = current_time_ms;
 
           ds5_feedback_t ds5_fb = {0};
 
@@ -983,6 +1060,71 @@ void hid_app_task(void)
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
       }
+
+      // send Switch handshake, disableTimeout, led, rumble
+      if (devices[dev_addr].instances[instance].switch_mounted) {
+        // See: https://github.com/Dan611/hid-procon/blob/master/hid-procon.c
+        //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
+
+        uint32_t current_time_ms = board_millis();
+        if ( current_time_ms - start_ms_nsw >= interval_switch_ms)
+        {
+          start_ms_nsw = current_time_ms;
+
+          if (!devices[dev_addr].instances[instance].switch_baud_sets) {
+            devices[dev_addr].instances[instance].switch_baud_sets = true;
+            uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
+
+            printf("SWITCH: Baud\n");
+            tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
+
+          } else if (!devices[dev_addr].instances[instance].switch_handshake) {
+            devices[dev_addr].instances[instance].switch_handshake = true;
+            uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
+
+            printf("SWITCH: Handshake\n");
+            tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
+
+          } else if (!devices[dev_addr].instances[instance].switch_enabled) {
+            devices[dev_addr].instances[instance].switch_enabled = true;
+            uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
+
+            printf("SWITCH: Enable USB\n");
+            tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
+
+          } else if (!devices[dev_addr].instances[instance].switch_homeled) {
+            devices[dev_addr].instances[instance].switch_homeled = true;
+            int player_index = find_player_index(dev_addr, instance);
+
+            // Based on: https://github.com/Dan611/hid-procon
+            uint8_t len = 14;
+            uint8_t data[14] = { 0 };
+
+            data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
+            data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
+
+            // COMMAND: Enable Home LED
+            data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
+            data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
+            data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
+            data[0x0A + 3] = (0x1 /* Mini Cycle 1 LED intensity */ << 4) | 0x0 /* Mini Cycle 2 LED intensity */;
+
+            uint8_t buf[8 + len];
+            buf[0] = 0x80; // PROCON_REPORT_SEND_USB
+            buf[1] = 0x92; // PROCON_USB_DO_CMD
+            buf[2] = 0x00;
+            buf[3] = 0x31;
+            buf[4] = 0x00;
+            buf[5] = 0x00;
+            buf[6] = 0x00;
+            buf[7] = 0x00;
+
+	          memcpy(buf + 8, data, len);
+
+            tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
+          }
+        }
+      }
     }
   }
 }
@@ -1030,9 +1172,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_triple_v2(dev_addr) ) isController = true;
   else if (is_triple_v1(dev_addr) ) isController = true;
   else if (is_pokken(dev_addr)    ) isController = true;
+  else if (is_switch(dev_addr)    ) isController = true;
   else if (is_nes_usb(dev_addr)   ) isController = true;
 
-  printf("isController: %d, dev: %d, instance: %d", isController?1:0, dev_addr, instance);
+  printf("isController: %d, dev: %d, instance: %d\n", isController?1:0, dev_addr, instance);
 
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -1068,6 +1211,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].motor_right = 0;
     devices[dev_addr].instances[instance].ds5_mounted = true;
   }
+  else if (is_switch(dev_addr))
+  {
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].switch_mounted = true;
+    printf("SWITCH: Mounted.\n");
+  }
 
   // request to receive report
   // tuh_hid_report_received_cb() will be invoked when report is available
@@ -1084,12 +1234,13 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].ds3_mounted = false;
   devices[dev_addr].instances[instance].ds4_mounted = false;
   devices[dev_addr].instances[instance].ds5_mounted = false;
+  devices[dev_addr].instances[instance].switch_mounted = false;
 }
 
 // check if different than 2
-bool diff_than_2(uint8_t x, uint8_t y)
+bool diff_than_n(uint8_t x, uint8_t y, uint8_t n)
 {
-  return (x - y > 2) || (y - x > 2);
+  return (x - y > n) || (y - x > n);
 }
 
 // check if 2 reports are different enough
@@ -1098,8 +1249,8 @@ bool ds3_diff_report(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt
   bool result;
 
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_2(rpt1->lx, rpt2->lx) || diff_than_2(rpt1->ly, rpt2->ly ) ||
-           diff_than_2(rpt1->rx, rpt2->rx) || diff_than_2(rpt1->ry, rpt2->ry);
+  result = diff_than_n(rpt1->lx, rpt2->lx, 2) || diff_than_n(rpt1->ly, rpt2->ly, 2) ||
+           diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
 
   // check the reset with mem compare
   result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3);
@@ -1113,8 +1264,8 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
   bool result;
 
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_2(rpt1->x, rpt2->x) || diff_than_2(rpt1->y , rpt2->y ) ||
-           diff_than_2(rpt1->z, rpt2->z) || diff_than_2(rpt1->rz, rpt2->rz);
+  result = diff_than_n(rpt1->x, rpt2->x, 2) || diff_than_n(rpt1->y, rpt2->y, 2) ||
+           diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2);
 
   // check the reset with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 5);
@@ -1127,9 +1278,9 @@ bool ds5_diff_report(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
   bool result;
 
   // x1, y1, x2, y2, rx, ry must different than 2 to be counted
-  result = diff_than_2(rpt1->x1, rpt2->x1) || diff_than_2(rpt1->y1, rpt2->y1) ||
-           diff_than_2(rpt1->x2, rpt2->x2) || diff_than_2(rpt1->y2, rpt2->y2) ||
-           diff_than_2(rpt1->rx, rpt2->rx) || diff_than_2(rpt1->ry, rpt2->ry);
+  result = diff_than_n(rpt1->x1, rpt2->x1, 2) || diff_than_n(rpt1->y1, rpt2->y1, 2) ||
+           diff_than_n(rpt1->x2, rpt2->x2, 2) || diff_than_n(rpt1->y2, rpt2->y2, 2) ||
+           diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
 
   // check the reset with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 3);
@@ -1285,6 +1436,31 @@ bool pokken_diff_report(pokken_report_t const* rpt1, pokken_report_t const* rpt2
   result |= rpt1->zr != rpt2->zr;
   result |= rpt1->select != rpt2->select;
   result |= rpt1->start != rpt2->start;
+
+  return result;
+}
+
+bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2)
+{
+  bool result;
+
+  uint16_t rpt1_left_stick_x = rpt1->left_stick[0] | ((rpt1->left_stick[1] & 0x0F) << 8);
+  uint16_t rpt1_left_stick_y = (rpt1->left_stick[1] >> 4) | (rpt1->left_stick[2] << 4);
+  uint16_t rpt2_left_stick_x = rpt2->left_stick[0] | ((rpt2->left_stick[1] & 0x0F) << 8);
+  uint16_t rpt2_left_stick_y = (rpt2->left_stick[1] >> 4) | (rpt2->left_stick[2] << 4);
+
+  uint16_t rpt1_right_stick_x = rpt1->right_stick[0] | ((rpt1->right_stick[1] & 0x0F) << 8);
+  uint16_t rpt1_right_stick_y = (rpt1->right_stick[1] >> 4) | (rpt1->right_stick[2] << 4);
+  uint16_t rpt2_right_stick_x = rpt2->right_stick[0] | ((rpt2->right_stick[1] & 0x0F) << 8);
+  uint16_t rpt2_right_stick_y = (rpt2->right_stick[1] >> 4) | (rpt2->right_stick[2] << 4);
+
+  // x, y, z, rz must different than 2 to be counted
+  result = diff_than_n(rpt1_left_stick_x, rpt2_left_stick_x, 4) || diff_than_n(rpt1_left_stick_y, rpt2_left_stick_y, 4) ||
+           diff_than_n(rpt1_right_stick_x, rpt2_right_stick_x, 4) || diff_than_n(rpt1_right_stick_y, rpt2_right_stick_y, 4);
+
+  // check the reset with mem compare (everything but the sticks)
+  result |= memcmp(&rpt1->report_id + 3, &rpt2->report_id + 3, 3);
+  result |= memcmp(&rpt1->vibration_ack, &rpt2->vibration_ack, 37);
 
   return result;
 }
@@ -1956,6 +2132,77 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   }
 }
 
+void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static switch_report_t prev_report[5][5];
+
+  switch_report_t update_report;
+  memcpy(&update_report, report, sizeof(update_report));
+
+  if ( switch_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  {
+    uint16_t left_stick_x = update_report.left_stick[0] | ((update_report.left_stick[1] & 0x0F) << 8);
+    uint16_t left_stick_y = (update_report.left_stick[1] >> 4) | (update_report.left_stick[2] << 4);
+    uint16_t right_stick_x = update_report.right_stick[0] | ((update_report.right_stick[1] & 0x0F) << 8);
+    uint16_t right_stick_y = (update_report.right_stick[1] >> 4) | (update_report.right_stick[2] << 4);
+
+    printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", left_stick_x, left_stick_y, right_stick_x, right_stick_y);
+    printf("DPad = ");
+
+    if (update_report.down) printf("Down ");
+    if (update_report.up) printf("Up ");
+    if (update_report.right) printf("Right ");
+    if (update_report.left ) printf("Left ");
+    if (update_report.y) printf("Y ");
+    if (update_report.b) printf("B ");
+    if (update_report.a) printf("A ");
+    if (update_report.x) printf("X ");
+    if (update_report.l) printf("L ");
+    if (update_report.r) printf("R ");
+    if (update_report.zl) printf("ZL ");
+    if (update_report.zr) printf("ZR ");
+    if (update_report.lstick) printf("LStick ");
+    if (update_report.rstick) printf("RStick ");
+    if (update_report.select) printf("Select ");
+    if (update_report.start) printf("Start ");
+    if (update_report.home) printf("Home ");
+    if (update_report.cap) printf("Cap ");
+    if (update_report.sr_r) printf("sr_r ");
+    if (update_report.sl_r) printf("sl_r ");
+    if (update_report.sr_l) printf("sr_l ");
+    if (update_report.sl_l) printf("sl_l ");
+    printf("\r\n");
+
+    int threshold = 256;
+    bool dpad_up    = ((update_report.up) || left_stick_y > (2048 + threshold));
+    bool dpad_right = ((update_report.right) || left_stick_x > (2048 + threshold));
+    bool dpad_down  = ((update_report.down) || left_stick_y < (2048 - threshold));
+    bool dpad_left  = ((update_report.left) || left_stick_x < (2048 - threshold));
+    bool has_6btns = true;
+
+    buttons = (((update_report.r || update_report.zr) ? 0x00 : 0x8000) | // VI
+               ((update_report.l || update_report.zl) ? 0x00 : 0x4000) | // V
+               ((update_report.y)      ? 0x00 : 0x2000) | // IV
+               ((update_report.x)      ? 0x00 : 0x1000) | // III
+               ((has_6btns)            ? 0x00 : 0xFF00) |
+               ((dpad_left)            ? 0x00 : 0x0008) |
+               ((dpad_down)            ? 0x00 : 0x0004) |
+               ((dpad_right)           ? 0x00 : 0x0002) |
+               ((dpad_up)              ? 0x00 : 0x0001) |
+               ((update_report.start)  ? 0x00 : 0x0080) | // Run
+               ((update_report.select) ? 0x00 : 0x0040) | // Select
+               ((update_report.b)      ? 0x00 : 0x0020) | // II
+               ((update_report.a)      ? 0x00 : 0x0010)); // I
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+
+    prev_report[dev_addr-1][instance] = update_report;
+  }
+}
+
 void process_nes_usb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -2034,6 +2281,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
       else if ( is_pokken(dev_addr) ) process_pokken(dev_addr, instance, report, len);
+      else if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
       else if ( is_nes_usb(dev_addr) ) process_nes_usb(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
