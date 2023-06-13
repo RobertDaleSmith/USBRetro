@@ -570,13 +570,13 @@ int main(void)
 // Player Managment Functions
 //--------------------------------------------------------------------+
 
-
-
 // Function to remove all players with a certain device_address and shift the remaining players
-void remove_players_by_address(int device_address) {
+void remove_players_by_address(int device_address, int instance) { // -1 instance removes all instances within device_address
     int i = 0;
     while(i < playersCount) {
-        if(players[i].device_address == device_address) {
+        if((players[i].device_address == device_address && instance == -1) ||
+           (players[i].device_address == device_address && players[i].instance_number == instance))
+        {
             // Shift all the players after this one up in the array
             for(int j = i; j < playersCount - 1; j++) {
                 players[j] = players[j+1];
@@ -613,7 +613,7 @@ void tuh_umount_cb(uint8_t dev_addr)
   printf("A device with address %d is unmounted \r\n", dev_addr);
 
   // if ((--playersCount) < 0) playersCount = 0;
-  remove_players_by_address(dev_addr);
+  remove_players_by_address(dev_addr, -1);
 
   is_fun = false;
 }
