@@ -536,6 +536,12 @@ typedef struct {
     uint8_t  subcommand_reply_data[35]; // Reply data for executed subcommands
 } switch_report_t;
 
+typedef union
+{
+  switch_report_t data;
+  uint8_t buf[sizeof(switch_report_t)];
+} switch_report_01_t;
+
 // Generic NES USB Controller
 typedef struct TU_ATTR_PACKED
 {
@@ -573,10 +579,15 @@ typedef struct TU_ATTR_PACKED
   bool ds4_mounted;
   bool ds5_mounted;
   bool switch_mounted;
-  bool switch_baud_sets;
+  bool switch_conn_ack;
+  bool switch_baud;
+  bool switch_baud_ack;
   bool switch_handshake;
-  bool switch_enabled;
-  bool switch_change_home_led;
+  bool switch_handshake_ack;
+  bool switch_usb_enable;
+  bool switch_usb_enable_ack;
+  bool switch_home_led;
+  bool switch_command_ack;
   int switch_player_led_set;
   uint8_t motor_left;
   uint8_t motor_right;
@@ -791,6 +802,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
 
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
+extern void remove_players_by_address(int device_address, int instance);
 
 extern bool is_fun;
 unsigned char fun_inc = 0;
@@ -833,8 +845,6 @@ void hid_app_task(void)
   static uint32_t start_ms_ds4 = 0;
   static uint32_t start_ms_ds5 = 0;
   static uint32_t start_ms_nsw = 0;
-
-  const uint32_t interval_switch_ms = 250;
 
   if (is_fun) {
     fun_inc++;
@@ -1078,95 +1088,97 @@ void hid_app_task(void)
         }
       }
 
-      // send Switch handshake, disableTimeout, led, rumble
-      if (devices[dev_addr].instances[instance].switch_mounted) {
-        // See: https://github.com/Dan611/hid-procon/blob/master/hid-procon.c
-        //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
+      // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
+      // See: https://github.com/Dan611/hid-procon/
+      //      https://github.com/felis/USB_Host_Shield_2.0/
+      //      https://github.com/nicman23/dkms-hid-nintendo/
+      //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
+      if (devices[dev_addr].instances[instance].switch_mounted && 
+          devices[dev_addr].instances[instance].switch_conn_ack)
+      {
+        // set the faster baud rate
+        if (!devices[dev_addr].instances[instance].switch_baud) {
+          devices[dev_addr].instances[instance].switch_baud = true;
 
-        uint32_t current_time_ms = board_millis();
-        if ( current_time_ms - start_ms_nsw >= interval_switch_ms)
-        {
-          start_ms_nsw = current_time_ms;
+          printf("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
+          uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
+          tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
 
-          if (!devices[dev_addr].instances[instance].switch_baud_sets) {
-            devices[dev_addr].instances[instance].switch_baud_sets = true;
+        // wait for baud ask and then send init handshake
+        } else if (!devices[dev_addr].instances[instance].switch_handshake && devices[dev_addr].instances[instance].switch_baud_ack) {
+          devices[dev_addr].instances[instance].switch_handshake = true;
 
-            printf("SWITCH: Baud\n");
-            uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
-            tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
+          printf("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
+          uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
+          tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
 
-          } else if (!devices[dev_addr].instances[instance].switch_handshake) {
-            devices[dev_addr].instances[instance].switch_handshake = true;
+        // wait for handshake ack and then send USB enable mode
+        } else if (!devices[dev_addr].instances[instance].switch_usb_enable && devices[dev_addr].instances[instance].switch_handshake_ack) {
+          devices[dev_addr].instances[instance].switch_usb_enable = true;
 
-            printf("SWITCH: Handshake\n");
-            uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
-            tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
+          printf("SWITCH[%d|%d]: Enable USB\r\n", dev_addr, instance);
+          uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
+          tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
 
-          } else if (!devices[dev_addr].instances[instance].switch_enabled) {
-            devices[dev_addr].instances[instance].switch_enabled = true;
+        // wait for usb enabled acknowledgment
+        } else if (devices[dev_addr].instances[instance].switch_usb_enable_ack) {
+          // SWITCH SUB-COMMANDS
+          //
+          // Based on: https://github.com/Dan611/hid-procon
+          //           https://github.com/nicman23/dkms-hid-nintendo
+          //
+          uint8_t data[14] = { 0 };
+          data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
 
-            printf("SWITCH: Enable USB\n");
-            uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
-            tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
+          if (!devices[dev_addr].instances[instance].switch_home_led) {
+            devices[dev_addr].instances[instance].switch_home_led = true;
 
-          } else {
-            // SWITCH SUB-COMMANDS
-            //
-            // Based on: https://github.com/Dan611/hid-procon
-            //           https://github.com/nicman23/dkms-hid-nintendo
-            //
-            uint8_t data[14] = { 0 };
-            data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
+            // It is possible set up to 15 mini cycles, but we simply just set the LED constantly on after momentary off.
+            // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x38-set-home-light
+            data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
 
-            if (!devices[dev_addr].instances[instance].switch_change_home_led) {
-              devices[dev_addr].instances[instance].switch_change_home_led = true;
+            data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
+            data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
+            data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
+            data[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
 
-              // It is possible set up to 15 mini cycles, but we simply just set the LED constantly on after momentary off.
-              // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x38-set-home-light
+            switch_send_command(dev_addr, instance, data, 10 + 4);
+
+          } else if (devices[dev_addr].instances[instance].switch_command_ack) {
+            int player_index = find_player_index(dev_addr, instance);
+
+            if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
+              devices[dev_addr].instances[instance].switch_player_led_set = player_index;
+
+              // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
               data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
 
-              data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
-              data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
-              data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
-              data[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
+              data[0x0A + 0] = 0x30; // PROCON_CMD_LED
 
-              switch_send_command(dev_addr, instance, data, 10 + 4);
+              // led player indicator
+              switch (player_index+1)
+              {
+              case 1:
+              case 2:
+              case 3:
+              case 4:
+              case 5:
+                data[0x0A + 1] = PLAYER_LEDS[player_index+1];
+                break;
 
-            } else {
-              int player_index = find_player_index(dev_addr, instance);
-
-              if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
-                devices[dev_addr].instances[instance].switch_player_led_set = player_index;
-
-                // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
-                data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
-
-                data[0x0A + 0] = 0x30; // PROCON_CMD_LED
-
-                // led player indicator
-                switch (player_index+1)
-                {
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                  data[0x0A + 1] = PLAYER_LEDS[player_index+1];
-                  break;
-
-                default: // unassigned
-                  // turn all leds on
-                  data[0x0A + 1] = 0x0f;
-                  break;
-                }
-
-                // fun
-                if (player_index+1 && is_fun) {
-                  data[0x0A + 1] = (fun_inc & 0b00001111);
-                }
-
-                switch_send_command(dev_addr, instance, data, 10 + 2);
+              default: // unassigned
+                // turn all leds on
+                data[0x0A + 1] = 0x0f;
+                break;
               }
+
+              // fun
+              if (player_index+1 && is_fun) {
+                data[0x0A + 1] = (fun_inc & 0b00001111);
+              }
+
+              devices[dev_addr].instances[instance].switch_command_ack = false;
+              switch_send_command(dev_addr, instance, data, 10 + 2);
             }
           }
         }
@@ -1262,7 +1274,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].motor_left = 0;
     devices[dev_addr].instances[instance].motor_right = 0;
     devices[dev_addr].instances[instance].switch_mounted = true;
-    printf("SWITCH: Mounted.\n");
+    printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
   }
 
   // request to receive report
@@ -1273,6 +1285,20 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   }
 }
 
+void switch_reset(uint8_t dev_addr, uint8_t instance)
+{
+  devices[dev_addr].instances[instance].switch_conn_ack = false;
+  devices[dev_addr].instances[instance].switch_baud = false;
+  devices[dev_addr].instances[instance].switch_baud_ack = false;
+  devices[dev_addr].instances[instance].switch_handshake = false;
+  devices[dev_addr].instances[instance].switch_handshake_ack = false;
+  devices[dev_addr].instances[instance].switch_usb_enable = false;
+  devices[dev_addr].instances[instance].switch_usb_enable_ack = false;
+  devices[dev_addr].instances[instance].switch_home_led = false;
+  devices[dev_addr].instances[instance].switch_command_ack = false;
+  devices[dev_addr].instances[instance].switch_player_led_set = 0;
+}
+
 // Invoked when device with hid interface is un-mounted
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
@@ -1281,11 +1307,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].ds4_mounted = false;
   devices[dev_addr].instances[instance].ds5_mounted = false;
   devices[dev_addr].instances[instance].switch_mounted = false;
-  devices[dev_addr].instances[instance].switch_baud_sets = false;
-  devices[dev_addr].instances[instance].switch_handshake = false;
-  devices[dev_addr].instances[instance].switch_enabled = false;
-  devices[dev_addr].instances[instance].switch_change_home_led = false;
-  devices[dev_addr].instances[instance].switch_player_led_set = -1;
+  switch_reset(dev_addr, instance);
 }
 
 // check if different than 2
@@ -2183,6 +2205,14 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   }
 }
 
+void print_report(switch_report_01_t* report, uint32_t length) {
+    printf("Bytes: ");
+    for(uint32_t i = 0; i < length; i++) {
+        printf("%02X ", report->buf[i]);
+    }
+    printf("\n");
+}
+
 void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -2191,75 +2221,135 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   switch_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if (update_report.report_id == 48 &&
-    devices[dev_addr].instances[instance].switch_enabled &&
-    switch_diff_report(&prev_report[dev_addr-1][instance], &update_report))
-  {
-    uint16_t left_stick_x = update_report.left_stick[0] | ((update_report.left_stick[1] & 0x0F) << 8);
-    uint16_t left_stick_y = (update_report.left_stick[1] >> 4) | (update_report.left_stick[2] << 4);
-    uint16_t right_stick_x = update_report.right_stick[0] | ((update_report.right_stick[1] & 0x0F) << 8);
-    uint16_t right_stick_y = (update_report.right_stick[1] >> 4) | (update_report.right_stick[2] << 4);
+  if (update_report.report_id == 0x30) {
+    devices[dev_addr].instances[instance].switch_usb_enable_ack = true;
 
-    printf("SWITCH: Report ID = %u\r\n", update_report.report_id);
-    printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", left_stick_x, left_stick_y, right_stick_x, right_stick_y);
-    printf("DPad = ");
+    if (switch_diff_report(&prev_report[dev_addr-1][instance], &update_report)) {
+      uint16_t left_stick_x = update_report.left_stick[0] | ((update_report.left_stick[1] & 0x0F) << 8);
+      uint16_t left_stick_y = (update_report.left_stick[1] >> 4) | (update_report.left_stick[2] << 4);
+      uint16_t right_stick_x = update_report.right_stick[0] | ((update_report.right_stick[1] & 0x0F) << 8);
+      uint16_t right_stick_y = (update_report.right_stick[1] >> 4) | (update_report.right_stick[2] << 4);
 
-    if (update_report.down) printf("Down ");
-    if (update_report.up) printf("Up ");
-    if (update_report.right) printf("Right ");
-    if (update_report.left ) printf("Left ");
-    if (update_report.y) printf("Y ");
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.zl) printf("ZL ");
-    if (update_report.zr) printf("ZR ");
-    if (update_report.lstick) printf("LStick ");
-    if (update_report.rstick) printf("RStick ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    if (update_report.home) printf("Home ");
-    if (update_report.cap) printf("Cap ");
-    if (update_report.sr_r) printf("sr_r ");
-    if (update_report.sl_r) printf("sl_r ");
-    if (update_report.sr_l) printf("sr_l ");
-    if (update_report.sl_l) printf("sl_l ");
-    printf("\r\n");
+      printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, update_report.report_id);
+      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", left_stick_x, left_stick_y, right_stick_x, right_stick_y);
+      printf("DPad = ");
 
-    int threshold = 256;
-    bool dpad_up    = ((update_report.up) || left_stick_y > (2048 + threshold));
-    bool dpad_right = ((update_report.right) || left_stick_x > (2048 + threshold));
-    bool dpad_down  = ((update_report.down) || left_stick_y < (2048 - threshold));
-    bool dpad_left  = ((update_report.left) || left_stick_x < (2048 - threshold));
-    bool has_6btns = true;
+      if (update_report.down) printf("Down ");
+      if (update_report.up) printf("Up ");
+      if (update_report.right) printf("Right ");
+      if (update_report.left ) printf("Left ");
+      if (update_report.y) printf("Y ");
+      if (update_report.b) printf("B ");
+      if (update_report.a) printf("A ");
+      if (update_report.x) printf("X ");
+      if (update_report.l) printf("L ");
+      if (update_report.r) printf("R ");
+      if (update_report.zl) printf("ZL ");
+      if (update_report.zr) printf("ZR ");
+      if (update_report.lstick) printf("LStick ");
+      if (update_report.rstick) printf("RStick ");
+      if (update_report.select) printf("Select ");
+      if (update_report.start) printf("Start ");
+      if (update_report.home) printf("Home ");
+      if (update_report.cap) printf("Cap ");
+      if (update_report.sr_r) printf("sr_r ");
+      if (update_report.sl_r) printf("sl_r ");
+      if (update_report.sr_l) printf("sr_l ");
+      if (update_report.sl_l) printf("sl_l ");
+      printf("\r\n");
 
-    buttons = (((update_report.r || update_report.zr) ? 0x00 : 0x8000) | // VI
-               ((update_report.l || update_report.zl) ? 0x00 : 0x4000) | // V
-               ((update_report.y)      ? 0x00 : 0x2000) | // IV
-               ((update_report.x)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0xFF00) |
-               ((dpad_left)            ? 0x00 : 0x0008) |
-               ((dpad_down)            ? 0x00 : 0x0004) |
-               ((dpad_right)           ? 0x00 : 0x0002) |
-               ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start || update_report.home)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select || update_report.home) ? 0x00 : 0x0040) | // Select
-               ((update_report.b)      ? 0x00 : 0x0020) | // II
-               ((update_report.a)      ? 0x00 : 0x0010)); // I
+      bool has_6btns = true;
+      int threshold = 256;
+      bool dpad_up    = (update_report.up) || left_stick_y > (2048 + threshold);
+      bool dpad_right = (update_report.right) || left_stick_x > (2048 + threshold);
+      bool dpad_down  = (update_report.down) || left_stick_y < (2048 - threshold);
+      bool dpad_left  = (update_report.left) || left_stick_x < (2048 - threshold);
+      bool bttn_1 = update_report.a;
+      bool bttn_2 = update_report.b;
+      bool bttn_3 = update_report.x;
+      bool bttn_4 = update_report.y;
+      bool bttn_5 = update_report.l || update_report.zl;
+      bool bttn_6 = update_report.r || update_report.zr;
+      bool bttn_sel = update_report.select || update_report.home;
+      bool bttn_run = update_report.start || update_report.home;
 
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+      if (!left_stick_x && !left_stick_y) {
+        dpad_up    = (right_stick_y > (2048 + threshold));
+        dpad_right = (right_stick_x > (2048 + threshold));
+        dpad_down  = (right_stick_y < (2048 - threshold));
+        dpad_left  = (right_stick_x < (2048 - threshold));
+        bttn_sel = update_report.home;
+        bttn_run = update_report.start;
+      }
 
-    prev_report[dev_addr-1][instance] = update_report;
-  }
-  else if (update_report.report_id != 48) {
-    // TODO: figure out what this report is all about.
-    // Also possible command ack and joycon removed/added state
+      if (!right_stick_x && !right_stick_y) {
+        dpad_up    = (left_stick_y > (2048 + threshold));
+        dpad_right = (left_stick_x > (2048 + threshold));
+        dpad_down  = (left_stick_y < (2048 - threshold));
+        dpad_left  = (left_stick_x < (2048 - threshold));
 
-    printf("SWITCH: Report ID = %u\r\n", update_report.report_id);
+        bttn_1 = update_report.right;
+        bttn_2 = update_report.down;
+        bttn_3 = update_report.up;
+        bttn_4 = update_report.left;
+        bttn_5 = update_report.l;
+        bttn_6 = update_report.zl;
+        bttn_sel = update_report.cap;
+        bttn_run = update_report.select;
+      }
+
+      buttons = (
+        ((bttn_6)     ? 0x00 : 0x8000) | // VI
+        ((bttn_5)     ? 0x00 : 0x4000) | // V
+        ((bttn_4)     ? 0x00 : 0x2000) | // IV
+        ((bttn_3)     ? 0x00 : 0x1000) | // III
+        ((has_6btns)  ? 0x00 : 0xFF00) |
+        ((dpad_left)  ? 0x00 : 0x0008) |
+        ((dpad_down)  ? 0x00 : 0x0004) |
+        ((dpad_right) ? 0x00 : 0x0002) |
+        ((dpad_up)    ? 0x00 : 0x0001) |
+        ((bttn_run)   ? 0x00 : 0x0080) | // Run
+        ((bttn_sel)   ? 0x00 : 0x0040) | // Select
+        ((bttn_2)     ? 0x00 : 0x0020) | // II
+        ((bttn_1)     ? 0x00 : 0x0010)   // I
+      );
+
+      // add to accumulator and post to the state machine
+      // if a scan from the host machine is ongoing, wait
+      post_globals(dev_addr, instance, buttons, 0, 0);
+
+      prev_report[dev_addr-1][instance] = update_report;
+    }
+
+  // process input reports for events and command acknowledgments
+  } else {
+
+    switch_report_01_t state_report;
+    memcpy(&state_report, report, sizeof(state_report));
+
+    // JC_INPUT_USB_RESPONSE (connection events & command acknowledgments)
+    if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x01) { // JC_USB_CMD_CONN_STATUS
+      if (state_report.buf[2] == 0x00) { // connect
+        devices[dev_addr].instances[instance].switch_conn_ack = true;
+      } else if (state_report.buf[2] == 0x03) { // disconnect
+        switch_reset(dev_addr, instance);
+        remove_players_by_address(dev_addr, instance);
+      }
+    }
+    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x02) { // JC_USB_CMD_HANDSHAKE
+      devices[dev_addr].instances[instance].switch_handshake_ack = true;
+    }
+    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x03) { // JC_USB_CMD_BAUDRATE_3M
+      devices[dev_addr].instances[instance].switch_baud_ack = true;
+    }
+    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x92) { // command ack
+      devices[dev_addr].instances[instance].switch_command_ack = true;
+    }
+
+    printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, state_report.data.report_id);
+
+    uint32_t length = sizeof(state_report.buf) / sizeof(state_report.buf[0]);
+    print_report(&state_report, length);
   }
 }
 
