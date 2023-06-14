@@ -127,6 +127,7 @@ typedef struct TU_ATTR_PACKED
   int player_number;
 
   int16_t global_buttons;
+  int16_t altern_buttons;
   int16_t global_x;
   int16_t global_y;
 
@@ -199,6 +200,7 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].player_number = playersCount + 1;
 
     players[playersCount].global_buttons = 0xFFFF;
+    players[playersCount].altern_buttons = 0xFFFF;
     players[playersCount].global_x = 0;
     players[playersCount].global_y = 0;
 
@@ -261,6 +263,12 @@ void __not_in_flash_func(update_output)(void)
   
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
+    // check for 6-button enable/disable hotkeys
+    if (!(players[i].output_buttons & 0b0000000010000001))
+      players[i].is6btn = true;
+    else if (!(players[i].output_buttons & 0b0000000010000100))
+      players[i].is6btn = false;
+
     bool has6Btn = !(players[i].output_buttons & 0x0f00);
     bool isMouse = !(players[i].output_buttons & 0x0f);
     bool is6btn = has6Btn && players[i].is6btn;
@@ -343,10 +351,14 @@ void __not_in_flash_func(update_output)(void)
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
 {
   bool has6Btn = !(buttons & 0x0f00);
   bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
+
+  // for merging extra device instances into the root instance (ex: joycon charging grip)
+  bool is_extra = (instance == -1);
+  if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
   uint16_t buttons_pressed = (~(buttons | 0x0f00));
@@ -368,20 +380,16 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint1
       else
         players[player_index].global_y = players[player_index].global_y + delta_y;
 
-      players[player_index].global_buttons = buttons;
-
-      if (has6Btn && !(buttons & 0b0000000010000001)) {
-        players[player_index].is6btn = true;
-      }
-      else if (has6Btn && !(buttons & 0b0000000010000100)) {
-        players[player_index].is6btn = false;
-      }
+      if (is_extra) // extra instance buttons to merge with root player
+        players[0].altern_buttons = buttons;
+      else
+        players[player_index].global_buttons = buttons;
 
       if (!output_exclude || !isMouse)
       {
         players[player_index].output_x = players[player_index].global_x;
         players[player_index].output_y = players[player_index].global_y;
-        players[player_index].output_buttons = players[player_index].global_buttons;
+        players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
         update_output();
       }
@@ -487,7 +495,7 @@ static bool rx_bit = 0;
 
           players[i].output_x = 0;
           players[i].output_y = 0;
-          players[i].output_buttons = players[i].global_buttons;
+          players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
         }
 
         output_exclude = true;            // continue to lock the output values (which are now zero)
@@ -521,6 +529,7 @@ int main(void)
   unsigned short int i;
   for (i = 0; i < 5; ++i) {
     players[i].global_buttons = 0xFFFF;
+    players[i].altern_buttons = 0xFFFF;
     players[i].global_x = 0;
     players[i].global_y = 0;
     players[i].output_buttons = 0xFFFF;

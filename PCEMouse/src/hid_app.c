@@ -600,10 +600,12 @@ typedef struct TU_ATTR_PACKED
   uint16_t serial[20];
   uint16_t vid, pid;
   instance_t instances[CFG_TUH_HID];
+  uint8_t instance_count;
+  uint8_t instance_root;
 
 } device_t;
 
-static device_t devices[MAX_DEVICES];
+static device_t devices[MAX_DEVICES] = { 0 };
 
 // check if device is Sony DualShock 3
 static inline bool is_sony_ds3(uint8_t dev_addr)
@@ -800,7 +802,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 extern void remove_players_by_address(int device_address, int instance);
 
@@ -1145,7 +1147,7 @@ void hid_app_task(void)
             switch_send_command(dev_addr, instance, data, 10 + 4);
 
           } else if (devices[dev_addr].instances[instance].switch_command_ack) {
-            int player_index = find_player_index(dev_addr, instance);
+            int player_index = find_player_index(dev_addr, devices[dev_addr].instance_count == 1 ? instance : devices[dev_addr].instance_root);
 
             if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
               devices[dev_addr].instances[instance].switch_player_led_set = player_index;
@@ -1209,6 +1211,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   // Stash device vid/pid/serial device type detection
   devices[dev_addr].vid = vid;
   devices[dev_addr].pid = pid;
+  if ((++devices[dev_addr].instance_count) == 1) {
+    devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
+  }
 
   // Interface protocol (hid_interface_protocol_enum_t)
   const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
@@ -1303,6 +1308,7 @@ void switch_reset(uint8_t dev_addr, uint8_t instance)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
+  devices[dev_addr].instance_count--;
   devices[dev_addr].instances[instance].ds3_mounted = false;
   devices[dev_addr].instances[instance].ds4_mounted = false;
   devices[dev_addr].instances[instance].ds5_mounted = false;
@@ -2273,29 +2279,30 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool bttn_sel = update_report.select || update_report.home;
       bool bttn_run = update_report.start || update_report.home;
 
-      if (!left_stick_x && !left_stick_y) {
-        dpad_up    = (right_stick_y > (2048 + threshold));
-        dpad_right = (right_stick_x > (2048 + threshold));
-        dpad_down  = (right_stick_y < (2048 - threshold));
-        dpad_left  = (right_stick_x < (2048 - threshold));
-        bttn_sel = update_report.home;
-        bttn_run = update_report.start;
-      }
+      bool is_left_joycon = (!right_stick_x && !right_stick_y);
+      bool is_right_joycon = (!left_stick_x && !left_stick_y);
 
-      if (!right_stick_x && !right_stick_y) {
-        dpad_up    = (left_stick_y > (2048 + threshold));
-        dpad_right = (left_stick_x > (2048 + threshold));
-        dpad_down  = (left_stick_y < (2048 - threshold));
-        dpad_left  = (left_stick_x < (2048 - threshold));
-
-        bttn_1 = update_report.right;
-        bttn_2 = update_report.down;
-        bttn_3 = update_report.up;
-        bttn_4 = update_report.left;
+      if (is_left_joycon) {
+        dpad_up    = update_report.up || (left_stick_y > (2048 + threshold));
+        dpad_right = update_report.right || (left_stick_x > (2048 + threshold));
+        dpad_down  = update_report.down || (left_stick_y < (2048 - threshold));
+        dpad_left  = update_report.left || (left_stick_x < (2048 - threshold));
+        // bttn_1 = update_report.right;
+        // bttn_2 = update_report.down;
+        // bttn_3 = update_report.up;
+        // bttn_4 = update_report.left;
         bttn_5 = update_report.l;
         bttn_6 = update_report.zl;
-        bttn_sel = update_report.cap;
-        bttn_run = update_report.select;
+        bttn_sel = update_report.select || update_report.cap;
+        bttn_run = false; // update_report.select;
+      }
+      else if (is_right_joycon) {
+        dpad_up    = false; // (right_stick_y > (2048 + threshold));
+        dpad_right = false; // (right_stick_x > (2048 + threshold));
+        dpad_down  = false; // (right_stick_y < (2048 - threshold));
+        dpad_left  = false; // (right_stick_x < (2048 - threshold));
+        bttn_sel = update_report.home;
+        // bttn_run = update_report.start;
       }
 
       buttons = (
@@ -2316,7 +2323,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, 0, 0);
+      bool is_root = instance == devices[dev_addr].instance_root;
+      post_globals(dev_addr, is_root ? instance : -1, buttons, 0, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
     }

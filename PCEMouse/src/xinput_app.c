@@ -27,7 +27,7 @@
 
 uint16_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, uint8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 
 //--------------------------------------------------------------------+
 // USB X-input
