@@ -37,6 +37,7 @@
 
 #include "bsp/board.h"
 #include "tusb.h"
+#include "hid_parser.h"
 
 #define LANGUAGE_ID 0x0409
 
@@ -299,7 +300,7 @@ typedef struct TU_ATTR_PACKED
 
   uint8_t counter; // +1 each report
 
-} bitdo_psc_report_t;
+} sony_psc_report_t;
 
 // 8BitDo USB Adapter for PC Engine 2.4g controllers
 typedef struct TU_ATTR_PACKED
@@ -319,6 +320,36 @@ typedef struct TU_ATTR_PACKED
   };
 
 } bitdo_pce_report_t;
+
+// 8BitDo M30 Bluetooth gamepad
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t a : 1;
+    uint8_t b : 1;
+    uint8_t home : 1;
+    uint8_t x : 1;
+    uint8_t y : 1;
+    uint8_t padding1 : 1;
+    uint8_t z : 1;
+    uint8_t c : 1;
+  };
+
+  struct {
+    uint8_t l : 1;
+    uint8_t r : 1;
+    uint8_t minus : 1;
+    uint8_t start : 1;
+    uint8_t padding2 : 4;
+  };
+
+  struct {
+    uint8_t dpad   : 4;
+    uint8_t padding3 : 4;
+  };
+
+} bitdo_m30_report_t;
+
 
 // Sega Genesis mini controller
 typedef struct TU_ATTR_PACKED
@@ -629,13 +660,13 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
          );
 }
 
-// check if device is 8BitDo Ultimate C Wired Controller
+// check if device is Wii U Pokken USB Controller
 static inline bool is_pokken(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
-  return ((vid == 0x0f0d && pid == 0x0092)); // 8BitDo Ultimate Cs
+  return ((vid == 0x0f0d && pid == 0x0092)); // Wii U Pokken
 }
 
 // check if device is 8BitDo Ultimate C Wired Controller
@@ -671,12 +702,21 @@ static inline bool is_8bit_pce(uint8_t dev_addr)
 }
 
 // check if device is PlayStation Classic Controller
-static inline bool is_8bit_psc(uint8_t dev_addr)
+static inline bool is_sony_psc(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
+}
+
+// check if device is 8BitDo Bluetooth gamepad
+static inline bool is_8bit_m30(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x2dc8 && pid == 0x5006)); // 8BitDo M30 BT (Android Mode)
 }
 
 // check if device is Sega Genesis mini controller
@@ -697,7 +737,7 @@ static inline bool is_astro_city(uint8_t dev_addr)
   return ((vid == 0x0ca3 && (
            pid == 0x0028 || // Astro City mini joystick
            pid == 0x0027 || // Astro City mini controller
-           pid == 0x0024    // 8BitDo M30 6-button controller
+           pid == 0x0024    // 8BitDo M30 6-button controller (2.4g)
          )));
 }
 
@@ -800,6 +840,7 @@ uint8_t local_y;
 
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report);
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report);
+static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
@@ -1227,8 +1268,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   if      (is_sony_ds3(dev_addr)  ) isController = true;
   else if (is_sony_ds4(dev_addr)  ) isController = true;
   else if (is_sony_ds5(dev_addr)  ) isController = true;
+  else if (is_sony_psc(dev_addr)  ) isController = true;
   else if (is_8bit_pce(dev_addr)  ) isController = true;
-  else if (is_8bit_psc(dev_addr)  ) isController = true;
   else if (is_sega_mini(dev_addr) ) isController = true;
   else if (is_astro_city(dev_addr)) isController = true;
   else if (is_wing_man(dev_addr)  ) isController = true;
@@ -1331,7 +1372,7 @@ bool ds3_diff_report(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt
   result = diff_than_n(rpt1->lx, rpt2->lx, 2) || diff_than_n(rpt1->ly, rpt2->ly, 2) ||
            diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
 
-  // check the reset with mem compare
+  // check the rest with mem compare
   result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3);
 
   return result;
@@ -1346,7 +1387,7 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
   result = diff_than_n(rpt1->x, rpt2->x, 2) || diff_than_n(rpt1->y, rpt2->y, 2) ||
            diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2);
 
-  // check the reset with mem compare
+  // check the rest with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 5);
 
   return result;
@@ -1361,13 +1402,13 @@ bool ds5_diff_report(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
            diff_than_n(rpt1->x2, rpt2->x2, 2) || diff_than_n(rpt1->y2, rpt2->y2, 2) ||
            diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
 
-  // check the reset with mem compare
+  // check the rest with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 3);
 
   return result;
 }
 
-bool psc_diff_report(bitdo_psc_report_t const* rpt1, bitdo_psc_report_t const* rpt2)
+bool psc_diff_report(sony_psc_report_t const* rpt1, sony_psc_report_t const* rpt2)
 {
   bool result;
 
@@ -1396,6 +1437,16 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
   result |= rpt1->run != rpt2->run;
   result |= rpt1->one != rpt2->one;
   result |= rpt1->two != rpt2->two;
+
+  return result;
+}
+
+bool m30_diff_report(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* rpt2)
+{
+  bool result;
+
+  // check the all with mem compare
+  result |= memcmp(&rpt1, &rpt2, 3);
 
   return result;
 }
@@ -1802,12 +1853,12 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
   }
 }
-void process_8bit_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static bitdo_psc_report_t prev_report[5] = { 0 };
+  static sony_psc_report_t prev_report[5] = { 0 };
 
-  bitdo_psc_report_t psc_report;
+  sony_psc_report_t psc_report;
   memcpy(&psc_report, report, sizeof(psc_report));
 
   // counter is +1, assign to make it easier to compare 2 report
@@ -1902,6 +1953,58 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
   }
 }
 
+void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static bitdo_m30_report_t prev_report[5] = { 0 };
+
+  bitdo_m30_report_t input_report;
+  memcpy(&input_report, report, sizeof(input_report));
+
+  if ( m30_diff_report(&prev_report[dev_addr-1], &input_report) )
+  {
+    printf("DPad = %d ", input_report.dpad);
+
+    if (input_report.a) printf("A ");
+    if (input_report.b) printf("B ");
+    if (input_report.c) printf("C ");
+    if (input_report.x) printf("X ");
+    if (input_report.y) printf("Y ");
+    if (input_report.z) printf("Z ");
+    if (input_report.l) printf("L ");
+    if (input_report.r) printf("R ");
+    if (input_report.start) printf("Start ");
+    if (input_report.minus) printf("Minus ");
+    if (input_report.home) printf("Home ");
+
+    printf("\r\n");
+
+    bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
+    bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
+    bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
+    bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
+    bool has_6btns = false;
+
+    buttons = (((input_report.z || input_report.l) ? 0x00 : 0x8000) |
+               ((input_report.y || input_report.r) ? 0x00 : 0x4000) |
+               ((input_report.x)     ? 0x00 : 0x2000) |
+               ((input_report.a)     ? 0x00 : 0x1000) |
+               ((dpad_left)          ? 0x00 : 0x08) |
+               ((dpad_down)          ? 0x00 : 0x04) |
+               ((dpad_right)         ? 0x00 : 0x02) |
+               ((dpad_up)            ? 0x00 : 0x01) |
+               ((input_report.start || input_report.home) ? 0x00 : 0x80) |
+               ((input_report.minus || input_report.home) ? 0x00 : 0x40) |
+               ((input_report.b)     ? 0x00 : 0x20) |
+               ((input_report.c)     ? 0x00 : 0x10));
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+
+    prev_report[dev_addr-1] = input_report;
+  }
+}
 
 void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
@@ -1932,9 +2035,9 @@ void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     bool dpad_left  = (sega_report.dpad_x < 128);
     bool has_6btns = true;
 
-    buttons = (((sega_report.x || sega_report.l) ? 0x00 : 0x8000) |
+    buttons = (((sega_report.z || sega_report.l) ? 0x00 : 0x8000) |
                ((sega_report.y) ? 0x00 : 0x4000) |
-               ((sega_report.z || sega_report.r) ? 0x00 : 0x2000) |
+               ((sega_report.x || sega_report.r) ? 0x00 : 0x2000) |
                ((sega_report.a) ? 0x00 : 0x1000) |
                ((has_6btns)      ? 0x00 : 0xFF00) |
                ((dpad_left)      ? 0x00 : 0x08) |
@@ -1984,19 +2087,19 @@ void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     bool dpad_left  = (astro_report.x < 127);
     bool has_6btns = true;
 
-    buttons = (((astro_report.a) ? 0x00 : 0x8000) |
-               ((astro_report.b) ? 0x00 : 0x4000) |
-               ((astro_report.c) ? 0x00 : 0x2000) |
-               ((astro_report.d) ? 0x00 : 0x1000) |
+    buttons = (((astro_report.c) ? 0x00 : 0x8000) | // VI
+               ((astro_report.b) ? 0x00 : 0x4000) | // V
+               ((astro_report.a) ? 0x00 : 0x2000) | // IV
+               ((astro_report.d) ? 0x00 : 0x1000) | // III
                ((has_6btns)      ? 0x00 : 0xFF00) |
                ((dpad_left)      ? 0x00 : 0x08) |
                ((dpad_down)      ? 0x00 : 0x04) |
                ((dpad_right)     ? 0x00 : 0x02) |
                ((dpad_up)        ? 0x00 : 0x01) |
-               ((astro_report.start)  ? 0x00 : 0x80) |
-               ((astro_report.credit) ? 0x00 : 0x40) |
-               ((astro_report.e || astro_report.l) ? 0x00 : 0x20) |
-               ((astro_report.f || astro_report.r) ? 0x00 : 0x10));
+               ((astro_report.start)  ? 0x00 : 0x80) | // RUN
+               ((astro_report.credit) ? 0x00 : 0x40) | // SEL
+               ((astro_report.e || astro_report.l) ? 0x00 : 0x20) | // II
+               ((astro_report.f || astro_report.r) ? 0x00 : 0x10)); // I
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -2431,8 +2534,9 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       if      ( is_sony_ds3(dev_addr) ) process_sony_ds3(dev_addr, instance, report, len);
       else if ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
       else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, instance, report, len);
+      else if ( is_sony_psc(dev_addr) ) process_sony_psc(dev_addr, instance, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
-      else if ( is_8bit_psc(dev_addr) ) process_8bit_psc(dev_addr, instance, report, len);
+      else if ( is_8bit_m30(dev_addr) ) process_8bit_m30(dev_addr, instance, report, len);
       else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, instance, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
@@ -2629,6 +2733,66 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 }
 
 //--------------------------------------------------------------------+
+// Gamepad Report
+//--------------------------------------------------------------------+
+
+void print_bits(uint32_t num) {
+    for(int bit = 7; bit >= 0; bit--) {
+        printf("%d", (num >> bit) & 1);
+    }
+    printf("\n");
+}
+
+static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report)
+{
+  static hid_gamepad_report_t prev_report = { 0 };
+
+  bool has_6btns = true;
+  bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
+    btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
+    btns_three = false, btns_four = false, btns_five = false, btns_six = false;
+
+  printf("X: %d ", report->x);
+  print_bits(report->x);
+  printf("Y: %d ", report->y);
+  print_bits(report->y);
+  printf("Z: %d ", report->z);
+  print_bits(report->z);
+  printf("Rz: %d ", report->rz);
+  print_bits(report->rz);
+  printf("Rx: %d ", report->rx);
+  print_bits(report->rx);
+  printf("Ry: %d ", report->ry);
+  print_bits(report->ry);
+  printf("Hat: ");
+  print_bits(report->hat);
+
+  printf("Buttons: ");
+  for(int i = 3; i >= 0; i--) {
+      print_bits(report->buttons >> (i * 8));
+  }
+  printf("\n");
+
+  buttons = (((btns_six)   ? 0x00 : 0x8000) |
+             ((btns_five)  ? 0x00 : 0x4000) |
+             ((btns_four)  ? 0x00 : 0x2000) |
+             ((btns_three) ? 0x00 : 0x1000) |
+             ((has_6btns)  ? 0x00 : 0xFF00) |
+             ((dpad_left)  ? 0x00 : 0x0008) |
+             ((dpad_down)  ? 0x00 : 0x0004) |
+             ((dpad_right) ? 0x00 : 0x0002) |
+             ((dpad_up)    ? 0x00 : 0x0001) |
+             ((btns_run)   ? 0x00 : 0x0080) |
+             ((btns_sel)   ? 0x00 : 0x0040) |
+             ((btns_two)   ? 0x00 : 0x0020) |
+             ((btns_one)   ? 0x00 : 0x0010));
+  post_globals(dev_addr, instance, buttons, 0, 0);
+
+  prev_report = *report;
+}
+
+
+//--------------------------------------------------------------------+
 // Generic Report
 //--------------------------------------------------------------------+
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -2689,6 +2853,12 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         TU_LOG1("HID receive mouse report\r\n");
         // Assume mouse follow boot report layout
         process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
+      break;
+
+      case HID_USAGE_DESKTOP_GAMEPAD:
+        TU_LOG1("HID receive gamepad report\r\n");
+        // Assume gamepad follow boot report layout
+        // process_gamepad_report(dev_addr, instance, (hid_gamepad_report_t const*) report );
       break;
 
       default: break;
