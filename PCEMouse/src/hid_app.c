@@ -43,18 +43,22 @@
 
 // SWITCH PRO
 #define PROCON_REPORT_SEND_USB 0x80
-
 #define PROCON_USB_HANDSHAKE   0x02
 #define PROCON_USB_BAUD        0x03
 #define PROCON_USB_ENABLE      0x04
 #define PROCON_USB_DO_CMD      0x92
-
 #define PROCON_CMD_AND_RUMBLE  0x01
+#define PROCON_CMD_MODE        0x03
+#define PROCON_CMD_LED_HOME    0x38
+#define PROCON_ARG_INPUT_FULL  0x30
 
-#define PROCON_CMD_MODE				0x03
-#define PROCON_CMD_LED_HOME		0x38
-
-#define PROCON_ARG_INPUT_FULL	0x30
+// Controller Types
+#define CONTROLLER_GENERIC 0x00
+#define CONTROLLER_HID 0x01
+#define CONTROLLER_DS3 0x02
+#define CONTROLLER_DS4 0x03
+#define CONTROLLER_DS5 0x04
+#define CONTROLLER_SWITCH 0x05
 
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
@@ -647,15 +651,12 @@ typedef struct {
 // Each HID instance can has multiple reports
 typedef struct TU_ATTR_PACKED
 {
+  uint8_t type;
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
   //
   bool ds3_init;
   bool ds3_led_set;
-  bool ds3_mounted;
-  bool ds4_mounted;
-  bool ds5_mounted;
-  bool switch_mounted;
   bool switch_conn_ack;
   bool switch_baud;
   bool switch_baud_ack;
@@ -666,8 +667,8 @@ typedef struct TU_ATTR_PACKED
   bool switch_home_led;
   bool switch_command_ack;
   int switch_player_led_set;
-  uint8_t motor_left;
-  uint8_t motor_right;
+  // uint8_t motor_left;
+  // uint8_t motor_right;
 
   InputLocation xLoc;
   InputLocation yLoc;
@@ -956,7 +957,7 @@ void hid_app_task(void)
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
       // send DS3 Init, LED and rumble responses
-      if (devices[dev_addr].instances[instance].ds3_mounted) {
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS3) {
         if (!devices[dev_addr].instances[instance].ds3_init) {
           /*
           * The Sony Sixaxis does not handle HID Output Reports on the
@@ -1051,7 +1052,7 @@ void hid_app_task(void)
       }
 
       // send DS4 LED and rumble response
-      if (devices[dev_addr].instances[instance].ds4_mounted) {
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS4) {
         uint32_t current_time_ms = board_millis();
         if ( current_time_ms - start_ms_ds4 >= interval_ms)
         {
@@ -1106,7 +1107,7 @@ void hid_app_task(void)
       }
 
       // send DS5 LED and rumble response
-      if (devices[dev_addr].instances[instance].ds5_mounted) {
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS5) {
 
         uint32_t current_time_ms = board_millis();
         if ( current_time_ms - start_ms_ds5 >= interval_ms)
@@ -1192,7 +1193,7 @@ void hid_app_task(void)
       //      https://github.com/felis/USB_Host_Shield_2.0/
       //      https://github.com/nicman23/dkms-hid-nintendo/
       //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
-      if (devices[dev_addr].instances[instance].switch_mounted && 
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_SWITCH &&
           devices[dev_addr].instances[instance].switch_conn_ack)
       {
         // set the faster baud rate
@@ -1477,30 +1478,33 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   if (is_sony_ds3(dev_addr))
   {
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].type = CONTROLLER_DS3;
     devices[dev_addr].instances[instance].ds3_init = false;
     devices[dev_addr].instances[instance].ds3_led_set = false;
-    devices[dev_addr].instances[instance].ds3_mounted = true;
+    // devices[dev_addr].instances[instance].motor_left = 0;
+    // devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_sony_ds4(dev_addr))
   {
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-    devices[dev_addr].instances[instance].ds4_mounted = true;
+    devices[dev_addr].instances[instance].type = CONTROLLER_DS4;
+    // devices[dev_addr].instances[instance].motor_left = 0;
+    // devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_sony_ds5(dev_addr))
   {
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-    devices[dev_addr].instances[instance].ds5_mounted = true;
+    devices[dev_addr].instances[instance].type = CONTROLLER_DS5;
+    // devices[dev_addr].instances[instance].motor_left = 0;
+    // devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_switch(dev_addr))
   {
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-    devices[dev_addr].instances[instance].switch_mounted = true;
+    devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
+    // devices[dev_addr].instances[instance].motor_left = 0;
+    // devices[dev_addr].instances[instance].motor_right = 0;
     printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+  }
+  else {
+    devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
   }
 
   // request to receive report
@@ -1529,13 +1533,18 @@ void switch_reset(uint8_t dev_addr, uint8_t instance)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
-  devices[dev_addr].instance_count--;
-  devices[dev_addr].instances[instance].ds3_mounted = false;
-  devices[dev_addr].instances[instance].ds4_mounted = false;
-  devices[dev_addr].instances[instance].ds5_mounted = false;
-  devices[dev_addr].instances[instance].switch_mounted = false;
 
-  switch_reset(dev_addr, instance);
+  // Reset Switch Config
+  if (devices[dev_addr].instances[instance].type == CONTROLLER_SWITCH) {
+    switch_reset(dev_addr, instance);
+  }
+  // Reset HID Config
+  else if (devices[dev_addr].instances[instance].type == CONTROLLER_HID) {
+    // hid_reset(dev_addr, instance);
+  }
+
+  devices[dev_addr].instance_count--;
+  devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
 // check if different than 2
