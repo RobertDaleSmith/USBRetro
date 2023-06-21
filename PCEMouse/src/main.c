@@ -104,6 +104,12 @@ uint64_t turbo_frequency;
 #endif
 #endif
 
+// button modes
+#define BUTTON_MODE_2 0x00
+#define BUTTON_MODE_6 0x01
+#define BUTTON_MODE_3_SEL 0x02
+#define BUTTON_MODE_3_RUN 0x03
+
 // is fun easter egg
 #define BUFFER_SIZE 10
 #define KONAMI_CODE {0x01, 0x01, 0x04, 0x04, 0x08, 0x02, 0x08, 0x02, 0x20, 0x10}
@@ -137,7 +143,7 @@ typedef struct TU_ATTR_PACKED
 
   int16_t prev_buttons;
 
-  bool is6btn;
+  int button_mode;
 } Player_t;
 
 Player_t players[MAX_PLAYERS];
@@ -207,7 +213,7 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].output_buttons = 0xFFFF;
     players[playersCount].output_x = 0;
     players[playersCount].output_y = 0;
-    players[playersCount].is6btn = false;
+    players[playersCount].button_mode = BUTTON_MODE_2;
 
     players[playersCount].prev_buttons = 0xFFFF;
 
@@ -265,13 +271,19 @@ void __not_in_flash_func(update_output)(void)
   for (i = 0; i < 5; ++i) {
     // check for 6-button enable/disable hotkeys
     if (!(players[i].output_buttons & 0b0000000010000001))
-      players[i].is6btn = true;
+      players[i].button_mode = BUTTON_MODE_6;
     else if (!(players[i].output_buttons & 0b0000000010000100))
-      players[i].is6btn = false;
+      players[i].button_mode = BUTTON_MODE_2;
+    else if (!(players[i].output_buttons & 0b0000000010000010))
+      players[i].button_mode = BUTTON_MODE_3_SEL;
+    else if (!(players[i].output_buttons & 0b0000000010001000))
+      players[i].button_mode = BUTTON_MODE_3_RUN;
 
     bool has6Btn = !(players[i].output_buttons & 0x0f00);
     bool isMouse = !(players[i].output_buttons & 0x0f);
-    bool is6btn = has6Btn && players[i].is6btn;
+    bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
+    bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
+    bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
 
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
@@ -286,12 +298,28 @@ void __not_in_flash_func(update_output)(void)
     }
 
     // 6 button extra four buttons (III/IV/V/VI)
-    if (is6btn && (state == 2)) {
-      byte = ((players[i].output_buttons>>8) & 0xf0);
+    if (is6btn) {
+      if (state == 2) {
+        byte = ((players[i].output_buttons>>8) & 0xf0);
+      }
+    }
+
+    //
+    else if (is3btnSel) {
+      if ((~(players[i].output_buttons>>8)) & 0x10) {
+        byte &= 0b01111111;
+      }
+    }
+
+    //
+    else if (is3btnRun) {
+      if ((~(players[i].output_buttons>>8)) & 0x10) {
+        byte &= 0b10111111;
+      }
     }
 
     // Simulated Turbo buttons X/Y for II/I and L/R for speeds 1/2
-    if (!is6btn) {
+    else {
       // Update the button state based on the turbo_state
       if (turbo_state) {
         // Set the button state as pressed
@@ -536,7 +564,7 @@ int main(void)
     players[i].output_x = 0;
     players[i].output_y = 0;
     players[i].prev_buttons = 0xFFFF;
-    players[i].is6btn = false;
+    players[i].button_mode = BUTTON_MODE_2;
   }
   state = 3;
 
