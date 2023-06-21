@@ -3074,19 +3074,19 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
     bool buttonStart = current.all_buttons & (0x01 << (buttonCount-1));
     bool has_6btns = buttonCount >= 8;
 
-    buttons = (((current.button6)  ? 0x00 : 0x8000) |
-               ((current.button5)  ? 0x00 : 0x4000) |
-               ((current.button4)  ? 0x00 : 0x2000) |
+    buttons = (((current.button6) ? 0x00 : 0x8000) |
+               ((current.button5) ? 0x00 : 0x4000) |
+               ((current.button4) ? 0x00 : 0x2000) |
                ((current.button3) ? 0x00 : 0x1000) |
-               ((has_6btns)  ? 0x00 : 0xFF00) |
-               ((current.left)  ? 0x00 : 0x0008) |
-               ((current.down)  ? 0x00 : 0x0004) |
-               ((current.right) ? 0x00 : 0x0002) |
-               ((current.up)    ? 0x00 : 0x0001) |
-               ((buttonStart)   ? 0x00 : 0x0080) |
-               ((buttonSelect)   ? 0x00 : 0x0040) |
-               ((current.button2)   ? 0x00 : 0x0020) |
-               ((current.button1)   ? 0x00 : 0x0010));
+               ((has_6btns)       ? 0x00 : 0x0F00) |
+               ((current.left)    ? 0x00 : 0x0008) |
+               ((current.down)    ? 0x00 : 0x0004) |
+               ((current.right)   ? 0x00 : 0x0002) |
+               ((current.up)      ? 0x00 : 0x0001) |
+               ((buttonStart)     ? 0x00 : 0x0080) |
+               ((buttonSelect)    ? 0x00 : 0x0040) |
+               ((current.button2) ? 0x00 : 0x0020) |
+               ((current.button1) ? 0x00 : 0x0010));
     post_globals(dev_addr, instance, buttons, 0, 0);
   }
 }
