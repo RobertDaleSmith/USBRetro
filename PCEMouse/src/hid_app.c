@@ -3072,10 +3072,12 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
     if (buttonCount > 12) buttonCount = 12;
     bool buttonSelect = current.all_buttons & (0x01 << (buttonCount-2));
     bool buttonStart = current.all_buttons & (0x01 << (buttonCount-1));
-    bool has_6btns = buttonCount >= 8;
+    bool button5 = buttonCount >=7 ? current.button5 : 0;
+    bool button6 = buttonCount >=8 ? current.button6 : 0;
+    bool has_6btns = buttonCount >= 6;
 
-    buttons = (((current.button6) ? 0x00 : 0x8000) |
-               ((current.button5) ? 0x00 : 0x4000) |
+    buttons = (((button6)         ? 0x00 : 0x8000) |
+               ((button5)         ? 0x00 : 0x4000) |
                ((current.button4) ? 0x00 : 0x2000) |
                ((current.button3) ? 0x00 : 0x1000) |
                ((has_6btns)       ? 0x00 : 0x0F00) |
