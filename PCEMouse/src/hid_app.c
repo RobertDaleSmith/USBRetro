@@ -63,6 +63,46 @@ uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E',
 
 uint8_t output_sequence_counter = 0;
 
+////////////////
+// hid_parser //
+////////////////
+#define INVALID_REPORT_ID -1
+// means 1/X of half range of analog would be dead zone
+#define DEAD_ZONE 4U
+static const char *const BUTTON_NAMES[] = {"NONE", "^", ">", "\\/", "<", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"};
+//(hat format, 8 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
+static const uint8_t HAT_SWITCH_TO_DIRECTION_BUTTONS[] = {0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001, 0b0000};
+
+typedef union
+{
+  struct
+  {
+    bool up : 1;
+    bool right : 1;
+    bool down : 1;
+    bool left : 1;
+    bool button1 : 1;
+    bool button2 : 1;
+    bool button3 : 1;
+    bool button4 : 1;
+
+    bool button5 : 1;
+    bool button6 : 1;
+    bool button7 : 1;
+    bool button8 : 1;
+    bool button9 : 1;
+    bool button10 : 1;
+    bool button11 : 1;
+    bool button12 : 1;
+  };
+  struct
+  {
+    uint16_t all_direction : 4;
+    uint32_t all_buttons : 12;
+  };
+  uint32_t value : 24;
+} pad_buttons;
+
 // Sony DS3/SIXAXIS https://github.com/torvalds/linux/blob/master/drivers/hid/hid-sony.c
 typedef struct TU_ATTR_PACKED {
   uint8_t reportId; // 0x01 for HID data
@@ -350,7 +390,6 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_m30_report_t;
 
-
 // Sega Genesis mini controller
 typedef struct TU_ATTR_PACKED
 {
@@ -599,11 +638,18 @@ typedef struct TU_ATTR_PACKED
 #define MAX_DEVICES 10
 #define MAX_REPORT  5
 
+typedef struct {
+    uint8_t byteIndex;
+    uint8_t bitMask;
+    uint32_t mid;
+} InputLocation;
+
 // Each HID instance can has multiple reports
 typedef struct TU_ATTR_PACKED
 {
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
+  //
   bool ds3_init;
   bool ds3_led_set;
   bool ds3_mounted;
@@ -623,7 +669,16 @@ typedef struct TU_ATTR_PACKED
   uint8_t motor_left;
   uint8_t motor_right;
 
+  InputLocation xLoc;
+  InputLocation yLoc;
+  InputLocation hatLoc;
+  InputLocation buttonLoc[12]; // assuming a maximum of 12 buttons
+  uint8_t buttonCnt;
+
 } instance_t;
+
+// hid_parser
+HID_ReportInfo_t *info;
 
 // Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
@@ -657,6 +712,7 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
            || (vid == 0x0f0d && pid == 0x005e)                 // Hori FC4 
            || (vid == 0x0f0d && pid == 0x00ee)                 // Hori PS4 Mini (PS4-099U) 
            || (vid == 0x1f4f && pid == 0x1002)                 // ASW GG xrd controller
+          //  || (vid == 0x1532 && pid == 0x0401)                 // GP2040-CE PS4 mode
          );
 }
 
@@ -1230,6 +1286,115 @@ void hid_app_task(void)
   }
 }
 
+// Gets HID descriptor report item for specific ReportID
+static inline bool USB_GetHIDReportItemInfoWithReportId(const uint8_t *ReportData, HID_ReportItem_t *const ReportItem)
+{
+  if (ReportItem->ReportID)
+  {
+    if (ReportItem->ReportID != ReportData[0])
+      return false;
+
+    ReportData++;
+  }
+  return USB_GetHIDReportItemInfo(ReportItem->ReportID, ReportData, ReportItem);
+}
+
+// Parses HID descriptor into byteIndex/buttonMasks
+void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
+{
+  HID_ReportItem_t *item = info->FirstReportItem;
+  //iterate filtered reports info to match report from data
+  uint8_t btns_count = 0;
+  bool hid_debug = false;
+  while (item)
+  {
+    uint8_t midValue = (item->Attributes.Logical.Maximum - item->Attributes.Logical.Minimum) / 2;
+    uint8_t bitSize = item->Attributes.BitSize ? item->Attributes.BitSize : 0; // bits per usage
+    uint8_t bitOffset = item->BitOffset ? item->BitOffset : 0; // bits offset from start
+    uint8_t bitMask = ((0xFF >> (8 - bitSize)) << bitOffset % 8); // usage bits byte mask
+    uint8_t byteIndex = (int)(bitOffset / 8); // usage start byte
+
+    if (hid_debug) {
+      printf("midValue: %d ", midValue);
+      printf("bitSize: %d ", bitSize);
+      printf("bitOffset: %d ", bitOffset);
+      printf("bitMask: 0x%x ", bitMask);
+      printf("byteIndex: %d", byteIndex);
+    }
+    uint8_t report[1] = {0}; // reportId = 0; original ex maps report to descriptor data structure
+    if (USB_GetHIDReportItemInfoWithReportId(report, item))
+    {
+      switch (item->Attributes.Usage.Page)
+      {
+      case HID_USAGE_PAGE_DESKTOP:
+        switch (item->Attributes.Usage.Usage)
+        {
+        case HID_USAGE_DESKTOP_X:
+        {
+          if (hid_debug) printf(" HID_USAGE_DESKTOP_X ");
+          devices[dev_addr].instances[instance].xLoc.byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].xLoc.bitMask = bitMask;
+          devices[dev_addr].instances[instance].xLoc.mid = midValue;
+
+        }
+        break;
+        case HID_USAGE_DESKTOP_Y:
+        {
+          if (hid_debug) printf(" HID_USAGE_DESKTOP_Y ");
+          devices[dev_addr].instances[instance].yLoc.byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].yLoc.bitMask = bitMask;
+          devices[dev_addr].instances[instance].yLoc.mid = midValue;
+        }
+        break;
+        // case HID_USAGE_DESKTOP_Z:
+        // {
+        //   if (hid_debug) printf(" HID_USAGE_DESKTOP_Z ");
+        //   devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
+        //   devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
+        //  devices[dev_addr].instances[instance].zLoc.mid = midValue;
+        // }
+        break;
+        case HID_USAGE_DESKTOP_HAT_SWITCH:
+          if (hid_debug) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
+          devices[dev_addr].instances[instance].hatLoc.byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].hatLoc.bitMask = bitMask;
+
+          break;
+        // case HID_USAGE_DESKTOP_DPAD_UP:
+        //   current.up |= 1;
+        //   break;
+        // case HID_USAGE_DESKTOP_DPAD_RIGHT:
+        //   current.right |= 1;
+        //   break;
+        // case HID_USAGE_DESKTOP_DPAD_DOWN:
+        //   current.down |= 1;
+        //   break;
+        // case HID_USAGE_DESKTOP_DPAD_LEFT:
+        //   current.left |= 1;
+        //   break;
+        }
+        break;
+      case HID_USAGE_PAGE_BUTTON:
+      {
+        if (hid_debug) printf(" HID_USAGE_PAGE_BUTTON ");
+        uint8_t usage = item->Attributes.Usage.Usage;
+
+        if (usage >= 1 && usage <= 12) {
+          devices[dev_addr].instances[instance].buttonLoc[usage - 1].byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].buttonLoc[usage - 1].bitMask = bitMask;
+        }
+        btns_count++;
+      }
+      break;
+      }
+    }
+    item = item->Next;
+    if (hid_debug) printf("\n\n");
+  }
+
+  devices[dev_addr].instances[instance].buttonCnt = btns_count;
+}
+
 //--------------------------------------------------------------------+
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
@@ -1248,6 +1413,21 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   printf("HID device address = %d, instance = %d is mounted\r\n", dev_addr, instance);
   printf("VID = %04x, PID = %04x\r\n", vid, pid);
+
+  // hid_parser
+  uint8_t ret = USB_ProcessHIDReport(dev_addr, instance, desc_report, desc_len, &(info));
+  if(ret == HID_PARSE_Successful)
+  {
+    // g_dev_addr = dev_addr;
+    // g_instance = instance;
+    parse_hid_descriptor(dev_addr, instance);
+  }
+  else
+  {
+    printf("Error: USB_ProcessHIDReport failed: %d\r\n", ret);
+  }
+  USB_FreeReportInfo(info);
+  info = NULL;
 
   // Stash device vid/pid/serial device type detection
   devices[dev_addr].vid = vid;
@@ -1354,6 +1534,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].ds4_mounted = false;
   devices[dev_addr].instances[instance].ds5_mounted = false;
   devices[dev_addr].instances[instance].switch_mounted = false;
+
   switch_reset(dev_addr, instance);
 }
 
@@ -2743,6 +2924,39 @@ void print_bits(uint32_t num) {
     printf("\n");
 }
 
+//called from parser for filtering report items
+bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, HID_ReportItem_t *const CurrentItem)
+{
+  if (CurrentItem->ItemType != HID_REPORT_ITEM_In)
+    return false;
+
+  // if (devices[dev_addr].instances[instance].reportID == INVALID_REPORT_ID)
+  // {
+  //   devices[dev_addr].instances[instance].reportID = CurrentItem->ReportID;
+  // }
+  switch (CurrentItem->Attributes.Usage.Page)
+  {
+    case HID_USAGE_PAGE_DESKTOP:
+      // printf("HID_USAGE: 0x%x\n", CurrentItem->Attributes.Usage.Usage);
+      switch (CurrentItem->Attributes.Usage.Usage)
+      {
+        case HID_USAGE_DESKTOP_X:
+        case HID_USAGE_DESKTOP_Y:
+        case HID_USAGE_DESKTOP_Z:
+        case HID_USAGE_DESKTOP_HAT_SWITCH:
+        case HID_USAGE_DESKTOP_DPAD_UP:
+        case HID_USAGE_DESKTOP_DPAD_DOWN:
+        case HID_USAGE_DESKTOP_DPAD_LEFT:
+        case HID_USAGE_DESKTOP_DPAD_RIGHT:
+          return true;
+      }
+      return false;
+    case HID_USAGE_PAGE_BUTTON:
+      return true;
+  }
+  return false;
+}
+
 static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report)
 {
   static hid_gamepad_report_t prev_report = { 0 };
@@ -2791,6 +3005,91 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
   prev_report = *report;
 }
 
+// Parses report with parsed HID descriptor byteIndexes & bitMasks
+void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
+{
+  static pad_buttons previous[5][5];
+  pad_buttons current = {0};
+  current.value = 0;
+
+  uint8_t xValue = report[devices[dev_addr].instances[instance].xLoc.byteIndex] & devices[dev_addr].instances[instance].xLoc.bitMask;
+  uint8_t yValue = report[devices[dev_addr].instances[instance].yLoc.byteIndex] & devices[dev_addr].instances[instance].yLoc.bitMask;
+  uint8_t hatValue = report[devices[dev_addr].instances[instance].hatLoc.byteIndex] & devices[dev_addr].instances[instance].hatLoc.bitMask;
+
+  // parse hat from report
+  if (devices[dev_addr].instances[instance].hatLoc.bitMask) {
+    current.all_direction |= HAT_SWITCH_TO_DIRECTION_BUTTONS[hatValue];
+  }
+
+  // parse buttons from report
+  current.all_buttons = 0;
+  for (int i = 0; i < 12; i++) {
+    if (report[devices[dev_addr].instances[instance].buttonLoc[i].byteIndex] & devices[dev_addr].instances[instance].buttonLoc[i].bitMask) {
+      current.all_buttons |= (0x01 << i);
+    }
+  }
+
+  // parse analog from report
+  if (devices[dev_addr].instances[instance].xLoc.bitMask && devices[dev_addr].instances[instance].yLoc.bitMask) {
+    // parse x-axis from report
+    uint32_t range_half = devices[dev_addr].instances[instance].xLoc.mid;
+    uint32_t dead_zone_range = range_half / DEAD_ZONE;
+    if (xValue < (range_half - dead_zone_range) && xValue != 0x01)
+    {
+      current.left |= 1;
+    }
+    else if (xValue > (range_half + dead_zone_range))
+    {
+      current.right |= 1;
+    }
+
+    // parse y-axis from report
+    range_half = devices[dev_addr].instances[instance].yLoc.mid;
+    dead_zone_range = range_half / DEAD_ZONE;
+    if (yValue < (range_half - dead_zone_range))
+    {
+      current.up |= 1;
+    }
+    else if (yValue > (range_half + dead_zone_range))
+    {
+      current.down |= 1;
+    }
+  }
+
+  if (previous[dev_addr-1][instance].value != current.value)
+  {
+    previous[dev_addr-1][instance] = current;
+
+    // printf("Generic HID Report: ");
+    // printf("Button Count: %d\n", devices[dev_addr].instances[instance].buttonCnt);
+    // printf(" xValue:%d yValue:%d dPad:%d \n",xValue, yValue, hatValue);
+    // for (int i = 0; i < 12; i++) {
+    //   printf(" B%d:%d", i + 1, (report[devices[dev_addr].instances[instance].buttonLoc[i].byteIndex] & devices[dev_addr].instances[instance].buttonLoc[i].bitMask) ? 1 : 0 );
+    // }
+    // printf("\n");
+
+    uint8_t buttonCount = devices[dev_addr].instances[instance].buttonCnt;
+    if (buttonCount > 12) buttonCount = 12;
+    bool buttonSelect = current.all_buttons & (0x01 << (buttonCount-2));
+    bool buttonStart = current.all_buttons & (0x01 << (buttonCount-1));
+    bool has_6btns = buttonCount >= 8;
+
+    buttons = (((current.button6)  ? 0x00 : 0x8000) |
+               ((current.button5)  ? 0x00 : 0x4000) |
+               ((current.button4)  ? 0x00 : 0x2000) |
+               ((current.button3) ? 0x00 : 0x1000) |
+               ((has_6btns)  ? 0x00 : 0xFF00) |
+               ((current.left)  ? 0x00 : 0x0008) |
+               ((current.down)  ? 0x00 : 0x0004) |
+               ((current.right) ? 0x00 : 0x0002) |
+               ((current.up)    ? 0x00 : 0x0001) |
+               ((buttonStart)   ? 0x00 : 0x0080) |
+               ((buttonSelect)   ? 0x00 : 0x0040) |
+               ((current.button2)   ? 0x00 : 0x0020) |
+               ((current.button1)   ? 0x00 : 0x0010));
+    post_globals(dev_addr, instance, buttons, 0, 0);
+  }
+}
 
 //--------------------------------------------------------------------+
 // Generic Report
@@ -2855,13 +3154,15 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         process_mouse_report(dev_addr, instance, (hid_mouse_report_t const*) report );
       break;
 
-      case HID_USAGE_DESKTOP_GAMEPAD:
+      // case HID_USAGE_DESKTOP_GAMEPAD:
+      default:
         TU_LOG1("HID receive gamepad report\r\n");
         // Assume gamepad follow boot report layout
         // process_gamepad_report(dev_addr, instance, (hid_gamepad_report_t const*) report );
+        parse_hid_report(dev_addr, instance, report, len);
       break;
 
-      default: break;
+      // default: break;
     }
   }
 }

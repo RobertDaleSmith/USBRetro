@@ -311,6 +311,7 @@ extern "C"
 		uint16_t ItemFlags;					  /**< Item data flags, a mask of \c HID_IOF_* constants. */
 		uint8_t ReportID;					  /**< Report ID this item belongs to, or 0x00 if device has only one report */
 		HID_ReportItem_Attributes_t Attributes; /**< Report item attributes. */
+		uint8_t ReportCount;
 		uint32_t Value;			/**< Current value of the report item - use \ref HID_ALIGN_DATA() when processing
 								 *   a retrieved value so that it is aligned to a specific type.
 								 */
@@ -360,7 +361,9 @@ extern "C"
 	 *
 	 *  \return A value in the \ref HID_Parse_ErrorCodes_t enum.
 	 */
-	uint8_t USB_ProcessHIDReport(const uint8_t *ReportData,
+	uint8_t USB_ProcessHIDReport(uint8_t dev_addr,
+								 uint8_t instance,
+								 const uint8_t *ReportData,
 								 uint16_t ReportSize,
 								 HID_ReportInfo_t **ParserData);
 
@@ -396,7 +399,7 @@ extern "C"
 	 *  \return Boolean \c true if the item should be stored into the \ref HID_ReportInfo_t structure, \c false if
 	 *		  it should be ignored.
 	 */
-	bool CALLBACK_HIDParser_FilterHIDReportItem(HID_ReportItem_t *const CurrentItem);
+	bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, HID_ReportItem_t *const CurrentItem);
 
 	/** Enum for the different types of HID reports. */
 	enum HID_ReportItemTypes_t
