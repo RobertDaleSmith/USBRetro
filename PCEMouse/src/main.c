@@ -306,14 +306,14 @@ void __not_in_flash_func(update_output)(void)
 
     //
     else if (is3btnSel) {
-      if ((~(players[i].output_buttons>>8)) & 0x10) {
+      if ((~(players[i].output_buttons>>8)) & 0x30) {
         byte &= 0b01111111;
       }
     }
 
     //
     else if (is3btnRun) {
-      if ((~(players[i].output_buttons>>8)) & 0x10) {
+      if ((~(players[i].output_buttons>>8)) & 0x30) {
         byte &= 0b10111111;
       }
     }
