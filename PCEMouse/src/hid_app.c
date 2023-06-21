@@ -2340,10 +2340,10 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((dpad_down)        ? 0x00 : 0x04) |
                ((dpad_right)       ? 0x00 : 0x02) |
                ((dpad_up)          ? 0x00 : 0x01) |
-               ((wingman_report.s) ? 0x00 : 0x80) |    // Run
-               ((wingman_report.mode) ? 0x00 : 0x40) | // Select
-               ((wingman_report.b) ? 0x00 : 0x20) |    // II
-               ((wingman_report.c) ? 0x00 : 0x10));    // I
+               ((wingman_report.s) ? 0x00 : 0x80) |  // Run
+               ((wingman_report.r) ? 0x00 : 0x40) |  // Select
+               ((wingman_report.b) ? 0x00 : 0x20) |  // II
+               ((wingman_report.c) ? 0x00 : 0x10));  // I
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
