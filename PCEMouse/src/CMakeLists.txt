@@ -29,6 +29,7 @@ target_sources(pcemouse PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
         ${CMAKE_CURRENT_SOURCE_DIR}/xinput_host.c
         ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hid_parser.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/main.c
         )
