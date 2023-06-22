@@ -639,6 +639,7 @@ typedef struct TU_ATTR_PACKED
 
 } nes_usb_report_t;
 
+#define MAX_BUTTONS 12 // max generic HID buttons to map
 #define MAX_DEVICES 10
 #define MAX_REPORT  5
 
@@ -673,7 +674,7 @@ typedef struct TU_ATTR_PACKED
   InputLocation xLoc;
   InputLocation yLoc;
   InputLocation hatLoc;
-  InputLocation buttonLoc[12]; // assuming a maximum of 12 buttons
+  InputLocation buttonLoc[MAX_BUTTONS]; // assuming a maximum of 12 buttons
   uint8_t buttonCnt;
 
 } instance_t;
@@ -1380,7 +1381,7 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
         if (hid_debug) printf(" HID_USAGE_PAGE_BUTTON ");
         uint8_t usage = item->Attributes.Usage.Usage;
 
-        if (usage >= 1 && usage <= 12) {
+        if (usage >= 1 && usage <= MAX_BUTTONS) {
           devices[dev_addr].instances[instance].buttonLoc[usage - 1].byteIndex = byteIndex;
           devices[dev_addr].instances[instance].buttonLoc[usage - 1].bitMask = bitMask;
         }
@@ -1460,7 +1461,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_switch(dev_addr)    ) isController = true;
   else if (is_nes_usb(dev_addr)   ) isController = true;
 
-  printf("isController: %d, dev: %d, instance: %d\n", isController?1:0, dev_addr, instance);
+  printf("Known_Controller: %d, dev: %d, instance: %d\n", isController?1:0, dev_addr, instance);
 
   if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -1476,6 +1477,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     }
   }
 
+  // Set device type and defaults
   if (is_sony_ds3(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS3;
@@ -1487,20 +1489,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_sony_ds4(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS4;
-    // devices[dev_addr].instances[instance].motor_left = 0;
-    // devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_sony_ds5(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS5;
-    // devices[dev_addr].instances[instance].motor_left = 0;
-    // devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_switch(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
-    // devices[dev_addr].instances[instance].motor_left = 0;
-    // devices[dev_addr].instances[instance].motor_right = 0;
     printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
   }
   else {
@@ -1515,6 +1511,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   }
 }
 
+// resets default values in case devices are hotswapped
 void switch_reset(uint8_t dev_addr, uint8_t instance)
 {
   devices[dev_addr].instances[instance].switch_conn_ack = false;
@@ -1529,6 +1526,24 @@ void switch_reset(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].switch_player_led_set = 0;
 }
 
+// resets default values in case devices are hotswapped
+void hid_reset(uint8_t dev_addr, uint8_t instance)
+{
+  devices[dev_addr].instances[instance].xLoc.byteIndex = 0;
+  devices[dev_addr].instances[instance].xLoc.bitMask = 0;
+  devices[dev_addr].instances[instance].xLoc.mid = 0;
+  devices[dev_addr].instances[instance].yLoc.byteIndex = 0;
+  devices[dev_addr].instances[instance].yLoc.bitMask = 0;
+  devices[dev_addr].instances[instance].yLoc.mid = 0;
+  devices[dev_addr].instances[instance].hatLoc.byteIndex = 0;
+  devices[dev_addr].instances[instance].hatLoc.bitMask = 0;
+  devices[dev_addr].instances[instance].buttonCnt = 0;
+  for (int i = 0; i < MAX_BUTTONS; i++) {
+    devices[dev_addr].instances[instance].buttonLoc[i].byteIndex = 0;
+    devices[dev_addr].instances[instance].buttonLoc[i].bitMask = 0;
+  }
+}
+
 // Invoked when device with hid interface is un-mounted
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
@@ -1540,7 +1555,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   }
   // Reset HID Config
   else if (devices[dev_addr].instances[instance].type == CONTROLLER_HID) {
-    // hid_reset(dev_addr, instance);
+    hid_reset(dev_addr, instance);
   }
 
   devices[dev_addr].instance_count--;
