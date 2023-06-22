@@ -363,6 +363,8 @@ typedef struct TU_ATTR_PACKED
     uint8_t dpad : 4; // (hat format, 0x08 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
   };
 
+  uint8_t x1, y1, x2, y2;
+
 } bitdo_pce_report_t;
 
 // 8BitDo M30 Bluetooth gamepad
@@ -1333,31 +1335,32 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
       case HID_USAGE_PAGE_DESKTOP:
         switch (item->Attributes.Usage.Usage)
         {
-        case HID_USAGE_DESKTOP_X:
+        case HID_USAGE_DESKTOP_X: // Left Analog X
         {
           if (hid_debug) printf(" HID_USAGE_DESKTOP_X ");
           devices[dev_addr].instances[instance].xLoc.byteIndex = byteIndex;
           devices[dev_addr].instances[instance].xLoc.bitMask = bitMask;
           devices[dev_addr].instances[instance].xLoc.mid = midValue;
-
+          break;
         }
-        break;
-        case HID_USAGE_DESKTOP_Y:
+        case HID_USAGE_DESKTOP_Y: // Left Analog Y
         {
           if (hid_debug) printf(" HID_USAGE_DESKTOP_Y ");
           devices[dev_addr].instances[instance].yLoc.byteIndex = byteIndex;
           devices[dev_addr].instances[instance].yLoc.bitMask = bitMask;
           devices[dev_addr].instances[instance].yLoc.mid = midValue;
+          break;
         }
-        break;
-        case HID_USAGE_DESKTOP_Z:
+        case HID_USAGE_DESKTOP_Z: // Right Analog X
         {
           if (hid_debug) printf(" HID_USAGE_DESKTOP_Z ");
-          // devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
-          // devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
-          // devices[dev_addr].instances[instance].zLoc.mid = midValue;
+          break;
         }
-        break;
+        case HID_USAGE_DESKTOP_RZ: // Right Analog Y
+        {
+          if (hid_debug) printf(" HID_USAGE_DESKTOP_RZ ");
+          break;
+        }
         case HID_USAGE_DESKTOP_HAT_SWITCH:
           if (hid_debug) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
           devices[dev_addr].instances[instance].hatLoc.byteIndex = byteIndex;
@@ -1566,7 +1569,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 }
 
 // check if different than 2
-bool diff_than_n(uint8_t x, uint8_t y, uint8_t n)
+bool diff_than_n(uint16_t x, uint16_t y, uint8_t n)
 {
   return (x - y > n) || (y - x > n);
 }
@@ -1640,11 +1643,8 @@ bool pce_diff_report(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* r
 {
   bool result;
 
-  result = rpt1->dpad != rpt2->dpad;
-  result |= rpt1->sel != rpt2->sel;
-  result |= rpt1->run != rpt2->run;
-  result |= rpt1->one != rpt2->one;
-  result |= rpt1->two != rpt2->two;
+  // check the all with mem compare
+  result |= memcmp(&rpt1, &rpt2, 3);
 
   return result;
 }
@@ -2128,6 +2128,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
   if ( pce_diff_report(&prev_report[dev_addr-1], &pce_report) )
   {
+    // printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", pce_report.x1, pce_report.y1, pce_report.x2, pce_report.y2);
     printf("DPad = %d ", pce_report.dpad);
 
     if (pce_report.sel) printf("Select ");
@@ -2980,6 +2981,7 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
         case HID_USAGE_DESKTOP_X:
         case HID_USAGE_DESKTOP_Y:
         case HID_USAGE_DESKTOP_Z:
+        case HID_USAGE_DESKTOP_RZ:
         case HID_USAGE_DESKTOP_HAT_SWITCH:
         case HID_USAGE_DESKTOP_DPAD_UP:
         case HID_USAGE_DESKTOP_DPAD_DOWN:
