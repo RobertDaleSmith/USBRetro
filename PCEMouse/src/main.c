@@ -268,7 +268,15 @@ void __not_in_flash_func(update_output)(void)
   }
   
   unsigned short int i;
-  for (i = 0; i < 5; ++i) {
+  for (i = 0; i < MAX_PLAYERS; ++i) {
+    // base controller/mouse buttons
+    int8_t byte = (players[i].output_buttons & 0xff);
+
+    if (i >= playersCount) {
+      bytes[i] = 0xff;
+      continue;
+    }
+
     // check for 6-button enable/disable hotkeys
     if (!(players[i].output_buttons & 0b0000000010000001))
       players[i].button_mode = BUTTON_MODE_6;
@@ -279,15 +287,6 @@ void __not_in_flash_func(update_output)(void)
     else if (!(players[i].output_buttons & 0b0000000010001000))
       players[i].button_mode = BUTTON_MODE_3_RUN;
 
-    bool has6Btn = !(players[i].output_buttons & 0x0f00);
-    bool isMouse = !(players[i].output_buttons & 0x0f);
-    bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
-    bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
-    bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
-
-    // base controller/mouse buttons
-    int8_t byte = (players[i].output_buttons & 0xff);
-
     // Turbo EverDrive Pro hot-key fix
     if (hotkey) byte &= hotkey;
     else if (i == 0) {
@@ -296,6 +295,12 @@ void __not_in_flash_func(update_output)(void)
       else if(btns == 0x88) hotkey = ~0x88; // RUN + LEFT
       else if(btns == 0x84) hotkey = ~0x84; // RUN + DOWN
     }
+
+    bool has6Btn = !(players[i].output_buttons & 0x0f00);
+    bool isMouse = !(players[i].output_buttons & 0x0f);
+    bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
+    bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
+    bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
 
     // 6 button extra four buttons (III/IV/V/VI)
     if (is6btn) {
