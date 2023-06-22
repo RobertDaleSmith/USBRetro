@@ -392,6 +392,8 @@ typedef struct TU_ATTR_PACKED
     uint8_t padding3 : 4;
   };
 
+  uint8_t x1, y1, x2, y2;
+
 } bitdo_m30_report_t;
 
 // Sega Genesis mini controller
@@ -1348,13 +1350,13 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
           devices[dev_addr].instances[instance].yLoc.mid = midValue;
         }
         break;
-        // case HID_USAGE_DESKTOP_Z:
-        // {
-        //   if (hid_debug) printf(" HID_USAGE_DESKTOP_Z ");
-        //   devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
-        //   devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
-        //  devices[dev_addr].instances[instance].zLoc.mid = midValue;
-        // }
+        case HID_USAGE_DESKTOP_Z:
+        {
+          if (hid_debug) printf(" HID_USAGE_DESKTOP_Z ");
+          // devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
+          // devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
+          // devices[dev_addr].instances[instance].zLoc.mid = midValue;
+        }
         break;
         case HID_USAGE_DESKTOP_HAT_SWITCH:
           if (hid_debug) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
@@ -1452,6 +1454,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (is_sony_ds5(dev_addr)  ) isController = true;
   else if (is_sony_psc(dev_addr)  ) isController = true;
   else if (is_8bit_pce(dev_addr)  ) isController = true;
+  else if (is_8bit_m30(dev_addr)  ) isController = true;
   else if (is_sega_mini(dev_addr) ) isController = true;
   else if (is_astro_city(dev_addr)) isController = true;
   else if (is_wing_man(dev_addr)  ) isController = true;
@@ -1651,7 +1654,7 @@ bool m30_diff_report(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* r
   bool result;
 
   // check the all with mem compare
-  result |= memcmp(&rpt1, &rpt2, 3);
+  result |= memcmp(&rpt1, &rpt2, 7);
 
   return result;
 }
@@ -2168,6 +2171,7 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
   if ( m30_diff_report(&prev_report[dev_addr-1], &input_report) )
   {
+    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", input_report.x1, input_report.y1, input_report.x2, input_report.y2);
     printf("DPad = %d ", input_report.dpad);
 
     if (input_report.a) printf("A ");
@@ -2183,12 +2187,21 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     if (input_report.home) printf("Home ");
 
     printf("\r\n");
-
     bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
     bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
     bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
-    bool has_6btns = false;
+
+    int threshold = 28;
+    dpad_up    |= (input_report.y1 < (128 - threshold));
+    dpad_right |= (input_report.x1 > (128 + threshold));
+    dpad_down  |= (input_report.y1 > (128 + threshold));
+    dpad_left  |= (input_report.x1 < (128 - threshold));
+
+    dpad_up    |= (input_report.y2 < (128 - threshold));
+    dpad_right |= (input_report.x2 > (128 + threshold));
+    dpad_down  |= (input_report.y2 > (128 + threshold));
+    dpad_left  |= (input_report.x2 < (128 - threshold));
 
     buttons = (((input_report.z || input_report.l) ? 0x00 : 0x8000) |
                ((input_report.y || input_report.r) ? 0x00 : 0x4000) |
@@ -3042,7 +3055,8 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
 
   // parse hat from report
   if (devices[dev_addr].instances[instance].hatLoc.bitMask) {
-    current.all_direction |= HAT_SWITCH_TO_DIRECTION_BUTTONS[hatValue];
+    uint8_t direction = hatValue <= 8 ? hatValue : 8; // fix for hats with pressed state greater than 8
+    current.all_direction |= HAT_SWITCH_TO_DIRECTION_BUTTONS[direction];
   }
 
   // parse buttons from report
@@ -3084,7 +3098,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
   {
     previous[dev_addr-1][instance] = current;
 
-    // printf("Generic HID Report: ");
+    // printf("Super HID Report: ");
     // printf("Button Count: %d\n", devices[dev_addr].instances[instance].buttonCnt);
     // printf(" xValue:%d yValue:%d dPad:%d \n",xValue, yValue, hatValue);
     // for (int i = 0; i < 12; i++) {
