@@ -377,26 +377,63 @@ typedef struct TU_ATTR_PACKED
     uint8_t x : 1;
     uint8_t y : 1;
     uint8_t padding1 : 1;
-    uint8_t z : 1;
-    uint8_t c : 1;
+    uint8_t l : 1; // z
+    uint8_t r : 1; // c
   };
 
   struct {
-    uint8_t l : 1;
-    uint8_t r : 1;
-    uint8_t minus : 1;
+    uint8_t l2 : 1;
+    uint8_t r2 : 1;
+    uint8_t select : 1;
     uint8_t start : 1;
-    uint8_t padding2 : 4;
+    uint8_t padding2 : 1;
+    uint8_t l3 : 1;
+    uint8_t r3 : 1;
   };
 
   struct {
     uint8_t dpad   : 4;
-    uint8_t padding3 : 4;
+    uint8_t cap : 1;
   };
 
   uint8_t x1, y1, x2, y2;
 
 } bitdo_m30_report_t;
+
+// 8BitDo Bluetooth Adapter
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t reportId; // 0x01 for HID data
+
+  struct {
+    uint8_t a : 1;
+    uint8_t b : 1;
+    uint8_t home : 1;
+    uint8_t x : 1;
+    uint8_t y : 1;
+    uint8_t padding1 : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
+  };
+
+  struct {
+    uint8_t l2 : 1;
+    uint8_t r2 : 1;
+    uint8_t select : 1;
+    uint8_t start : 1;
+    uint8_t padding2 : 1;
+    uint8_t l3 : 1;
+    uint8_t r3 : 1;
+  };
+
+  struct {
+    uint8_t dpad : 4;
+    uint8_t cap : 1;
+  };
+
+  uint8_t x1, y1, x2, y2;
+
+} bitdo_bta_report_t;
 
 // Sega Genesis mini controller
 typedef struct TU_ATTR_PACKED
@@ -622,13 +659,13 @@ typedef union
   uint8_t buf[sizeof(switch_report_t)];
 } switch_report_01_t;
 
-// Generic NES USB Controller
+// DragonRise Generic Gamepad (SNES/NES/GC/etc)
 typedef struct TU_ATTR_PACKED
 {
   uint8_t id, axis1_y, axis1_x, axis0_x, axis0_y;
 
   struct {
-    uint8_t high : 4;
+    uint8_t padding : 4;
     uint8_t x : 1;
     uint8_t a : 1;
     uint8_t b : 1;
@@ -636,14 +673,15 @@ typedef struct TU_ATTR_PACKED
   };
 
   struct {
-    uint8_t low : 4;
+    uint8_t c : 1;
+    uint8_t z : 1;
+    uint8_t l : 1;
+    uint8_t r : 1;
     uint8_t select : 1;
     uint8_t start : 1;
-    uint8_t r : 1;
-    uint8_t l : 1;
   };
 
-} nes_usb_report_t;
+} dragonrise_report_t;
 
 #define MAX_BUTTONS 12 // max generic HID buttons to map
 #define MAX_DEVICES 6
@@ -748,7 +786,7 @@ static inline bool is_switch(uint8_t dev_addr)
 }
 
 // check if device is generic NES USB Controller
-static inline bool is_nes_usb(uint8_t dev_addr)
+static inline bool is_dragonrise(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
@@ -781,6 +819,15 @@ static inline bool is_8bit_m30(uint8_t dev_addr)
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x2dc8 && pid == 0x5006)); // 8BitDo M30 BT (Android Mode)
+}
+
+// check if device is 8BitDo Bluetooth Adapter
+static inline bool is_8bit_bta(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x2dc8 && (pid == 0x3105 || pid == 0x3107))); // 8BitDo Bluetooth Adapter (Black)
 }
 
 // check if device is Sega Genesis mini controller
@@ -1405,6 +1452,81 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].buttonCnt = btns_count;
 }
 
+bool isKnownController(uint8_t dev_addr) {
+  if      (is_sony_ds3(dev_addr)  ) {
+    printf("DEVICE:[PS3 Dualshock 3 Controller]\n");
+    return true;
+  }
+  else if (is_sony_ds4(dev_addr)  ) {
+    printf("DEVICE:[PS4 DualShock 4 Controller]\n");
+    return true;
+  }
+  else if (is_sony_ds5(dev_addr)  ) {
+    printf("DEVICE:[PS5 DualSense Controller]\n");
+    return true;
+  }
+  else if (is_sony_psc(dev_addr)  ) {
+    printf("DEVICE:[PlayStation Classic Controller]\n");
+    return true;
+  }
+  else if (is_8bit_pce(dev_addr)  ) {
+    printf("DEVICE:[8BitDo PCE 2.4g Controller]\n");
+    return true;
+  }
+  else if (is_8bit_m30(dev_addr)  ) {
+    printf("DEVICE:[8BitDo M30 Bluetooth Controller]\n");
+    return true;
+  }
+  else if (is_8bit_bta(dev_addr)  ) {
+    printf("DEVICE:[8BitDo Wireless Adapter (Black)]\n");
+    return true;
+  }
+  else if (is_sega_mini(dev_addr) ) {
+    printf("DEVICE:[Sega Genesis/MD Mini Controller]\n");
+    return true;
+  }
+  else if (is_astro_city(dev_addr)) {
+    if (devices[dev_addr].pid == 0x0024) {
+      printf("DEVICE:[8BitDo M30 2.4g Controller]\n");
+    } else {
+      printf("DEVICE:[Sega Astro City Mini ");
+      if (devices[dev_addr].pid == 0x0028) printf("Joystick]\n");
+      else/*pid == 0x0027*/ printf("Controller]\n");
+    }
+    return true;
+  }
+  else if (is_wing_man(dev_addr)  ) {
+    printf("DEVICE:[Logitech WingMan Action Controller]\n");
+    return true;
+  }
+  else if (is_triple_v2(dev_addr) ) {
+    printf("DEVICE:[TripleController Adapter v2]\n");
+    return true;
+  }
+  else if (is_triple_v1(dev_addr) ) {
+    printf("DEVICE:[TripleController Adapter v1]\n");
+    return true;
+  }
+  else if (is_pokken(dev_addr)    ) {
+    printf("DEVICE:[Wii U Pokken Controller]\n");
+    return true;
+  }
+  else if (is_switch(dev_addr)    ) {
+    if (devices[dev_addr].pid == 0x200e) {
+      printf("DEVICE:[Switch JoyCon Charging Grip]\n");
+    } else {
+      printf("DEVICE:[Switch Pro Controller]\n");
+    }
+    return true;
+  }
+  else if (is_dragonrise(dev_addr)   ) {
+    printf("DEVICE:[DragonRise Generic Gamepad]\n");
+    return true;
+  }
+
+  return false;
+}
+
 //--------------------------------------------------------------------+
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
@@ -1439,23 +1561,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isKnownCtrlr = false;
-  if      (is_sony_ds3(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_sony_ds4(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_sony_ds5(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_sony_psc(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_8bit_pce(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_8bit_m30(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_sega_mini(dev_addr) ) isKnownCtrlr = true;
-  else if (is_astro_city(dev_addr)) isKnownCtrlr = true;
-  else if (is_wing_man(dev_addr)  ) isKnownCtrlr = true;
-  else if (is_triple_v2(dev_addr) ) isKnownCtrlr = true;
-  else if (is_triple_v1(dev_addr) ) isKnownCtrlr = true;
-  else if (is_pokken(dev_addr)    ) isKnownCtrlr = true;
-  else if (is_switch(dev_addr)    ) isKnownCtrlr = true;
-  else if (is_nes_usb(dev_addr)   ) isKnownCtrlr = true;
-
-  printf("Known_Controller: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
+  bool isKnownCtrlr = isKnownController(dev_addr);
+  printf("mapped: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
 
   if (!isKnownCtrlr)
   {
@@ -1669,6 +1776,16 @@ bool m30_diff_report(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* r
   return result;
 }
 
+bool bta_diff_report(bitdo_bta_report_t const* rpt1, bitdo_bta_report_t const* rpt2)
+{
+  bool result;
+
+  // check the all with mem compare
+  result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 7);
+
+  return result;
+}
+
 bool sega_diff_report(sega_mini_report_t const* rpt1, sega_mini_report_t const* rpt2)
 {
   bool result;
@@ -1803,20 +1920,16 @@ bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2
   return result;
 }
 
-bool nes_usb_diff_report(nes_usb_report_t const* rpt1, nes_usb_report_t const* rpt2)
+bool dragonrise_diff_report(dragonrise_report_t const* rpt1, dragonrise_report_t const* rpt2)
 {
   bool result;
 
-  result |= rpt1->axis0_y != rpt2->axis0_y;
-  result |= rpt1->axis0_x != rpt2->axis0_x;
-  result |= rpt1->a != rpt2->a;
-  result |= rpt1->b != rpt2->b;
-  result |= rpt1->x != rpt2->x;
-  result |= rpt1->y != rpt2->y;
-  result |= rpt1->l != rpt2->l;
-  result |= rpt1->r != rpt2->r;
-  result |= rpt1->select != rpt2->select;
-  result |= rpt1->start != rpt2->start;
+  // x, y, z, rz must different than 2 to be counted
+  result = diff_than_n(rpt1->axis0_x, rpt2->axis0_x, 2) || diff_than_n(rpt1->axis0_y, rpt2->axis0_y, 2) ||
+           diff_than_n(rpt1->axis1_x, rpt2->axis1_x, 2) || diff_than_n(rpt1->axis1_y, rpt2->axis1_y, 2);
+
+  // check the rest with mem compare
+  result |= memcmp(&rpt1->axis0_y + 1, &rpt2->axis0_y + 1, 2);
 
   return result;
 }
@@ -2177,14 +2290,17 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     if (input_report.a) printf("A ");
     if (input_report.b) printf("B ");
-    if (input_report.c) printf("C ");
+    if (input_report.r) printf("R (C) ");
     if (input_report.x) printf("X ");
     if (input_report.y) printf("Y ");
-    if (input_report.z) printf("Z ");
-    if (input_report.l) printf("L ");
-    if (input_report.r) printf("R ");
+    if (input_report.l) printf("L (Z) ");
+    if (input_report.l2) printf("L2 ");
+    if (input_report.r2) printf("R2 ");
+    if (input_report.l3) printf("L3 ");
+    if (input_report.r3) printf("R3 ");
+    if (input_report.cap) printf("Capture ");
+    if (input_report.select) printf("Select ");
     if (input_report.start) printf("Start ");
-    if (input_report.minus) printf("Minus ");
     if (input_report.home) printf("Home ");
 
     printf("\r\n");
@@ -2204,8 +2320,11 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     dpad_down  |= (input_report.y2 > (128 + threshold));
     dpad_left  |= (input_report.x2 < (128 - threshold));
 
-    buttons = (((input_report.z || input_report.l) ? 0x00 : 0x8000) |
-               ((input_report.y || input_report.r) ? 0x00 : 0x4000) |
+    if (dpad_up && dpad_down) dpad_down = false;
+    if (dpad_left && dpad_right) dpad_right = false;
+
+    buttons = (((input_report.l2) ? 0x00 : 0x8000) |
+               ((input_report.r2) ? 0x00 : 0x4000) |
                ((input_report.x)     ? 0x00 : 0x2000) |
                ((input_report.a)     ? 0x00 : 0x1000) |
                ((dpad_left)          ? 0x00 : 0x08) |
@@ -2213,9 +2332,78 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((dpad_right)         ? 0x00 : 0x02) |
                ((dpad_up)            ? 0x00 : 0x01) |
                ((input_report.start || input_report.home) ? 0x00 : 0x80) |
-               ((input_report.minus || input_report.home) ? 0x00 : 0x40) |
+               ((input_report.select || input_report.home) ? 0x00 : 0x40) |
                ((input_report.b)     ? 0x00 : 0x20) |
-               ((input_report.c)     ? 0x00 : 0x10));
+               ((input_report.r)     ? 0x00 : 0x10));
+
+    // add to accumulator and post to the state machine
+    // if a scan from the host machine is ongoing, wait
+    post_globals(dev_addr, instance, buttons, 0, 0);
+
+    prev_report[dev_addr-1] = input_report;
+  }
+}
+
+void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static bitdo_bta_report_t prev_report[5] = { 0 };
+
+  bitdo_bta_report_t input_report;
+  memcpy(&input_report, report, sizeof(input_report));
+
+  if ( bta_diff_report(&prev_report[dev_addr-1], &input_report) )
+  {
+    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", input_report.x1, input_report.y1, input_report.x2, input_report.y2);
+    printf("DPad = %d ", input_report.dpad);
+
+    if (input_report.a) printf("A ");
+    if (input_report.b) printf("B ");
+    if (input_report.r) printf("R (C) ");
+    if (input_report.x) printf("X ");
+    if (input_report.y) printf("Y ");
+    if (input_report.l) printf("L (Z) ");
+    if (input_report.l2) printf("L2 ");
+    if (input_report.r2) printf("R2 ");
+    if (input_report.l3) printf("L3 ");
+    if (input_report.r3) printf("R3 ");
+    if (input_report.cap) printf("Capture ");
+    if (input_report.select) printf("Select ");
+    if (input_report.start) printf("Start ");
+    if (input_report.home) printf("Home ");
+
+    printf("\r\n");
+    bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
+    bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
+    bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
+    bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
+
+    int threshold = 28;
+    dpad_up    |= (input_report.y1 < (128 - threshold));
+    dpad_right |= (input_report.x1 > (128 + threshold));
+    dpad_down  |= (input_report.y1 > (128 + threshold));
+    dpad_left  |= (input_report.x1 < (128 - threshold));
+
+    dpad_up    |= (input_report.y2 < (128 - threshold));
+    dpad_right |= (input_report.x2 > (128 + threshold));
+    dpad_down  |= (input_report.y2 > (128 + threshold));
+    dpad_left  |= (input_report.x2 < (128 - threshold));
+
+    if (dpad_up && dpad_down) dpad_down = false;
+    if (dpad_left && dpad_right) dpad_right = false;
+
+    buttons = (((input_report.r) ? 0x00 : 0x8000) |
+               ((input_report.l) ? 0x00 : 0x4000) |
+               ((input_report.y) ? 0x00 : 0x2000) |
+               ((input_report.x) ? 0x00 : 0x1000) |
+               ((dpad_left)      ? 0x00 : 0x08) |
+               ((dpad_down)      ? 0x00 : 0x04) |
+               ((dpad_right)     ? 0x00 : 0x02) |
+               ((dpad_up)        ? 0x00 : 0x01) |
+               ((input_report.start || input_report.home) ? 0x00 : 0x80) |
+               ((input_report.select || input_report.home) ? 0x00 : 0x40) |
+               ((input_report.b) ? 0x00 : 0x20) |
+               ((input_report.a) ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -2684,17 +2872,17 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   }
 }
 
-void process_nes_usb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static nes_usb_report_t prev_report[5][5];
+  static dragonrise_report_t prev_report[5][5];
 
-  nes_usb_report_t update_report;
+  dragonrise_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if ( nes_usb_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  if ( dragonrise_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
   {
-    printf("(x, y) = (%u, %u)\r\n", update_report.axis0_x, update_report.axis0_y);
+    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y);
     // Y,X,L,R extra button data may or may not be used by similiar generic controller variants
     if (update_report.y) printf("Y ");
     if (update_report.b) printf("B ");
@@ -2702,29 +2890,29 @@ void process_nes_usb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
     if (update_report.x) printf("X ");
     if (update_report.l) printf("L ");
     if (update_report.r) printf("R ");
+    if (update_report.z) printf("Z ");
+    if (update_report.c) printf("C ");
     if (update_report.select) printf("Select ");
     if (update_report.start) printf("Start ");
     printf("\r\n");
 
-    bool dpad_left  = (update_report.axis0_x < 127);
-    bool dpad_right  = (update_report.axis0_x > 127);
-    bool dpad_up  = (update_report.axis0_y < 127);
-    bool dpad_down  = (update_report.axis0_y > 127);
-    bool has_6btns = false;
+    bool dpad_left  = (update_report.axis0_x < 126);
+    bool dpad_right  = (update_report.axis0_x > 128);
+    bool dpad_up  = (update_report.axis0_y < 126);
+    bool dpad_down  = (update_report.axis0_y > 128);
 
-    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
-               ((update_report.l)      ? 0x00 : 0x4000) | // V
-               ((update_report.y)      ? 0x00 : 0x2000) | // IV
-               ((update_report.x)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0xFF00) |
+    buttons = (((update_report.z)      ? 0x00 : 0x8000) | // VI
+               ((update_report.y)      ? 0x00 : 0x4000) | // V
+               ((update_report.x)      ? 0x00 : 0x2000) | // IV
+               ((update_report.a)      ? 0x00 : 0x1000) | // III
                ((dpad_left)            ? 0x00 : 0x0008) |
                ((dpad_down)            ? 0x00 : 0x0004) |
                ((dpad_right)           ? 0x00 : 0x0002) |
                ((dpad_up)              ? 0x00 : 0x0001) |
                ((update_report.start)  ? 0x00 : 0x0080) | // Run
                ((update_report.select) ? 0x00 : 0x0040) | // Select
-               ((update_report.b)      ? 0x00 : 0x0020) | // II
-               ((update_report.a)      ? 0x00 : 0x0010)); // I
+               ((update_report.b || update_report.l) ? 0x00 : 0x0020) | // II
+               ((update_report.c || update_report.r) ? 0x00 : 0x0010)); // I
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
@@ -2757,6 +2945,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_sony_psc(dev_addr) ) process_sony_psc(dev_addr, instance, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
       else if ( is_8bit_m30(dev_addr) ) process_8bit_m30(dev_addr, instance, report, len);
+      else if ( is_8bit_bta(dev_addr) ) process_8bit_bta(dev_addr, instance, report, len);
       else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, instance, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
@@ -2764,7 +2953,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
       else if ( is_pokken(dev_addr) ) process_pokken(dev_addr, instance, report, len);
       else if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
-      else if ( is_nes_usb(dev_addr) ) process_nes_usb(dev_addr, instance, report, len);
+      else if ( is_dragonrise(dev_addr) ) process_dragonrise(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
