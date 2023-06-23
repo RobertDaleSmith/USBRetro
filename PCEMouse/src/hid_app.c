@@ -612,6 +612,8 @@ typedef struct {
     uint8_t  vibration_ack; // Acknowledge output reports that trigger vibration
     uint8_t  subcommand_ack; // Acknowledge if a subcommand was executed
     uint8_t  subcommand_reply_data[35]; // Reply data for executed subcommands
+
+    uint16_t left_x, left_y, right_x, right_y;
 } switch_report_t;
 
 typedef union
@@ -1782,23 +1784,13 @@ bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2
 {
   bool result;
 
-  uint16_t rpt1_left_stick_x = rpt1->left_stick[0] | ((rpt1->left_stick[1] & 0x0F) << 8);
-  uint16_t rpt1_left_stick_y = (rpt1->left_stick[1] >> 4) | (rpt1->left_stick[2] << 4);
-  uint16_t rpt2_left_stick_x = rpt2->left_stick[0] | ((rpt2->left_stick[1] & 0x0F) << 8);
-  uint16_t rpt2_left_stick_y = (rpt2->left_stick[1] >> 4) | (rpt2->left_stick[2] << 4);
-
-  uint16_t rpt1_right_stick_x = rpt1->right_stick[0] | ((rpt1->right_stick[1] & 0x0F) << 8);
-  uint16_t rpt1_right_stick_y = (rpt1->right_stick[1] >> 4) | (rpt1->right_stick[2] << 4);
-  uint16_t rpt2_right_stick_x = rpt2->right_stick[0] | ((rpt2->right_stick[1] & 0x0F) << 8);
-  uint16_t rpt2_right_stick_y = (rpt2->right_stick[1] >> 4) | (rpt2->right_stick[2] << 4);
-
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1_left_stick_x, rpt2_left_stick_x, 4) || diff_than_n(rpt1_left_stick_y, rpt2_left_stick_y, 4) ||
-           diff_than_n(rpt1_right_stick_x, rpt2_right_stick_x, 4) || diff_than_n(rpt1_right_stick_y, rpt2_right_stick_y, 4);
+  result = diff_than_n(rpt1->left_x, rpt2->left_x, 4) || diff_than_n(rpt1->left_y, rpt2->left_y, 4); // ||
+       //  diff_than_n(rpt1->right_x, rpt2->right_x, 4) || diff_than_n(rpt1->right_y, rpt2->right_y, 4);
 
   // check the reset with mem compare (everything but the sticks)
-  result |= memcmp(&rpt1->report_id + 3, &rpt2->report_id + 3, 3);
-  result |= memcmp(&rpt1->vibration_ack, &rpt2->vibration_ack, 37);
+  result |= memcmp(&rpt1->battery_level_and_connection_info + 1, &rpt2->battery_level_and_connection_info + 1, 3);
+  result |= memcmp(&rpt1->subcommand_ack, &rpt2->subcommand_ack, 36);
 
   return result;
 }
@@ -2552,14 +2544,15 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   if (update_report.report_id == 0x30) {
     devices[dev_addr].instances[instance].switch_usb_enable_ack = true;
 
+    update_report.left_x = (update_report.left_stick[0] & 0xFF) | ((update_report.left_stick[1] & 0x0F) << 8);
+    update_report.left_y = ((update_report.left_stick[1] & 0xF0) >> 4) | ((update_report.left_stick[2] & 0xFF) << 4);
+    update_report.right_x = (update_report.right_stick[0] & 0xFF) | ((update_report.right_stick[1] & 0x0F) << 8);
+    update_report.right_y = ((update_report.right_stick[1] & 0xF0) >> 4) | ((update_report.right_stick[2] & 0xFF) << 4);
+
     if (switch_diff_report(&prev_report[dev_addr-1][instance], &update_report)) {
-      uint16_t left_stick_x = update_report.left_stick[0] | ((update_report.left_stick[1] & 0x0F) << 8);
-      uint16_t left_stick_y = (update_report.left_stick[1] >> 4) | (update_report.left_stick[2] << 4);
-      uint16_t right_stick_x = update_report.right_stick[0] | ((update_report.right_stick[1] & 0x0F) << 8);
-      uint16_t right_stick_y = (update_report.right_stick[1] >> 4) | (update_report.right_stick[2] << 4);
 
       printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, update_report.report_id);
-      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", left_stick_x, left_stick_y, right_stick_x, right_stick_y);
+      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", update_report.left_x, update_report.left_y, update_report.right_x, update_report.right_y);
       printf("DPad = ");
 
       if (update_report.down) printf("Down ");
@@ -2588,10 +2581,10 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
       bool has_6btns = true;
       int threshold = 256;
-      bool dpad_up    = (update_report.up) || left_stick_y > (2048 + threshold);
-      bool dpad_right = (update_report.right) || left_stick_x > (2048 + threshold);
-      bool dpad_down  = (update_report.down) || left_stick_y < (2048 - threshold);
-      bool dpad_left  = (update_report.left) || left_stick_x < (2048 - threshold);
+      bool dpad_up    = (update_report.up) || update_report.left_y > (2048 + threshold);
+      bool dpad_right = (update_report.right) || update_report.left_x > (2048 + threshold);
+      bool dpad_down  = (update_report.down) || update_report.left_y < (2048 - threshold);
+      bool dpad_left  = (update_report.left) || update_report.left_x < (2048 - threshold);
       bool bttn_1 = update_report.a;
       bool bttn_2 = update_report.b;
       bool bttn_3 = update_report.x;
@@ -2601,14 +2594,14 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool bttn_sel = update_report.select || update_report.home;
       bool bttn_run = update_report.start || update_report.home;
 
-      bool is_left_joycon = (!right_stick_x && !right_stick_y);
-      bool is_right_joycon = (!left_stick_x && !left_stick_y);
+      bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
+      bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
 
       if (is_left_joycon) {
-        dpad_up    = update_report.up || (left_stick_y > (2048 + threshold));
-        dpad_right = update_report.right || (left_stick_x > (2048 + threshold));
-        dpad_down  = update_report.down || (left_stick_y < (2048 - threshold));
-        dpad_left  = update_report.left || (left_stick_x < (2048 - threshold));
+        dpad_up    = update_report.up || (update_report.left_y > (2048 + threshold));
+        dpad_right = update_report.right || (update_report.left_x > (2048 + threshold));
+        dpad_down  = update_report.down || (update_report.left_y < (2048 - threshold));
+        dpad_left  = update_report.left || (update_report.left_x < (2048 - threshold));
         // bttn_1 = update_report.right;
         // bttn_2 = update_report.down;
         // bttn_3 = update_report.up;
