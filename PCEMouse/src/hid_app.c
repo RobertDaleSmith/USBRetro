@@ -827,7 +827,11 @@ static inline bool is_8bit_bta(uint8_t dev_addr)
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
-  return ((vid == 0x2dc8 && (pid == 0x3105 || pid == 0x3107))); // 8BitDo Bluetooth Adapter (Black)
+  return ((vid == 0x2dc8 && (
+    pid == 0x3100 || // 8BitDo Bluetooth Adapter (Red)
+    pid == 0x3105 || // 8BitDo Bluetooth Adapter (Black) [05:HID_MODE]
+    pid == 0x3107    // 8BitDo Bluetooth Adapter (Black) [07:IDLE_MODE]
+  )));
 }
 
 // check if device is Sega Genesis mini controller
@@ -1478,7 +1482,14 @@ bool isKnownController(uint8_t dev_addr) {
     return true;
   }
   else if (is_8bit_bta(dev_addr)  ) {
-    printf("DEVICE:[8BitDo Wireless Adapter (Black)]\n");
+    printf("DEVICE:[8BitDo Wireless Adapter ");
+    if (devices[dev_addr].pid == 0x3105) {
+      printf(" (Black)]\n");
+    } else if (devices[dev_addr].pid == 0x3107) {
+      printf("(Black)][IDLE]\n");
+    } else {
+      printf("(Red)]\n");
+    }
     return true;
   }
   else if (is_sega_mini(dev_addr) ) {
