@@ -646,7 +646,6 @@ void tuh_mount_cb(uint8_t dev_addr)
   // application set-up
   printf("A device with address %d is mounted\r\n", dev_addr);
 
-  // playersCount++;
 }
 
 void tuh_umount_cb(uint8_t dev_addr)

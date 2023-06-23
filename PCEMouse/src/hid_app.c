@@ -646,7 +646,7 @@ typedef struct TU_ATTR_PACKED
 } nes_usb_report_t;
 
 #define MAX_BUTTONS 12 // max generic HID buttons to map
-#define MAX_DEVICES 10
+#define MAX_DEVICES 6
 #define MAX_REPORT  5
 
 typedef struct {
@@ -1204,15 +1204,16 @@ void hid_app_task(void)
           devices[dev_addr].instances[instance].switch_conn_ack)
       {
         // set the faster baud rate
-        if (!devices[dev_addr].instances[instance].switch_baud) {
-          devices[dev_addr].instances[instance].switch_baud = true;
+        // if (!devices[dev_addr].instances[instance].switch_baud) {
+        //   devices[dev_addr].instances[instance].switch_baud = true;
 
-          printf("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
-          uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
-          tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
+        //   printf("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
+        //   uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
+        //   tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
 
-        // wait for baud ask and then send init handshake
-        } else if (!devices[dev_addr].instances[instance].switch_handshake && devices[dev_addr].instances[instance].switch_baud_ack) {
+        // // wait for baud ask and then send init handshake
+        // } else
+        if (!devices[dev_addr].instances[instance].switch_handshake/* && devices[dev_addr].instances[instance].switch_baud_ack*/) {
           devices[dev_addr].instances[instance].switch_handshake = true;
 
           printf("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
@@ -1423,21 +1424,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   printf("HID device address = %d, instance = %d is mounted\r\n", dev_addr, instance);
   printf("VID = %04x, PID = %04x\r\n", vid, pid);
 
-  // hid_parser
-  uint8_t ret = USB_ProcessHIDReport(dev_addr, instance, desc_report, desc_len, &(info));
-  if(ret == HID_PARSE_Successful)
-  {
-    // g_dev_addr = dev_addr;
-    // g_instance = instance;
-    parse_hid_descriptor(dev_addr, instance);
-  }
-  else
-  {
-    printf("Error: USB_ProcessHIDReport failed: %d\r\n", ret);
-  }
-  USB_FreeReportInfo(info);
-  info = NULL;
-
   // Stash device vid/pid/serial device type detection
   devices[dev_addr].vid = vid;
   devices[dev_addr].pid = pid;
@@ -1453,28 +1439,43 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isController = false;
-  if      (is_sony_ds3(dev_addr)  ) isController = true;
-  else if (is_sony_ds4(dev_addr)  ) isController = true;
-  else if (is_sony_ds5(dev_addr)  ) isController = true;
-  else if (is_sony_psc(dev_addr)  ) isController = true;
-  else if (is_8bit_pce(dev_addr)  ) isController = true;
-  else if (is_8bit_m30(dev_addr)  ) isController = true;
-  else if (is_sega_mini(dev_addr) ) isController = true;
-  else if (is_astro_city(dev_addr)) isController = true;
-  else if (is_wing_man(dev_addr)  ) isController = true;
-  else if (is_triple_v2(dev_addr) ) isController = true;
-  else if (is_triple_v1(dev_addr) ) isController = true;
-  else if (is_pokken(dev_addr)    ) isController = true;
-  else if (is_switch(dev_addr)    ) isController = true;
-  else if (is_nes_usb(dev_addr)   ) isController = true;
+  bool isKnownCtrlr = false;
+  if      (is_sony_ds3(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_sony_ds4(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_sony_ds5(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_sony_psc(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_8bit_pce(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_8bit_m30(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_sega_mini(dev_addr) ) isKnownCtrlr = true;
+  else if (is_astro_city(dev_addr)) isKnownCtrlr = true;
+  else if (is_wing_man(dev_addr)  ) isKnownCtrlr = true;
+  else if (is_triple_v2(dev_addr) ) isKnownCtrlr = true;
+  else if (is_triple_v1(dev_addr) ) isKnownCtrlr = true;
+  else if (is_pokken(dev_addr)    ) isKnownCtrlr = true;
+  else if (is_switch(dev_addr)    ) isKnownCtrlr = true;
+  else if (is_nes_usb(dev_addr)   ) isKnownCtrlr = true;
 
-  printf("Known_Controller: %d, dev: %d, instance: %d\n", isController?1:0, dev_addr, instance);
+  printf("Known_Controller: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
 
-  if ( !isController && itf_protocol == HID_ITF_PROTOCOL_NONE )
+  if (!isKnownCtrlr)
   {
-    devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
-    printf("HID has %u reports \r\n", devices[dev_addr].instances[instance].report_count);
+    if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
+      devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
+      printf("HID has %u reports \r\n", devices[dev_addr].instances[instance].report_count);
+    }
+
+    // hid_parser
+    uint8_t ret = USB_ProcessHIDReport(dev_addr, instance, desc_report, desc_len, &(info));
+    if(ret == HID_PARSE_Successful)
+    {
+      parse_hid_descriptor(dev_addr, instance);
+    }
+    else
+    {
+      printf("Error: USB_ProcessHIDReport failed: %d\r\n", ret);
+    }
+    USB_FreeReportInfo(info);
+    info = NULL;
   }
 
   uint16_t temp_buf[128];
@@ -1522,6 +1523,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 // resets default values in case devices are hotswapped
 void switch_reset(uint8_t dev_addr, uint8_t instance)
 {
+  printf("SWITCH[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
   devices[dev_addr].instances[instance].switch_conn_ack = false;
   devices[dev_addr].instances[instance].switch_baud = false;
   devices[dev_addr].instances[instance].switch_baud_ack = false;
@@ -1537,6 +1539,7 @@ void switch_reset(uint8_t dev_addr, uint8_t instance)
 // resets default values in case devices are hotswapped
 void hid_reset(uint8_t dev_addr, uint8_t instance)
 {
+  printf("HID[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
   devices[dev_addr].instances[instance].xLoc.byteIndex = 0;
   devices[dev_addr].instances[instance].xLoc.bitMask = 0;
   devices[dev_addr].instances[instance].xLoc.mid = 0;
@@ -1566,7 +1569,12 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     hid_reset(dev_addr, instance);
   }
 
-  devices[dev_addr].instance_count--;
+  if (devices[dev_addr].instance_count > 0) {
+    devices[dev_addr].instance_count--;
+  } else {
+    devices[dev_addr].instance_count = 0;
+  }
+
   devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
@@ -2582,8 +2590,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool has_6btns = true;
       int threshold = 256;
       bool dpad_up    = (update_report.up) || update_report.left_y > (2048 + threshold);
-      bool dpad_right = (update_report.right) || update_report.left_x > (2048 + threshold);
-      bool dpad_down  = (update_report.down) || update_report.left_y < (2048 - threshold);
+      bool dpad_right = (update_report.right && !update_report.left) || update_report.left_x > (2048 + threshold);
+      bool dpad_down  = (update_report.down && !update_report.up) || update_report.left_y < (2048 - threshold);
       bool dpad_left  = (update_report.left) || update_report.left_x < (2048 - threshold);
       bool bttn_1 = update_report.a;
       bool bttn_2 = update_report.b;
