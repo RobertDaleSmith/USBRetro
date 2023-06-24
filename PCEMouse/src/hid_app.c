@@ -857,16 +857,19 @@ static inline bool is_sony_psc(uint8_t dev_addr)
   return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
 }
 
-// check if device is 8BitDo Bluetooth gamepad
+// check if device is 8BitDo Bluetooth gamepad (D-input)
 static inline bool is_8bit_m30(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
-  return ((vid == 0x2dc8 && pid == 0x5006)); // 8BitDo M30 BT (Android Mode)
+  return ((vid == 0x2dc8 && (
+    pid == 0x5006 || // 8BitDo M30 BT (D-input)
+    pid == 0x3104    // 8BitDo Bluetooth Adapter (Gray)
+  )));
 }
 
-// check if device is 8BitDo Bluetooth Adapter
+// check if device is 8BitDo Bluetooth Adapter (D-input)
 static inline bool is_8bit_bta(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
@@ -1988,7 +1991,7 @@ bool gc_diff_report(gamecube_report_t const* rpt1, gamecube_report_t const* rpt2
   result = diff_than_n(rpt1->port[player].x1, rpt2->port[player].x1, 2) || diff_than_n(rpt1->port[player].y1, rpt2->port[player].y1, 2);
 
   // check the all with mem compare (after report_id players are spaced 9 bytes apart)
-  result |= memcmp(&rpt1->report_id + 1 + (player*9), &rpt2->report_id + 1 + (player*9), 2);
+  result |= memcmp(&rpt1->report_id + 1 + (player*9), &rpt2->report_id + 1 + (player*9), 3);
 
   return result;
 }
@@ -2396,8 +2399,8 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     if (dpad_up && dpad_down) dpad_down = false;
     if (dpad_left && dpad_right) dpad_right = false;
 
-    buttons = (((input_report.l2) ? 0x00 : 0x8000) |
-               ((input_report.r2) ? 0x00 : 0x4000) |
+    buttons = (((input_report.l2 || input_report.l) ? 0x00 : 0x8000) |
+               ((input_report.r2 || input_report.y) ? 0x00 : 0x4000) |
                ((input_report.x)     ? 0x00 : 0x2000) |
                ((input_report.a)     ? 0x00 : 0x1000) |
                ((dpad_left)          ? 0x00 : 0x08) |
