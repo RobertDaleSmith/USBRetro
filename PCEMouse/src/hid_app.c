@@ -659,6 +659,44 @@ typedef union
   uint8_t buf[sizeof(switch_report_t)];
 } switch_report_01_t;
 
+// Switch GameCube Single Port
+typedef struct TU_ATTR_PACKED
+{
+  struct {
+    uint8_t type : 4;
+    uint8_t connected : 4;
+  };
+
+  struct {
+    uint8_t a : 1;
+    uint8_t b : 1;
+    uint8_t x : 1;
+    uint8_t y : 1;
+    uint8_t left : 1;
+    uint8_t right : 1;
+    uint8_t down : 1;
+    uint8_t up : 1;
+  };
+
+  struct {
+    uint8_t start : 1;
+    uint8_t z : 1;
+    uint8_t r : 1;
+    uint8_t l : 1;
+  };
+
+  uint8_t x1, y1, x2, y2, zl, zr;
+
+} gamecube_port_report_t;
+
+// Switch GameCube Adapter
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t report_id;
+  gamecube_port_report_t port[4];
+
+} gamecube_report_t;
+
 // DragonRise Generic Gamepad (SNES/NES/GC/etc)
 typedef struct TU_ATTR_PACKED
 {
@@ -771,18 +809,25 @@ static inline bool is_pokken(uint8_t dev_addr)
   return ((vid == 0x0f0d && pid == 0x0092)); // Wii U Pokken
 }
 
-// check if device is 8BitDo Ultimate C Wired Controller
+// check if device is Nintendo Switch
 static inline bool is_switch(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
-  return ((vid == 0x057e && (pid == 0x2009 || pid == 0x200e)));
-
   return ((vid == 0x057e && (
            pid == 0x2009 || // Nintendo Switch Pro
            pid == 0x200e    // JoyCon Charge Grip
          )));
+}
+
+// check if device is Nintendo Switch GameCube Adapter
+static inline bool is_gamecube(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return (vid == 0x057e && pid == 0x0337); // GameCube Adapter
 }
 
 // check if device is generic NES USB Controller
@@ -1530,6 +1575,10 @@ bool isKnownController(uint8_t dev_addr) {
     }
     return true;
   }
+  else if (is_gamecube(dev_addr)    ) {
+    printf("DEVICE:[Switch GameCube Adapter]\n");
+    return true;
+  }
   else if (is_dragonrise(dev_addr)   ) {
     printf("DEVICE:[DragonRise Generic Gamepad]\n");
     return true;
@@ -1927,6 +1976,19 @@ bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2
   // check the reset with mem compare (everything but the sticks)
   result |= memcmp(&rpt1->battery_level_and_connection_info + 1, &rpt2->battery_level_and_connection_info + 1, 3);
   result |= memcmp(&rpt1->subcommand_ack, &rpt2->subcommand_ack, 36);
+
+  return result;
+}
+
+bool gc_diff_report(gamecube_report_t const* rpt1, gamecube_report_t const* rpt2, uint8_t player)
+{
+  bool result;
+
+  // x, y must different than 2 to be counted
+  result = diff_than_n(rpt1->port[player].x1, rpt2->port[player].x1, 2) || diff_than_n(rpt1->port[player].y1, rpt2->port[player].y1, 2);
+
+  // check the all with mem compare (after report_id players are spaced 9 bytes apart)
+  result |= memcmp(&rpt1->report_id + 1 + (player*9), &rpt2->report_id + 1 + (player*9), 2);
 
   return result;
 }
@@ -2748,7 +2810,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   switch_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if (update_report.report_id == 0x30) {
+  if (update_report.report_id == 0x30) { // Switch Controller Report
+
     devices[dev_addr].instances[instance].switch_usb_enable_ack = true;
 
     update_report.left_x = (update_report.left_stick[0] & 0xFF) | ((update_report.left_stick[1] & 0x0F) << 8);
@@ -2883,6 +2946,96 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   }
 }
 
+void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  // previous report used to compare for changes
+  static gamecube_report_t prev_report[5][4];
+
+  gamecube_report_t gamecube_report;
+  memcpy(&gamecube_report, report, sizeof(gamecube_report));
+
+  if (gamecube_report.report_id == 0x21) { // GameCube Controller Report
+    for(int i = 0; i < 4; i++) {
+      if (gamecube_report.port[i].connected) {
+        if (gc_diff_report(&prev_report[dev_addr-1][instance + i], &gamecube_report, i)) {
+          printf("GAMECUBE[%d|%d]: Report ID = 0x%x\r\n", dev_addr, (instance + i), gamecube_report.report_id);
+          printf("(x, y, cx, cy, zl, zr) = (%u, %u, %u, %u, %u, %u)\r\n",
+            gamecube_report.port[i].x1,
+            gamecube_report.port[i].y1,
+            gamecube_report.port[i].x2,
+            gamecube_report.port[i].y2,
+            gamecube_report.port[i].zl,
+            gamecube_report.port[i].zr);
+          printf("DPad = ");
+
+          if (gamecube_report.port[i].down) printf("Down ");
+          if (gamecube_report.port[i].up) printf("Up ");
+          if (gamecube_report.port[i].right) printf("Right ");
+          if (gamecube_report.port[i].left) printf("Left ");
+          if (gamecube_report.port[i].a) printf("A ");
+          if (gamecube_report.port[i].b) printf("B ");
+          if (gamecube_report.port[i].x) printf("X ");
+          if (gamecube_report.port[i].y) printf("Y ");
+          if (gamecube_report.port[i].z) printf("Z ");
+          if (gamecube_report.port[i].l) printf("L ");
+          if (gamecube_report.port[i].r) printf("R ");
+          if (gamecube_report.port[i].start) printf("Start ");
+          printf("\n");
+
+          bool dpad_left  = gamecube_report.port[i].left;
+          bool dpad_right  = gamecube_report.port[i].right;
+          bool dpad_up  = gamecube_report.port[i].up;
+          bool dpad_down  = gamecube_report.port[i].down;
+
+          uint8_t range_half = 127;
+          uint32_t dead_zone_range = range_half / DEAD_ZONE;
+          if (gamecube_report.port[i].x1 < (range_half - dead_zone_range))
+          {
+            dpad_left |= 1;
+          }
+          else if (gamecube_report.port[i].x1 > (range_half + dead_zone_range))
+          {
+            dpad_right |= 1;
+          }
+          if (gamecube_report.port[i].y1 < (range_half - dead_zone_range))
+          {
+            dpad_down |= 1;
+          }
+          else if (gamecube_report.port[i].y1 > (range_half + dead_zone_range))
+          {
+            dpad_up |= 1;
+          }
+
+          if (dpad_up && dpad_down) dpad_down = false;
+          if (dpad_left && dpad_right) dpad_right = false;
+
+          buttons = (
+            ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
+            ((gamecube_report.port[i].l)     ? 0x00 : 0x4000) | // V
+            ((gamecube_report.port[i].x)     ? 0x00 : 0x2000) | // IV
+            ((gamecube_report.port[i].y)     ? 0x00 : 0x1000) | // III
+            ((dpad_left)  ? 0x00 : 0x0008) |
+            ((dpad_down)  ? 0x00 : 0x0004) |
+            ((dpad_right) ? 0x00 : 0x0002) |
+            ((dpad_up)    ? 0x00 : 0x0001) |
+            ((gamecube_report.port[i].start)   ? 0x00 : 0x0080) | // Run
+            ((gamecube_report.port[i].z)   ? 0x00 : 0x0040) | // Select
+            ((gamecube_report.port[i].b)     ? 0x00 : 0x0020) | // II
+            ((gamecube_report.port[i].a)     ? 0x00 : 0x0010)   // I
+          );
+
+          post_globals(dev_addr, i, buttons, 0, 0);
+
+          prev_report[dev_addr-1][instance + i] = gamecube_report;
+        }
+      } else if (prev_report[dev_addr-1][instance + i].port[i].connected) { // disconnected
+        remove_players_by_address(dev_addr, instance + i);
+        prev_report[dev_addr-1][instance + i] = gamecube_report;
+      }
+    }
+  }
+}
+
 void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
@@ -2964,6 +3117,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
       else if ( is_pokken(dev_addr) ) process_pokken(dev_addr, instance, report, len);
       else if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
+      else if ( is_gamecube(dev_addr) ) process_gamecube(dev_addr, instance, report, len);
       else if ( is_dragonrise(dev_addr) ) process_dragonrise(dev_addr, instance, report, len);
       else {
         // Generic report requires matching ReportID and contents with previous parsed report info
