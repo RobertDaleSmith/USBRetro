@@ -727,7 +727,7 @@ typedef struct TU_ATTR_PACKED
 
 typedef struct {
     uint8_t byteIndex;
-    uint8_t bitMask;
+    uint16_t bitMask;
     uint32_t mid;
 } InputLocation;
 
@@ -1419,7 +1419,7 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
     uint8_t midValue = (item->Attributes.Logical.Maximum - item->Attributes.Logical.Minimum) / 2;
     uint8_t bitSize = item->Attributes.BitSize ? item->Attributes.BitSize : 0; // bits per usage
     uint8_t bitOffset = item->BitOffset ? item->BitOffset : 0; // bits offset from start
-    uint8_t bitMask = ((0xFF >> (8 - bitSize)) << bitOffset % 8); // usage bits byte mask
+    uint16_t bitMask = ((0xFFFF >> (16g - bitSize)) << bitOffset % 8); // usage bits byte mask
     uint8_t byteIndex = (int)(bitOffset / 8); // usage start byte
 
     if (hid_debug) {
@@ -3409,8 +3409,28 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
   pad_buttons current = {0};
   current.value = 0;
 
-  uint8_t xValue = report[devices[dev_addr].instances[instance].xLoc.byteIndex] & devices[dev_addr].instances[instance].xLoc.bitMask;
-  uint8_t yValue = report[devices[dev_addr].instances[instance].yLoc.byteIndex] & devices[dev_addr].instances[instance].yLoc.bitMask;
+  uint16_t xValue, yValue;
+
+  if (devices[dev_addr].instances[instance].xLoc.bitMask > 0xFF) { // if bitmask is larger than 8 bits
+    // Combine the current byte and the next byte into a 16-bit value
+    uint16_t combinedBytes = ((uint16_t)report[devices[dev_addr].instances[instance].xLoc.byteIndex] << 8) | report[devices[dev_addr].instances[instance].xLoc.byteIndex + 1];
+    // Apply the bitmask to the combined 16-bit value
+    xValue = (combinedBytes & devices[dev_addr].instances[instance].xLoc.bitMask) >> (__builtin_ctz(devices[dev_addr].instances[instance].xLoc.bitMask));
+  } else {
+    // Apply the bitmask to the single byte value (your existing implementation)
+    xValue = report[devices[dev_addr].instances[instance].xLoc.byteIndex] & devices[dev_addr].instances[instance].xLoc.bitMask;
+  }
+
+  if (devices[dev_addr].instances[instance].yLoc.bitMask > 0xFF) { // if bitmask is larger than 8 bits
+    // Combine the current byte and the next byte into a 16-bit value
+    uint16_t combinedBytes = ((uint16_t)report[devices[dev_addr].instances[instance].yLoc.byteIndex] << 8) | report[devices[dev_addr].instances[instance].yLoc.byteIndex + 1];
+    // Apply the bitmask to the combined 16-bit value
+    yValue = (combinedBytes & devices[dev_addr].instances[instance].yLoc.bitMask) >> (__builtin_ctz(devices[dev_addr].instances[instance].yLoc.bitMask));
+  } else {
+    // Apply the bitmask to the single byte value (your existing implementation)
+    yValue = report[devices[dev_addr].instances[instance].yLoc.byteIndex] & devices[dev_addr].instances[instance].yLoc.bitMask;
+  }
+
   uint8_t hatValue = report[devices[dev_addr].instances[instance].hatLoc.byteIndex] & devices[dev_addr].instances[instance].hatLoc.bitMask;
 
   // parse hat from report
