@@ -90,7 +90,7 @@ extern "C"
  *  value in the user project makefile, passing the define to the compiler using the -D compiler
  *  switch.
  */
-#define HID_USAGE_STACK_DEPTH 8
+#define HID_USAGE_STACK_DEPTH 16
 #endif
 
 /** Returns the value a given HID report item (once its value has been fetched via \ref USB_GetHIDReportItemInfo())
