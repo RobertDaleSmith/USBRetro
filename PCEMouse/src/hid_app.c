@@ -1398,7 +1398,7 @@ void hid_app_task(void)
 // Gets HID descriptor report item for specific ReportID
 static inline bool USB_GetHIDReportItemInfoWithReportId(const uint8_t *ReportData, HID_ReportItem_t *const ReportItem)
 {
-  printf("ReportID: %d ", ReportItem->ReportID);
+  if (HID_DEBUG) printf("ReportID: %d ", ReportItem->ReportID);
   if (ReportItem->ReportID)
   {
     if (ReportItem->ReportID != ReportData[0])
@@ -1440,7 +1440,7 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
     uint8_t report[1] = {0}; // reportId = 0; original ex maps report to descriptor data structure
     if (USB_GetHIDReportItemInfoWithReportId(report, item))
     {
-      printf("PAGE: %d ", item->Attributes.Usage.Page);
+      if (HID_DEBUG) printf("PAGE: %d ", item->Attributes.Usage.Page);
       switch (item->Attributes.Usage.Page)
       {
       case HID_USAGE_PAGE_DESKTOP:
