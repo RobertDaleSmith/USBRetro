@@ -116,7 +116,6 @@ uint32_t __rev(uint32_t);
 void led_blinking_task(void);
 uint8_t eparity(uint32_t);
 
-extern void cdc_task(void);
 extern void hid_app_task(void);
 
 extern void neopixel_init(void);
@@ -246,10 +245,6 @@ static void __not_in_flash_func(process_signals)(void)
     neopixel_task(playersCount);
 #ifndef ADAFRUIT_QTPY_RP2040
     // led_blinking_task();
-#endif
-
-#if CFG_TUH_CDC
-    cdc_task();
 #endif
 
 //
@@ -519,7 +514,7 @@ int main(void)
   // Pause briefly for stability before starting activity
   sleep_ms(1000);
 
-  printf("TinyUSB Host CDC MSC HID Example\r\n");
+  printf("USB Host to Nuon Polyface\r\n");
 
   tusb_init();
 
@@ -607,17 +602,14 @@ int main(void)
 
 
 //--------------------------------------------------------------------+
-// USB CDC
+// TinyUSB Callbacks
 //--------------------------------------------------------------------+
-#if CFG_TUH_CDC
-CFG_TUSB_MEM_SECTION static char serial_in_buffer[64] = { 0 };
+#if CFG_TUH_HID
 
 void tuh_mount_cb(uint8_t dev_addr)
 {
   // application set-up
   printf("A device with address %d is mounted\r\n", dev_addr);
-
-  tuh_cdc_receive(dev_addr, serial_in_buffer, sizeof(serial_in_buffer), true); // schedule first transfer
 
   playersCount++;
 }
@@ -628,24 +620,6 @@ void tuh_umount_cb(uint8_t dev_addr)
   printf("A device with address %d is unmounted \r\n", dev_addr);
 
   if ((--playersCount) < 0) playersCount = 0;
-}
-
-// invoked ISR context
-void tuh_cdc_xfer_isr(uint8_t dev_addr, xfer_result_t event, cdc_pipeid_t pipe_id, uint32_t xferred_bytes)
-{
-  (void) event;
-  (void) pipe_id;
-  (void) xferred_bytes;
-
-  printf(serial_in_buffer);
-  tu_memclr(serial_in_buffer, sizeof(serial_in_buffer));
-
-  tuh_cdc_receive(dev_addr, serial_in_buffer, sizeof(serial_in_buffer), true); // waiting for next data
-}
-
-void cdc_task(void)
-{
-
 }
 
 #endif

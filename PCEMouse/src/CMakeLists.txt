@@ -30,7 +30,6 @@ target_sources(pcemouse PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/main.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/msc_app.c
         )
 
 # Example include
