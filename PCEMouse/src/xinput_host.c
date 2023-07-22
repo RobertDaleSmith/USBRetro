@@ -274,6 +274,15 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
             tuh_xinput_send_report(dev_addr, instance, xboxone_pdp_init3, sizeof(xboxone_pdp_init3));
             wait_for_tx_complete(dev_addr, xid_itf->ep_out);
         }
+
+        //Required for PowerA aftermarket controllers
+        if (VID == 0x24c6)
+        {
+            tuh_xinput_send_report(dev_addr, instance, xboxone_powera_init1, sizeof(xboxone_powera_init1));
+            wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+            tuh_xinput_send_report(dev_addr, instance, xboxone_powera_init2, sizeof(xboxone_powera_init2));
+            wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+        }
     }
 
     if (tuh_xinput_mount_cb)
