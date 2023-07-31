@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
@@ -50,7 +50,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
   if (xid_itf->connected && xid_itf->new_pad_data)
   {
     printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
-      dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
+           dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
     bool is6btn = true;
     buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || p->bRightTrigger) ? 0x00 : 0x8000) |
@@ -82,6 +82,7 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
     tuh_xinput_receive_report(dev_addr, instance);
     return;
   }
+  // tuh_xinput_init_chatpad(dev_addr, instance, true);
   tuh_xinput_set_led(dev_addr, instance, 0, true);
   tuh_xinput_set_led(dev_addr, instance, 1, true);
   tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);

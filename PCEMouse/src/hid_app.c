@@ -879,6 +879,7 @@ static inline bool is_8bit_bta(uint8_t dev_addr)
   return ((vid == 0x2dc8 && (
     pid == 0x3100 || // 8BitDo Bluetooth Adapter (Red)
     pid == 0x3105 || // 8BitDo Bluetooth Adapter (Black) [05:HID_MODE]
+    pid == 0x3106 || // 8BitDo Bluetooth Adapter (Black) [06:RECV_MODE]
     pid == 0x3107    // 8BitDo Bluetooth Adapter (Black) [07:IDLE_MODE]
   )));
 }
