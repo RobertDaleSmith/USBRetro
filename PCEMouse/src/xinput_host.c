@@ -7,6 +7,7 @@
 
 #include "host/usbh.h"
 #include "host/usbh_classdriver.h"
+#include "class/hid/hid.h"
 #include "xinput_host.h"
 
 typedef struct
@@ -46,8 +47,10 @@ static uint8_t get_instance_id_by_itfnum(uint8_t dev_addr, uint8_t itf)
     {
         xinputh_interface_t *hid = get_instance(dev_addr, inst);
 
-        if ((hid->itf_num == itf) && (hid->ep_in || hid->ep_out))
+        if ((hid->itf_num == itf) && (hid->ep_in || hid->ep_out)) {
+            TU_LOG2("XINPUT::get_instance: instance: %d, num: %d ?= %d, in: %d, out: %d\n", inst, hid->itf_num, itf, hid->ep_in, hid->ep_out);
             return inst;
+        }
     }
 
     return 0xff;
@@ -78,6 +81,13 @@ bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance, const uint8_t *t
 
     TU_ASSERT(len <= xid_itf->epout_size);
     TU_VERIFY(usbh_edpt_claim(dev_addr, xid_itf->ep_out));
+
+    // Print the data bytes being sent
+    TU_LOG2("Data bytes being sent: ");
+    for (uint16_t i = 0; i < len; i++) {
+        TU_LOG2("%02X ", txbuf[i]);
+    }
+    TU_LOG2("\n");
 
     memcpy(xid_itf->epout_buf, txbuf, len);
     return usbh_edpt_xfer(dev_addr, xid_itf->ep_out, xid_itf->epout_buf, len);
@@ -156,6 +166,63 @@ bool tuh_xinput_set_rumble(uint8_t dev_addr, uint8_t instance, uint8_t lValue, u
     return true;
 }
 
+bool tuh_xinput_init_chatpad(uint8_t dev_addr, uint8_t instance, bool block)
+{
+    TU_LOG2("XINPUT::tuh_xinput_init_chatpad\n");
+    xinputh_interface_t *xid_itf = get_instance(dev_addr, instance);
+    uint8_t txbuf[sizeof(xboxone_chatpad_init3)];
+    uint16_t len;
+    switch (xid_itf->type)
+    {
+    case XBOXONE:
+        memcpy(txbuf, xboxone_chatpad_init3, sizeof(xboxone_chatpad_init3));
+        len = sizeof(xboxone_chatpad_init3);
+        break;
+    default:
+        return true;
+    }
+    bool ret = tuh_xinput_send_report(dev_addr, instance, txbuf, len);
+    if (block && ret)
+    {
+        wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+    }
+
+    uint8_t txbuf2[sizeof(xboxone_chatpad_init4)];
+    len;
+    switch (xid_itf->type)
+    {
+    case XBOXONE:
+        memcpy(txbuf2, xboxone_chatpad_init4, sizeof(xboxone_chatpad_init4));
+        len = sizeof(xboxone_chatpad_init4);
+        break;
+    default:
+        return true;
+    }
+    ret = tuh_xinput_send_report(dev_addr, instance, txbuf2, len);
+    if (block && ret)
+    {
+        wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+    }
+
+    uint8_t txbuf3[sizeof(xboxone_chatpad_init5)];
+    len;
+    switch (xid_itf->type)
+    {
+    case XBOXONE:
+        memcpy(txbuf3, xboxone_chatpad_init5, sizeof(xboxone_chatpad_init5));
+        len = sizeof(xboxone_chatpad_init5);
+        break;
+    default:
+        return true;
+    }
+    ret = tuh_xinput_send_report(dev_addr, instance, txbuf3, len);
+    if (block && ret)
+    {
+        wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+    }
+    return ret;
+}
+
 //--------------------------------------------------------------------+
 // USBH API
 //--------------------------------------------------------------------+
@@ -167,6 +234,10 @@ void xinputh_init(void)
 bool xinputh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const *desc_itf, uint16_t max_len)
 {
     TU_VERIFY(dev_addr <= CFG_TUH_DEVICE_MAX);
+
+    uint16_t PID, VID;
+    tuh_vid_pid_get(dev_addr, &VID, &PID);
+    TU_LOG2("XINPUT:: dev: %d, instance: %d, endpoints:%d, class: %d, subclass: %d, protocol: %d, interface: %d, vid: %d, pid: %d \n\n", dev_addr, desc_itf->bInterfaceNumber, desc_itf->bNumEndpoints, desc_itf->bInterfaceClass, desc_itf->bInterfaceSubClass, desc_itf->bInterfaceProtocol, desc_itf->iInterface, VID, PID);
 
     xinput_type_t type = XINPUT_UNKNOWN;
     if (desc_itf->bNumEndpoints < 2)
@@ -183,6 +254,19 @@ bool xinputh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const 
     else if (desc_itf->bInterfaceClass == 0x58 &&  //XboxOG bInterfaceClass
              desc_itf->bInterfaceSubClass == 0x42) //XboxOG bInterfaceSubClass
         type = XBOXOG;
+
+    if (desc_itf->bInterfaceClass == TUSB_CLASS_HID &&
+            desc_itf->bInterfaceSubClass == 0 && //Supports boot protocol
+            desc_itf->bInterfaceProtocol == HID_ITF_PROTOCOL_NONE &&
+            VID == 0x2dc8)
+        type = XINPUT_8BITDO_IDLE;
+
+    if (desc_itf->bInterfaceClass == 255 && VID == 0x2dc8 && PID == 0x3106){ //|| XINPUT_8BITDO_IDLE) {
+        printf("8BitDo sleepy..\n");
+        sleep_ms(1000);
+    }
+
+    TU_LOG2("XINPUT::type: %d\n", type);
 
     if (type == XINPUT_UNKNOWN)
     {
@@ -203,15 +287,21 @@ bool xinputh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const 
     uint8_t const *p_desc = (uint8_t const *)desc_itf;
     int endpoint = 0;
     int pos = 0;
+
     while (endpoint < desc_itf->bNumEndpoints && pos < max_len)
     {
         if (tu_desc_type(p_desc) != TUSB_DESC_ENDPOINT)
         {
+            TU_LOG2("XINPUT:: EP_NOT_TUSB_DESC: desc_type: %d!\n", tu_desc_type(p_desc));
             pos += tu_desc_len(p_desc);
             p_desc = tu_desc_next(p_desc);
             continue;
         }
+
         tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *)p_desc;
+        TU_LOG2("XINPUT::EP_address: %d\n", desc_ep->bEndpointAddress);
+        TU_LOG2("pos: %d, max_len: %d, endpoint: %d, desc_itf->bNumEndpoints: %d\n", pos, max_len, endpoint, desc_itf->bNumEndpoints);
+
         TU_ASSERT(TUSB_DESC_ENDPOINT == desc_ep->bDescriptorType);
         TU_ASSERT(tuh_edpt_open(dev_addr, desc_ep));
         if (tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_OUT)
@@ -224,12 +314,15 @@ bool xinputh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const 
             xid_itf->ep_in = desc_ep->bEndpointAddress;
             xid_itf->epin_size = tu_edpt_packet_size(desc_ep);
         }
+        TU_LOG2("ep_in: %d, ep_out: %d\n", xid_itf->ep_in, xid_itf->ep_out);
         endpoint++;
         pos += tu_desc_len(p_desc);
         p_desc = tu_desc_next(p_desc);
     }
 
     xinput_dev->inst_count++;
+
+    TU_LOG2("XINPUT::inst_count: %d\n", xinput_dev->inst_count);
     return true;
 }
 
@@ -238,6 +331,8 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
     uint8_t instance = get_instance_id_by_itfnum(dev_addr, itf_num);
     xinputh_interface_t *xid_itf = get_instance(dev_addr, instance);
     xid_itf->connected = true;
+
+    TU_LOG2("XINPUT::set_config: instance: %d\n", instance);
 
     if (xid_itf->type == XBOX360_WIRELESS)
     {
@@ -254,8 +349,11 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
         uint16_t PID, VID;
         tuh_vid_pid_get(dev_addr, &VID, &PID);
 
-        tuh_xinput_send_report(dev_addr, instance, xboxone_start_input, sizeof(xboxone_start_input));
-        wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+        //Init chatpad?
+        // tuh_xinput_send_report(dev_addr, instance, xboxone_chatpad_init1, sizeof(xboxone_chatpad_init1));
+        // wait_for_tx_complete(dev_addr, xid_itf->ep_out);
+        // tuh_xinput_send_report(dev_addr, instance, xboxone_chatpad_init2, sizeof(xboxone_chatpad_init2));
+        // wait_for_tx_complete(dev_addr, xid_itf->ep_out);
 
         //Init packet for XBONE S/Elite controllers (return from bluetooth mode)
         if (VID == 0x045e && (PID == 0x02ea || PID == 0x0b00 || PID == 0x0b12))
@@ -263,6 +361,10 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
             tuh_xinput_send_report(dev_addr, instance, xboxone_s_init, sizeof(xboxone_s_init));
             wait_for_tx_complete(dev_addr, xid_itf->ep_out);
         }
+
+        //Init packet for XBONE
+        tuh_xinput_send_report(dev_addr, instance, xboxone_start_input, sizeof(xboxone_start_input));
+        wait_for_tx_complete(dev_addr, xid_itf->ep_out);
 
         //Required for PDP aftermarket controllers
         if (VID == 0x0e6f)
@@ -296,6 +398,7 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
 
 bool xinputh_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes)
 {
+    TU_LOG2("XINPUT::xfer_cb instance: ");
     if (result != XFER_RESULT_SUCCESS)
     {
         TU_LOG1("Error: %d\n", result);
@@ -307,6 +410,9 @@ bool xinputh_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, ui
     xinputh_interface_t *xid_itf = get_instance(dev_addr, instance);
     xinput_gamepad_t *pad = &xid_itf->pad;
     uint8_t *rdata = xid_itf->epin_buf;
+
+
+    TU_LOG2("dev: %d, inst: %d, repordId: %d\n", dev_addr, instance, rdata[0]);
 
     if (dir == TUSB_DIR_IN)
     {
@@ -404,6 +510,7 @@ bool xinputh_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, ui
         }
         else if (xid_itf->type == XBOXONE)
         {
+            TU_LOG2("XINPUT::rdata: %d\n", rdata[0]);
             if (rdata[0] == 0x20)
             {
                 tu_memclr(pad, sizeof(xinput_gamepad_t));
@@ -474,7 +581,7 @@ bool xinputh_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, ui
 
                 xid_itf->new_pad_data = true;
             }
-        } 
+        }
         tuh_xinput_report_received_cb(dev_addr, instance, (const uint8_t *)xid_itf, sizeof(xinputh_interface_t));
         xid_itf->new_pad_data = false;
     }
@@ -493,6 +600,8 @@ void xinputh_close(uint8_t dev_addr)
 {
     TU_VERIFY(dev_addr <= CFG_TUH_DEVICE_MAX, );
     xinputh_device_t *xinput_dev = get_dev(dev_addr);
+
+    TU_LOG2("XINPUT::close:inst_count: %d\n", xinput_dev->inst_count);
 
     for (uint8_t inst = 0; inst < xinput_dev->inst_count; inst++)
     {
