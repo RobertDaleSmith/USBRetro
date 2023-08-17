@@ -14,6 +14,7 @@ pico_sdk_init()
 
 set(FAMILY rp2040)
 
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/tusb_xinput xinput_host)
 add_executable(pcemouse)
 
 pico_add_extra_outputs(pcemouse)
@@ -23,11 +24,9 @@ pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/clock.pio )
 pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/select.pio )
 pico_generate_pio_header(pcemouse ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
-
 # Example source
 target_sources(pcemouse PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/xinput_host.c
         ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hid_parser.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
@@ -45,5 +44,5 @@ target_link_libraries(pcemouse PRIVATE
 	hardware_pio
 	tinyusb_host
 	tinyusb_board
+        xinput_host_app_driver
 	)
-
