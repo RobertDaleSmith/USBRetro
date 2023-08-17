@@ -35,7 +35,7 @@
  *
  */
 
-#include "bsp/board.h"
+#include "bsp/board_api.h"
 #include "tusb.h"
 #include "hid_parser.h"
 
@@ -858,6 +858,15 @@ static inline bool is_sony_psc(uint8_t dev_addr)
   return ((vid == 0x054c && pid == 0x0cda)); // PSClassic Controller
 }
 
+// check if device is 8BitDo NeoGeo gamepad
+static inline bool is_8bit_neo(uint8_t dev_addr)
+{
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
+
+  return ((vid == 0x2dc8 && (pid == 0x9025 || pid == 0x9026))); // 8BitDo NeoGeo 2.4g Receiver
+}
+
 // check if device is 8BitDo Bluetooth gamepad (D-input)
 static inline bool is_8bit_m30(uint8_t dev_addr)
 {
@@ -1533,6 +1542,10 @@ bool isKnownController(uint8_t dev_addr) {
   }
   else if (is_8bit_pce(dev_addr)  ) {
     printf("DEVICE:[8BitDo PCE 2.4g Controller]\n");
+    return true;
+  }
+  else if (is_8bit_neo(dev_addr)  ) {
+    printf("DEVICE:[8BitDo NeoGeo 2.4g Controller]\n");
     return true;
   }
   else if (is_8bit_m30(dev_addr)  ) {
