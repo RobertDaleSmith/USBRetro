@@ -1,0 +1,3 @@
+[submodule "PCEMouse/src/lib/tusb_xinput"]
+	path = PCEMouse/src/lib/tusb_xinput
+	url = https://github.com/RobertDaleSmith/tusb_xinput.git
