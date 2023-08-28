@@ -5,6 +5,8 @@ uint16_t buttons;
 
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 
+uint8_t byteScaleAnalog(int16_t xbox_val);
+
 //--------------------------------------------------------------------+
 // USB X-input
 //--------------------------------------------------------------------+
@@ -29,21 +31,28 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
            dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
     bool is6btn = true;
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || p->bRightTrigger) ? 0x00 : 0x8000) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER || p->bLeftTrigger) ? 0x00 : 0x4000) |
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x8000) |
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x4000) |
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
                ((is6btn) ? 0x00 : 0xFF00) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT || p->sThumbLX < -20000) ? 0x00 : 0x08) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN || p->sThumbLY < -20000) ? 0x00 : 0x04) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT || p->sThumbLX > 20000) ? 0x00 : 0x02) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP || p->sThumbLY > 20000) ? 0x00 : 0x01) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) ? 0x00 : 0x08) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) ? 0x00 : 0x04) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) ? 0x00 : 0x02) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP) ? 0x00 : 0x01) |
                ((p->wButtons & XINPUT_GAMEPAD_START) ? 0x00 : 0x80) |
                ((p->wButtons & XINPUT_GAMEPAD_BACK) ? 0x00 : 0x40) |
                ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
                ((p->wButtons & XINPUT_GAMEPAD_B) ? 0x00 : 0x10));
 
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    uint8_t analog_1x = byteScaleAnalog(p->sThumbLX);
+    uint8_t analog_1y = byteScaleAnalog(p->sThumbLY);
+    uint8_t analog_2x = byteScaleAnalog(p->sThumbRX);
+    uint8_t analog_2y = byteScaleAnalog(p->sThumbRY);
+    uint8_t analog_l = p->bLeftTrigger;
+    uint8_t analog_r = p->bRightTrigger;
+
+    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
@@ -68,6 +77,13 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
 void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
+}
+
+uint8_t byteScaleAnalog(int16_t xbox_val) {
+    // Scale the xbox value from [-32768, 32767] to [0, 255]
+    // Offset by 32768 to get in range [0, 65536], then divide by 256 to get in range [0, 255]
+    uint8_t scale_val = (xbox_val + 32768) / 256;
+    return scale_val;
 }
 
 #endif
