@@ -47,6 +47,13 @@
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
+
+//--------------------------------------------------------------------+
+// MACRO CONSTANT TYPEDEF PROTYPES
+//--------------------------------------------------------------------+
+
+#ifdef CONFIG_PCE
+
 #include "plex.pio.h"
 #include "clock.pio.h"
 #include "select.pio.h"
@@ -57,10 +64,7 @@ uint64_t timer_threshold_a;
 uint64_t timer_threshold_b;
 uint64_t turbo_frequency;
 
-//--------------------------------------------------------------------+
-// MACRO CONSTANT TYPEDEF PROTYPES
-//--------------------------------------------------------------------+
-
+#define MAX_PLAYERS 5 // PCE supports up to 5 players
 
 #ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
 
@@ -104,27 +108,51 @@ uint64_t turbo_frequency;
 #endif
 #endif
 
-// button modes
+// PCE button modes
 #define BUTTON_MODE_2 0x00
 #define BUTTON_MODE_6 0x01
 #define BUTTON_MODE_3_SEL 0x02
 #define BUTTON_MODE_3_RUN 0x03
 
-// is fun easter egg
-#define BUFFER_SIZE 10
+#endif
+
+#ifdef CONFIG_NGC
+
+  #include "pico/bootrom.h"
+  #include "joybus.pio.h"
+  #include "GamecubeConsole.h"
+
+  #define MAX_PLAYERS 1
+
+  #define SHIELD_PIN_L 4  // Connector shielding mounted to GPIOs [4, 5,26,27]
+  #define SHIELD_PIN_R 26
+
+  #define BOOTSEL_PIN 11
+  #define GC_DATA_PIN 2
+  #define GC_3V3_PIN 6
+
+  extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
+  extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
+  extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
+
+  GamecubeConsole gc;
+  gc_report_t gc_report;
+
+#endif
+
+// CHEAT CODES :: is fun easter egg
+#define CHEAT_LENGTH 10
 #define KONAMI_CODE {0x01, 0x01, 0x04, 0x04, 0x08, 0x02, 0x08, 0x02, 0x20, 0x10}
-uint16_t buffer[BUFFER_SIZE] = {0};
-uint16_t konami_code[BUFFER_SIZE] = KONAMI_CODE;
-int buffer_index = 0;
+uint16_t cheat_buffer[CHEAT_LENGTH] = {0};
+uint16_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
 
 void led_blinking_task(void);
 
 extern void hid_app_task(void);
 
 extern void neopixel_init(void);
-extern void neopixel_task(int pat);
 
-#define MAX_PLAYERS 5
+extern void neopixel_task(int pat);
 
 typedef struct TU_ATTR_PACKED
 {
@@ -213,8 +241,7 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].output_buttons = 0xFFFF;
     players[playersCount].output_x = 0;
     players[playersCount].output_y = 0;
-    players[playersCount].button_mode = BUTTON_MODE_2;
-
+    players[playersCount].button_mode = 0;
     players[playersCount].prev_buttons = 0xFFFF;
 
     playersCount++;
@@ -224,24 +251,25 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
 // is_fun easter egg
 void __not_in_flash_func(shift_buffer_and_insert)(uint16_t new_value) {
     // Shift all elements to the left by 1
-    for (int i = 0; i < BUFFER_SIZE - 1; i++) {
-        buffer[i] = buffer[i + 1];
+    for (int i = 0; i < CHEAT_LENGTH - 1; i++) {
+        cheat_buffer[i] = cheat_buffer[i + 1];
     }
 
     // Insert the new value at the end
-    buffer[BUFFER_SIZE - 1] = new_value;
+    cheat_buffer[CHEAT_LENGTH - 1] = new_value;
 }
 
 void __not_in_flash_func(check_for_konami_code)(void)
 {
+  // DEBUG LOGGING
   // printf("Buffer content: ");
-  // for (int i = 0; i < BUFFER_SIZE; i++) {
-  //     printf("%x ", buffer[i]);
+  // for (int i = 0; i < CHEAT_LENGTH; i++) {
+  //     printf("%x ", cheat_buffer[i]);
   // }
   // printf("\n");
 
-  for (int i = 0; i < BUFFER_SIZE; i++) {
-    if (buffer[i] != konami_code[i]) {
+  for (int i = 0; i < CHEAT_LENGTH; i++) {
+    if (cheat_buffer[i] != konami_code[i]) {
       return;
     }
   }
@@ -255,6 +283,8 @@ void __not_in_flash_func(check_for_konami_code)(void)
 //
 void __not_in_flash_func(update_output)(void)
 {
+
+#ifdef CONFIG_PCE
   static uint32_t turbo_timer = 0;
   static bool turbo_state = false;
   int8_t bytes[5] = { 0 };
@@ -266,7 +296,7 @@ void __not_in_flash_func(update_output)(void)
     turbo_timer = 0;
     turbo_state = !turbo_state;
   }
-  
+
   unsigned short int i;
   for (i = 0; i < MAX_PLAYERS; ++i) {
     // base controller/mouse buttons
@@ -378,6 +408,35 @@ void __not_in_flash_func(update_output)(void)
     shift_buffer_and_insert(btns);
     check_for_konami_code();
   }
+#endif
+
+#ifdef CONFIG_NGC
+  unsigned short int i;
+  for (i = 0; i < MAX_PLAYERS; ++i) {
+    // base controller buttons
+    int16_t byte = (players[i].output_buttons & 0xffff);
+
+    gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
+    gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
+    gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
+    gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
+    gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
+    gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
+    gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
+    gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
+    gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
+    gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
+    gc_report.r          = ((byte & 0x04000) == 0) ? 1 : 0; // r2
+    gc_report.l          = ((byte & 0x08000) == 0) ? 1 : 0; // l2
+    gc_report.stick_x    = players[i].output_x;
+    gc_report.stick_y    = players[i].output_y;
+    // gc_report.cstick_x   = players[i].output_analog_2x;
+    // gc_report.cstick_y   = players[i].output_analog_2y;
+    // gc_report.l_analog   = players[i].output_analog_l;
+    // gc_report.r_analog   = players[i].output_analog_r;
+  }
+#endif
+
 }
 
 //
@@ -403,6 +462,10 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16
   // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
 
   if (player_index >= 0) {
+
+#ifdef CONFIG_PCE
+      // TODO: map analog to dpad movement here.. also double map V/VI btns to R2/L2
+
       if (delta_x >= 128)
         players[player_index].global_x = players[player_index].global_x - (256-delta_x);
       else
@@ -426,6 +489,15 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16
 
         update_output();
       }
+#endif
+
+#ifdef CONFIG_NGC
+      players[player_index].output_x = delta_x;
+      players[player_index].output_y = delta_y;
+      players[player_index].output_buttons = buttons;
+      update_output();
+#endif
+
   }
 }
 
@@ -447,6 +519,7 @@ static void __not_in_flash_func(process_signals)(void)
     led_blinking_task();
 #endif
 
+#ifdef CONFIG_PCE
 //
 // check time offset in order to detect when a PCE scan is no longer
 // in process (so that fresh values can be sent to the state machine)
@@ -459,6 +532,7 @@ static void __not_in_flash_func(process_signals)(void)
       output_exclude = false;
       init_time = get_absolute_time();
     }
+#endif
 
 #if CFG_TUH_HID
     hid_app_task();
@@ -479,6 +553,8 @@ static bool rx_bit = 0;
 
   while (1)
   {
+
+#ifdef CONFIG_PCE
      // wait for (and sync with) negedge of CLR signal; rx_data is throwaway
      rx_bit = pio_sm_get_blocking(pio, sm2);
 
@@ -533,9 +609,19 @@ static bool rx_bit = 0;
 
         output_exclude = true;            // continue to lock the output values (which are now zero)
      }
+#endif
 
+#ifdef CONFIG_NGC
+    // Wait for GameCube console to poll controller
+    GamecubeConsole_WaitForPoll(&gc);
+
+    // Send GameCube controller button report
+    GamecubeConsole_SendReport(&gc, &gc_report);
+#endif
   }
 }
+
+#ifdef CONFIG_PCE
 
 void turbo_init() {
     cpu_frequency = clock_get_hz(clk_sys);
@@ -545,42 +631,9 @@ void turbo_init() {
     timer_threshold = timer_threshold_a;
 }
 
-int main(void)
-{
-  board_init();
+void pce_init() {
+  // use turbo button feature with PCE
   turbo_init();
-
-  // Pause briefly for stability before starting activity
-  sleep_ms(1000);
-
-  printf("USB Host to PC Engine\r\n");
-
-  tusb_init();
-
-  neopixel_init();
-
-  unsigned short int i;
-  for (i = 0; i < 5; ++i) {
-    players[i].global_buttons = 0xFFFF;
-    players[i].altern_buttons = 0xFFFF;
-    players[i].global_x = 0;
-    players[i].global_y = 0;
-    players[i].output_buttons = 0xFFFF;
-    players[i].output_x = 0;
-    players[i].output_y = 0;
-    players[i].prev_buttons = 0xFFFF;
-    players[i].button_mode = BUTTON_MODE_2;
-  }
-  state = 3;
-
-  output_word_0 = 0x00FFFFFFFF;  // no buttons pushed
-  output_word_1 = 0x00000000FF;  // no buttons pushed
-
-
-  init_time = get_absolute_time();
-
-  // Both state machines can run on the same PIO processor
-  pio = pio0;
 
   // Load the plex (multiplex output) program, and configure a free state machine
   // to run the program.
@@ -588,7 +641,6 @@ int main(void)
   uint offset1 = pio_add_program(pio, &plex_program);
   sm1 = pio_claim_unused_sm(pio, true);
   plex_program_init(pio, sm1, offset1, DATAIN_PIN, CLKIN_PIN, OUTD0_PIN);
-
 
   // Load the clock/select (synchronizing input) programs, and configure a free state machines
   // to run the programs.
@@ -600,6 +652,98 @@ int main(void)
   uint offset3 = pio_add_program(pio, &select_program);
   sm3 = pio_claim_unused_sm(pio, true);
   select_program_init(pio, sm3, offset3, DATAIN_PIN);
+}
+#endif
+
+#ifdef CONFIG_NGC
+void ngc_init() {
+  // over clock CPU for correct timing with GC
+  set_sys_clock_khz(130000, true);
+
+  // corrects UART serial output after overclock
+  stdio_init_all();
+
+  // Ground gpio attatched to sheilding
+  gpio_init(SHIELD_PIN_L);
+  gpio_set_dir(SHIELD_PIN_L, GPIO_OUT);
+  gpio_init(SHIELD_PIN_L+1);
+  gpio_set_dir(SHIELD_PIN_L+1, GPIO_OUT);
+  gpio_init(SHIELD_PIN_R);
+  gpio_set_dir(SHIELD_PIN_R, GPIO_OUT);
+  gpio_init(SHIELD_PIN_R+1);
+  gpio_set_dir(SHIELD_PIN_R+1, GPIO_OUT);
+
+  gpio_put(SHIELD_PIN_L, 0);
+  gpio_put(SHIELD_PIN_L+1, 0);
+  gpio_put(SHIELD_PIN_R, 0);
+  gpio_put(SHIELD_PIN_R+1, 0);
+
+  // Initialize the BOOTSEL_PIN as input
+  gpio_init(BOOTSEL_PIN);
+  gpio_set_dir(BOOTSEL_PIN, GPIO_IN);
+  gpio_pull_up(BOOTSEL_PIN);
+
+  // Reboot into bootsel mode if GC 3.3V not detected.
+  // gpio_init(GC_3V3_PIN);
+  // gpio_set_dir(GC_3V3_PIN, GPIO_IN);
+  // gpio_pull_down(GC_3V3_PIN);
+
+  // sleep_ms(200);
+  // if (!gpio_get(GC_3V3_PIN)) reset_usb_boot(0, 0);
+
+  int sm = -1;
+  int offset = -1;
+  GamecubeConsole_init(&gc, GC_DATA_PIN, pio, sm, offset);
+  gc_report = default_gc_report;
+}
+#endif
+
+int main(void)
+{
+  board_init();
+
+  // Pause briefly for stability before starting activity
+  sleep_ms(1000);
+
+#ifdef CONFIG_PCE
+  printf("USB Host to PCEngine/TurboGrafx-16\r\n");
+#elif CONFIG_NGC
+  printf("USB Host to Nintendo GameCube\r\n");
+#endif
+
+  tusb_init();
+
+  neopixel_init();
+
+  unsigned short int i;
+  for (i = 0; i < MAX_PLAYERS; ++i) {
+    players[i].global_buttons = 0xFFFF;
+    players[i].altern_buttons = 0xFFFF;
+    players[i].global_x = 0;
+    players[i].global_y = 0;
+    players[i].output_buttons = 0xFFFF;
+    players[i].output_x = 0;
+    players[i].output_y = 0;
+    players[i].prev_buttons = 0xFFFF;
+    players[i].button_mode = 0;
+  }
+  state = 3;
+
+  output_word_0 = 0x00FFFFFFFF;  // no buttons pushed
+  output_word_1 = 0x00000000FF;  // no buttons pushed
+
+  init_time = get_absolute_time();
+
+  // Both state machines can run on the same PIO processor
+  pio = pio0;
+
+#ifdef CONFIG_PCE
+  pce_init();
+#endif
+
+#ifdef CONFIG_NGC
+  ngc_init();
+#endif
 
   multicore_launch_core1(core1_entry);
 

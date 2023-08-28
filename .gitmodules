@@ -1,3 +1,7 @@
 [submodule "PCEMouse/src/lib/tusb_xinput"]
 	path = PCEMouse/src/lib/tusb_xinput
 	url = https://github.com/RobertDaleSmith/tusb_xinput.git
+[submodule "PCEMouse/src/lib/joybus-pio"]
+	path = PCEMouse/src/lib/joybus-pio
+	url = https://github.com/RobertDaleSmith/joybus-pio.git
+	branch = c
