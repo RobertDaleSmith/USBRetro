@@ -128,7 +128,7 @@ uint64_t turbo_frequency;
   #define SHIELD_PIN_R 26
 
   #define BOOTSEL_PIN 11
-  #define GC_DATA_PIN 2
+  #define GC_DATA_PIN 7
   #define GC_3V3_PIN 6
 
   extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
@@ -137,6 +137,8 @@ uint64_t turbo_frequency;
 
   GamecubeConsole gc;
   gc_report_t gc_report;
+  u_int8_t gc_rumble = 0;
+  u_int8_t gc_last_rumble = 0;
 
 #endif
 
@@ -154,6 +156,10 @@ extern void neopixel_init(void);
 
 extern void neopixel_task(int pat);
 
+void rumble_task(void);
+
+bool tuh_xinput_set_rumble(uint8_t dev_addr, uint8_t instance, uint8_t lValue, uint8_t rValue, bool block);
+
 typedef struct TU_ATTR_PACKED
 {
   int device_address;
@@ -166,8 +172,12 @@ typedef struct TU_ATTR_PACKED
   int16_t global_y;
 
   int16_t output_buttons;
-  int16_t output_x;
-  int16_t output_y;
+  int16_t output_analog_1x;
+  int16_t output_analog_1y;
+  int16_t output_analog_2x;
+  int16_t output_analog_2y;
+  int16_t output_analog_l;
+  int16_t output_analog_r;
 
   int16_t prev_buttons;
 
@@ -239,8 +249,8 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].global_y = 0;
 
     players[playersCount].output_buttons = 0xFFFF;
-    players[playersCount].output_x = 0;
-    players[playersCount].output_y = 0;
+    players[playersCount].output_analog_1x = 0;
+    players[playersCount].output_analog_1y = 0;
     players[playersCount].button_mode = 0;
     players[playersCount].prev_buttons = 0xFFFF;
 
@@ -372,16 +382,16 @@ void __not_in_flash_func(update_output)(void)
     if (isMouse) {
       switch (state) {
         case 3: // state 3: x most significant nybble
-          byte |= (((players[i].output_x>>1) & 0xf0) >> 4);
+          byte |= (((players[i].output_analog_1x>>1) & 0xf0) >> 4);
           break;
         case 2: // state 2: x least significant nybble
-          byte |= (((players[i].output_x>>1) & 0x0f));
+          byte |= (((players[i].output_analog_1x>>1) & 0x0f));
           break;
         case 1: // state 1: y most significant nybble
-          byte |= (((players[i].output_y>>1) & 0xf0) >> 4);
+          byte |= (((players[i].output_analog_1y>>1) & 0xf0) >> 4);
           break;
         case 0: // state 0: y least significant nybble
-          byte |= (((players[i].output_y>>1) & 0x0f));
+          byte |= (((players[i].output_analog_1y>>1) & 0x0f));
           break;
       }
     }
@@ -426,14 +436,14 @@ void __not_in_flash_func(update_output)(void)
     gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
     gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
     gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
-    gc_report.r          = ((byte & 0x04000) == 0) ? 1 : 0; // r2
-    gc_report.l          = ((byte & 0x08000) == 0) ? 1 : 0; // l2
-    gc_report.stick_x    = players[i].output_x;
-    gc_report.stick_y    = players[i].output_y;
-    // gc_report.cstick_x   = players[i].output_analog_2x;
-    // gc_report.cstick_y   = players[i].output_analog_2y;
-    // gc_report.l_analog   = players[i].output_analog_l;
-    // gc_report.r_analog   = players[i].output_analog_r;
+    gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
+    gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+    gc_report.stick_x    = players[i].output_analog_1x;
+    gc_report.stick_y    = players[i].output_analog_1y;
+    gc_report.cstick_x   = players[i].output_analog_2x;
+    gc_report.cstick_y   = players[i].output_analog_2y;
+    gc_report.l_analog   = players[i].output_analog_l;
+    gc_report.r_analog   = players[i].output_analog_r;
   }
 #endif
 
@@ -443,7 +453,16 @@ void __not_in_flash_func(update_output)(void)
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y)
+void __not_in_flash_func(post_globals)(
+  uint8_t dev_addr,
+  int8_t instance,
+  uint16_t buttons,
+  uint8_t analog_1x,
+  uint8_t analog_1y,
+  uint8_t analog_2x,
+  uint8_t analog_2y,
+  uint8_t analog_l,
+  uint8_t analog_r)
 {
   bool has6Btn = !(buttons & 0x0f00);
   bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
@@ -462,19 +481,22 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16
   // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
 
   if (player_index >= 0) {
-
 #ifdef CONFIG_PCE
-      // TODO: map analog to dpad movement here.. also double map V/VI btns to R2/L2
+      // TODO: 
+      //  - map analog to dpad movement here.
+      //  - also double map V/VI btns to R2/L2.
+      //  - also map PS button to S1 + S2
+      //  - also map 8BitDo/Switch Home buttons to S1 + S2
 
-      if (delta_x >= 128)
-        players[player_index].global_x = players[player_index].global_x - (256-delta_x);
+      if (analog_1x >= 128)
+        players[player_index].global_x = players[player_index].global_x - (256-analog_1x);
       else
-        players[player_index].global_x = players[player_index].global_x + delta_x;
+        players[player_index].global_x = players[player_index].global_x + analog_1x;
 
-      if (delta_y >= 128)
-        players[player_index].global_y = players[player_index].global_y - (256-delta_y);
+      if (analog_1y >= 128)
+        players[player_index].global_y = players[player_index].global_y - (256-analog_1y);
       else
-        players[player_index].global_y = players[player_index].global_y + delta_y;
+        players[player_index].global_y = players[player_index].global_y + analog_1y;
 
       if (is_extra) // extra instance buttons to merge with root player
         players[0].altern_buttons = buttons;
@@ -483,8 +505,8 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16
 
       if (!output_exclude || !isMouse)
       {
-        players[player_index].output_x = players[player_index].global_x;
-        players[player_index].output_y = players[player_index].global_y;
+        players[player_index].output_analog_1x = players[player_index].global_x;
+        players[player_index].output_analog_1y = players[player_index].global_y;
         players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
         update_output();
@@ -492,8 +514,19 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16
 #endif
 
 #ifdef CONFIG_NGC
-      players[player_index].output_x = delta_x;
-      players[player_index].output_y = delta_y;
+      // fixes out of range analog values (1-255)
+      if (analog_1x == 0) analog_1x = 1;
+      if (analog_1y == 0) analog_1y = 1;
+      if (analog_2x == 0) analog_2x = 1;
+      if (analog_2y == 0) analog_2y = 1;
+
+      // cache analog and button values to player object
+      players[player_index].output_analog_1x = analog_1x;
+      players[player_index].output_analog_1y = analog_1y;
+      players[player_index].output_analog_2x = analog_2x;
+      players[player_index].output_analog_2y = analog_2y;
+      players[player_index].output_analog_l = analog_l;
+      players[player_index].output_analog_r = analog_r;
       players[player_index].output_buttons = buttons;
       update_output();
 #endif
@@ -517,6 +550,11 @@ static void __not_in_flash_func(process_signals)(void)
     neopixel_task(playersCount);
 #ifndef ADAFRUIT_QTPY_RP2040
     led_blinking_task();
+#endif
+
+#ifdef CONFIG_NGC
+    // xinput rumble task
+    rumble_task();
 #endif
 
 #ifdef CONFIG_PCE
@@ -599,11 +637,11 @@ static bool rx_bit = 0;
         unsigned short int i;
         for (i = 0; i < 5; ++i) {
           // decrement outputs from globals
-          players[i].global_x = (players[i].global_x - players[i].output_x);
-          players[i].global_y = (players[i].global_y - players[i].output_y);
+          players[i].global_x = (players[i].global_x - players[i].output_analog_1x);
+          players[i].global_y = (players[i].global_y - players[i].output_analog_1y);
 
-          players[i].output_x = 0;
-          players[i].output_y = 0;
+          players[i].output_analog_1x = 0;
+          players[i].output_analog_1y = 0;
           players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
         }
 
@@ -613,7 +651,7 @@ static bool rx_bit = 0;
 
 #ifdef CONFIG_NGC
     // Wait for GameCube console to poll controller
-    GamecubeConsole_WaitForPoll(&gc);
+    gc_rumble = GamecubeConsole_WaitForPoll(&gc) ? 255 : 0;
 
     // Send GameCube controller button report
     GamecubeConsole_SendReport(&gc, &gc_report);
@@ -684,12 +722,12 @@ void ngc_init() {
   gpio_pull_up(BOOTSEL_PIN);
 
   // Reboot into bootsel mode if GC 3.3V not detected.
-  // gpio_init(GC_3V3_PIN);
-  // gpio_set_dir(GC_3V3_PIN, GPIO_IN);
-  // gpio_pull_down(GC_3V3_PIN);
+  gpio_init(GC_3V3_PIN);
+  gpio_set_dir(GC_3V3_PIN, GPIO_IN);
+  gpio_pull_down(GC_3V3_PIN);
 
-  // sleep_ms(200);
-  // if (!gpio_get(GC_3V3_PIN)) reset_usb_boot(0, 0);
+  sleep_ms(200);
+  if (!gpio_get(GC_3V3_PIN)) reset_usb_boot(0, 0);
 
   int sm = -1;
   int offset = -1;
@@ -722,8 +760,12 @@ int main(void)
     players[i].global_x = 0;
     players[i].global_y = 0;
     players[i].output_buttons = 0xFFFF;
-    players[i].output_x = 0;
-    players[i].output_y = 0;
+    players[i].output_analog_1x = 128;
+    players[i].output_analog_1y = 128;
+    players[i].output_analog_2x = 128;
+    players[i].output_analog_2y = 128;
+    players[i].output_analog_l = 0;
+    players[i].output_analog_r = 0;
     players[i].prev_buttons = 0xFFFF;
     players[i].button_mode = 0;
   }
@@ -804,6 +846,28 @@ void tuh_umount_cb(uint8_t dev_addr)
 }
 
 #endif
+
+void rumble_task() {
+#ifdef CONFIG_NGC
+  // rumble only if controller connected
+  if (!playersCount) return;
+
+  // rumble state update only on diff than last
+  if (gc_last_rumble == gc_rumble) return;
+  gc_last_rumble = gc_rumble;
+
+  // update rumble state for xinput device 1.
+  unsigned short int i;
+  for (i = 0; i < playersCount; ++i) {
+    // TODO: only fire this if device is xinput
+    // if (players[i].xinput) {
+      tuh_xinput_set_rumble(players[i].device_address, players[i].instance_number, gc_rumble, gc_rumble, true);
+    // } else {
+    //   hid_set_rumble(players[i].device_address, players[i].instance_number, gc_rumble, gc_rumble);
+    // }
+  }
+#endif
+}
 
 //--------------------------------------------------------------------+
 // Blinking Task

@@ -96,19 +96,29 @@ void pattern_blue(uint len, uint t) {
 }
 
 void pattern_red(uint len, uint t) {
-    put_pixel(urgb_u32(0xff, 0, 0)); // red
+    put_pixel(urgb_u32(64, 0, 0)); // red
 }
 
 void pattern_green(uint len, uint t) {
-    put_pixel(urgb_u32(0, 0xff, 0)); // green
+    put_pixel(urgb_u32(0, 64, 0)); // green
 }
 
 void pattern_purple(uint len, uint t) {
-    put_pixel(urgb_u32(20, 0, 40)); // purple
+    put_pixel(urgb_u32(6, 0, 64)); // purple
 }
 
 void pattern_yellow(uint len, uint t) {
-    put_pixel(urgb_u32(0xff, 0xff, 0)); // yellow
+    put_pixel(urgb_u32(64, 64, 0)); // yellow
+}
+
+void pattern_purples(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        uint8_t intensity = t; // Adjust the intensity value for a darker effect
+        put_pixel(urgb_u32(intensity / 10, 0, intensity / 1)); // Dark purple color (red + blue)
+        if (++t >= max) t = 0;
+    }
 }
 
 void pattern_br(uint len, uint t) {
@@ -174,12 +184,21 @@ const struct {
     pattern pat;
     const char *name;
 } pattern_table[] = {
+#ifdef CONFIG_NGC
+        {pattern_purples, "Purples"},    // 0 controllers
+        {pattern_purple,  "Purple"},     // 1 controller
+        {pattern_red,     "Red"},        // 2 controllers
+        {pattern_green,   "Green"},      // 3 controllers
+        {pattern_blue,    "Blue"},       // 4 controller
+        {pattern_yellow,  "Yellow"},     // 5 controllers
+#else // PCE
         {pattern_blues,   "Blues"},      // 0 controllers
         {pattern_blue,    "Blue"},       // 1 controller
         {pattern_red,     "Red"},        // 2 controllers
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#endif
         {pattern_random,  "Random data"},// fun
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},
@@ -198,6 +217,7 @@ void neopixel_init()
     uint offset = pio_add_program(pio, &ws2812_program);
     sm = pio_claim_unused_sm(pio, true);
     ws2812_program_init(pio, sm, offset, WS2812_PIN, 800000, IS_RGBW);
+    put_pixel(urgb_u32(0x40, 0x20, 0x00)); // init color value (holds color on auto sel boot)
 }
 
 void neopixel_task(int pat)

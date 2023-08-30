@@ -3,7 +3,7 @@
 
 uint16_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r);
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
@@ -31,8 +31,8 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
            dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
     bool is6btn = true;
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x8000) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x4000) |
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x8000) |
+               ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x4000) |
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
                ((is6btn) ? 0x00 : 0xFF00) |
@@ -52,7 +52,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     uint8_t analog_l = p->bLeftTrigger;
     uint8_t analog_r = p->bRightTrigger;
 
-    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y);
+    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
