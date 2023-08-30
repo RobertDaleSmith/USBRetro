@@ -216,11 +216,11 @@ typedef struct TU_ATTR_PACKED
   uint8_t l2_trigger; // 0 released, 0xff fully pressed
   uint8_t r2_trigger; // as above
 
-   uint16_t timestamp;
-   uint8_t  battery;
+  // uint16_t timestamp;
+  // uint8_t  battery;
 
-   int16_t gyro[3];  // x, y, z;
-   int16_t accel[3]; // x, y, z
+  // int16_t gyro[3];  // x, y, z;
+  // int16_t accel[3]; // x, y, z
 
   // there is still lots more info
 
@@ -607,6 +607,8 @@ typedef struct TU_ATTR_PACKED
     uint8_t padding2 : 4;
   };
 
+  uint8_t x_axis, y_axis, z_axis, rz_axis;
+
 } pokken_report_t;
 
 // Nintedo Switch Pro USB Controller
@@ -751,8 +753,8 @@ typedef struct TU_ATTR_PACKED
   bool switch_home_led;
   bool switch_command_ack;
   int switch_player_led_set;
-  // uint8_t motor_left;
-  // uint8_t motor_right;
+  uint8_t motor_left;
+  uint8_t motor_right;
 
   InputLocation xLoc;
   InputLocation yLoc;
@@ -773,7 +775,6 @@ typedef struct TU_ATTR_PACKED
   instance_t instances[CFG_TUH_HID];
   uint8_t instance_count;
   uint8_t instance_root;
-
 } device_t;
 
 static device_t devices[MAX_DEVICES] = { 0 };
@@ -1017,7 +1018,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 extern void remove_players_by_address(int device_address, int instance);
 
@@ -1178,10 +1179,16 @@ void hid_app_task(void)
 
           sony_ds4_output_report_t output_report = {0};
           output_report.set_led = 1;
+
           switch (player_index+1)
           {
           case 1:
+#ifdef CONFIG_NGC
+            output_report.lightbar_red = 20; // purple
+            output_report.lightbar_blue = 40;//
+#else
             output_report.lightbar_blue = 64;
+#endif
             break;
 
           case 2:
@@ -1192,9 +1199,13 @@ void hid_app_task(void)
             output_report.lightbar_green = 64;
             break;
 
-          case 4: // purple
-            output_report.lightbar_red = 20;
-            output_report.lightbar_blue = 40;
+          case 4:
+#ifdef CONFIG_NGC
+            output_report.lightbar_blue = 64;
+#else
+            output_report.lightbar_red = 20; // purple
+            output_report.lightbar_blue = 40;//
+#endif
             break;
 
           case 5: // yellow
@@ -1216,9 +1227,9 @@ void hid_app_task(void)
             output_report.lightbar_blue = (fun_inc%2 == 0) ? 0 : fun_inc+128;
           }
 
-          // output_report.set_rumble = 1;
-          // output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
-          // output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
+          output_report.set_rumble = 1;
+          output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
+          output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
           tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
         }
       }
@@ -1260,7 +1271,12 @@ void hid_app_task(void)
           {
           case 1:
             ds5_fb.player_led = 0b00100;
+#ifdef CONFIG_NGC
+            ds5_fb.lightbar_r = 20; // purple
+            ds5_fb.lightbar_b = 40; //
+#else
             ds5_fb.lightbar_b = 64;
+#endif
             break;
 
           case 2:
@@ -1273,10 +1289,14 @@ void hid_app_task(void)
             ds5_fb.lightbar_g = 64;
             break;
 
-          case 4: // purple
+          case 4:
             ds5_fb.player_led = 0b11011;
-            ds5_fb.lightbar_r = 20;
-            ds5_fb.lightbar_b = 40;
+#ifdef CONFIG_NGC
+            ds5_fb.lightbar_r = 20; // purple
+            ds5_fb.lightbar_b = 40; //
+#else
+            ds5_fb.lightbar_b = 64;
+#endif
             break;
 
           case 5: // yellow
@@ -1301,6 +1321,8 @@ void hid_app_task(void)
             ds5_fb.lightbar_b = fun_inc+128;
           }
 
+          ds5_fb.rumble_l = devices[dev_addr].instances[instance].motor_left;
+          ds5_fb.rumble_r = devices[dev_addr].instances[instance].motor_right;
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
       }
@@ -1688,16 +1710,20 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].type = CONTROLLER_DS3;
     devices[dev_addr].instances[instance].ds3_init = false;
     devices[dev_addr].instances[instance].ds3_led_set = false;
-    // devices[dev_addr].instances[instance].motor_left = 0;
-    // devices[dev_addr].instances[instance].motor_right = 0;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_sony_ds4(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS4;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_sony_ds5(dev_addr))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS5;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (is_switch(dev_addr))
   {
@@ -1802,7 +1828,8 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
 
   // x, y, z, rz must different than 2 to be counted
   result = diff_than_n(rpt1->x, rpt2->x, 2) || diff_than_n(rpt1->y, rpt2->y, 2) ||
-           diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2);
+           diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2) ||
+           diff_than_n(rpt1->l2_trigger, rpt2->l2_trigger, 2) || diff_than_n(rpt1->r2_trigger, rpt2->r2_trigger, 2);
 
   // check the rest with mem compare
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 5);
@@ -1979,6 +2006,9 @@ bool pokken_diff_report(pokken_report_t const* rpt1, pokken_report_t const* rpt2
 {
   bool result;
 
+  result = diff_than_n(rpt1->x_axis, rpt2->x_axis, 2) || diff_than_n(rpt1->y_axis, rpt2->y_axis, 2) ||
+           diff_than_n(rpt1->z_axis, rpt2->z_axis, 2) || diff_than_n(rpt1->rz_axis, rpt2->rz_axis, 2);
+
   result |= rpt1->dpad != rpt2->dpad;
   result |= rpt1->b != rpt2->b;
   result |= rpt1->a != rpt2->a;
@@ -1999,8 +2029,8 @@ bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2
   bool result;
 
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1->left_x, rpt2->left_x, 4) || diff_than_n(rpt1->left_y, rpt2->left_y, 4); // ||
-       //  diff_than_n(rpt1->right_x, rpt2->right_x, 4) || diff_than_n(rpt1->right_y, rpt2->right_y, 4);
+  result = diff_than_n(rpt1->left_x, rpt2->left_x, 4) || diff_than_n(rpt1->left_y, rpt2->left_y, 4) ||
+           diff_than_n(rpt1->right_x, rpt2->right_x, 4) || diff_than_n(rpt1->right_y, rpt2->right_y, 4);
 
   // check the reset with mem compare (everything but the sticks)
   result |= memcmp(&rpt1->battery_level_and_connection_info + 1, &rpt2->battery_level_and_connection_info + 1, 3);
@@ -2059,6 +2089,7 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // We need more than memcmp to check if report is different enough
     if ( ds3_diff_report(&prev_report[dev_addr-1], &ds3_report) )
     {
+      //TODO: parse left and right analog trigger pressure values
       printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", ds3_report.lx, ds3_report.ly, ds3_report.rx, ds3_report.ry);
       printf("DPad = ");
 
@@ -2086,30 +2117,25 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       printf("\r\n");
 
-      int threshold = 28;
-      bool dpad_up    = (ds3_report.up || ds3_report.ly < (128 - threshold));
-      bool dpad_right = (ds3_report.right || ds3_report.lx > (128 + threshold));
-      bool dpad_down  = (ds3_report.down || ds3_report.ly > (128 + threshold));
-      bool dpad_left  = (ds3_report.left || ds3_report.lx < (128 - threshold));
       bool has_6btns = true;
 
-      buttons = (((ds3_report.r1 || ds3_report.l2) ? 0x00 : 0x8000) |
-                 ((ds3_report.l1 || ds3_report.r2) ? 0x00 : 0x4000) |
+      buttons = (((ds3_report.r1)       ? 0x00 : 0x8000) |
+                 ((ds3_report.l1)       ? 0x00 : 0x4000) |
                  ((ds3_report.square)   ? 0x00 : 0x2000) |
                  ((ds3_report.triangle) ? 0x00 : 0x1000) |
                  ((has_6btns)           ? 0x00 : 0xFF00) |
-                 ((dpad_left)           ? 0x00 : 0x08) |
-                 ((dpad_down)           ? 0x00 : 0x04) |
-                 ((dpad_right)          ? 0x00 : 0x02) |
-                 ((dpad_up)             ? 0x00 : 0x01) |
-                 ((ds3_report.start || ds3_report.ps)    ? 0x00 : 0x80) |
-                 ((ds3_report.select || ds3_report.ps)   ? 0x00 : 0x40) |
-                 ((ds3_report.cross  || (!has_6btns && ds3_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds3_report.circle || (!has_6btns && ds3_report.square))   ? 0x00 : 0x10));
+                 ((ds3_report.left)     ? 0x00 : 0x08) |
+                 ((ds3_report.down)     ? 0x00 : 0x04) |
+                 ((ds3_report.right)    ? 0x00 : 0x02) |
+                 ((ds3_report.up)       ? 0x00 : 0x01) |
+                 ((ds3_report.start)    ? 0x00 : 0x80) |
+                 ((ds3_report.select)   ? 0x00 : 0x40) |
+                 ((ds3_report.cross)    ? 0x00 : 0x20) |
+                 ((ds3_report.circle)   ? 0x00 : 0x10));
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, 0, 0);
+      post_globals(dev_addr, instance, buttons, ds3_report.lx, ds3_report.ly, ds3_report.rx, ds3_report.ry, 0, 0);
 
       // The left and right triggers control the intensity of the left and right rumble motors
       // motor_left = ds3_report.l2_trigger;
@@ -2143,7 +2169,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // We need more than memcmp to check if report is different enough
     if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
-      printf("(x, y, z, rz) = (%u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz);
+      printf("(x, y, z, rz, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, ds4_report.r2_trigger, ds4_report.l2_trigger);
       printf("DPad = %s ", dpad_str[ds4_report.dpad]);
 
       if (ds4_report.square   ) printf("Square ");
@@ -2166,35 +2192,43 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       printf("\r\n");
 
-      int threshold = 28;
-      bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 ||
-                         ds4_report.dpad == 7 || ds4_report.y < (128 - threshold));
-      bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3) || ds4_report.x > (128 + threshold));
-      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5) || ds4_report.y > (128 + threshold));
-      bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7) || ds4_report.x < (128 - threshold));
+      bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
+      bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
+      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5));
+      bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7));
+      bool button_z = ds4_report.share || ds4_report.tpad;
       bool has_6btns = true;
 
-      buttons = (((ds4_report.r1 || ds4_report.l2) ? 0x00 : 0x8000) |
-                 ((ds4_report.l1 || ds4_report.r2) ? 0x00 : 0x4000) |
+      buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
+                 ((ds4_report.l1)       ? 0x00 : 0x4000) |
                  ((ds4_report.square)   ? 0x00 : 0x2000) |
                  ((ds4_report.triangle) ? 0x00 : 0x1000) |
                  ((has_6btns)           ? 0x00 : 0xFF00) |
-                 ((dpad_left)           ? 0x00 : 0x08) |
-                 ((dpad_down)           ? 0x00 : 0x04) |
-                 ((dpad_right)          ? 0x00 : 0x02) |
-                 ((dpad_up)             ? 0x00 : 0x01) |
-                 ((ds4_report.option || ds4_report.ps) ? 0x00 : 0x80) |
-                 ((ds4_report.share  || ds4_report.ps) ? 0x00 : 0x40) |
-                 ((ds4_report.cross  || (!has_6btns && ds4_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds4_report.circle || (!has_6btns && ds4_report.square))   ? 0x00 : 0x10));
+                 ((dpad_left)           ? 0x00 : 0x0008) |
+                 ((dpad_down)           ? 0x00 : 0x0004) |
+                 ((dpad_right)          ? 0x00 : 0x0002) |
+                 ((dpad_up)             ? 0x00 : 0x0001) |
+                 ((ds4_report.option)   ? 0x00 : 0x0080) |
+                 ((button_z)            ? 0x00 : 0x0040) |
+                 ((ds4_report.cross)    ? 0x00 : 0x0020) |
+                 ((ds4_report.circle)   ? 0x00 : 0x0010));
+
+      uint8_t analog_1x = ds4_report.x;
+      uint8_t analog_1y = 255 - ds4_report.y;
+      uint8_t analog_2x = ds4_report.z;
+      uint8_t analog_2y = 255 - ds4_report.rz;
+      uint8_t analog_l = ds4_report.l2_trigger;
+      uint8_t analog_r = ds4_report.r2_trigger;
+
+      uint8_t deadzone = 40;
+      if (analog_1x > (128-(deadzone/2)) && analog_1x < (128+(deadzone/2))) analog_1x = 128;
+      if (analog_1y > (128-(deadzone/2)) && analog_1y < (128+(deadzone/2))) analog_1y = 128;
+      if (analog_2x > (128-(deadzone/2)) && analog_2x < (128+(deadzone/2))) analog_2x = 128;
+      if (analog_2y > (128-(deadzone/2)) && analog_2y < (128+(deadzone/2))) analog_2y = 128;
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, 0, 0);
-
-      // The left and right triggers control the intensity of the left and right rumble motors
-      // motor_left = ds4_report.l2_trigger;
-      // motor_right = ds4_report.r2_trigger;
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
 
       prev_report[dev_addr-1] = ds4_report;
     }
@@ -2221,7 +2255,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     if ( ds5_diff_report(&prev_report[dev_addr-1], &ds5_report) )
     {
-      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
+      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
       printf("DPad = %s ", dpad_str[ds5_report.dpad]);
 
       if (ds5_report.square   ) printf("Square ");
@@ -2245,31 +2279,37 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       printf("\r\n");
 
-      int threshold = 28;
-      bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 ||
-                         ds5_report.dpad == 7 || ds5_report.y1 < (128 - threshold));
-      bool dpad_right = ((ds5_report.dpad >= 1 && ds5_report.dpad <= 3) || ds5_report.x1 > (128 + threshold));
-      bool dpad_down  = ((ds5_report.dpad >= 3 && ds5_report.dpad <= 5) || ds5_report.y1 > (128 + threshold));
-      bool dpad_left  = ((ds5_report.dpad >= 5 && ds5_report.dpad <= 7) || ds5_report.x1 < (128 - threshold));
+      bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 || ds5_report.dpad == 7);
+      bool dpad_right = (ds5_report.dpad >= 1 && ds5_report.dpad <= 3);
+      bool dpad_down  = (ds5_report.dpad >= 3 && ds5_report.dpad <= 5);
+      bool dpad_left  = (ds5_report.dpad >= 5 && ds5_report.dpad <= 7);
+      bool button_z = ds5_report.share || ds5_report.tpad;
       bool has_6btns = true;
 
-      buttons = (((ds5_report.r1 || ds5_report.l2) ? 0x00 : 0x8000) |
-                 ((ds5_report.l1 || ds5_report.r2) ? 0x00 : 0x4000) |
+      buttons = (((ds5_report.r1)       ? 0x00 : 0x8000) |
+                 ((ds5_report.l1)       ? 0x00 : 0x4000) |
                  ((ds5_report.square)   ? 0x00 : 0x2000) |
                  ((ds5_report.triangle) ? 0x00 : 0x1000) |
                  ((has_6btns)           ? 0x00 : 0xFF00) |
-                 ((dpad_left)           ? 0x00 : 0x08) |
-                 ((dpad_down)           ? 0x00 : 0x04) |
-                 ((dpad_right)          ? 0x00 : 0x02) |
-                 ((dpad_up)             ? 0x00 : 0x01) |
-                 ((ds5_report.option || ds5_report.ps|| ds5_report.mute) ? 0x00 : 0x80) |
-                 ((ds5_report.share  || ds5_report.ps || ds5_report.mute) ? 0x00 : 0x40) |
-                 ((ds5_report.cross  || (!has_6btns && ds5_report.triangle)) ? 0x00 : 0x20) |
-                 ((ds5_report.circle || (!has_6btns && ds5_report.square))   ? 0x00 : 0x10));
+                 ((dpad_left)           ? 0x00 : 0x0008) |
+                 ((dpad_down)           ? 0x00 : 0x0004) |
+                 ((dpad_right)          ? 0x00 : 0x0002) |
+                 ((dpad_up)             ? 0x00 : 0x0001) |
+                 ((ds5_report.option)   ? 0x00 : 0x0080) |
+                 ((button_z)            ? 0x00 : 0x0040) |
+                 ((ds5_report.cross)    ? 0x00 : 0x0020) |
+                 ((ds5_report.circle)   ? 0x00 : 0x0010));
+
+      uint8_t analog_1x = ds5_report.x1;
+      uint8_t analog_1y = 255 - ds5_report.y1;
+      uint8_t analog_2x = ds5_report.x2;
+      uint8_t analog_2y = 255 - ds5_report.y2;
+      uint8_t analog_l = ds5_report.rx;
+      uint8_t analog_r = ds5_report.ry;
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, 0, 0);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
 
       prev_report[dev_addr-1] = ds5_report;
     }
@@ -2311,8 +2351,8 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
     bool has_6btns = true;
 
-    buttons = (((psc_report.r1 || psc_report.l2) ? 0x00 : 0x8000) |
-               ((psc_report.l1 || psc_report.r2) ? 0x00 : 0x4000) |
+    buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
+               ((psc_report.l1)       ? 0x00 : 0x4000) |
                ((psc_report.square)   ? 0x00 : 0x2000) |
                ((psc_report.triangle) ? 0x00 : 0x1000) |
                ((has_6btns)           ? 0x00 : 0xFF00) |
@@ -2320,14 +2360,14 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((dpad_down)           ? 0x00 : 0x04) |
                ((dpad_right)          ? 0x00 : 0x02) |
                ((dpad_up)             ? 0x00 : 0x01) |
-               ((psc_report.option || psc_report.ps) ? 0x00 : 0x80) |
-               ((psc_report.share  || psc_report.ps) ? 0x00 : 0x40) |
-               ((psc_report.cross  || (!has_6btns && psc_report.triangle && !psc_report.ps)) ? 0x00 : 0x20) |
-               ((psc_report.circle || (!has_6btns && psc_report.square)) ? 0x00 : 0x10));
+               ((psc_report.option)   ? 0x00 : 0x80) |
+               ((psc_report.share)    ? 0x00 : 0x40) |
+               ((psc_report.cross)    ? 0x00 : 0x20) |
+               ((psc_report.circle)   ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1] = psc_report;
   }
@@ -2372,7 +2412,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1] = pce_report;
   }
@@ -2412,36 +2452,22 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
 
-    int threshold = 28;
-    dpad_up    |= (input_report.y1 < (128 - threshold));
-    dpad_right |= (input_report.x1 > (128 + threshold));
-    dpad_down  |= (input_report.y1 > (128 + threshold));
-    dpad_left  |= (input_report.x1 < (128 - threshold));
-
-    dpad_up    |= (input_report.y2 < (128 - threshold));
-    dpad_right |= (input_report.x2 > (128 + threshold));
-    dpad_down  |= (input_report.y2 > (128 + threshold));
-    dpad_left  |= (input_report.x2 < (128 - threshold));
-
-    if (dpad_up && dpad_down) dpad_down = false;
-    if (dpad_left && dpad_right) dpad_right = false;
-
     buttons = (((input_report.l2 || input_report.l) ? 0x00 : 0x8000) |
                ((input_report.r2 || input_report.y) ? 0x00 : 0x4000) |
-               ((input_report.x)     ? 0x00 : 0x2000) |
-               ((input_report.a)     ? 0x00 : 0x1000) |
-               ((dpad_left)          ? 0x00 : 0x08) |
-               ((dpad_down)          ? 0x00 : 0x04) |
-               ((dpad_right)         ? 0x00 : 0x02) |
-               ((dpad_up)            ? 0x00 : 0x01) |
-               ((input_report.start || input_report.home) ? 0x00 : 0x80) |
-               ((input_report.select || input_report.home) ? 0x00 : 0x40) |
-               ((input_report.b)     ? 0x00 : 0x20) |
-               ((input_report.r)     ? 0x00 : 0x10));
+               ((input_report.x)      ? 0x00 : 0x2000) |
+               ((input_report.a)      ? 0x00 : 0x1000) |
+               ((dpad_left)           ? 0x00 : 0x08) |
+               ((dpad_down)           ? 0x00 : 0x04) |
+               ((dpad_right)          ? 0x00 : 0x02) |
+               ((dpad_up)             ? 0x00 : 0x01) |
+               ((input_report.start)  ? 0x00 : 0x80) |
+               ((input_report.select) ? 0x00 : 0x40) |
+               ((input_report.b)      ? 0x00 : 0x20) |
+               ((input_report.r)      ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2481,36 +2507,22 @@ void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
 
-    int threshold = 28;
-    dpad_up    |= (input_report.y1 < (128 - threshold));
-    dpad_right |= (input_report.x1 > (128 + threshold));
-    dpad_down  |= (input_report.y1 > (128 + threshold));
-    dpad_left  |= (input_report.x1 < (128 - threshold));
-
-    dpad_up    |= (input_report.y2 < (128 - threshold));
-    dpad_right |= (input_report.x2 > (128 + threshold));
-    dpad_down  |= (input_report.y2 > (128 + threshold));
-    dpad_left  |= (input_report.x2 < (128 - threshold));
-
-    if (dpad_up && dpad_down) dpad_down = false;
-    if (dpad_left && dpad_right) dpad_right = false;
-
-    buttons = (((input_report.r) ? 0x00 : 0x8000) |
-               ((input_report.l) ? 0x00 : 0x4000) |
-               ((input_report.y) ? 0x00 : 0x2000) |
-               ((input_report.x) ? 0x00 : 0x1000) |
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((input_report.start || input_report.home) ? 0x00 : 0x80) |
-               ((input_report.select || input_report.home) ? 0x00 : 0x40) |
-               ((input_report.b) ? 0x00 : 0x20) |
-               ((input_report.a) ? 0x00 : 0x10));
+    buttons = (((input_report.r)      ? 0x00 : 0x8000) |
+               ((input_report.l)      ? 0x00 : 0x4000) |
+               ((input_report.y)      ? 0x00 : 0x2000) |
+               ((input_report.x)      ? 0x00 : 0x1000) |
+               ((dpad_left)           ? 0x00 : 0x08) |
+               ((dpad_down)           ? 0x00 : 0x04) |
+               ((dpad_right)          ? 0x00 : 0x02) |
+               ((dpad_up)             ? 0x00 : 0x01) |
+               ((input_report.start)  ? 0x00 : 0x80) |
+               ((input_report.select) ? 0x00 : 0x40) |
+               ((input_report.b)      ? 0x00 : 0x20) |
+               ((input_report.a)      ? 0x00 : 0x10));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2561,7 +2573,7 @@ void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1] = sega_report;
   }
@@ -2613,7 +2625,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1] = astro_report;
   }
@@ -2643,12 +2655,10 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // if (wingman_report.s) printf("S ");
     // printf("\r\n");
 
-    int threshold = 28;
-    bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 ||
-                        wingman_report.dpad == 7 || wingman_report.analog_y < (128 - threshold));
-    bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3) || wingman_report.analog_x > (128 + threshold));
-    bool dpad_down  = ((wingman_report.dpad >= 3 && wingman_report.dpad <= 5) || wingman_report.analog_y > (128 + threshold));
-    bool dpad_left  = ((wingman_report.dpad >= 5 && wingman_report.dpad <= 7) || wingman_report.analog_x < (128 - threshold));
+    bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 || wingman_report.dpad == 7);
+    bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3));
+    bool dpad_down  = ((wingman_report.dpad >= 3 && wingman_report.dpad <= 5));
+    bool dpad_left  = ((wingman_report.dpad >= 5 && wingman_report.dpad <= 7));
     bool has_6btns = true;
 
     buttons = (((wingman_report.z) ? 0x00 : 0x8000) |  // VI
@@ -2667,7 +2677,7 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 128, 128, 0);
 
     prev_report[dev_addr-1] = wingman_report;
   }
@@ -2717,7 +2727,7 @@ void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2767,7 +2777,7 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2783,6 +2793,7 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
   if ( pokken_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
   {
+    printf("(x, y, z, rz) = (%u, %u %u, %u)\r\n", update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis);
     printf("DPad = %d ", update_report.dpad);
     if (update_report.y) printf("Y ");
     if (update_report.b) printf("B ");
@@ -2802,8 +2813,10 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     bool dpad_left  = (update_report.dpad >= 5 && update_report.dpad <= 7);
     bool has_6btns = true;
 
-    buttons = (((update_report.r || update_report.zr) ? 0x00 : 0x8000) | // VI
-               ((update_report.l || update_report.zl) ? 0x00 : 0x4000) | // V
+    // TODO: handle ZL/ZR as L2/R2
+
+    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+               ((update_report.l)      ? 0x00 : 0x4000) | // V
                ((update_report.y)      ? 0x00 : 0x2000) | // IV
                ((update_report.x)      ? 0x00 : 0x1000) | // III
                ((has_6btns)            ? 0x00 : 0xFF00) |
@@ -2818,7 +2831,7 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2830,6 +2843,11 @@ void print_report(switch_report_01_t* report, uint32_t length) {
         printf("%02X ", report->buf[i]);
     }
     printf("\n");
+}
+
+uint8_t byteScaleSwitchAnalog(uint16_t switch_val) {
+    // Scale the switch value from [0, 4096] to [0, 255]
+    return (switch_val * 256) / 4096;
 }
 
 void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -2881,27 +2899,33 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
       bool has_6btns = true;
       int threshold = 256;
-      bool dpad_up    = (update_report.up) || update_report.left_y > (2048 + threshold);
-      bool dpad_right = (update_report.right && !update_report.left) || update_report.left_x > (2048 + threshold);
-      bool dpad_down  = (update_report.down && !update_report.up) || update_report.left_y < (2048 - threshold);
-      bool dpad_left  = (update_report.left) || update_report.left_x < (2048 - threshold);
+      bool dpad_up    = update_report.up;
+      bool dpad_right = update_report.right;
+      bool dpad_down  = update_report.down;
+      bool dpad_left  = update_report.left;
       bool bttn_1 = update_report.a;
       bool bttn_2 = update_report.b;
       bool bttn_3 = update_report.x;
       bool bttn_4 = update_report.y;
-      bool bttn_5 = update_report.l || update_report.zl;
-      bool bttn_6 = update_report.r || update_report.zr;
-      bool bttn_sel = update_report.select || update_report.home;
-      bool bttn_run = update_report.start || update_report.home;
-
+      bool bttn_5 = update_report.l;
+      bool bttn_6 = update_report.r;
+      bool bttn_run = update_report.start;
+      bool bttn_sel = update_report.select;
+      uint8_t left_trigger = 0;
+      uint8_t rght_trigger = 0;
+#ifdef CONFIG_NGC
+      bttn_sel |= update_report.zl || update_report.zr;
+      if (update_report.l) left_trigger = 0xff;
+      if (update_report.r) rght_trigger = 0xff;
+#endif
       bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
       bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
 
       if (is_left_joycon) {
-        dpad_up    = update_report.up || (update_report.left_y > (2048 + threshold));
-        dpad_right = update_report.right || (update_report.left_x > (2048 + threshold));
-        dpad_down  = update_report.down || (update_report.left_y < (2048 - threshold));
-        dpad_left  = update_report.left || (update_report.left_x < (2048 - threshold));
+        dpad_up    = update_report.up;
+        dpad_right = update_report.right;
+        dpad_down  = update_report.down;
+        dpad_left  = update_report.left;
         // bttn_1 = update_report.right;
         // bttn_2 = update_report.down;
         // bttn_3 = update_report.up;
@@ -2939,7 +2963,11 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       bool is_root = instance == devices[dev_addr].instance_root;
-      post_globals(dev_addr, is_root ? instance : -1, buttons, 0, 0);
+      uint8_t leftX = byteScaleSwitchAnalog(update_report.left_x);
+      uint8_t leftY = byteScaleSwitchAnalog(update_report.left_y);
+      uint8_t rightX = byteScaleSwitchAnalog(update_report.right_x);
+      uint8_t rightY = byteScaleSwitchAnalog(update_report.right_y);
+      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, left_trigger, rght_trigger);
 
       prev_report[dev_addr-1][instance] = update_report;
     }
@@ -3016,45 +3044,32 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
           bool dpad_right  = gamecube_report.port[i].right;
           bool dpad_up  = gamecube_report.port[i].up;
           bool dpad_down  = gamecube_report.port[i].down;
-
-          uint8_t range_half = 127;
-          uint32_t dead_zone_range = range_half / DEAD_ZONE;
-          if (gamecube_report.port[i].x1 < (range_half - dead_zone_range))
-          {
-            dpad_left |= 1;
-          }
-          else if (gamecube_report.port[i].x1 > (range_half + dead_zone_range))
-          {
-            dpad_right |= 1;
-          }
-          if (gamecube_report.port[i].y1 < (range_half - dead_zone_range))
-          {
-            dpad_down |= 1;
-          }
-          else if (gamecube_report.port[i].y1 > (range_half + dead_zone_range))
-          {
-            dpad_up |= 1;
-          }
-
-          if (dpad_up && dpad_down) dpad_down = false;
-          if (dpad_left && dpad_right) dpad_right = false;
+          bool has_6btns = true;
 
           buttons = (
             ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
             ((gamecube_report.port[i].l)     ? 0x00 : 0x4000) | // V
             ((gamecube_report.port[i].x)     ? 0x00 : 0x2000) | // IV
             ((gamecube_report.port[i].y)     ? 0x00 : 0x1000) | // III
-            ((dpad_left)  ? 0x00 : 0x0008) |
-            ((dpad_down)  ? 0x00 : 0x0004) |
-            ((dpad_right) ? 0x00 : 0x0002) |
-            ((dpad_up)    ? 0x00 : 0x0001) |
-            ((gamecube_report.port[i].start)   ? 0x00 : 0x0080) | // Run
-            ((gamecube_report.port[i].z)   ? 0x00 : 0x0040) | // Select
+            ((has_6btns)                     ? 0x00 : 0xFF00) |
+            ((dpad_left)                     ? 0x00 : 0x0008) |
+            ((dpad_down)                     ? 0x00 : 0x0004) |
+            ((dpad_right)                    ? 0x00 : 0x0002) |
+            ((dpad_up)                       ? 0x00 : 0x0001) |
+            ((gamecube_report.port[i].start) ? 0x00 : 0x0080) | // Run
+            ((gamecube_report.port[i].z)     ? 0x00 : 0x0040) | // Select
             ((gamecube_report.port[i].b)     ? 0x00 : 0x0020) | // II
             ((gamecube_report.port[i].a)     ? 0x00 : 0x0010)   // I
           );
 
-          post_globals(dev_addr, i, buttons, 0, 0);
+          post_globals(dev_addr, i, buttons,
+            gamecube_report.port[i].x1,
+            gamecube_report.port[i].y1,
+            gamecube_report.port[i].x2,
+            gamecube_report.port[i].y2,
+            gamecube_report.port[i].zl,
+            gamecube_report.port[i].zr
+          );
 
           prev_report[dev_addr-1][instance + i] = gamecube_report;
         }
@@ -3095,11 +3110,13 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     bool dpad_right  = (update_report.axis0_x > 128);
     bool dpad_up  = (update_report.axis0_y < 126);
     bool dpad_down  = (update_report.axis0_y > 128);
+    bool has_6btns = true;
 
     buttons = (((update_report.z)      ? 0x00 : 0x8000) | // VI
                ((update_report.y)      ? 0x00 : 0x4000) | // V
                ((update_report.x)      ? 0x00 : 0x2000) | // IV
                ((update_report.a)      ? 0x00 : 0x1000) | // III
+               ((has_6btns)            ? 0x00 : 0xFF00) |
                ((dpad_left)            ? 0x00 : 0x0008) |
                ((dpad_down)            ? 0x00 : 0x0004) |
                ((dpad_right)           ? 0x00 : 0x0002) |
@@ -3111,7 +3128,7 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3236,7 +3253,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, instance, buttons, 0, 0);
+  post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
   prev_report = *report;
 }
@@ -3330,7 +3347,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, instance, buttons, local_x, local_y);
+  post_globals(dev_addr, instance, buttons, local_x, local_y, 128, 128, 0, 0);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel);
@@ -3424,7 +3441,7 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, instance, buttons, 0, 0);
+  post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
 
   prev_report = *report;
 }
@@ -3549,7 +3566,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
                ((buttonSelect)    ? 0x00 : 0x0040) |
                ((current.button2) ? 0x00 : 0x0020) |
                ((buttonI)         ? 0x00 : 0x0010));
-    post_globals(dev_addr, instance, buttons, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
   }
 }
 
