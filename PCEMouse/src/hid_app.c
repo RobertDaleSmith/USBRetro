@@ -38,6 +38,12 @@
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "hid_parser.h"
+#include <math.h>
+
+typedef struct {
+    uint8_t x;
+    uint8_t y;
+} Point;
 
 #define HID_DEBUG 0
 #define LANGUAGE_ID 0x0409
@@ -3185,6 +3191,26 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 // Keyboard
 //--------------------------------------------------------------------+
 
+Point calculate_coordinates(int angle_degrees, int intensity) {
+    // Convert the angle to radians
+    double angle_radians = angle_degrees * M_PI / 180.0;
+
+    // Calculate the distance along the line based on intensity
+    double max_distance = 1.0;  // Maximum distance is normalized to 1
+    double distance = intensity / 100.0 * max_distance;
+
+    // Calculate the X and Y coordinates as bytes in the range 0-255
+    double y_double = 128.0 + distance * cos(angle_radians) * 127.0;
+    double x_double = 128.0 + distance * sin(angle_radians) * 127.0;
+
+    // Ensure the values are within bounds
+    uint8_t y_byte = (uint8_t)fmin(255.0, fmax(0.0, y_double));
+    uint8_t x_byte = (uint8_t)fmin(255.0, fmax(0.0, x_double));
+
+    Point result = {x_byte, y_byte};
+    return result;
+}
+
 // look up new key in previous keys
 static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8_t keycode)
 {
@@ -3199,29 +3225,86 @@ static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report)
 {
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
+  static bool ctrl = 0;
 
+  uint8_t analog_left_x = 128;
+  uint8_t analog_left_y = 128;
+  uint8_t analog_right_x = 128;
+  uint8_t analog_right_y = 128;
+  uint8_t analog_l = 0;
+  uint8_t analog_r = 0;
   bool has_6btns = true;
   bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
     btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
     btns_three = false, btns_four = false, btns_five = false, btns_six = false;
+
+  uint32_t leftStickKeys = 0x0;
 
   //------------- example code ignore control (non-printable) key affects -------------//
   for(uint8_t i=0; i<6; i++)
   {
     if ( report->keycode[i] )
     {
-      if (report->keycode[i] == 40) btns_run = true; // Enter
-      if (report->keycode[i] == 41) btns_sel = true; // ESC
-      if (report->keycode[i] == 26 || report->keycode[i] == 82) dpad_up = true; // W or Arrow
-      if (report->keycode[i] == 4  || report->keycode[i] == 80) dpad_left = true; // A or Arrow
-      if (report->keycode[i] == 22 || report->keycode[i] == 81) dpad_down = true; // S or Arrow
-      if (report->keycode[i] == 7  || report->keycode[i] == 79) dpad_right = true; // D or Arrow
-      if (report->keycode[i] == 89) btns_one = true;
-      if (report->keycode[i] == 90) btns_two = true;
-      if (report->keycode[i] == 91) btns_three = true;
-      if (report->keycode[i] == 92) btns_four = true;
-      if (report->keycode[i] == 93) btns_five = true;
-      if (report->keycode[i] == 94) btns_six = true;
+      if (report->keycode[i] == HID_KEY_ENTER) btns_run = true;
+      if (report->keycode[i] == HID_KEY_ESCAPE ||
+          report->keycode[i] == HID_KEY_O ||
+          report->keycode[i] == HID_KEY_P) btns_sel = true;
+      if (report->keycode[i] == HID_KEY_1 || report->keycode[i] == HID_KEY_ARROW_UP) dpad_up = true;
+      if (report->keycode[i] == HID_KEY_2 || report->keycode[i] == HID_KEY_ARROW_DOWN) dpad_down = true;
+      if (report->keycode[i] == HID_KEY_3 || report->keycode[i] == HID_KEY_ARROW_LEFT) dpad_left = true;
+      if (report->keycode[i] == HID_KEY_4 || report->keycode[i] == HID_KEY_ARROW_RIGHT) dpad_right = true;
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_HOME) btns_one = true;
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_END) btns_two = true;
+      if (report->keycode[i] == HID_KEY_L) btns_three = true;
+      if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true;
+      if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_five = true;
+      if (report->keycode[i] == HID_KEY_I || report->keycode[i] == HID_KEY_PAGE_DOWN) btns_six = true;
+
+      // LEFT STICK
+      switch (report->keycode[i])
+      {
+      case HID_KEY_W:
+          leftStickKeys |= (0x1 << (4 * i));
+          break;
+      case HID_KEY_S:
+          leftStickKeys |= (0x2 << (4 * i));
+          break;
+      case HID_KEY_A:
+          leftStickKeys |= (0x4 << (4 * i));
+          break;
+      case HID_KEY_D:
+          leftStickKeys |= (0x8 << (4 * i));
+          break;
+      default:
+          break;
+      }
+
+      // RIGHT STICK
+      if (report->keycode[i] == HID_KEY_M) analog_right_y = 255;
+      if (report->keycode[i] == HID_KEY_COMMA) analog_right_y = 1;
+      if (report->keycode[i] == HID_KEY_PERIOD) analog_right_x = 1;
+      if (report->keycode[i] == HID_KEY_SLASH) analog_right_x = 255;
+
+      if (btns_five) analog_l = 255;
+      if (btns_six) analog_r = 255;
+
+      bool const is_ctrl = report->modifier & (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_RIGHTCTRL);
+      bool const is_alt = report->modifier & (KEYBOARD_MODIFIER_LEFTALT | KEYBOARD_MODIFIER_RIGHTALT);
+      if ( is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
+      {
+      #ifdef CONFIG_NGC
+        // gc-swiss irg
+        btns_sel = true;
+        dpad_down = true;
+        btns_two = true;
+        btns_six = true;
+      #endif
+      #ifdef CONFIG_PCE
+        // SSDS3 igr
+        btns_sel = true;
+        btns_run = true;
+      #endif
+      }
 
       if ( find_key_in_report(&prev_report, report->keycode[i]) )
       {
@@ -3230,15 +3313,156 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
       {
         // printf("keycode(%d)\r\n", report->keycode[i]);
         // not existed in previous report means the current key is pressed
-        bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
-        uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
-        putchar(ch);
-        if ( ch == '\r' ) putchar('\n'); // added new line for enter key
+        // bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
+        // uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
+        // putchar(ch);
+        // if ( ch == '\r' ) putchar('\n'); // added new line for enter key
 
-        fflush(stdout); // flush right away, else nanolib will wait for newline
+        // fflush(stdout); // flush right away, else nanolib will wait for newline
       }
     }
   }
+
+  // calculate left stick angle degrees
+  bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
+  int intensity = leftStickKeys ? (is_shift ? 75 : 100) : 0;
+  int degree = 0;
+  if (leftStickKeys && intensity) {
+      if (leftStickKeys <= 0x000f) {
+      switch (leftStickKeys)
+      {
+      case 0x01: // W
+          degree = 0;
+          break;
+      case 0x02: // S
+          degree = 180;
+          break;
+      case 0x04: // A
+          degree = 270;
+          break;
+      case 0x08: // D
+          degree = 90;
+          break;
+      default:
+          break;
+      }
+    } else if (leftStickKeys <= 0x00ff) {
+      switch (leftStickKeys)
+      {
+      case 0x12: // S ⇾ W
+          degree = 0;
+          break;
+      case 0x81: // W ⇾ D
+      case 0x18: // D ⇾ W
+          degree = 45;
+          break;
+      case 0x84: // A ⇾ D
+          degree = 90;
+          break;
+      case 0x82: // S ⇾ D
+      case 0x28: // D ⇾ S
+          degree = 135;
+          break;
+      case 0x21: // W ⇾ S
+          degree = 180;
+          break;
+      case 0x42: // S ⇾ A
+      case 0x24: // A ⇾ S
+          degree = 225;
+          break;
+      case 0x41: // W ⇾ A
+      case 0x14: // A ⇾ W
+          degree = 315;
+          break;
+      case 0x48: // D ⇾ A
+          degree = 270;
+          break;
+      default:
+          break;
+      }
+    } else if (leftStickKeys <= 0x0fff) {
+      switch (leftStickKeys)
+      {
+      case 0x841: // W ⇾ A ⇾ D
+      case 0x812: // S ⇾ W ⇾ D
+      case 0x182: // S ⇾ D ⇾ W
+      case 0x814: // A ⇾ W ⇾ D
+      case 0x184: // A ⇾ D ⇾ W
+      case 0x128: // D ⇾ S ⇾ W
+          degree = 45;
+          break;
+      case 0x821: // W ⇾ S ⇾ D
+      case 0x281: // W ⇾ D ⇾ S
+      case 0x842: // S ⇾ A ⇾ D
+      case 0x824: // A ⇾ S ⇾ D
+      case 0x284: // A ⇾ D ⇾ S
+      case 0x218: // D ⇾ W ⇾ S
+          degree = 135;
+          break;
+      case 0x421: // W ⇾ S ⇾ A
+      case 0x241: // W ⇾ A ⇾ S
+      case 0x482: // S ⇾ D ⇾ A
+      case 0x214: // A ⇾ W ⇾ S
+      case 0x248: // D ⇾ A ⇾ S
+          degree = 225;
+          break;
+      case 0x124: // A ⇾ S ⇾ W
+      case 0x418: // D ⇾ W ⇾ A
+      case 0x148: // D ⇾ A ⇾ W
+      case 0x481: // W ⇾ D ⇾ A
+      case 0x412: // S ⇾ W ⇾ A
+      case 0x142: // S ⇾ A ⇾ W
+          degree = 315;
+          break;
+      default:
+          break;
+      }
+    } else if (leftStickKeys <= 0xffff) {
+      switch (leftStickKeys)
+      {
+      case 0x8412: // S ⇾ W ⇾ A ⇾ D
+      case 0x8142: // S ⇾ A ⇾ W ⇾ D
+      case 0x1842: // S ⇾ A ⇾ D ⇾ W
+      case 0x8124: // A ⇾ S ⇾ W ⇾ D
+      case 0x1824: // A ⇾ S ⇾ D ⇾ W
+      case 0x1284: // A ⇾ D ⇾ S ⇾ W
+          degree = 45;
+          break;
+      case 0x8421: // W ⇾ S ⇾ A ⇾ D
+      case 0x8241: // W ⇾ A ⇾ S ⇾ D
+      case 0x2841: // W ⇾ A ⇾ D ⇾ S
+      case 0x8214: // A ⇾ W ⇾ S ⇾ D
+      case 0x2814: // A ⇾ W ⇾ D ⇾ S
+      case 0x2184: // A ⇾ D ⇾ W ⇾ S
+          degree = 135;
+          break;
+      case 0x2148: // D ⇾ A ⇾ W ⇾ S
+      case 0x4821: // W ⇾ S ⇾ D ⇾ A
+      case 0x4281: // W ⇾ D ⇾ S ⇾ A
+      case 0x2481: // W ⇾ D ⇾ A ⇾ S
+      case 0x4218: // D ⇾ W ⇾ S ⇾ A
+      case 0x2418: // D ⇾ W ⇾ A ⇾ S
+          degree = 225;
+          break;
+      case 0x4812: // S ⇾ W ⇾ D ⇾ A
+      case 0x4182: // S ⇾ D ⇾ W ⇾ A
+      case 0x1482: // S ⇾ D ⇾ A ⇾ W
+      case 0x4128: // D ⇾ S ⇾ W ⇾ A
+      case 0x1428: // D ⇾ S ⇾ A ⇾ W
+      case 0x1248: // D ⇾ A ⇾ S ⇾ W
+          degree = 315;
+          break;
+      default:
+          break;
+      }
+    }
+
+    Point analog_left = calculate_coordinates(degree, intensity);
+    analog_left_x = analog_left.x;
+    analog_left_y = analog_left.y;
+  }
+
+  printf("in: %d° %d%, x:%d, y:%d, leftStickKeys: %x\n", degree, intensity, analog_left_x, analog_left_y, leftStickKeys);
 
   buttons = (((btns_six)   ? 0x00 : 0x8000) |
              ((btns_five)  ? 0x00 : 0x4000) |
@@ -3253,7 +3477,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+  post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r);
 
   prev_report = *report;
 }

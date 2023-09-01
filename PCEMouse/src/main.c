@@ -655,6 +655,8 @@ static bool rx_bit = 0;
 
     // Send GameCube controller button report
     GamecubeConsole_SendReport(&gc, &gc_report);
+
+    // printf("MODE: %d\n", gc._reading_mode);
 #endif
   }
 }
