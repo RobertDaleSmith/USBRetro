@@ -1076,7 +1076,6 @@ void hid_app_task(uint8_t rumble)
     }
   }
 
-
   // iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
@@ -1164,10 +1163,13 @@ void hid_app_task(uint8_t rumble)
               }
             }
 
-            // output_report.data.rumble.right_motor_on = 1;
-            // output_report.data.rumble.left_motor_force = 1;
-            // output_report.data.rumble.left_duration = 16;
-            // output_report.data.rumble.right_duration = 16;
+            if (rumble) {
+              output_report.data.rumble.right_motor_on = 1;
+              output_report.data.rumble.left_motor_force = 128;
+              output_report.data.rumble.left_duration = 128;
+              output_report.data.rumble.right_duration = 128;
+            }
+
             // Send report without the report ID, start at index 1 instead of 0
             tuh_hid_send_report(dev_addr, instance, output_report.data.report_id, &(output_report.buf[1]), sizeof(output_report) - 1);
           }
@@ -2159,11 +2161,7 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, ds3_report.lx, ds3_report.ly, ds3_report.rx, ds3_report.ry, 0, 0);
-
-      // The left and right triggers control the intensity of the left and right rumble motors
-      // motor_left = ds3_report.l2_trigger;
-      // motor_right = ds3_report.r2_trigger;
+      post_globals(dev_addr, instance, buttons, ds3_report.lx, 255 - ds3_report.ly, ds3_report.rx, 255 - ds3_report.ry, 0, 0);
 
       prev_report[dev_addr-1] = ds3_report;
     }
