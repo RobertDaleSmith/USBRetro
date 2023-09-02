@@ -137,10 +137,10 @@ uint64_t turbo_frequency;
 
   GamecubeConsole gc;
   gc_report_t gc_report;
-  u_int8_t gc_rumble = 0;
-  u_int8_t gc_last_rumble = 0;
 
 #endif
+  uint8_t gc_rumble = 0;
+  uint8_t gc_last_rumble = 0;
 
 // CHEAT CODES :: is fun easter egg
 #define CHEAT_LENGTH 10
@@ -150,7 +150,7 @@ uint16_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
 
 void led_blinking_task(void);
 
-extern void hid_app_task(void);
+extern void hid_app_task(uint8_t rumble);
 
 extern void neopixel_init(void);
 
@@ -573,12 +573,11 @@ static void __not_in_flash_func(process_signals)(void)
 #endif
 
 #if CFG_TUH_HID
-    hid_app_task();
+    hid_app_task(gc_rumble);
 #endif
 
   }
 }
-
 
 //
 // core1_entry - inner-loop for the second core
