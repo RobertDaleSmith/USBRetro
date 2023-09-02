@@ -1238,6 +1238,11 @@ void hid_app_task(uint8_t rumble)
           output_report.set_rumble = 1;
           output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
           output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
+
+          if (rumble) {
+            output_report.motor_left = 192;
+            output_report.motor_right = 192;
+          }
           tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
         }
       }
@@ -1254,7 +1259,7 @@ void hid_app_task(uint8_t rumble)
           ds5_feedback_t ds5_fb = {0};
 
           // set flags for trigger_r, trigger_l, lightbar, and player_led
-          // ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
+          ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
           // ds5_fb.flags |= (1 << 2); // trigger_r
           // ds5_fb.flags |= (1 << 3); // trigger_l
           ds5_fb.flags |= (1 << 10); // lightbar
@@ -1331,6 +1336,11 @@ void hid_app_task(uint8_t rumble)
 
           ds5_fb.rumble_l = devices[dev_addr].instances[instance].motor_left;
           ds5_fb.rumble_r = devices[dev_addr].instances[instance].motor_right;
+
+          if (rumble) {
+            ds5_fb.rumble_l = 192;
+            ds5_fb.rumble_r = 192;
+          }
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
       }
@@ -2277,7 +2287,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     if ( ds5_diff_report(&prev_report[dev_addr-1], &ds5_report) )
     {
-      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
+      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
       printf("DPad = %s ", dpad_str[ds5_report.dpad]);
 
       if (ds5_report.square   ) printf("Square ");
