@@ -139,8 +139,9 @@ uint64_t turbo_frequency;
   gc_report_t gc_report;
 
 #endif
-  uint8_t gc_rumble = 0;
-  uint8_t gc_last_rumble = 0;
+bool update_pending;
+uint8_t gc_rumble = 0;
+uint8_t gc_last_rumble = 0;
 
 // CHEAT CODES :: is fun easter egg
 #define CHEAT_LENGTH 10
@@ -426,18 +427,34 @@ void __not_in_flash_func(update_output)(void)
     // base controller buttons
     int16_t byte = (players[i].output_buttons & 0xffff);
 
-    gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
-    gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
-    gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
-    gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
-    gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
-    gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
-    gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
-    gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
-    gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
-    gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
-    gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
-    gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+    if (update_pending) {
+      gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
+      gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
+      gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
+      gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
+      gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
+      gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
+      gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
+      gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
+      gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
+      gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
+      gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
+      gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
+    } else {
+      gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
+      gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
+      gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
+      gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
+      gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
+      gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
+      gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
+      gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
+      gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
+      gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
+      gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
+      gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+    }
+
     gc_report.stick_x    = players[i].output_analog_1x;
     gc_report.stick_y    = players[i].output_analog_1y;
     gc_report.cstick_x   = players[i].output_analog_2x;
@@ -447,6 +464,7 @@ void __not_in_flash_func(update_output)(void)
   }
 #endif
 
+  update_pending = true;
 }
 
 //
@@ -654,6 +672,7 @@ static bool rx_bit = 0;
 
     // Send GameCube controller button report
     GamecubeConsole_SendReport(&gc, &gc_report);
+    update_pending = false;
 
     // printf("MODE: %d\n", gc._reading_mode);
 #endif
