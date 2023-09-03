@@ -68,6 +68,7 @@ uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', '
 uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E', 'N', '-', 'V', '2'};
 
 uint8_t output_sequence_counter = 0;
+uint8_t last_rumble = 0;
 
 ////////////////
 // hid_parser //
@@ -1163,11 +1164,14 @@ void hid_app_task(uint8_t rumble)
               }
             }
 
-            if (rumble) {
-              output_report.data.rumble.right_motor_on = 1;
-              output_report.data.rumble.left_motor_force = 128;
-              output_report.data.rumble.left_duration = 128;
-              output_report.data.rumble.right_duration = 128;
+            if (rumble != last_rumble) {
+              if (rumble) {
+                output_report.data.rumble.right_motor_on = 1;
+                output_report.data.rumble.left_motor_force = 128;
+                output_report.data.rumble.left_duration = 128;
+                output_report.data.rumble.right_duration = 128;
+              }
+              last_rumble = rumble;
             }
 
             // Send report without the report ID, start at index 1 instead of 0
@@ -1239,9 +1243,12 @@ void hid_app_task(uint8_t rumble)
           output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
           output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
 
-          if (rumble) {
-            output_report.motor_left = 192;
-            output_report.motor_right = 192;
+          if (rumble != last_rumble) {
+            if (rumble) {
+              output_report.motor_left = 192;
+              output_report.motor_right = 192;
+            }
+            last_rumble = rumble;
           }
           tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
         }
@@ -1337,9 +1344,12 @@ void hid_app_task(uint8_t rumble)
           ds5_fb.rumble_l = devices[dev_addr].instances[instance].motor_left;
           ds5_fb.rumble_r = devices[dev_addr].instances[instance].motor_right;
 
-          if (rumble) {
-            ds5_fb.rumble_l = 192;
-            ds5_fb.rumble_r = 192;
+          if (rumble != last_rumble) {
+            if (rumble) {
+              ds5_fb.rumble_l = 192;
+              ds5_fb.rumble_r = 192;
+            }
+            last_rumble = rumble;
           }
           tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
         }
@@ -1437,6 +1447,55 @@ void hid_app_task(uint8_t rumble)
 
               devices[dev_addr].instances[instance].switch_command_ack = false;
               switch_send_command(dev_addr, instance, data, 10 + 2);
+            } else if (rumble != last_rumble) {
+              uint8_t buf[10] = { 0 };
+              buf[0x00] = 0x10; // Report ID - PROCON_CMD_RUMBLE_ONLY
+              buf[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
+              
+              // // Snippet values from https://github.com/DanielOgorchock/linux/blob/7811b8f1f00ee9f195b035951749c57498105d52/drivers/hid/hid-nintendo.c#L197
+              // // joycon_rumble_frequencies.freq = { 0x2000, 0x28,   95 }
+              // uint16_t freq_data_high_high = 0x2000;
+              // uint8_t freq_data_low_low = 0x28;
+              // // joycon_rumble_amplitudes.amp = { 0x78, 0x005e,  422 }
+              // uint8_t amp_data_high = 0x78;
+              // uint16_t amp_data_low = 0x005e;
+              // printf("0x%x 0x%x 0x%x 0x%x\n\n", (freq_data_high_high >> 8) & 0xFF, (freq_data_high_high & 0xFF) + amp_data_high, freq_data_low_low + ((amp_data_low >> 8) & 0xFF), amp_data_low & 0xFF);
+
+              if (rumble) {
+                // Left rumble ON data
+                buf[0x02 + 0] = 0x20;
+                buf[0x02 + 1] = 0x78;
+                buf[0x02 + 2] = 0x28;
+                buf[0x02 + 3] = 0x5e;
+                // buf[0x02 + 0] = (freq_data_high_high >> 8) & 0xFF;
+                // buf[0x02 + 1] = (freq_data_high_high & 0xFF) + amp_data_high;
+                // buf[0x02 + 2] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
+                // buf[0x02 + 3] = amp_data_low & 0xFF;
+
+                // Right rumble ON data
+                buf[0x02 + 4] = 0x20;
+                buf[0x02 + 5] = 0x78;
+                buf[0x02 + 6] = 0x28;
+                buf[0x02 + 7] = 0x5e;
+                // buf[0x02 + 4] = (freq_data_high_high >> 8) & 0xFF;
+                // buf[0x02 + 5] = (freq_data_high_high & 0xFF) + amp_data_high;
+                // buf[0x02 + 6] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
+                // buf[0x02 + 7] = amp_data_low & 0xFF;
+              } else {
+                // Left rumble OFF data
+                buf[0x02 + 0] = 0x00;
+                buf[0x02 + 1] = 0x01;
+                buf[0x02 + 2] = 0x40;
+                buf[0x02 + 3] = 0x40;
+
+                // Right rumble OFF data
+                buf[0x02 + 4] = 0x00;
+                buf[0x02 + 5] = 0x01;
+                buf[0x02 + 6] = 0x40;
+                buf[0x02 + 7] = 0x40;
+              }
+              last_rumble = rumble;
+              switch_send_command(dev_addr, instance, buf, 10);
             }
           }
         }
@@ -1444,15 +1503,19 @@ void hid_app_task(uint8_t rumble)
 
       // keyboard LED
       if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD) {
-        if (rumble)
-        {
-          kbd_leds |= KEYBOARD_LED_CAPSLOCK | KEYBOARD_LED_SCROLLLOCK | KEYBOARD_LED_NUMLOCK;
-        } else {
-          kbd_leds = 0; // kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
-        }
-        if (kbd_leds != prev_kbd_leds) {
-          tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
-          prev_kbd_leds = kbd_leds;
+        if (rumble != last_rumble) {
+          if (rumble)
+          {
+            kbd_leds |= KEYBOARD_LED_CAPSLOCK | KEYBOARD_LED_SCROLLLOCK | KEYBOARD_LED_NUMLOCK;
+          } else {
+            kbd_leds = 0; // kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
+          }
+          last_rumble = rumble;
+
+          if (kbd_leds != prev_kbd_leds) {
+            tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
+            prev_kbd_leds = kbd_leds;
+          }
         }
       }
     }
