@@ -41,6 +41,7 @@
 
 #include "bsp/board_api.h"
 #include "tusb.h"
+#include "lib/joybus-pio/include/gamecube_definitions.h"
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
@@ -117,10 +118,16 @@ uint64_t turbo_frequency;
 #endif
 
 #ifdef CONFIG_NGC
-
   #include "pico/bootrom.h"
   #include "joybus.pio.h"
   #include "GamecubeConsole.h"
+  // GameCube JoyBus resources:
+  // https://github.com/NicoHood/Nintendo
+  // https://n64brew.dev/wiki/Joybus_Protocol
+  // http://hitmen.c02.at/files/yagcd/yagcd/chap9.html
+  // https://simplecontrollers.com/blogs/resources/gamecube-protocol
+  // https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering
+  // https://sites.google.com/site/consoleprotocols/home/nintendo-joy-bus-documentation
 
   #define MAX_PLAYERS 1
 
@@ -134,14 +141,28 @@ uint64_t turbo_frequency;
   extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
   extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
   extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
+  extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
 
   GamecubeConsole gc;
   gc_report_t gc_report;
 
+  // Define your lookup table (all initialized to NOT_FOUND to start)
+  #define GC_KEY_NOT_FOUND 0x00
+  uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
+
+  // NGC button modes
+  #define BUTTON_MODE_0  0x00
+  #define BUTTON_MODE_1  0x01
+  #define BUTTON_MODE_2  0x02
+  #define BUTTON_MODE_3  0x03
+  #define BUTTON_MODE_4  0x04
+  #define BUTTON_MODE_KB 0x05
 #endif
 bool update_pending;
 uint8_t gc_rumble = 0;
+uint8_t gc_kb_led = 0;
 uint8_t gc_last_rumble = 0;
+uint8_t gc_kb_counter = 0;
 
 // CHEAT CODES :: is fun easter egg
 #define CHEAT_LENGTH 10
@@ -151,7 +172,7 @@ uint16_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
 
 void led_blinking_task(void);
 
-extern void hid_app_task(uint8_t rumble);
+extern void hid_app_task(uint8_t rumble, uint8_t leds);
 
 extern void neopixel_init(void);
 
@@ -179,6 +200,8 @@ typedef struct TU_ATTR_PACKED
   int16_t output_analog_2y;
   int16_t output_analog_l;
   int16_t output_analog_r;
+
+  uint8_t keypress[3];
 
   int16_t prev_buttons;
 
@@ -287,6 +310,12 @@ void __not_in_flash_func(check_for_konami_code)(void)
   // The Konami Code has been entered
   is_fun = !is_fun;
 }
+
+#ifdef CONFIG_NGC
+uint8_t gc_kb_key_lookup(uint8_t hid_key) {
+    return hid_to_gc_key[hid_key];
+}
+#endif
 
 //
 // update_output - updates output_word with multi-tap plex data that
@@ -427,40 +456,66 @@ void __not_in_flash_func(update_output)(void)
     // base controller buttons
     int16_t byte = (players[i].output_buttons & 0xffff);
 
-    if (update_pending) {
-      gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
-      gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
-      gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
-      gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
-      gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
-      gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
-      gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
-      gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
-      gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
-      gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
-      gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
-      gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
-    } else {
-      gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
-      gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
-      gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
-      gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
-      gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
-      gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
-      gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
-      gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
-      gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
-      gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
-      gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
-      gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+    if (players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14) {
+      if (players[i].button_mode != BUTTON_MODE_KB) {
+        players[i].button_mode = BUTTON_MODE_KB;
+        GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
+        gc_report = default_gc_kb_report;
+        gc_kb_led = 0x4;
+      } else {
+        players[i].button_mode = BUTTON_MODE_3;
+        GamecubeConsole_SetMode(&gc, GamecubeMode_3);
+        gc_report = default_gc_report;
+        gc_kb_led = 0;
+      }
     }
 
-    gc_report.stick_x    = players[i].output_analog_1x;
-    gc_report.stick_y    = players[i].output_analog_1y;
-    gc_report.cstick_x   = players[i].output_analog_2x;
-    gc_report.cstick_y   = players[i].output_analog_2y;
-    gc_report.l_analog   = players[i].output_analog_l;
-    gc_report.r_analog   = players[i].output_analog_r;
+    if (players[i].button_mode != BUTTON_MODE_KB) {
+      // controller
+      if (update_pending) {
+        gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
+        gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
+        gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
+        gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
+        gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
+        gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
+        gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
+        gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
+        gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
+        gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
+        gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
+        gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
+      } else {
+        gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
+        gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
+        gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
+        gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
+        gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
+        gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
+        gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
+        gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
+        gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
+        gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
+        gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
+        gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+      }
+
+      gc_report.stick_x    = players[i].output_analog_1x;
+      gc_report.stick_y    = players[i].output_analog_1y;
+      gc_report.cstick_x   = players[i].output_analog_2x;
+      gc_report.cstick_y   = players[i].output_analog_2y;
+      gc_report.l_analog   = players[i].output_analog_l;
+      gc_report.r_analog   = players[i].output_analog_r;
+    } else {
+      // keyboard
+      gc_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
+      gc_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
+      gc_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
+      gc_report.keyboard.checksum = gc_report.keyboard.keypress[0] ^
+                                    gc_report.keyboard.keypress[1] ^
+                                    gc_report.keyboard.keypress[2] ^ gc_kb_counter;
+      gc_report.keyboard.counter = gc_kb_counter;
+    }
   }
 #endif
 
@@ -480,7 +535,8 @@ void __not_in_flash_func(post_globals)(
   uint8_t analog_2x,
   uint8_t analog_2y,
   uint8_t analog_l,
-  uint8_t analog_r)
+  uint8_t analog_r,
+  uint32_t keys)
 {
   bool has6Btn = !(buttons & 0x0f00);
   bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
@@ -490,7 +546,7 @@ void __not_in_flash_func(post_globals)(
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00));
+  uint16_t buttons_pressed = (~(buttons | 0x0f00)) || keys;
   if (player_index < 0 && buttons_pressed) {
     printf("[add player] [%d, %d]\n", dev_addr, instance);
     player_index = add_player(dev_addr, instance);
@@ -546,6 +602,10 @@ void __not_in_flash_func(post_globals)(
       players[player_index].output_analog_l = analog_l;
       players[player_index].output_analog_r = analog_r;
       players[player_index].output_buttons = buttons;
+
+      players[player_index].keypress[0] = (keys) & 0xff;
+      players[player_index].keypress[1] = (keys >> 8) & 0xff;
+      players[player_index].keypress[2] = (keys >> 16) & 0xff;
       update_output();
 #endif
 
@@ -591,7 +651,7 @@ static void __not_in_flash_func(process_signals)(void)
 #endif
 
 #if CFG_TUH_HID
-    hid_app_task(gc_rumble);
+    hid_app_task(gc_rumble, gc_kb_led);
 #endif
 
   }
@@ -675,6 +735,9 @@ static bool rx_bit = 0;
     update_pending = false;
 
     // printf("MODE: %d\n", gc._reading_mode);
+
+    gc_kb_counter++;
+    gc_kb_counter &= 15;
 #endif
   }
 }
@@ -714,6 +777,96 @@ void pce_init() {
 #endif
 
 #ifdef CONFIG_NGC
+
+void gc_kb_key_lookup_init() {
+  // init hid key to gc key lookup table
+  hid_to_gc_key[HID_KEY_A] = GC_KEY_A;
+  hid_to_gc_key[HID_KEY_B] = GC_KEY_B;
+  hid_to_gc_key[HID_KEY_C] = GC_KEY_C;
+  hid_to_gc_key[HID_KEY_D] = GC_KEY_D;
+  hid_to_gc_key[HID_KEY_E] = GC_KEY_E;
+  hid_to_gc_key[HID_KEY_F] = GC_KEY_F;
+  hid_to_gc_key[HID_KEY_G] = GC_KEY_G;
+  hid_to_gc_key[HID_KEY_H] = GC_KEY_H;
+  hid_to_gc_key[HID_KEY_I] = GC_KEY_I;
+  hid_to_gc_key[HID_KEY_J] = GC_KEY_J;
+  hid_to_gc_key[HID_KEY_K] = GC_KEY_K;
+  hid_to_gc_key[HID_KEY_L] = GC_KEY_L;
+  hid_to_gc_key[HID_KEY_M] = GC_KEY_M;
+  hid_to_gc_key[HID_KEY_N] = GC_KEY_N;
+  hid_to_gc_key[HID_KEY_O] = GC_KEY_O;
+  hid_to_gc_key[HID_KEY_P] = GC_KEY_P;
+  hid_to_gc_key[HID_KEY_Q] = GC_KEY_Q;
+  hid_to_gc_key[HID_KEY_R] = GC_KEY_R;
+  hid_to_gc_key[HID_KEY_S] = GC_KEY_S;
+  hid_to_gc_key[HID_KEY_T] = GC_KEY_T;
+  hid_to_gc_key[HID_KEY_U] = GC_KEY_U;
+  hid_to_gc_key[HID_KEY_V] = GC_KEY_V;
+  hid_to_gc_key[HID_KEY_W] = GC_KEY_W;
+  hid_to_gc_key[HID_KEY_X] = GC_KEY_X;
+  hid_to_gc_key[HID_KEY_Y] = GC_KEY_Y;
+  hid_to_gc_key[HID_KEY_Z] = GC_KEY_Z;
+  hid_to_gc_key[HID_KEY_1] = GC_KEY_1;
+  hid_to_gc_key[HID_KEY_2] = GC_KEY_2;
+  hid_to_gc_key[HID_KEY_3] = GC_KEY_3;
+  hid_to_gc_key[HID_KEY_4] = GC_KEY_4;
+  hid_to_gc_key[HID_KEY_5] = GC_KEY_5;
+  hid_to_gc_key[HID_KEY_6] = GC_KEY_6;
+  hid_to_gc_key[HID_KEY_7] = GC_KEY_7;
+  hid_to_gc_key[HID_KEY_8] = GC_KEY_8;
+  hid_to_gc_key[HID_KEY_9] = GC_KEY_9;
+  hid_to_gc_key[HID_KEY_0] = GC_KEY_0;
+  hid_to_gc_key[HID_KEY_MINUS] = GC_KEY_MINUS;
+  hid_to_gc_key[HID_KEY_EQUAL] = GC_KEY_CARET;
+  hid_to_gc_key[HID_KEY_GRAVE] = GC_KEY_YEN; // HID_KEY_KANJI3
+  hid_to_gc_key[HID_KEY_PRINT_SCREEN] = GC_KEY_AT; // hankaku/zenkaku HID_KEY_LANG5
+  hid_to_gc_key[HID_KEY_BRACKET_LEFT] = GC_KEY_LEFTBRACKET;
+  hid_to_gc_key[HID_KEY_SEMICOLON] = GC_KEY_SEMICOLON;
+  hid_to_gc_key[HID_KEY_APOSTROPHE] = GC_KEY_COLON;
+  hid_to_gc_key[HID_KEY_BRACKET_RIGHT] = GC_KEY_RIGHTBRACKET;
+  hid_to_gc_key[HID_KEY_COMMA] = GC_KEY_COMMA;
+  hid_to_gc_key[HID_KEY_PERIOD] = GC_KEY_PERIOD;
+  hid_to_gc_key[HID_KEY_SLASH] = GC_KEY_SLASH;
+  hid_to_gc_key[HID_KEY_BACKSLASH] = GC_KEY_BACKSLASH;
+  hid_to_gc_key[HID_KEY_F1] = GC_KEY_F1;
+  hid_to_gc_key[HID_KEY_F2] = GC_KEY_F2;
+  hid_to_gc_key[HID_KEY_F3] = GC_KEY_F3;
+  hid_to_gc_key[HID_KEY_F4] = GC_KEY_F4;
+  hid_to_gc_key[HID_KEY_F5] = GC_KEY_F5;
+  hid_to_gc_key[HID_KEY_F6] = GC_KEY_F6;
+  hid_to_gc_key[HID_KEY_F7] = GC_KEY_F7;
+  hid_to_gc_key[HID_KEY_F8] = GC_KEY_F8;
+  hid_to_gc_key[HID_KEY_F9] = GC_KEY_F9;
+  hid_to_gc_key[HID_KEY_F10] = GC_KEY_F10;
+  hid_to_gc_key[HID_KEY_F11] = GC_KEY_F11;
+  hid_to_gc_key[HID_KEY_F12] = GC_KEY_F12;
+  hid_to_gc_key[HID_KEY_ESCAPE] = GC_KEY_ESC;
+  hid_to_gc_key[HID_KEY_INSERT] = GC_KEY_INSERT;
+  hid_to_gc_key[HID_KEY_DELETE] = GC_KEY_DELETE;
+  hid_to_gc_key[HID_KEY_GRAVE] = GC_KEY_GRAVE;
+  hid_to_gc_key[HID_KEY_BACKSPACE] = GC_KEY_BACKSPACE;
+  hid_to_gc_key[HID_KEY_TAB] = GC_KEY_TAB;
+  hid_to_gc_key[HID_KEY_CAPS_LOCK] = GC_KEY_CAPSLOCK;
+  hid_to_gc_key[HID_KEY_SHIFT_LEFT] = GC_KEY_LEFTSHIFT;
+  hid_to_gc_key[HID_KEY_SHIFT_RIGHT] = GC_KEY_RIGHTSHIFT;
+  hid_to_gc_key[HID_KEY_CONTROL_LEFT] = GC_KEY_LEFTCTRL;
+  hid_to_gc_key[HID_KEY_ALT_LEFT] = GC_KEY_LEFTALT;
+  hid_to_gc_key[HID_KEY_GUI_LEFT] = GC_KEY_LEFTUNK1; // muhenkan HID_KEY_KANJI5
+  hid_to_gc_key[HID_KEY_SPACE] = GC_KEY_SPACE;
+  hid_to_gc_key[HID_KEY_GUI_RIGHT] = GC_KEY_RIGHTUNK1; // henkan/zenkouho HID_KEY_KANJI4
+  hid_to_gc_key[HID_KEY_APPLICATION] = GC_KEY_RIGHTUNK2; // hiragana/katakana HID_KEY_LANG4
+  hid_to_gc_key[HID_KEY_ARROW_LEFT] = GC_KEY_LEFT;
+  hid_to_gc_key[HID_KEY_ARROW_DOWN] = GC_KEY_DOWN;
+  hid_to_gc_key[HID_KEY_ARROW_UP] = GC_KEY_UP;
+  hid_to_gc_key[HID_KEY_ARROW_RIGHT] = GC_KEY_RIGHT;
+  hid_to_gc_key[HID_KEY_ENTER] = GC_KEY_ENTER;
+  hid_to_gc_key[HID_KEY_HOME] = GC_KEY_HOME; // fn + up
+  hid_to_gc_key[HID_KEY_END] = GC_KEY_END; // fn + right
+  hid_to_gc_key[HID_KEY_PAGE_DOWN] = GC_KEY_PAGEDOWN; // fn + left
+  hid_to_gc_key[HID_KEY_PAGE_UP] = GC_KEY_PAGEUP; // fn + down
+  // hid_to_gc_key[HID_KEY_SCROLL_LOCK] = GC_KEY_SCROLLLOCK; // fn + insert
+}
+
 void ngc_init() {
   // over clock CPU for correct timing with GC
   set_sys_clock_khz(130000, true);
@@ -751,9 +904,11 @@ void ngc_init() {
 
   int sm = -1;
   int offset = -1;
+  gc_kb_key_lookup_init();
   GamecubeConsole_init(&gc, GC_DATA_PIN, pio, sm, offset);
   gc_report = default_gc_report;
 }
+
 #endif
 
 int main(void)
