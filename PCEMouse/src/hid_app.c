@@ -69,6 +69,7 @@ uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E',
 
 uint8_t output_sequence_counter = 0;
 uint8_t last_rumble = 0;
+uint8_t last_leds = 0;
 
 ////////////////
 // hid_parser //
@@ -438,7 +439,7 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_bta_report_t;
 
-// Sega Genesis mini controller
+// HORI HORIPAD (also Sega Genesis mini compatible controllers)
 typedef struct TU_ATTR_PACKED
 {
   struct {
@@ -446,23 +447,33 @@ typedef struct TU_ATTR_PACKED
     uint8_t b : 1;
     uint8_t a : 1;
     uint8_t x : 1;
-    uint8_t l : 1;
-    uint8_t r : 1;
-    uint8_t z : 1;
-    uint8_t c : 1;
+    uint8_t l1 : 1;
+    uint8_t r1 : 1;
+    uint8_t l2 : 1; // sega-z
+    uint8_t r2 : 1; // sega-c
   };
 
   struct {
-    uint8_t mode  : 1;
-    uint8_t start : 7;
+    uint8_t s1 : 1; // select / sega-mode
+    uint8_t s2 : 1; // start
+    uint8_t l3 : 1;
+    uint8_t r3 : 1;
+    uint8_t a1 : 1; // home
+    uint8_t a2 : 1; // capture
+    uint8_t padding1 : 2;
   };
 
-  uint8_t id;
+  struct {
+    uint8_t dpad : 4;
+    uint8_t padding2 : 4;
+  };
 
-  uint8_t dpad_x;
-  uint8_t dpad_y;
+  uint8_t axis_x;
+  uint8_t axis_y;
+  uint8_t axis_z;
+  uint8_t axis_rz;
 
-} sega_mini_report_t;
+} horipad_report_t;
 
 // Sega Astro City mini controller
 typedef struct TU_ATTR_PACKED
@@ -743,6 +754,8 @@ typedef struct TU_ATTR_PACKED
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
   //
+  bool kbd_init;
+  bool kbd_ready;
   bool ds3_init;
   bool ds3_led_set;
   bool switch_conn_ack;
@@ -900,13 +913,13 @@ static inline bool is_8bit_bta(uint8_t dev_addr)
   )));
 }
 
-// check if device is Sega Genesis mini controller
-static inline bool is_sega_mini(uint8_t dev_addr)
+// check if device is Switch HORI HORIPAD (or Sega Genesis mini compatible)
+static inline bool is_horipad(uint8_t dev_addr)
 {
   uint16_t vid = devices[dev_addr].vid;
   uint16_t pid = devices[dev_addr].pid;
 
-  return ((vid == 0x0f0d && pid == 0x00c1)); // Sega Genesis mini controller
+  return ((vid == 0x0f0d && pid == 0x00c1)); // Switch HORI HORIPAD
 }
 
 // check if device is Astro City mini controller
@@ -1024,7 +1037,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 extern void remove_players_by_address(int device_address, int instance);
 
@@ -1062,7 +1075,7 @@ bool switch_send_command(uint8_t dev_addr, uint8_t instance, uint8_t *data, uint
   tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
 }
 
-void hid_app_task(uint8_t rumble)
+void hid_app_task(uint8_t rumble, uint8_t leds)
 {
   const uint32_t interval_ms = 200;
   static uint32_t start_ms_ds3 = 0;
@@ -1503,6 +1516,22 @@ void hid_app_task(uint8_t rumble)
 
       // keyboard LED
       if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD) {
+        if (!devices[dev_addr].instances[instance].kbd_init && devices[dev_addr].instances[instance].kbd_ready) {
+          devices[dev_addr].instances[instance].kbd_init = true;
+
+          // kbd_leds = KEYBOARD_LED_NUMLOCK;
+          tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
+        }
+        else if (leds != last_leds) {
+          if (leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
+          else kbd_leds &= ~KEYBOARD_LED_NUMLOCK;
+          if (leds & 0x2) kbd_leds |= KEYBOARD_LED_CAPSLOCK;
+          else kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
+          if (leds & 0x4) kbd_leds |= KEYBOARD_LED_SCROLLLOCK;
+          else kbd_leds &= ~KEYBOARD_LED_SCROLLLOCK;
+          tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
+          last_leds = leds;
+        }
         if (rumble != last_rumble) {
           if (rumble)
           {
@@ -1680,8 +1709,8 @@ bool isKnownController(uint8_t dev_addr) {
     }
     return true;
   }
-  else if (is_sega_mini(dev_addr) ) {
-    printf("DEVICE:[Sega Genesis/MD Mini Controller]\n");
+  else if (is_horipad(dev_addr) ) {
+    printf("DEVICE:[HORI HORIPAD (or Genesis/MD Mini) Controller]\n");
     return true;
   }
   else if (is_astro_city(dev_addr)) {
@@ -1770,7 +1799,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   bool isKnownCtrlr = isKnownController(dev_addr);
   printf("mapped: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
 
-  if (!isKnownCtrlr)
+  if (!isKnownCtrlr && itf_protocol != HID_ITF_PROTOCOL_KEYBOARD)
   {
     if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
       devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
@@ -1828,9 +1857,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
+    devices[dev_addr].instances[instance].kbd_ready = false;
+    devices[dev_addr].instances[instance].kbd_init = false;
   }
   else {
     devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
+    devices[dev_addr].instances[instance].kbd_ready = false;
+    devices[dev_addr].instances[instance].kbd_init = false;
   }
 
   // request to receive report
@@ -2001,22 +2034,11 @@ bool bta_diff_report(bitdo_bta_report_t const* rpt1, bitdo_bta_report_t const* r
   return result;
 }
 
-bool sega_diff_report(sega_mini_report_t const* rpt1, sega_mini_report_t const* rpt2)
+bool horipad_diff_report(horipad_report_t const* rpt1, horipad_report_t const* rpt2)
 {
   bool result;
 
-  result |= rpt1->a != rpt2->a;
-  result |= rpt1->b != rpt2->b;
-  result |= rpt1->c != rpt2->c;
-  result |= rpt1->x != rpt2->x;
-  result |= rpt1->y != rpt2->y;
-  result |= rpt1->z != rpt2->z;
-  result |= rpt1->l != rpt2->l;
-  result |= rpt1->r != rpt2->r;
-  result |= rpt1->start != rpt2->start;
-  result |= rpt1->mode != rpt2->mode;
-  result |= rpt1->dpad_x != rpt2->dpad_x;
-  result |= rpt1->dpad_y != rpt2->dpad_y;
+  result |= memcmp(&rpt1, &rpt2, 7);
 
   return result;
 }
@@ -2234,7 +2256,7 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, ds3_report.lx, 255 - ds3_report.ly, ds3_report.rx, 255 - ds3_report.ry, 0, 0);
+      post_globals(dev_addr, instance, buttons, ds3_report.lx, 255 - ds3_report.ly, ds3_report.rx, 255 - ds3_report.ry, 0, 0, 0);
 
       prev_report[dev_addr-1] = ds3_report;
     }
@@ -2323,7 +2345,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0);
 
       prev_report[dev_addr-1] = ds4_report;
     }
@@ -2404,7 +2426,7 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0);
 
       prev_report[dev_addr-1] = ds5_report;
     }
@@ -2462,7 +2484,7 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1] = psc_report;
   }
@@ -2507,7 +2529,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1] = pce_report;
   }
@@ -2562,7 +2584,7 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0);
+    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2617,60 +2639,85 @@ void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0);
+    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
 }
 
-void process_sega_mini(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
-  static sega_mini_report_t prev_report[5] = { 0 };
+  static horipad_report_t prev_report[5] = { 0 };
 
-  sega_mini_report_t sega_report;
-  memcpy(&sega_report, report, sizeof(sega_report));
+  horipad_report_t input_report;
+  memcpy(&input_report, report, sizeof(input_report));
 
-  if ( sega_diff_report(&prev_report[dev_addr-1], &sega_report) )
+  if ( horipad_diff_report(&prev_report[dev_addr-1], &input_report) )
   {
-    printf("DPad = x:%d, y:%d ", sega_report.dpad_x, sega_report.dpad_y);
-    if (sega_report.a) printf("A ");
-    if (sega_report.b) printf("B ");
-    if (sega_report.c) printf("C ");
-    if (sega_report.x) printf("X ");
-    if (sega_report.y) printf("Y ");
-    if (sega_report.z) printf("Z ");
-    if (sega_report.l) printf("L ");
-    if (sega_report.r) printf("R ");
-    if (sega_report.start) printf("Start ");
-    if (sega_report.mode)  printf("Mode ");
+    printf("DPad = x:%d, y:%d, z:%d, rz:%d ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
+    printf("DPad = %d ", input_report.dpad);
+
+    if (input_report.b) printf("B ");
+    if (input_report.a) printf("A ");
+    if (input_report.y) printf("Y ");
+    if (input_report.x) printf("X ");
+    if (input_report.l1) printf("L1 ");
+    if (input_report.r1) printf("R1 ");
+    if (input_report.l2) printf("L2(Z) ");
+    if (input_report.r2) printf("R2(C) ");
+    if (input_report.s1) printf("Select ");
+    if (input_report.s2) printf("Start ");
+    if (input_report.a1) printf("Home ");
+    if (input_report.a2) printf("Capture ");
     printf("\r\n");
 
-    bool dpad_up    = (sega_report.dpad_y < 128);
-    bool dpad_right = (sega_report.dpad_x > 128);
-    bool dpad_down  = (sega_report.dpad_y > 128);
-    bool dpad_left  = (sega_report.dpad_x < 128);
+    bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
+    bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
+    bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
+    bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
     bool has_6btns = true;
-
-    buttons = (((sega_report.z || sega_report.l) ? 0x00 : 0x8000) |
-               ((sega_report.y) ? 0x00 : 0x4000) |
-               ((sega_report.x || sega_report.r) ? 0x00 : 0x2000) |
-               ((sega_report.a) ? 0x00 : 0x1000) |
-               ((has_6btns)      ? 0x00 : 0xFF00) |
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((sega_report.start) ? 0x00 : 0x80) |
-               ((sega_report.mode)  ? 0x00 : 0x40) |
-               ((sega_report.b) ? 0x00 : 0x20) |
-               ((sega_report.c) ? 0x00 : 0x10));
+#ifdef CONFIG_PCE
+    buttons = (((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
+               ((input_report.y)                    ? 0x00 : 0x4000) |
+               ((input_report.x || input_report.r2) ? 0x00 : 0x2000) |
+               ((input_report.a)                    ? 0x00 : 0x1000) |
+               ((has_6btns)                         ? 0x00 : 0xFF00) |
+               ((dpad_left)                         ? 0x00 : 0x08) |
+               ((dpad_down)                         ? 0x00 : 0x04) |
+               ((dpad_right)                        ? 0x00 : 0x02) |
+               ((dpad_up)                           ? 0x00 : 0x01) |
+               ((input_report.s2)                   ? 0x00 : 0x80) |
+               ((input_report.s1)                   ? 0x00 : 0x40) |
+               ((input_report.b)                    ? 0x00 : 0x20) |
+               ((input_report.r2)                   ? 0x00 : 0x10));
+#else
+    buttons = (((input_report.r1)                   ? 0x00 : 0x8000) |
+               ((input_report.l1)                   ? 0x00 : 0x4000) |
+               ((input_report.y)                    ? 0x00 : 0x2000) |
+               ((input_report.x)                    ? 0x00 : 0x1000) |
+               ((has_6btns)                         ? 0x00 : 0xFF00) |
+               ((dpad_left)                         ? 0x00 : 0x08) |
+               ((dpad_down)                         ? 0x00 : 0x04) |
+               ((dpad_right)                        ? 0x00 : 0x02) |
+               ((dpad_up)                           ? 0x00 : 0x01) |
+               ((input_report.s2)                   ? 0x00 : 0x80) |
+               ((input_report.s1)                   ? 0x00 : 0x40) |
+               ((input_report.b)                    ? 0x00 : 0x20) |
+               ((input_report.a)                    ? 0x00 : 0x10));
+#endif
+    // invert vertical axis
+    uint8_t axis_y = (input_report.axis_y == 0) ? 255 : 256 - input_report.axis_y;
+    uint8_t axis_rz = (input_report.axis_rz == 0) ? 255 : 256 - input_report.axis_rz;
+    // trigger axis
+    uint8_t axis_l = (input_report.l1) ? 255 : 0;
+    uint8_t axis_r = (input_report.r1) ? 255 : 0;
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, input_report.axis_x, axis_y, input_report.axis_z, axis_rz, axis_l, axis_r, 0);
 
-    prev_report[dev_addr-1] = sega_report;
+    prev_report[dev_addr-1] = input_report;
   }
 
 }
@@ -2720,7 +2767,7 @@ void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1] = astro_report;
   }
@@ -2772,7 +2819,7 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 128, 128, 0);
+    post_globals(dev_addr, instance, buttons, wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z, 128, 0, 0, 0);
 
     prev_report[dev_addr-1] = wingman_report;
   }
@@ -2822,7 +2869,7 @@ void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2872,7 +2919,7 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2926,7 +2973,7 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis, 0, 0);
+    post_globals(dev_addr, instance, buttons, update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3008,11 +3055,11 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool bttn_sel = update_report.select;
       uint8_t left_trigger = 0;
       uint8_t right_trigger = 0;
-#ifdef CONFIG_NGC
+
       bttn_sel |= update_report.zl || update_report.zr;
       if (update_report.l) left_trigger = 0xff;
       if (update_report.r) right_trigger = 0xff;
-#endif
+
       bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
       bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
 
@@ -3062,7 +3109,7 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t leftY = byteScaleSwitchAnalog(update_report.left_y);
       uint8_t rightX = byteScaleSwitchAnalog(update_report.right_x);
       uint8_t rightY = byteScaleSwitchAnalog(update_report.right_y);
-      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, left_trigger, right_trigger);
+      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, left_trigger, right_trigger, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
     }
@@ -3163,7 +3210,7 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
             gamecube_report.port[i].x2,
             gamecube_report.port[i].y2,
             gamecube_report.port[i].zl,
-            gamecube_report.port[i].zr
+            gamecube_report.port[i].zr, 0
           );
 
           prev_report[dev_addr-1][instance + i] = gamecube_report;
@@ -3223,7 +3270,7 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y, 0, 0);
+    post_globals(dev_addr, instance, buttons, update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3253,7 +3300,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
       else if ( is_8bit_m30(dev_addr) ) process_8bit_m30(dev_addr, instance, report, len);
       else if ( is_8bit_bta(dev_addr) ) process_8bit_bta(dev_addr, instance, report, len);
-      else if ( is_sega_mini(dev_addr) ) process_sega_mini(dev_addr, instance, report, len);
+      else if ( is_horipad(dev_addr) ) process_horipad(dev_addr, instance, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
@@ -3498,21 +3545,47 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
   uint8_t leftIndex = 0;
   uint8_t rightIndex = 0;
 
+  bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
+  bool const is_ctrl = report->modifier & (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_RIGHTCTRL);
+  bool const is_alt = report->modifier & (KEYBOARD_MODIFIER_LEFTALT | KEYBOARD_MODIFIER_RIGHTALT);
+
+  // parse 3 keycode bytes into single word to return
+  uint32_t reportKeys = report->keycode[0] | (report->keycode[1] << 8) | (report->keycode[2] << 16);
+  if (report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT)) {
+    reportKeys = reportKeys << 8 | HID_KEY_SHIFT_LEFT;
+  } else if (report->modifier & (KEYBOARD_MODIFIER_RIGHTSHIFT)) {
+    reportKeys = reportKeys << 8 | HID_KEY_SHIFT_RIGHT;
+  }
+  if (is_ctrl) {
+    reportKeys = reportKeys << 8 | HID_KEY_CONTROL_LEFT;
+  }
+  if (is_alt) {
+    reportKeys = reportKeys << 8 | HID_KEY_ALT_LEFT;
+  }
+  if (report->modifier & (KEYBOARD_MODIFIER_LEFTGUI)) {
+    reportKeys = reportKeys << 8 | HID_KEY_GUI_LEFT;
+  } else if (report->modifier & (KEYBOARD_MODIFIER_RIGHTGUI)) {
+    reportKeys = reportKeys << 8 | HID_KEY_GUI_RIGHT;
+  }
+
+  // wait until first report before sending init led output report
+  if (!devices[dev_addr].instances[instance].kbd_ready) {
+    devices[dev_addr].instances[instance].kbd_ready = true;
+  }
+
   //------------- example code ignore control (non-printable) key affects -------------//
   for(uint8_t i=0; i<6; i++)
   {
     if ( report->keycode[i] )
     {
-      if (report->keycode[i] == HID_KEY_ENTER) btns_run = true;
-      if (report->keycode[i] == HID_KEY_ESCAPE ||
-          report->keycode[i] == HID_KEY_O ||
-          report->keycode[i] == HID_KEY_P) btns_sel = true;
-      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_HOME) btns_one = true;
-      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_END) btns_two = true;
-      if (report->keycode[i] == HID_KEY_L) btns_three = true;
-      if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true;
-      if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_five = true;
-      if (report->keycode[i] == HID_KEY_I || report->keycode[i] == HID_KEY_PAGE_DOWN) btns_six = true;
+      if (report->keycode[i] == HID_KEY_ESCAPE || report->keycode[i] == HID_KEY_EQUAL) btns_run = true; // Start
+      if (report->keycode[i] == HID_KEY_P || report->keycode[i] == HID_KEY_MINUS) btns_sel = true; // Select / Z
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_one = true; // A
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_two = true; // B
+      if (report->keycode[i] == HID_KEY_L) btns_three = true; // X
+      if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true; // Y
+      if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_five = true; // L
+      if (report->keycode[i] == HID_KEY_I || report->keycode[i] == HID_KEY_PAGE_DOWN) btns_six = true; // R
 
       // HAT SWITCH
       switch (report->keycode[i])
@@ -3589,10 +3662,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
 
       if (btns_five) analog_l = 255;
       if (btns_six) analog_r = 255;
-
-      bool const is_ctrl = report->modifier & (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_RIGHTCTRL);
-      bool const is_alt = report->modifier & (KEYBOARD_MODIFIER_LEFTALT | KEYBOARD_MODIFIER_RIGHTALT);
-      if ( is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
+      if (is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
       {
       #ifdef CONFIG_NGC
         // gc-swiss irg
@@ -3626,15 +3696,13 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
   }
 
   // calculate left stick angle degrees
-  bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
-
   if (leftStickKeys) {
-    int leftIntensity = leftStickKeys ? (is_shift ? 58 : 78) : 0;
+    int leftIntensity = leftStickKeys ? (is_shift ? 28 : 78) : 0;
     calculate_coordinates(leftStickKeys, leftIntensity, &analog_left_x, &analog_left_y);
   }
 
   if (rightStickKeys) {
-    int rightIntensity = rightStickKeys ? (is_shift ? 58 : 78) : 0;
+    int rightIntensity = rightStickKeys ? (is_shift ? 28 : 78) : 0;
     calculate_coordinates(rightStickKeys, rightIntensity, &analog_right_x, &analog_right_y);
   }
 
@@ -3660,7 +3728,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r);
+  post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r, reportKeys);
 
   prev_report = *report;
 }
@@ -3754,7 +3822,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_globals(dev_addr, instance, buttons, local_x, local_y, 128, 128, 0, 0);
+  post_globals(dev_addr, instance, buttons, local_x, local_y, 128, 128, 0, 0, 0);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel);
@@ -3848,7 +3916,7 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
-  post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+  post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
   prev_report = *report;
 }
@@ -3973,7 +4041,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
                ((buttonSelect)    ? 0x00 : 0x0040) |
                ((current.button2) ? 0x00 : 0x0020) |
                ((buttonI)         ? 0x00 : 0x0010));
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
   }
 }
 

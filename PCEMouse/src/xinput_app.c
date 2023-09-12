@@ -3,7 +3,7 @@
 
 uint16_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
@@ -52,7 +52,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     uint8_t analog_l = p->bLeftTrigger;
     uint8_t analog_r = p->bRightTrigger;
 
-    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
+    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0);
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
