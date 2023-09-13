@@ -2165,7 +2165,9 @@ bool gc_diff_report(gamecube_report_t const* rpt1, gamecube_report_t const* rpt2
   bool result;
 
   // x, y must different than 2 to be counted
-  result = diff_than_n(rpt1->port[player].x1, rpt2->port[player].x1, 2) || diff_than_n(rpt1->port[player].y1, rpt2->port[player].y1, 2);
+  result = diff_than_n(rpt1->port[player].x1, rpt2->port[player].x1, 2) || diff_than_n(rpt1->port[player].y1, rpt2->port[player].y1, 2) ||
+           diff_than_n(rpt1->port[player].x2, rpt2->port[player].x2, 2) || diff_than_n(rpt1->port[player].y2, rpt2->port[player].y2, 2) ||
+           diff_than_n(rpt1->port[player].zl, rpt2->port[player].zl, 2) || diff_than_n(rpt1->port[player].zr, rpt2->port[player].zr, 2);
 
   // check the all with mem compare (after report_id players are spaced 9 bytes apart)
   result |= memcmp(&rpt1->report_id + 1 + (player*9), &rpt2->report_id + 1 + (player*9), 3);
@@ -3204,13 +3206,19 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
             ((gamecube_report.port[i].a)     ? 0x00 : 0x0010)   // I
           );
 
+          uint8_t zl_axis = gamecube_report.port[i].zl;
+          zl_axis = zl_axis > 38 ? zl_axis - 38 : 0;
+          uint8_t zr_axis = gamecube_report.port[i].zr;
+          zr_axis = zr_axis > 38 ? zr_axis - 38 : 0;
+
           post_globals(dev_addr, i, buttons,
             gamecube_report.port[i].x1,
             gamecube_report.port[i].y1,
             gamecube_report.port[i].x2,
             gamecube_report.port[i].y2,
-            gamecube_report.port[i].zl,
-            gamecube_report.port[i].zr, 0
+            zl_axis,
+            zr_axis,
+            0
           );
 
           prev_report[dev_addr-1][instance + i] = gamecube_report;

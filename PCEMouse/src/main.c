@@ -129,7 +129,7 @@ uint64_t turbo_frequency;
   // https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering
   // https://sites.google.com/site/consoleprotocols/home/nintendo-joy-bus-documentation
 
-  #define MAX_PLAYERS 1
+  #define MAX_PLAYERS 4
 
   #define SHIELD_PIN_L 4  // Connector shielding mounted to GPIOs [4, 5,26,27]
   #define SHIELD_PIN_R 26
@@ -206,6 +206,9 @@ typedef struct TU_ATTR_PACKED
   int16_t prev_buttons;
 
   int button_mode;
+#ifdef CONFIG_NGC
+  gc_report_t gc_report;
+#endif
 } Player_t;
 
 Player_t players[MAX_PLAYERS];
@@ -314,6 +317,17 @@ void __not_in_flash_func(check_for_konami_code)(void)
 #ifdef CONFIG_NGC
 uint8_t gc_kb_key_lookup(uint8_t hid_key) {
     return hid_to_gc_key[hid_key];
+}
+
+uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center) {
+    int distance_a = abs(a - center);
+    int distance_b = abs(b - center);
+
+    if (distance_a > distance_b) {
+        return a;
+    } else {
+        return b;
+    }
 }
 #endif
 
@@ -451,63 +465,58 @@ void __not_in_flash_func(update_output)(void)
 #endif
 
 #ifdef CONFIG_NGC
+  if (players[0].button_mode == BUTTON_MODE_KB) {
+    gc_report = default_gc_kb_report;
+  } else {
+    gc_report = default_gc_report;
+  }
+
   unsigned short int i;
-  for (i = 0; i < MAX_PLAYERS; ++i) {
+  for (i = 0; i < playersCount; ++i) {
     // base controller buttons
     int16_t byte = (players[i].output_buttons & 0xffff);
 
     if (players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14) {
-      if (players[i].button_mode != BUTTON_MODE_KB) {
+      if (players[0].button_mode != BUTTON_MODE_KB) {
+        players[0].button_mode = BUTTON_MODE_KB; // global
         players[i].button_mode = BUTTON_MODE_KB;
         GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
         gc_report = default_gc_kb_report;
+        // players[i].gc_report = default_gc_kb_report;
         gc_kb_led = 0x4;
       } else {
+        players[0].button_mode = BUTTON_MODE_3; // global
         players[i].button_mode = BUTTON_MODE_3;
         GamecubeConsole_SetMode(&gc, GamecubeMode_3);
         gc_report = default_gc_report;
+        // players[i].gc_report = default_gc_report;
         gc_kb_led = 0;
       }
     }
 
-    if (players[i].button_mode != BUTTON_MODE_KB) {
-      // controller
-      if (update_pending) {
-        gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
-        gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
-        gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
-        gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
-        gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
-        gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
-        gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
-        gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
-        gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
-        gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
-        gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
-        gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
-      } else {
-        gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
-        gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
-        gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
-        gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
-        gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
-        gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
-        gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
-        gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
-        gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
-        gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
-        gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
-        gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
-      }
+    if (players[0].button_mode != BUTTON_MODE_KB) {
+      // global buttons
+      gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
+      gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
+      gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
+      gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
+      gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
+      gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
+      gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
+      gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
+      gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
+      gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
+      gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
+      gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
 
-      gc_report.stick_x    = players[i].output_analog_1x;
-      gc_report.stick_y    = players[i].output_analog_1y;
-      gc_report.cstick_x   = players[i].output_analog_2x;
-      gc_report.cstick_y   = players[i].output_analog_2y;
-      gc_report.l_analog   = players[i].output_analog_l;
-      gc_report.r_analog   = players[i].output_analog_r;
+      // global dominate axis
+      gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x, 128);
+      gc_report.stick_y    = furthest_from_center(gc_report.stick_y, players[i].output_analog_1y, 128);
+      gc_report.cstick_x   = furthest_from_center(gc_report.cstick_x, players[i].output_analog_2x, 128);
+      gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
+      gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
+      gc_report.r_analog   = furthest_from_center(gc_report.r_analog, players[i].output_analog_r, 0);
     } else {
-      // keyboard
       gc_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
       gc_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
       gc_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
@@ -516,6 +525,39 @@ void __not_in_flash_func(update_output)(void)
                                     gc_report.keyboard.keypress[2] ^ gc_kb_counter;
       gc_report.keyboard.counter = gc_kb_counter;
     }
+
+    // if (players[i].button_mode != BUTTON_MODE_KB) {
+    //   // player buttons
+    //   players[i].gc_report.dpad_up    = ((byte & 0x0001) == 0) ? 1 : 0; // up
+    //   players[i].gc_report.dpad_right = ((byte & 0x0002) == 0) ? 1 : 0; // right
+    //   players[i].gc_report.dpad_down  = ((byte & 0x0004) == 0) ? 1 : 0; // down
+    //   players[i].gc_report.dpad_left  = ((byte & 0x0008) == 0) ? 1 : 0; // left
+    //   players[i].gc_report.a          = ((byte & 0x0010) == 0) ? 1 : 0; // b
+    //   players[i].gc_report.b          = ((byte & 0x0020) == 0) ? 1 : 0; // a
+    //   players[i].gc_report.z          = ((byte & 0x0040) == 0) ? 1 : 0; // select
+    //   players[i].gc_report.start      = ((byte & 0x0080) == 0) ? 1 : 0; // start
+    //   players[i].gc_report.x          = ((byte & 0x01000) == 0) ? 1 : 0; // y
+    //   players[i].gc_report.y          = ((byte & 0x02000) == 0) ? 1 : 0; // x
+    //   players[i].gc_report.l          = ((byte & 0x04000) == 0) ? 1 : 0; // l
+    //   players[i].gc_report.r          = ((byte & 0x08000) == 0) ? 1 : 0; // r
+
+    //   // player axis
+    //   players[i].gc_report.stick_x    = players[i].output_analog_1x;
+    //   players[i].gc_report.stick_y    = players[i].output_analog_1y;
+    //   players[i].gc_report.cstick_x   = players[i].output_analog_2x;
+    //   players[i].gc_report.cstick_y   = players[i].output_analog_2y;
+    //   players[i].gc_report.l_analog   = players[i].output_analog_l;
+    //   players[i].gc_report.r_analog   = players[i].output_analog_r;
+    // } else {
+    //   // player keyboard
+    //   players[i].gc_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
+    //   players[i].gc_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
+    //   players[i].gc_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
+    //   players[i].gc_report.keyboard.checksum = players[i].gc_report.keyboard.keypress[0] ^
+    //                                 players[i].gc_report.keyboard.keypress[1] ^
+    //                                 players[i].gc_report.keyboard.keypress[2] ^ gc_kb_counter;
+    //   players[i].gc_report.keyboard.counter = gc_kb_counter;
+    // }
   }
 #endif
 
@@ -943,6 +985,10 @@ int main(void)
     players[i].output_analog_r = 0;
     players[i].prev_buttons = 0xFFFF;
     players[i].button_mode = 0;
+#ifdef CONFIG_NGC
+    players[i].gc_report = default_gc_report;
+#endif
+
   }
   state = 3;
 
