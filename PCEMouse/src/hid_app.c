@@ -60,7 +60,8 @@
 #define CONTROLLER_DS4 0x03
 #define CONTROLLER_DS5 0x04
 #define CONTROLLER_SWITCH 0x05
-#define CONTROLLER_KEYBOARD 0x06
+#define CONTROLLER_GAMECUBE 0x06
+#define CONTROLLER_KEYBOARD 0x07
 
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
@@ -1547,6 +1548,18 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
           }
         }
       }
+
+      // GameCube WiiU Adapter Rumble
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_GAMECUBE) {
+        if (rumble != last_rumble) {
+          uint8_t buf4[5] = { 0x11, /* GC_CMD_RUMBLE */ };
+          for(int i = 0; i < 4; i++) {
+            buf4[i+1] = rumble ? 1 : 0;
+          }
+          tuh_hid_send_report(dev_addr, instance, buf4[0], &(buf4[0])+1, sizeof(buf4) - 1);
+          last_rumble = rumble;
+        }
+      }
     }
   }
 }
@@ -1853,6 +1866,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
     printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+  }
+  else if (is_gamecube(dev_addr))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_GAMECUBE;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
   }
   else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
   {
@@ -3185,10 +3204,10 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
           printf("\n");
 
           bool dpad_left  = gamecube_report.port[i].left;
-          bool dpad_right  = gamecube_report.port[i].right;
-          bool dpad_up  = gamecube_report.port[i].up;
+          bool dpad_right = gamecube_report.port[i].right;
+          bool dpad_up    = gamecube_report.port[i].up;
           bool dpad_down  = gamecube_report.port[i].down;
-          bool has_6btns = true;
+          bool has_6btns  = true;
 
           buttons = (
             ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
