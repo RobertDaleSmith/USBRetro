@@ -598,32 +598,38 @@ void __not_in_flash_func(post_globals)(
 
   if (player_index >= 0) {
 #ifdef CONFIG_PCE
+      // map analog to dpad movement here
+      __uint8_t dpad_offset = 32;
+      if (analog_1x > 128 + dpad_offset) buttons &= ~(0x02); // right
+      else if (analog_1x < 128 - dpad_offset) buttons &= ~(0x08); // left
+      if (analog_1y > 128 + dpad_offset) buttons &= ~(0x01); // up
+      else if (analog_1y < 128 - dpad_offset) buttons &= ~(0x04); // down
+#endif
+      // extra instance buttons to merge with root player
+      if (is_extra) {
+        players[0].altern_buttons = buttons;
+      } else {
+        players[player_index].global_buttons = buttons;
+      }
+
+#ifdef CONFIG_PCE
       // TODO: 
-      //  - map analog to dpad movement here.
       //  - also double map V/VI btns to R2/L2.
       //  - also map PS button to S1 + S2
       //  - also map 8BitDo/Switch Home buttons to S1 + S2
-
-      if (analog_1x >= 128)
-        players[player_index].global_x = players[player_index].global_x - (256-analog_1x);
-      else
-        players[player_index].global_x = players[player_index].global_x + analog_1x;
-
-      if (analog_1y >= 128)
-        players[player_index].global_y = players[player_index].global_y - (256-analog_1y);
-      else
-        players[player_index].global_y = players[player_index].global_y + analog_1y;
-
-      if (is_extra) // extra instance buttons to merge with root player
-        players[0].altern_buttons = buttons;
-      else
-        players[player_index].global_buttons = buttons;
-
       if (!output_exclude || !isMouse)
       {
-        players[player_index].output_analog_1x = players[player_index].global_x;
-        players[player_index].output_analog_1y = players[player_index].global_y;
+        // players[player_index].output_analog_1x = analog_1x;
+        // players[player_index].output_analog_1y = analog_1y;
         players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+
+        // basic socd (up priority, left+right neutral)
+        if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
+          players[player_index].output_buttons ^= 0x04;
+        }
+        if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
+          players[player_index].output_buttons ^= 0x0a;
+        }
 
         update_output();
       }
@@ -643,7 +649,7 @@ void __not_in_flash_func(post_globals)(
       players[player_index].output_analog_2y = analog_2y;
       players[player_index].output_analog_l = analog_l;
       players[player_index].output_analog_r = analog_r;
-      players[player_index].output_buttons = buttons;
+      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
       players[player_index].keypress[0] = (keys) & 0xff;
       players[player_index].keypress[1] = (keys >> 8) & 0xff;
@@ -702,11 +708,6 @@ void __not_in_flash_func(post_mouse_globals)(
         players[player_index].global_y = players[player_index].global_y - (256-mouse_y);
       else
         players[player_index].global_y = players[player_index].global_y + mouse_y;
-
-      if (is_extra) // extra instance buttons to merge with root player
-        players[0].altern_buttons = buttons;
-      else
-        players[player_index].global_buttons = buttons;
 
       if (!output_exclude || !isMouse)
       {
