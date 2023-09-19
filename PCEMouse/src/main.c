@@ -648,6 +648,117 @@ void __not_in_flash_func(post_globals)(
       players[player_index].keypress[0] = (keys) & 0xff;
       players[player_index].keypress[1] = (keys >> 8) & 0xff;
       players[player_index].keypress[2] = (keys >> 16) & 0xff;
+
+      // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
+
+      update_output();
+#endif
+
+  }
+}
+
+
+//
+// post_globals - accumulate the many intermediate mouse scans (~1ms)
+//                into an accumulator which will be reported back to PCE
+//
+void __not_in_flash_func(post_mouse_globals)(
+  uint8_t dev_addr,
+  int8_t instance,
+  uint16_t buttons,
+  uint8_t mouse_x,
+  uint8_t mouse_y)
+{
+  bool has6Btn = !(buttons & 0x0f00);
+  bool isMouse = !(buttons & 0x0f); // dpad least significant nybble only zero for usb mice
+
+  // for merging extra device instances into the root instance (ex: joycon charging grip)
+  bool is_extra = (instance == -1);
+  if (is_extra) instance = 0;
+
+  int player_index = find_player_index(dev_addr, instance);
+  uint16_t buttons_pressed = (~(buttons | 0x0f00));
+  if (player_index < 0 && buttons_pressed) {
+    printf("[add player] [%d, %d]\n", dev_addr, instance);
+    player_index = add_player(dev_addr, instance);
+  }
+
+  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
+
+  if (player_index >= 0) {
+#ifdef CONFIG_PCE
+      // TODO: 
+      //  - map analog to dpad movement here.
+      //  - also double map V/VI btns to R2/L2.
+      //  - also map PS button to S1 + S2
+      //  - also map 8BitDo/Switch Home buttons to S1 + S2
+
+      if (mouse_x >= 128)
+        players[player_index].global_x = players[player_index].global_x - (256-mouse_x);
+      else
+        players[player_index].global_x = players[player_index].global_x + mouse_x;
+
+      if (mouse_y >= 128)
+        players[player_index].global_y = players[player_index].global_y - (256-mouse_y);
+      else
+        players[player_index].global_y = players[player_index].global_y + mouse_y;
+
+      if (is_extra) // extra instance buttons to merge with root player
+        players[0].altern_buttons = buttons;
+      else
+        players[player_index].global_buttons = buttons;
+
+      if (!output_exclude || !isMouse)
+      {
+        players[player_index].output_analog_1x = players[player_index].global_x;
+        players[player_index].output_analog_1y = players[player_index].global_y;
+        players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+
+        update_output();
+      }
+#endif
+
+#ifdef CONFIG_NGC
+      // fixes out of range analog values (1-255)
+      if (mouse_x == 0) mouse_x = 1;
+      if (mouse_y == 0) mouse_y = 1;
+
+      if (mouse_x >= 128)
+        players[player_index].global_x = players[player_index].global_x - (256-mouse_x);
+      else
+        players[player_index].global_x = players[player_index].global_x + mouse_x;
+
+      if (players[player_index].global_x > 127) {
+        mouse_x = 0xff;
+      } else if (players[player_index].global_x < -127) {
+        mouse_x = 1;
+      } else {
+        mouse_x = 128 + players[player_index].global_x;
+      }
+
+      if (mouse_y >= 128)
+        players[player_index].global_y = players[player_index].global_y - (256-mouse_y);
+      else
+        players[player_index].global_y = players[player_index].global_y + mouse_y;
+
+      if (players[player_index].global_y > 127) {
+        mouse_y = 0xff;
+      } else if (players[player_index].global_y < -127) {
+        mouse_y = 1;
+      } else {
+        mouse_y = 128 + players[player_index].global_y;
+      }
+
+      // printf("X: %d, Y: %d   ", players[player_index].global_x, players[player_index].global_y);
+      // printf("X1: %d, Y1: %d   ", mouse_x, mouse_y);
+
+      // cache analog and button values to player object
+      players[player_index].output_analog_1x = mouse_x;
+      players[player_index].output_analog_1y = mouse_y;
+      // players[player_index].output_analog_2x = mouse_x;
+      // players[player_index].output_analog_2y = mouse_y;
+      players[player_index].output_buttons = buttons;
+
       update_output();
 #endif
 
@@ -754,7 +865,7 @@ static bool rx_bit = 0;
         update_output();
 
         unsigned short int i;
-        for (i = 0; i < 5; ++i) {
+        for (i = 0; i < MAX_PLAYERS; ++i) {
           // decrement outputs from globals
           players[i].global_x = (players[i].global_x - players[i].output_analog_1x);
           players[i].global_y = (players[i].global_y - players[i].output_analog_1y);
@@ -776,10 +887,28 @@ static bool rx_bit = 0;
     GamecubeConsole_SendReport(&gc, &gc_report);
     update_pending = false;
 
-    // printf("MODE: %d\n", gc._reading_mode);
-
     gc_kb_counter++;
     gc_kb_counter &= 15;
+
+    unsigned short int i;
+    for (i = 0; i < MAX_PLAYERS; ++i) {
+      // decrement outputs from globals
+      if (players[i].global_x != 0) {
+        players[i].global_x = (players[i].global_x - (players[i].output_analog_1x - 128));
+        // if (players[i].global_x > 128) players[i].global_x = 128;
+        // if (players[i].global_x < -128) players[i].global_x = -128;
+        players[i].output_analog_1x = 128;
+      }
+      if (players[i].global_y != 0) {
+        players[i].global_y = (players[i].global_y - (players[i].output_analog_1y - 128));
+        // if (players[i].global_y > 128) players[i].global_y = 128;
+        // if (players[i].global_y < -128) players[i].global_y = -128;
+        players[i].output_analog_1y = 128;
+      }
+    }
+    update_output();
+
+    // printf("MODE: %d\n", gc._reading_mode);
 #endif
   }
 }
