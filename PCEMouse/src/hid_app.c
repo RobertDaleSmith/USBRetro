@@ -3608,8 +3608,14 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     {
       if (report->keycode[i] == HID_KEY_ESCAPE || report->keycode[i] == HID_KEY_EQUAL) btns_run = true; // Start
       if (report->keycode[i] == HID_KEY_P || report->keycode[i] == HID_KEY_MINUS) btns_sel = true; // Select / Z
+#ifdef CONFIG_NGC
       if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_one = true; // A
       if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_two = true; // B
+#else
+      // more ideal PCE enter button for SuperSD3 Menu
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_two = true; // II
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_one = true; // I
+#endif
       if (report->keycode[i] == HID_KEY_L) btns_three = true; // X
       if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true; // Y
       if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_five = true; // L
