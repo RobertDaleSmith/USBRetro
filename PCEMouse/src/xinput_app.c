@@ -30,12 +30,22 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
            dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
+    uint8_t analog_1x = byteScaleAnalog(p->sThumbLX);
+    uint8_t analog_1y = byteScaleAnalog(p->sThumbLY);
+    uint8_t analog_2x = byteScaleAnalog(p->sThumbRX);
+    uint8_t analog_2y = byteScaleAnalog(p->sThumbRY);
+    uint8_t analog_l = p->bLeftTrigger;
+    uint8_t analog_r = p->bRightTrigger;
     bool is6btn = true;
+
     buttons = (((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x8000) |
                ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x4000) |
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
-               ((is6btn) ? 0x00 : 0xFF00) |
+               ((is6btn) ? 0x00 : 0x0800) |
+               ((false) ? 0x00 : 0x04) | // TODO: parse guide button report
+               ((analog_r > 200) ? 0x00 : 0x02) | // R2
+               ((analog_l > 200) ? 0x00 : 0x01) | // L2
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) ? 0x00 : 0x08) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) ? 0x00 : 0x04) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) ? 0x00 : 0x02) |
@@ -44,13 +54,6 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->wButtons & XINPUT_GAMEPAD_BACK) ? 0x00 : 0x40) |
                ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
                ((p->wButtons & XINPUT_GAMEPAD_B) ? 0x00 : 0x10));
-
-    uint8_t analog_1x = byteScaleAnalog(p->sThumbLX);
-    uint8_t analog_1y = byteScaleAnalog(p->sThumbLY);
-    uint8_t analog_2x = byteScaleAnalog(p->sThumbRX);
-    uint8_t analog_2y = byteScaleAnalog(p->sThumbRY);
-    uint8_t analog_l = p->bLeftTrigger;
-    uint8_t analog_r = p->bRightTrigger;
 
     post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0);
   }
