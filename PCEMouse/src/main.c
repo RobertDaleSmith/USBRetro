@@ -634,9 +634,6 @@ void __not_in_flash_func(post_globals)(
 #endif
 
 #ifdef CONFIG_NGC
-      // TODO: 
-      //  - Map triggers > 200 to respective L and R digital buttons
-
       // fixes out of range analog values (1-255)
       if (analog_1x == 0) analog_1x = 1;
       if (analog_1y == 0) analog_1y = 1;
@@ -655,6 +652,21 @@ void __not_in_flash_func(post_globals)(
       players[player_index].keypress[0] = (keys) & 0xff;
       players[player_index].keypress[1] = (keys >> 8) & 0xff;
       players[player_index].keypress[2] = (keys >> 16) & 0xff;
+
+      // full analog and digital L/R press always happen together
+      if (!((players[player_index].output_buttons) & 0x8000)) {
+        players[player_index].output_analog_r = 255;
+      }
+      else if (analog_r > 250) {
+        players[player_index].output_buttons &= ~0x8000;
+      }
+
+      if (!((players[player_index].output_buttons) & 0x4000)) {
+        players[player_index].output_analog_l = 255;
+      }
+      else if (analog_l > 250) {
+        players[player_index].output_buttons &= ~0x4000;
+      }
 
       // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
 

@@ -43,9 +43,9 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
                ((is6btn) ? 0x00 : 0x0800) |
-               ((false) ? 0x00 : 0x04) | // TODO: parse guide button report
-               ((analog_r > 200) ? 0x00 : 0x02) | // R2
-               ((analog_l > 200) ? 0x00 : 0x01) | // L2
+               ((false)  ? 0x00 : 0x0400) | // TODO: parse guide button report
+               ((analog_r > 200) ? 0x00 : 0x0200) | // R2
+               ((analog_l > 200) ? 0x00 : 0x0100) | // L2
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) ? 0x00 : 0x08) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) ? 0x00 : 0x04) |
                ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) ? 0x00 : 0x02) |
