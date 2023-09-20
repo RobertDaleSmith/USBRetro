@@ -1039,7 +1039,7 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
-extern void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t mouse_x, uint8_t mouse_y);
+extern void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 extern void remove_players_by_address(int device_address, int instance);
 
@@ -3831,7 +3831,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   if (buttons_swapped)
   {
      buttons = (((0xff00)) | // no six button controller byte
-                ((0x000f)) | // no dpad button presses
+                // ((0x000f)) | // no dpad button presses
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
@@ -3840,16 +3840,25 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   else
   {
      buttons = (((0xff00)) |
-                ((0x000f)) |
+                // ((0x000f)) |
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
   }
 
+#ifdef CONFIG_NGC
+  local_x = report->x;
+  local_y = ((~report->y) & 0xff);
+#else
+  local_x = (0 - report->x);
+  local_y = (0 - report->y);
+#endif
+
+
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_mouse_globals(dev_addr, instance, buttons, report->x, ((~report->y) & 0xff));
+  post_mouse_globals(dev_addr, instance, buttons, local_x, local_y);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel);
