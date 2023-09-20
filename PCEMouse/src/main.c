@@ -356,7 +356,7 @@ void __not_in_flash_func(update_output)(void)
     // base controller/mouse buttons
     int8_t byte = (players[i].output_buttons & 0xff);
 
-    if (i >= playersCount) {
+    if (i >= playersCount && !hotkey) {
       bytes[i] = 0xff;
       continue;
     }
