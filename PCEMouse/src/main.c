@@ -380,8 +380,8 @@ void __not_in_flash_func(update_output)(void)
       else if(btns == 0x84) hotkey = ~0x84; // RUN + DOWN
     }
 
-    bool has6Btn = !(players[i].output_buttons & 0x0f00);
-    bool isMouse = !(players[i].output_buttons & 0x0f);
+    bool has6Btn = !(players[i].output_buttons & 0x0800);
+    bool isMouse = !(players[i].output_buttons & 0x000f);
     bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
     bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
     bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
@@ -580,14 +580,14 @@ void __not_in_flash_func(post_globals)(
   uint8_t analog_r,
   uint32_t keys)
 {
-  bool has6Btn = !(buttons & 0x0f00);
+  bool has6Btn = !(buttons & 0x0800);
 
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00)) || keys;
+  uint16_t buttons_pressed = (~(buttons | 0x0800)) || keys;
   if (player_index < 0 && buttons_pressed) {
     printf("[add player] [%d, %d]\n", dev_addr, instance);
     player_index = add_player(dev_addr, instance);
@@ -613,9 +613,8 @@ void __not_in_flash_func(post_globals)(
 
 #ifdef CONFIG_PCE
       // TODO: 
-      //  - also double map V/VI btns to R2/L2.
-      //  - also map PS button to S1 + S2
-      //  - also map 8BitDo/Switch Home buttons to S1 + S2
+      //  - Map home button to S1 + S2
+
       if (!output_exclude)
       {
         // players[player_index].output_analog_1x = analog_1x;
@@ -635,6 +634,9 @@ void __not_in_flash_func(post_globals)(
 #endif
 
 #ifdef CONFIG_NGC
+      // TODO: 
+      //  - Map triggers > 200 to respective L and R digital buttons
+
       // fixes out of range analog values (1-255)
       if (analog_1x == 0) analog_1x = 1;
       if (analog_1y == 0) analog_1y = 1;
@@ -689,10 +691,6 @@ void __not_in_flash_func(post_mouse_globals)(
 
   if (player_index >= 0) {
 #ifdef CONFIG_PCE
-      // TODO: 
-      //  - also double map V/VI btns to R2/L2.
-      //  - also map PS button to S1 + S2
-      //  - also map 8BitDo/Switch Home buttons to S1 + S2
       players[player_index].global_buttons = buttons;
 
       if (delta_x >= 128)
