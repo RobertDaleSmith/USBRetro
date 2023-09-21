@@ -1093,14 +1093,16 @@ int main(void)
 {
   board_init();
 
-  // Pause briefly for stability before starting activity
-  sleep_ms(1000);
-
+  printf("\nUSB_RETRO::");
 #ifdef CONFIG_PCE
-  printf("USB Host to PCEngine/TurboGrafx-16\r\n");
+  printf("PCENGINE");
 #elif CONFIG_NGC
-  printf("USB Host to Nintendo GameCube\r\n");
+  printf("GAMECUBE");
 #endif
+  printf("\n\n");
+
+  // Pause briefly for stability before starting activity
+  sleep_ms(250);
 
   tusb_init();
 

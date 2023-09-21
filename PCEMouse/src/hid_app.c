@@ -3715,12 +3715,12 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
           hatSwitchKeys |= (0x1 << (4 * hatIndex));
           hatIndex++;
           break;
-      case HID_KEY_2:
+      case HID_KEY_3:
       case HID_KEY_ARROW_DOWN:
           hatSwitchKeys |= (0x2 << (4 * hatIndex));
           hatIndex++;
           break;
-      case HID_KEY_3:
+      case HID_KEY_2:
       case HID_KEY_ARROW_LEFT:
           hatSwitchKeys |= (0x4 << (4 * hatIndex));
           hatIndex++;
@@ -3764,11 +3764,11 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
           rightStickKeys |= (0x1 << (4 * rightIndex));
           rightIndex++;
           break;
-      case HID_KEY_COMMA:
+      case HID_KEY_PERIOD:
           rightStickKeys |= (0x2 << (4 * rightIndex));
           rightIndex++;
           break;
-      case HID_KEY_PERIOD:
+      case HID_KEY_COMMA:
           rightStickKeys |= (0x4 << (4 * rightIndex));
           rightIndex++;
           break;
