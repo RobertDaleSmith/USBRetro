@@ -72,7 +72,6 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
   }
   // tuh_xinput_init_chatpad(dev_addr, instance, true);
   tuh_xinput_set_led(dev_addr, instance, 0, true);
-  tuh_xinput_set_led(dev_addr, instance, 1, true);
   tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
   tuh_xinput_receive_report(dev_addr, instance);
 }

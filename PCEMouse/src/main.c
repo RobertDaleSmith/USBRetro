@@ -41,7 +41,6 @@
 
 #include "bsp/board_api.h"
 #include "tusb.h"
-#include "lib/joybus-pio/include/gamecube_definitions.h"
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
@@ -118,9 +117,10 @@ uint64_t turbo_frequency;
 #endif
 
 #ifdef CONFIG_NGC
-  #include "pico/bootrom.h"
+  #include "lib/joybus-pio/include/gamecube_definitions.h"
   #include "joybus.pio.h"
   #include "GamecubeConsole.h"
+  #include "pico/bootrom.h"
   // GameCube JoyBus resources:
   // https://github.com/NicoHood/Nintendo
   // https://n64brew.dev/wiki/Joybus_Protocol
@@ -178,8 +178,9 @@ extern void neopixel_init(void);
 
 extern void neopixel_task(int pat);
 
-void rumble_task(void);
+void xinput_task(void);
 
+bool tuh_xinput_set_led(uint8_t dev_addr, uint8_t instance, uint8_t quadrant, bool block);
 bool tuh_xinput_set_rumble(uint8_t dev_addr, uint8_t instance, uint8_t lValue, uint8_t rValue, bool block);
 
 typedef struct TU_ATTR_PACKED
@@ -214,6 +215,7 @@ typedef struct TU_ATTR_PACKED
 Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 bool is_fun = false;
+int last_player_count = 0;
 
 // When PCE reads, set interlock to ensure atomic update
 //
@@ -615,8 +617,8 @@ void __not_in_flash_func(post_globals)(
       // TODO: 
       //  - Map home button to S1 + S2
 
-      if (!output_exclude)
-      {
+      // if (!output_exclude || !isMouse)
+      // {
         // players[player_index].output_analog_1x = analog_1x;
         // players[player_index].output_analog_1y = analog_1y;
         players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
@@ -630,7 +632,7 @@ void __not_in_flash_func(post_globals)(
         }
 
         update_output();
-      }
+      // }
 #endif
 
 #ifdef CONFIG_NGC
@@ -790,10 +792,8 @@ static void __not_in_flash_func(process_signals)(void)
     led_blinking_task();
 #endif
 
-#ifdef CONFIG_NGC
     // xinput rumble task
-    rumble_task();
-#endif
+    xinput_task();
 
 #ifdef CONFIG_PCE
 //
@@ -1206,26 +1206,26 @@ void tuh_umount_cb(uint8_t dev_addr)
 
 #endif
 
-void rumble_task() {
-#ifdef CONFIG_NGC
+void xinput_task() {
   // rumble only if controller connected
   if (!playersCount) return;
 
   // rumble state update only on diff than last
-  if (gc_last_rumble == gc_rumble) return;
+  if (gc_last_rumble == gc_rumble && last_player_count == playersCount) return;
   gc_last_rumble = gc_rumble;
+  last_player_count = playersCount;
 
   // update rumble state for xinput device 1.
   unsigned short int i;
   for (i = 0; i < playersCount; ++i) {
     // TODO: only fire this if device is xinput
     // if (players[i].xinput) {
+      tuh_xinput_set_led(players[i].device_address, players[i].instance_number, i+1, true);
       tuh_xinput_set_rumble(players[i].device_address, players[i].instance_number, gc_rumble, gc_rumble, true);
     // } else {
     //   hid_set_rumble(players[i].device_address, players[i].instance_number, gc_rumble, gc_rumble);
     // }
   }
-#endif
 }
 
 //--------------------------------------------------------------------+
