@@ -3317,8 +3317,8 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
           buttons = (
             ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
             ((gamecube_report.port[i].l)     ? 0x00 : 0x4000) | // V
-            ((gamecube_report.port[i].x)     ? 0x00 : 0x2000) | // IV
-            ((gamecube_report.port[i].y)     ? 0x00 : 0x1000) | // III
+            ((gamecube_report.port[i].y)     ? 0x00 : 0x2000) | // IV
+            ((gamecube_report.port[i].x)     ? 0x00 : 0x1000) | // III
             ((has_6btns)                     ? 0x00 : 0x0800) |
             ((false)                         ? 0x00 : 0x0400) | // home
             ((false)                         ? 0x00 : 0x0200) | // r2
