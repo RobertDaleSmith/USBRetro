@@ -823,7 +823,7 @@ static inline bool is_sony_ds4(uint8_t dev_addr)
            || (vid == 0x0f0d && pid == 0x005e)                 // Hori FC4 
            || (vid == 0x0f0d && pid == 0x00ee)                 // Hori PS4 Mini (PS4-099U) 
            || (vid == 0x1f4f && pid == 0x1002)                 // ASW GG xrd controller
-          //  || (vid == 0x1532 && pid == 0x0401)                 // GP2040-CE PS4 mode
+           || (vid == 0x1532 && pid == 0x0401)                 // Razer Panthera PS4 Controller (GP2040-CE PS4 Mode)
          );
 }
 
@@ -2329,7 +2329,7 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
     {
       printf("(x, y, z, rz, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, ds4_report.r2_trigger, ds4_report.l2_trigger);
-      printf("DPad = %s ", dpad_str[ds4_report.dpad]);
+      printf("DPad = %s ", ds4_report.dpad);
 
       if (ds4_report.square   ) printf("Square ");
       if (ds4_report.cross    ) printf("Cross ");
