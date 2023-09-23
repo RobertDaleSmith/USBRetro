@@ -777,6 +777,8 @@ typedef struct TU_ATTR_PACKED
 
   InputLocation xLoc;
   InputLocation yLoc;
+  InputLocation zLoc;
+  InputLocation rzLoc;
   InputLocation hatLoc;
   InputLocation buttonLoc[MAX_BUTTONS]; // assuming a maximum of 12 buttons
   uint8_t buttonCnt;
@@ -1638,11 +1640,17 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
         case HID_USAGE_DESKTOP_Z: // Right Analog X
         {
           if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Z ");
+          devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
+          devices[dev_addr].instances[instance].zLoc.mid = midValue;
           break;
         }
         case HID_USAGE_DESKTOP_RZ: // Right Analog Y
         {
           if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RZ ");
+          devices[dev_addr].instances[instance].rzLoc.byteIndex = byteIndex;
+          devices[dev_addr].instances[instance].rzLoc.bitMask = bitMask;
+          devices[dev_addr].instances[instance].rzLoc.mid = midValue;
           break;
         }
         case HID_USAGE_DESKTOP_HAT_SWITCH:
@@ -1923,6 +1931,12 @@ void hid_reset(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].yLoc.byteIndex = 0;
   devices[dev_addr].instances[instance].yLoc.bitMask = 0;
   devices[dev_addr].instances[instance].yLoc.mid = 0;
+  devices[dev_addr].instances[instance].zLoc.byteIndex = 0;
+  devices[dev_addr].instances[instance].zLoc.bitMask = 0;
+  devices[dev_addr].instances[instance].zLoc.mid = 0;
+  devices[dev_addr].instances[instance].rzLoc.byteIndex = 0;
+  devices[dev_addr].instances[instance].rzLoc.bitMask = 0;
+  devices[dev_addr].instances[instance].rzLoc.mid = 0;
   devices[dev_addr].instances[instance].hatLoc.byteIndex = 0;
   devices[dev_addr].instances[instance].hatLoc.bitMask = 0;
   devices[dev_addr].instances[instance].buttonCnt = 0;
@@ -4072,7 +4086,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
   pad_buttons current = {0};
   current.value = 0;
 
-  uint16_t xValue, yValue;
+  uint16_t xValue, yValue, zValue, rzValue;
 
   if (devices[dev_addr].instances[instance].xLoc.bitMask > 0xFF) { // if bitmask is larger than 8 bits
     // Combine the current byte and the next byte into a 16-bit value
@@ -4092,6 +4106,26 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
   } else {
     // Apply the bitmask to the single byte value (your existing implementation)
     yValue = report[devices[dev_addr].instances[instance].yLoc.byteIndex] & devices[dev_addr].instances[instance].yLoc.bitMask;
+  }
+
+  if (devices[dev_addr].instances[instance].zLoc.bitMask > 0xFF) { // if bitmask is larger than 8 bits
+    // Combine the current byte and the next byte into a 16-bit value
+    uint16_t combinedBytes = ((uint16_t)report[devices[dev_addr].instances[instance].zLoc.byteIndex] << 8) | report[devices[dev_addr].instances[instance].zLoc.byteIndex + 1];
+    // Apply the bitmask to the combined 16-bit value
+    zValue = (combinedBytes & devices[dev_addr].instances[instance].zLoc.bitMask) >> (__builtin_ctz(devices[dev_addr].instances[instance].zLoc.bitMask));
+  } else {
+    // Apply the bitmask to the single byte value (your existing implementation)
+    zValue = report[devices[dev_addr].instances[instance].zLoc.byteIndex] & devices[dev_addr].instances[instance].zLoc.bitMask;
+  }
+
+  if (devices[dev_addr].instances[instance].rzLoc.bitMask > 0xFF) { // if bitmask is larger than 8 bits
+    // Combine the current byte and the next byte into a 16-bit value
+    uint16_t combinedBytes = ((uint16_t)report[devices[dev_addr].instances[instance].rzLoc.byteIndex] << 8) | report[devices[dev_addr].instances[instance].rzLoc.byteIndex + 1];
+    // Apply the bitmask to the combined 16-bit value
+    rzValue = (combinedBytes & devices[dev_addr].instances[instance].rzLoc.bitMask) >> (__builtin_ctz(devices[dev_addr].instances[instance].rzLoc.bitMask));
+  } else {
+    // Apply the bitmask to the single byte value (your existing implementation)
+    rzValue = report[devices[dev_addr].instances[instance].rzLoc.byteIndex] & devices[dev_addr].instances[instance].rzLoc.bitMask;
   }
 
   uint8_t hatValue = report[devices[dev_addr].instances[instance].hatLoc.byteIndex] & devices[dev_addr].instances[instance].hatLoc.bitMask;
@@ -4119,6 +4153,8 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
   // parse analog from report
   current.x = xValue;
   current.y = yValue;
+  current.z = zValue;
+  current.rz = rzValue;
   // if (devices[dev_addr].instances[instance].xLoc.bitMask && devices[dev_addr].instances[instance].yLoc.bitMask) {
   //   // parse x-axis from report
   //   uint32_t range_half = devices[dev_addr].instances[instance].xLoc.mid;
@@ -4196,7 +4232,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
                ((buttonSelect)    ? 0x00 : 0x0040) |
                ((current.button2) ? 0x00 : 0x0020) |
                ((buttonI)         ? 0x00 : 0x0010));
-    post_globals(dev_addr, instance, buttons, current.x, current.y, 128, 128, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, current.x, current.y, current.z, current.rz, 0, 0, 0);
   }
 }
 
