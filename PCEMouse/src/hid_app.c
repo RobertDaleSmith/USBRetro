@@ -103,13 +103,16 @@ typedef union
     bool button10 : 1;
     bool button11 : 1;
     bool button12 : 1;
+
+    uint8_t x, y, z, rz; // joystick
   };
   struct
   {
-    uint16_t all_direction : 4;
-    uint32_t all_buttons : 12;
+    uint8_t all_direction : 4;
+    uint16_t all_buttons : 12;
+    uint32_t analog_sticks : 32;
   };
-  uint32_t value : 24;
+  uint64_t value : 56;
 } pad_buttons;
 
 // Sony DS3/SIXAXIS https://github.com/torvalds/linux/blob/master/drivers/hid/hid-sony.c
@@ -2706,7 +2709,7 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
 
   if ( horipad_diff_report(&prev_report[dev_addr-1], &input_report) )
   {
-    printf("DPad = x:%d, y:%d, z:%d, rz:%d ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
+    printf("(x, y, z, rz) = (%d, %d, %d, %d) ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
     printf("DPad = %d ", input_report.dpad);
 
     if (input_report.b) printf("B ");
@@ -2731,12 +2734,12 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
 #ifdef CONFIG_PCE
     buttons = (((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
                ((input_report.y)                    ? 0x00 : 0x4000) |
-               ((input_report.x || input_report.r2) ? 0x00 : 0x2000) |
+               ((input_report.x || input_report.r1) ? 0x00 : 0x2000) |
                ((input_report.a)                    ? 0x00 : 0x1000) |
                ((has_6btns)                         ? 0x00 : 0x0800) |
                ((input_report.a1)                   ? 0x00 : 0x0400) |
-               ((input_report.r2)                   ? 0x00 : 0x0200) |
-               ((input_report.l2)                   ? 0x00 : 0x0100) |
+               ((false)           ? 0x00 : 0x0200) |
+               ((false)           ? 0x00 : 0x0100) |
                ((dpad_left)                         ? 0x00 : 0x08) |
                ((dpad_down)                         ? 0x00 : 0x04) |
                ((dpad_right)                        ? 0x00 : 0x02) |
@@ -2746,22 +2749,22 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
                ((input_report.b)                    ? 0x00 : 0x20) |
                ((input_report.r2)                   ? 0x00 : 0x10));
 #else
-    buttons = (((input_report.r1)                   ? 0x00 : 0x8000) |
-               ((input_report.l1)                   ? 0x00 : 0x4000) |
-               ((input_report.y)                    ? 0x00 : 0x2000) |
-               ((input_report.x)                    ? 0x00 : 0x1000) |
-               ((has_6btns)                         ? 0x00 : 0x0800) |
-               ((input_report.a1)                   ? 0x00 : 0x0400) |
-               ((input_report.r2)                   ? 0x00 : 0x0200) |
-               ((input_report.l2)                   ? 0x00 : 0x0100) |
-               ((dpad_left)                         ? 0x00 : 0x08) |
-               ((dpad_down)                         ? 0x00 : 0x04) |
-               ((dpad_right)                        ? 0x00 : 0x02) |
-               ((dpad_up)                           ? 0x00 : 0x01) |
-               ((input_report.s2)                   ? 0x00 : 0x80) |
-               ((input_report.s1)                   ? 0x00 : 0x40) |
-               ((input_report.b)                    ? 0x00 : 0x20) |
-               ((input_report.a)                    ? 0x00 : 0x10));
+    buttons = (((input_report.r1) ? 0x00 : 0x8000) |
+               ((input_report.l1) ? 0x00 : 0x4000) |
+               ((input_report.y)  ? 0x00 : 0x2000) |
+               ((input_report.x)  ? 0x00 : 0x1000) |
+               ((has_6btns)       ? 0x00 : 0x0800) |
+               ((input_report.a1) ? 0x00 : 0x0400) |
+               ((false)           ? 0x00 : 0x0200) |
+               ((false)           ? 0x00 : 0x0100) |
+               ((dpad_left)       ? 0x00 : 0x08) |
+               ((dpad_down)       ? 0x00 : 0x04) |
+               ((dpad_right)      ? 0x00 : 0x02) |
+               ((dpad_up)         ? 0x00 : 0x01) |
+               ((input_report.s2) ? 0x00 : 0x80) |
+               ((input_report.s1 || input_report.r2 || input_report.l2) ? 0x00 : 0x40) |
+               ((input_report.b)  ? 0x00 : 0x20) |
+               ((input_report.a)  ? 0x00 : 0x10));
 #endif
     // invert vertical axis
     uint8_t axis_y = (input_report.axis_y == 0) ? 255 : 256 - input_report.axis_y;
@@ -3070,9 +3073,13 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                ((update_report.b)      ? 0x00 : 0x0020) | // II
                ((update_report.a)      ? 0x00 : 0x0010)); // I
 
+    // invert vertical axis
+    uint8_t axis_y = (update_report.y_axis == 0) ? 255 : 256 - update_report.y_axis;
+    uint8_t axis_rz = (update_report.rz_axis == 0) ? 255 : 256 - update_report.rz_axis;
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, update_report.x_axis, axis_y, update_report.z_axis, axis_rz, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3154,10 +3161,13 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t left_trigger = 0;
       uint8_t right_trigger = 0;
 
+      // map ZL/ZR to GC Z button
       bttn_sel |= update_report.zl || update_report.zr;
-      if (update_report.l) left_trigger = 0xff;
-      if (update_report.r) right_trigger = 0xff;
 
+      uint8_t leftX = byteScaleSwitchAnalog(update_report.left_x);
+      uint8_t leftY = byteScaleSwitchAnalog(update_report.left_y);
+      uint8_t rightX = byteScaleSwitchAnalog(update_report.right_x);
+      uint8_t rightY = byteScaleSwitchAnalog(update_report.right_y);
       bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
       bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
 
@@ -3174,6 +3184,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         bttn_6 = update_report.zl;
         bttn_sel = update_report.select || update_report.cap;
         bttn_run = false; // update_report.select;
+        rightX = 128;
+        rightY = 128;
       }
       else if (is_right_joycon) {
         dpad_up    = false; // (right_stick_y > (2048 + threshold));
@@ -3183,6 +3195,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         bttn_home = false;
         bttn_sel = update_report.home;
         // bttn_run = update_report.start;
+        leftX = 128;
+        leftY = 128;
       }
 
       buttons = (
@@ -3207,10 +3221,6 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       bool is_root = instance == devices[dev_addr].instance_root;
-      uint8_t leftX = byteScaleSwitchAnalog(update_report.left_x);
-      uint8_t leftY = byteScaleSwitchAnalog(update_report.left_y);
-      uint8_t rightX = byteScaleSwitchAnalog(update_report.right_x);
-      uint8_t rightY = byteScaleSwitchAnalog(update_report.right_y);
       post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, left_trigger, right_trigger, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
@@ -4102,32 +4112,38 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
     }
   }
 
+  // TODO:
+  //    - parse and scale analog value by xLoc.mid*2
+  //    - add support for second analog stick
+  //
   // parse analog from report
-  if (devices[dev_addr].instances[instance].xLoc.bitMask && devices[dev_addr].instances[instance].yLoc.bitMask) {
-    // parse x-axis from report
-    uint32_t range_half = devices[dev_addr].instances[instance].xLoc.mid;
-    uint32_t dead_zone_range = range_half / DEAD_ZONE;
-    if (xValue < (range_half - dead_zone_range))
-    {
-      current.left |= 1;
-    }
-    else if (xValue > (range_half + dead_zone_range))
-    {
-      current.right |= 1;
-    }
+  current.x = xValue;
+  current.y = yValue;
+  // if (devices[dev_addr].instances[instance].xLoc.bitMask && devices[dev_addr].instances[instance].yLoc.bitMask) {
+  //   // parse x-axis from report
+  //   uint32_t range_half = devices[dev_addr].instances[instance].xLoc.mid;
+  //   uint32_t dead_zone_range = range_half / DEAD_ZONE;
+  //   if (xValue < (range_half - dead_zone_range))
+  //   {
+  //     current.left |= 1;
+  //   }
+  //   else if (xValue > (range_half + dead_zone_range))
+  //   {
+  //     current.right |= 1;
+  //   }
 
-    // parse y-axis from report
-    range_half = devices[dev_addr].instances[instance].yLoc.mid;
-    dead_zone_range = range_half / DEAD_ZONE;
-    if (yValue < (range_half - dead_zone_range))
-    {
-      current.up |= 1;
-    }
-    else if (yValue > (range_half + dead_zone_range))
-    {
-      current.down |= 1;
-    }
-  }
+  //   // parse y-axis from report
+  //   range_half = devices[dev_addr].instances[instance].yLoc.mid;
+  //   dead_zone_range = range_half / DEAD_ZONE;
+  //   if (yValue < (range_half - dead_zone_range))
+  //   {
+  //     current.up |= 1;
+  //   }
+  //   else if (yValue > (range_half + dead_zone_range))
+  //   {
+  //     current.down |= 1;
+  //   }
+  // }
 
   // TODO: based on diff report rather than current's datastructure in order to get subtle analog changes
   if (previous[dev_addr-1][instance].value != current.value)
@@ -4150,6 +4166,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
     bool buttonStart = current.all_buttons & (0x01 << (buttonCount-1));
     bool buttonI = current.button1;
     bool buttonIII = current.button3;
+    bool buttonIV = current.button4;
     bool buttonV = buttonCount >=7 ? current.button5 : 0;
     bool buttonVI = buttonCount >=8 ? current.button6 : 0;
     bool has_6btns = buttonCount >= 6;
@@ -4159,12 +4176,13 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
       buttonSelect = current.button9;
       buttonStart = current.button10;
       buttonI = current.button3;
-      buttonIII = current.button1;
+      buttonIII = current.button4;
+      buttonIV = current.button1;
     }
 
     buttons = (((buttonVI)        ? 0x00 : 0x8000) |
                ((buttonV)         ? 0x00 : 0x4000) |
-               ((current.button4) ? 0x00 : 0x2000) |
+               ((buttonIV)        ? 0x00 : 0x2000) |
                ((buttonIII)       ? 0x00 : 0x1000) |
                ((has_6btns)       ? 0x00 : 0x0800) |
                ((false)           ? 0x00 : 0x0400) | // home
@@ -4178,7 +4196,7 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
                ((buttonSelect)    ? 0x00 : 0x0040) |
                ((current.button2) ? 0x00 : 0x0020) |
                ((buttonI)         ? 0x00 : 0x0010));
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, current.x, current.y, 128, 128, 0, 0, 0);
   }
 }
 
