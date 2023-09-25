@@ -601,10 +601,14 @@ void __not_in_flash_func(post_globals)(
 #ifdef CONFIG_PCE
       // map analog to dpad movement here
       uint8_t dpad_offset = 32;
-      if (analog_1x > 128 + dpad_offset) buttons &= ~(0x02); // right
-      else if (analog_1x < 128 - dpad_offset) buttons &= ~(0x08); // left
-      if (analog_1y > 128 + dpad_offset) buttons &= ~(0x01); // up
-      else if (analog_1y < 128 - dpad_offset) buttons &= ~(0x04); // down
+      if (analog_1x) {
+          if (analog_1x > 128 + dpad_offset) buttons &= ~(0x02); // right
+          else if (analog_1x < 128 - dpad_offset) buttons &= ~(0x08); // left
+      }
+      if (analog_1y) {
+          if (analog_1y > 128 + dpad_offset) buttons &= ~(0x01); // up
+          else if (analog_1y < 128 - dpad_offset) buttons &= ~(0x04); // down
+      }
 #endif
       // extra instance buttons to merge with root player
       if (is_extra) {
@@ -617,10 +621,11 @@ void __not_in_flash_func(post_globals)(
       // TODO: 
       //  - Map home button to S1 + S2
 
+      // TODO:
+      //  - May need to output_exclude on 6-button?
+
       // if (!output_exclude || !isMouse)
       // {
-        // players[player_index].output_analog_1x = analog_1x;
-        // players[player_index].output_analog_1y = analog_1y;
         players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
         // basic socd (up priority, left+right neutral)
@@ -636,17 +641,11 @@ void __not_in_flash_func(post_globals)(
 #endif
 
 #ifdef CONFIG_NGC
-      // fixes out of range analog values (1-255)
-      if (analog_1x == 0) analog_1x = 1;
-      if (analog_1y == 0) analog_1y = 1;
-      if (analog_2x == 0) analog_2x = 1;
-      if (analog_2y == 0) analog_2y = 1;
-
       // cache analog and button values to player object
-      players[player_index].output_analog_1x = analog_1x;
-      players[player_index].output_analog_1y = analog_1y;
-      players[player_index].output_analog_2x = analog_2x;
-      players[player_index].output_analog_2y = analog_2y;
+      if (analog_1x) players[player_index].output_analog_1x = analog_1x;
+      if (analog_1y) players[player_index].output_analog_1y = analog_1y;
+      if (analog_2x) players[player_index].output_analog_2x = analog_2x;
+      if (analog_2y) players[player_index].output_analog_2y = analog_2y;
       players[player_index].output_analog_l = analog_l;
       players[player_index].output_analog_r = analog_r;
       players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
@@ -680,7 +679,7 @@ void __not_in_flash_func(post_globals)(
 
 
 //
-// post_globals - accumulate the many intermediate mouse scans (~1ms)
+// post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
 //                into an accumulator which will be reported back to PCE
 //
 void __not_in_flash_func(post_mouse_globals)(

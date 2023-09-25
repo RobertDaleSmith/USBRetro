@@ -1787,6 +1787,18 @@ bool isKnownController(uint8_t dev_addr) {
   return false;
 }
 
+void ensureNonZero(uint8_t* value) {
+    if (!*value) {
+        *value = 1;
+    }
+}
+
+void ensureAllNonZero(uint8_t* axis_1x, uint8_t* axis_1y, uint8_t* axis_2x, uint8_t* axis_2y) {
+    ensureNonZero(axis_1x);
+    ensureNonZero(axis_1y);
+    ensureNonZero(axis_2x);
+    ensureNonZero(axis_2y);
+}
 //--------------------------------------------------------------------+
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
@@ -2296,9 +2308,17 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                  ((ds3_report.cross)    ? 0x00 : 0x20) |
                  ((ds3_report.circle)   ? 0x00 : 0x10));
 
+      uint8_t analog_1x = ds3_report.lx;
+      uint8_t analog_1y = 255 - ds3_report.ly;
+      uint8_t analog_2x = ds3_report.rx;
+      uint8_t analog_2y = 255 - ds3_report.ry;
+
+      // keep analog within range [1-255]
+      ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
+
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, ds3_report.lx, 255 - ds3_report.ly, ds3_report.rx, 255 - ds3_report.ry, 0, 0, 0);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, 0, 0, 0);
 
       prev_report[dev_addr-1] = ds3_report;
     }
@@ -2382,6 +2402,10 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       uint8_t analog_l = ds4_report.l2_trigger;
       uint8_t analog_r = ds4_report.r2_trigger;
 
+      // keep analog within range [1-255]
+      ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
+
+      // adds deadzone
       uint8_t deadzone = 40;
       if (analog_1x > (128-(deadzone/2)) && analog_1x < (128+(deadzone/2))) analog_1x = 128;
       if (analog_1y > (128-(deadzone/2)) && analog_1y < (128+(deadzone/2))) analog_1y = 128;
@@ -2471,6 +2495,9 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       uint8_t analog_2y = 255 - ds5_report.y2;
       uint8_t analog_l = ds5_report.rx;
       uint8_t analog_r = ds5_report.ry;
+
+      // keep analog within range [1-255]
+      ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
@@ -2587,7 +2614,7 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, pce_report.x1, pce_report.y1, pce_report.x2, pce_report.y2, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0);
 
     prev_report[dev_addr-1] = pce_report;
   }
@@ -2645,9 +2672,17 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((input_report.b)      ? 0x00 : 0x20) |
                ((input_report.r)      ? 0x00 : 0x10));
 
+    uint8_t analog_1x = input_report.x1;
+    uint8_t analog_1y = (input_report.y1 == 0) ? 255 : 256 - input_report.y1;
+    uint8_t analog_2x = input_report.x2;
+    uint8_t analog_2y = (input_report.y2 == 0) ? 255 : 256 - input_report.y2;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, 0, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2705,9 +2740,17 @@ void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((input_report.b)      ? 0x00 : 0x20) |
                ((input_report.a)      ? 0x00 : 0x10));
 
+    uint8_t analog_1x = input_report.x1;
+    uint8_t analog_1y = (input_report.y1 == 0) ? 255 : 256 - input_report.y1;
+    uint8_t analog_2x = input_report.x2;
+    uint8_t analog_2y = (input_report.y2 == 0) ? 255 : 256 - input_report.y2;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, input_report.x1, input_report.y1, input_report.x2, input_report.y2, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, 0, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2781,15 +2824,17 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
                ((input_report.a)  ? 0x00 : 0x10));
 #endif
     // invert vertical axis
+    uint8_t axis_x = input_report.axis_x;
     uint8_t axis_y = (input_report.axis_y == 0) ? 255 : 256 - input_report.axis_y;
+    uint8_t axis_z = input_report.axis_z;
     uint8_t axis_rz = (input_report.axis_rz == 0) ? 255 : 256 - input_report.axis_rz;
-    // trigger axis
-    uint8_t axis_l = (input_report.l1) ? 255 : 0;
-    uint8_t axis_r = (input_report.r1) ? 255 : 0;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, input_report.axis_x, axis_y, input_report.axis_z, axis_rz, axis_l, axis_r, 0);
+    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0);
 
     prev_report[dev_addr-1] = input_report;
   }
@@ -2874,8 +2919,11 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     // if (wingman_report.s) printf("S ");
     // printf("\r\n");
 
+    uint8_t analog_x1 = (wingman_report.analog_x == 255) ? 255 : wingman_report.analog_x + 1;
+    uint8_t analog_y1 = (wingman_report.analog_y == 0) ? 255 : 255 - wingman_report.analog_y;
     uint8_t analog_x2 = ~wingman_report.analog_z;
     uint8_t analog_y2 = 128;
+
     bool dpad_up    = (wingman_report.dpad == 0 || wingman_report.dpad == 1 || wingman_report.dpad == 7);
     bool dpad_right = ((wingman_report.dpad >= 1 && wingman_report.dpad <= 3));
     bool dpad_down  = ((wingman_report.dpad >= 3 && wingman_report.dpad <= 5));
@@ -2924,9 +2972,12 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     }
 #endif
 
+    // keep analog within range [1-255]
+    ensureAllNonZero(&analog_x1, &analog_y1, &analog_x2, &analog_y2);
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, wingman_report.analog_x, wingman_report.analog_y, analog_x2, analog_y2, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, analog_x1, analog_y1, analog_x2, analog_y2, 0, 0, 0);
 
     prev_report[dev_addr-1] = wingman_report;
   }
@@ -3069,7 +3120,6 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     bool has_6btns = true;
 
     // TODO: handle ZL/ZR as L2/R2
-
     buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
                ((update_report.l)      ? 0x00 : 0x4000) | // V
                ((update_report.y)      ? 0x00 : 0x2000) | // IV
@@ -3088,12 +3138,17 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                ((update_report.a)      ? 0x00 : 0x0010)); // I
 
     // invert vertical axis
-    uint8_t axis_y = (update_report.y_axis == 0) ? 255 : 256 - update_report.y_axis;
-    uint8_t axis_rz = (update_report.rz_axis == 0) ? 255 : 256 - update_report.rz_axis;
+    uint8_t axis_x = (update_report.x_axis == 255) ? 255 : update_report.x_axis + 1;
+    uint8_t axis_y = (update_report.y_axis == 0) ? 255 : 255 - update_report.y_axis;
+    uint8_t axis_z = (update_report.z_axis == 255) ? 255 : update_report.z_axis + 1;
+    uint8_t axis_rz = (update_report.rz_axis == 0) ? 255 : 255 - update_report.rz_axis;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, update_report.x_axis, axis_y, update_report.z_axis, axis_rz, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3108,8 +3163,13 @@ void print_report(switch_report_01_t* report, uint32_t length) {
 }
 
 uint8_t byteScaleSwitchAnalog(uint16_t switch_val) {
-    // Scale the switch value from [0, 4096] to [0, 255]
-    return (switch_val * 256) / 4096;
+    // If the input is zero, then output zero
+    if (switch_val == 0) {
+        return 0;
+    }
+
+    // Otherwise, scale the switch value from [1, 4095] to [1, 255]
+    return 1 + ((switch_val - 1) * 255) / 4095;
 }
 
 void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -3139,6 +3199,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       if (update_report.up) printf("Up ");
       if (update_report.right) printf("Right ");
       if (update_report.left ) printf("Left ");
+
+      printf("; Buttons = ");
       if (update_report.y) printf("Y ");
       if (update_report.b) printf("B ");
       if (update_report.a) printf("A ");
@@ -3170,18 +3232,14 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool bttn_5 = update_report.l;
       bool bttn_6 = update_report.r;
       bool bttn_run = update_report.start;
-      bool bttn_sel = update_report.select;
+      bool bttn_sel = update_report.select || update_report.zl || update_report.zr;
       bool bttn_home = update_report.home;
-      uint8_t left_trigger = 0;
-      uint8_t right_trigger = 0;
 
-      // map ZL/ZR to GC Z button
-      bttn_sel |= update_report.zl || update_report.zr;
+      uint8_t leftX = 0;
+      uint8_t leftY = 0;
+      uint8_t rightX = 0;
+      uint8_t rightY = 0;
 
-      uint8_t leftX = byteScaleSwitchAnalog(update_report.left_x);
-      uint8_t leftY = byteScaleSwitchAnalog(update_report.left_y);
-      uint8_t rightX = byteScaleSwitchAnalog(update_report.right_x);
-      uint8_t rightY = byteScaleSwitchAnalog(update_report.right_y);
       bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
       bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
 
@@ -3190,16 +3248,11 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         dpad_right = update_report.right;
         dpad_down  = update_report.down;
         dpad_left  = update_report.left;
-        // bttn_1 = update_report.right;
-        // bttn_2 = update_report.down;
-        // bttn_3 = update_report.up;
-        // bttn_4 = update_report.left;
         bttn_5 = update_report.l;
-        bttn_6 = update_report.zl;
-        bttn_sel = update_report.select || update_report.cap;
-        bttn_run = false; // update_report.select;
-        rightX = 128;
-        rightY = 128;
+        bttn_run = false;
+
+        leftX = byteScaleSwitchAnalog(update_report.left_x + 127);
+        leftY = byteScaleSwitchAnalog(update_report.left_y - 127);
       }
       else if (is_right_joycon) {
         dpad_up    = false; // (right_stick_y > (2048 + threshold));
@@ -3207,10 +3260,14 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         dpad_down  = false; // (right_stick_y < (2048 - threshold));
         dpad_left  = false; // (right_stick_x < (2048 - threshold));
         bttn_home = false;
-        bttn_sel = update_report.home;
-        // bttn_run = update_report.start;
-        leftX = 128;
-        leftY = 128;
+
+        rightX = byteScaleSwitchAnalog(update_report.right_x);
+        rightY = byteScaleSwitchAnalog(update_report.right_y + 127);
+      } else {
+        leftX = byteScaleSwitchAnalog(update_report.left_x);
+        leftY = byteScaleSwitchAnalog(update_report.left_y);
+        rightX = byteScaleSwitchAnalog(update_report.right_x);
+        rightY = byteScaleSwitchAnalog(update_report.right_y);
       }
 
       buttons = (
@@ -3235,7 +3292,7 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       bool is_root = instance == devices[dev_addr].instance_root;
-      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, left_trigger, right_trigger, 0);
+      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
     }
@@ -3406,9 +3463,18 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
                ((update_report.b || update_report.l) ? 0x00 : 0x0020) | // II
                ((update_report.c || update_report.r) ? 0x00 : 0x0010)); // I
 
+    // invert vertical axis
+    uint8_t axis_1x = update_report.axis0_x;
+    uint8_t axis_1y = (update_report.axis0_y == 0) ? 255 : 256 - update_report.axis0_y;
+    uint8_t axis_2x = update_report.axis1_x;
+    uint8_t axis_2y = (update_report.axis1_y == 0) ? 255 : 256 - update_report.axis1_y;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&axis_1x, &axis_1y, &axis_2x, &axis_2y);
+
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y, 0, 0, 0);
+    post_globals(dev_addr, instance, buttons, axis_1x, axis_1y, axis_2x, axis_2y, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -3875,6 +3941,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
              ((btns_sel)   ? 0x00 : 0x0040) |
              ((btns_two)   ? 0x00 : 0x0020) |
              ((btns_one)   ? 0x00 : 0x0010));
+
   post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r, reportKeys);
 
   prev_report = *report;
@@ -4232,7 +4299,17 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
                ((buttonSelect)    ? 0x00 : 0x0040) |
                ((current.button2) ? 0x00 : 0x0020) |
                ((buttonI)         ? 0x00 : 0x0010));
-    post_globals(dev_addr, instance, buttons, current.x, current.y, current.z, current.rz, 0, 0, 0);
+
+    // invert vertical axis
+    uint8_t axis_x = (current.x == 255) ? 255 : current.x + 1;
+    uint8_t axis_y = (current.y == 0) ? 255 : 255 - current.y;
+    uint8_t axis_z = (current.z == 255) ? 255 : current.z + 1;
+    uint8_t axis_rz = (current.rz == 0) ? 255 : 255 - current.rz;
+
+    // keep analog within range [1-255]
+    ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
+
+    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0);
   }
 }
 

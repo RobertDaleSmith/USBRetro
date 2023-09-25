@@ -82,9 +82,10 @@ void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 }
 
 uint8_t byteScaleAnalog(int16_t xbox_val) {
-    // Scale the xbox value from [-32768, 32767] to [0, 255]
-    // Offset by 32768 to get in range [0, 65536], then divide by 256 to get in range [0, 255]
+    // Scale the xbox value from [-32768, 32767] to [1, 255]
+    // Offset by 32768 to get in range [0, 65536], then divide by 256 to get in range [1, 255]
     uint8_t scale_val = (xbox_val + 32768) / 256;
+    if (scale_val == 0) return 1;
     return scale_val;
 }
 
