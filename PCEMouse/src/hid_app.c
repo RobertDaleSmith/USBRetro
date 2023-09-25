@@ -63,6 +63,9 @@
 #define CONTROLLER_GAMECUBE 0x06
 #define CONTROLLER_KEYBOARD 0x07
 
+// DualSense GameCube Trigger Simulation
+#define GC_TRIGGER_THRESHOLD 75
+
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
 uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
@@ -301,9 +304,20 @@ typedef struct TU_ATTR_PACKED
 
 } sony_ds5_report_t;
 
+// mode: following bytes
+// 0x06: 0: frequency (1-255), 1: off time (1-255)
+// 0x23: 0: step1 resistance (0-15), 1: step2 resistance (0-15)
 typedef struct {
-    uint8_t type; // 0x6: vibrating, 0x23: 2step
-    uint8_t params[10]; // 0x6: 0: frequency (1-255), 1: off time (1-255). 0x23: 0: step1 resistance (0-15), 1: step2 resistance (0-15)
+    uint8_t motor_mode; // 0x2: resistance, 0x6: vibrating, 0x23: 2step
+    uint8_t start_resistance;
+    uint8_t effect_force;
+    uint8_t range_force;
+    uint8_t near_release_str;
+    uint8_t near_middle_str;
+    uint8_t pressed_str;
+    uint8_t unk1[2];
+    uint8_t actuation_freq;
+    uint8_t unk2;
 } ds5_trigger_t;
 
 typedef struct {
@@ -774,6 +788,8 @@ typedef struct TU_ATTR_PACKED
   int switch_player_led_set;
   uint8_t motor_left;
   uint8_t motor_right;
+  uint8_t analog_l;
+  uint8_t analog_r;
 
   InputLocation xLoc;
   InputLocation yLoc;
@@ -1276,6 +1292,8 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
 
       // send DS5 LED and rumble response
       if (devices[dev_addr].instances[instance].type == CONTROLLER_DS5) {
+        int32_t perc_threshold_l = -1;
+        int32_t perc_threshold_r = -1;
 
         uint32_t current_time_ms = board_millis();
         if ( current_time_ms - start_ms_ds5 >= interval_ms)
@@ -1287,25 +1305,42 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
 
           // set flags for trigger_r, trigger_l, lightbar, and player_led
           ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
-          // ds5_fb.flags |= (1 << 2); // trigger_r
-          // ds5_fb.flags |= (1 << 3); // trigger_l
+          ds5_fb.flags |= (1 << 2); // trigger_r
+          ds5_fb.flags |= (1 << 3); // trigger_l
           ds5_fb.flags |= (1 << 10); // lightbar
           ds5_fb.flags |= (1 << 12); // player_led
 
-          // haptic feedback example
-          // ds5_fb.trigger_r.type = 2; // Set type
-          // ds5_fb.trigger_r.params[0] = 0x5f;
-          // ds5_fb.trigger_r.params[1] = 0xff;
+          if (GC_TRIGGER_THRESHOLD > perc_threshold_l) {
+              perc_threshold_l = GC_TRIGGER_THRESHOLD;
+          }
 
-          // left trigger with similar effect as the PS5 demo
-          // ds5_fb.trigger_l.type = (fun_inc % 32 < 16) ? 0 : 2; // Set type
-          // ds5_fb.trigger_l.params[0] = 0x00;
-          // ds5_fb.trigger_l.params[1] = 0xff;
-          // ds5_fb.trigger_l.params[2] = 0xff;
+          if (GC_TRIGGER_THRESHOLD > perc_threshold_r) {
+              perc_threshold_r = GC_TRIGGER_THRESHOLD;
+          }
 
-          // for(int i = 0; i < 10; i++) {
-          //     ds5_fb.trigger_r.params[i] = 255;
-          // }
+          // gamecube simulated analog/digital click
+          uint8_t l2_start_resistance_value = (perc_threshold_l * 255) / 100;
+          uint8_t r2_start_resistance_value = (perc_threshold_r * 255) / 100;
+
+          uint8_t l2_trigger_start_resistance = (uint8_t)(0x94 * (l2_start_resistance_value / 255.0));
+          uint8_t l2_trigger_effect_force =
+              (uint8_t)((0xb4 - l2_trigger_start_resistance) * (l2_start_resistance_value / 255.0) + l2_trigger_start_resistance);
+
+          uint8_t r2_trigger_start_resistance = (uint8_t)(0x94 * (r2_start_resistance_value / 255.0));
+          uint8_t r2_trigger_effect_force =
+              (uint8_t)((0xb4 - r2_trigger_start_resistance) * (r2_start_resistance_value / 255.0) + r2_trigger_start_resistance);
+
+          // gamecube trigger left click
+          ds5_fb.trigger_l.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
+          ds5_fb.trigger_l.start_resistance = l2_trigger_start_resistance;
+          ds5_fb.trigger_l.effect_force = l2_trigger_effect_force;
+          ds5_fb.trigger_l.range_force = 0xff;
+
+          // gamecube trigger right click
+          ds5_fb.trigger_r.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
+          ds5_fb.trigger_r.start_resistance = r2_trigger_start_resistance;
+          ds5_fb.trigger_r.effect_force = r2_trigger_effect_force;
+          ds5_fb.trigger_r.range_force = 0xff;
 
           switch (player_index+1)
           {
@@ -2495,6 +2530,9 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       uint8_t analog_2y = 255 - ds5_report.y2;
       uint8_t analog_l = ds5_report.rx;
       uint8_t analog_r = ds5_report.ry;
+
+      devices[dev_addr].instances[instance].analog_l = analog_l;
+      devices[dev_addr].instances[instance].analog_r = analog_r;
 
       // keep analog within range [1-255]
       ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
@@ -3870,8 +3908,6 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
           break;
       }
 
-      if (btns_five) analog_l = 255;
-      if (btns_six) analog_r = 255;
       if (is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
       {
       #ifdef CONFIG_NGC
