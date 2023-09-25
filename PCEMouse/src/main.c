@@ -312,6 +312,7 @@ void __not_in_flash_func(check_for_konami_code)(void)
       return;
     }
   }
+  printf("is_fun!\n");
   // The Konami Code has been entered
   is_fun = !is_fun;
 }
@@ -450,20 +451,6 @@ void __not_in_flash_func(update_output)(void)
                   ((bytes[2] & 0xff) << 16)| // player 3
                   ((bytes[3] & 0xff) << 24); // player 4
   output_word_1 = ((bytes[4] & 0xff));       // player 5
-
-
-  int16_t btns= (~players[0].output_buttons & 0xff);
-  int16_t prev_btns= (~players[0].prev_buttons & 0xff);
-
-  // Stash previous buttons to detect release
-  if (!btns || btns != prev_btns) {
-    players[0].prev_buttons = players[0].output_buttons;
-  }
-  // Check if the Konami Code has been entered
-  if (btns && btns != prev_btns) {
-    shift_buffer_and_insert(btns);
-    check_for_konami_code();
-  }
 #endif
 
 #ifdef CONFIG_NGC
@@ -561,7 +548,21 @@ void __not_in_flash_func(update_output)(void)
     //   players[i].gc_report.keyboard.counter = gc_kb_counter;
     // }
   }
+
 #endif
+  int16_t btns= (~players[0].output_buttons & 0xff);
+  int16_t prev_btns= (~players[0].prev_buttons & 0xff);
+
+  // Stash previous buttons to detect release
+  if (!btns || btns != prev_btns) {
+    players[0].prev_buttons = players[0].output_buttons;
+  }
+
+  // Check if the Konami Code has been entered
+  if (btns && btns != prev_btns) {
+    shift_buffer_and_insert(btns);
+    check_for_konami_code();
+  }
 
   update_pending = true;
 }
