@@ -1126,7 +1126,6 @@ int main(void)
 #ifdef CONFIG_NGC
     players[i].gc_report = default_gc_report;
 #endif
-
   }
   state = 3;
 
