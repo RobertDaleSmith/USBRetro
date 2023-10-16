@@ -3201,9 +3201,9 @@ void print_report(switch_report_01_t* report, uint32_t length) {
 }
 
 uint8_t byteScaleSwitchAnalog(uint16_t switch_val) {
-    // If the input is zero, then output zero
+    // If the input is zero, then output min value of 1
     if (switch_val == 0) {
-        return 0;
+        return 1;
     }
 
     // Otherwise, scale the switch value from [1, 4095] to [1, 255]
@@ -3278,29 +3278,30 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t rightX = 0;
       uint8_t rightY = 0;
 
-      bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
-      bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
+      if (devices[dev_addr].pid == 0x200e) { // is_joycon_grip
+        bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
+        bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
+        if (is_left_joycon) {
+          dpad_up    = update_report.up;
+          dpad_right = update_report.right;
+          dpad_down  = update_report.down;
+          dpad_left  = update_report.left;
+          bttn_5 = update_report.l;
+          bttn_run = false;
 
-      if (is_left_joycon) {
-        dpad_up    = update_report.up;
-        dpad_right = update_report.right;
-        dpad_down  = update_report.down;
-        dpad_left  = update_report.left;
-        bttn_5 = update_report.l;
-        bttn_run = false;
+          leftX = byteScaleSwitchAnalog(update_report.left_x + 127);
+          leftY = byteScaleSwitchAnalog(update_report.left_y - 127);
+        }
+        else if (is_right_joycon) {
+          dpad_up    = false; // (right_stick_y > (2048 + threshold));
+          dpad_right = false; // (right_stick_x > (2048 + threshold));
+          dpad_down  = false; // (right_stick_y < (2048 - threshold));
+          dpad_left  = false; // (right_stick_x < (2048 - threshold));
+          bttn_home = false;
 
-        leftX = byteScaleSwitchAnalog(update_report.left_x + 127);
-        leftY = byteScaleSwitchAnalog(update_report.left_y - 127);
-      }
-      else if (is_right_joycon) {
-        dpad_up    = false; // (right_stick_y > (2048 + threshold));
-        dpad_right = false; // (right_stick_x > (2048 + threshold));
-        dpad_down  = false; // (right_stick_y < (2048 - threshold));
-        dpad_left  = false; // (right_stick_x < (2048 - threshold));
-        bttn_home = false;
-
-        rightX = byteScaleSwitchAnalog(update_report.right_x);
-        rightY = byteScaleSwitchAnalog(update_report.right_y + 127);
+          rightX = byteScaleSwitchAnalog(update_report.right_x);
+          rightY = byteScaleSwitchAnalog(update_report.right_y + 127);
+        }
       } else {
         leftX = byteScaleSwitchAnalog(update_report.left_x);
         leftY = byteScaleSwitchAnalog(update_report.left_y);
