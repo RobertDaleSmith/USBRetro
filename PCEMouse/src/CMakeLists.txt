@@ -30,6 +30,7 @@ pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/clock.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/select.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
+pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
