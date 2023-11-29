@@ -1,9 +1,9 @@
 #include "tusb.h"
 #include "xinput_host.h"
 
-uint16_t buttons;
+uint32_t buttons;
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint32_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
@@ -38,7 +38,9 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     uint8_t analog_r = p->bRightTrigger;
     bool is6btn = true;
 
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x8000) |
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) ? 0x00 : 0x20000) |
+               ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB) ? 0x00 : 0x10000) |
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x8000) |
                ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x4000) |
                ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
                ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |

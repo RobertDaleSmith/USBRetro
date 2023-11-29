@@ -120,6 +120,15 @@ void pattern_purples(uint len, uint t) {
         if (++t >= max) t = 0;
     }
 }
+void pattern_greens(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        uint8_t intensity = t; // Adjust the intensity value for a darker effect
+        put_pixel(urgb_u32(0, intensity / 10, 0));
+        if (++t >= max) t = 0;
+    }
+}
 
 void pattern_br(uint len, uint t) {
     for (uint i = 0; i < len; ++i) {
@@ -184,6 +193,14 @@ const struct {
     pattern pat;
     const char *name;
 } pattern_table[] = {
+#ifdef CONFIG_XB1
+        {pattern_greens,  "Greens"},     // 0 controllers
+        {pattern_green,   "Green"},      // 1 controllers
+        {pattern_purple,  "Purple"},     // 2 controller
+        {pattern_red,     "Red"},        // 3 controllers
+        {pattern_blue,    "Blue"},       // 4 controller
+        {pattern_yellow,  "Yellow"},     // 5 controllers
+#else
 #ifdef CONFIG_NGC
         {pattern_purples, "Purples"},    // 0 controllers
         {pattern_purple,  "Purple"},     // 1 controller
@@ -198,6 +215,7 @@ const struct {
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#endif
 #endif
         {pattern_random,  "Random data"},// fun
         {pattern_sparkle, "Sparkles"},
