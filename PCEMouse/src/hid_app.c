@@ -1050,7 +1050,7 @@ static bool buttons_swapped = false;
 // ------------------
 static uint8_t const keycode2ascii[128][2] =  { HID_KEYCODE_TO_ASCII };
 
-uint16_t buttons;
+uint32_t buttons;
 uint8_t local_x;
 uint8_t local_y;
 
@@ -1059,7 +1059,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamepad_report_t const *report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
+extern void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance, uint32_t buttons, uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r, uint32_t keys);
 extern void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y);
 extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 extern void remove_players_by_address(int device_address, int instance);
@@ -1231,11 +1231,15 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
           switch (player_index+1)
           {
           case 1:
+#ifdef CONFIG_XB1
+            output_report.lightbar_green = 64;
+#else
 #ifdef CONFIG_NGC
             output_report.lightbar_red = 20; // purple
             output_report.lightbar_blue = 40;//
 #else
             output_report.lightbar_blue = 64;
+#endif
 #endif
             break;
 
@@ -1244,9 +1248,13 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
             break;
 
           case 3:
+#ifdef CONFIG_XB1
+            output_report.lightbar_red = 20; // purple
+            output_report.lightbar_blue = 40;//
+#else
             output_report.lightbar_green = 64;
             break;
-
+#endif
           case 4:
 #ifdef CONFIG_NGC
             output_report.lightbar_blue = 64;
@@ -1305,10 +1313,12 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
 
           // set flags for trigger_r, trigger_l, lightbar, and player_led
           ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
-          ds5_fb.flags |= (1 << 2); // trigger_r
-          ds5_fb.flags |= (1 << 3); // trigger_l
           ds5_fb.flags |= (1 << 10); // lightbar
           ds5_fb.flags |= (1 << 12); // player_led
+#ifdef CONFIG_NGC
+          // gamecube simulated triggers
+          ds5_fb.flags |= (1 << 2); // trigger_r
+          ds5_fb.flags |= (1 << 3); // trigger_l
 
           if (GC_TRIGGER_THRESHOLD > perc_threshold_l) {
               perc_threshold_l = GC_TRIGGER_THRESHOLD;
@@ -1341,16 +1351,20 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
           ds5_fb.trigger_r.start_resistance = r2_trigger_start_resistance;
           ds5_fb.trigger_r.effect_force = r2_trigger_effect_force;
           ds5_fb.trigger_r.range_force = 0xff;
-
+#endif
           switch (player_index+1)
           {
           case 1:
             ds5_fb.player_led = 0b00100;
+#ifdef CONFIG_XB1
+            ds5_fb.lightbar_g = 64;
+#else
 #ifdef CONFIG_NGC
             ds5_fb.lightbar_r = 20; // purple
             ds5_fb.lightbar_b = 40; //
 #else
             ds5_fb.lightbar_b = 64;
+#endif
 #endif
             break;
 
@@ -1361,7 +1375,12 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
 
           case 3:
             ds5_fb.player_led = 0b10101;
+#ifdef CONFIG_XB1
+            ds5_fb.lightbar_r = 20; // purple
+            ds5_fb.lightbar_b = 40; //
+#else
             ds5_fb.lightbar_g = 64;
+#endif
             break;
 
           case 4:
@@ -2326,22 +2345,24 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 
       bool has_6btns = true;
 
-      buttons = (((ds3_report.r1)       ? 0x00 : 0x8000) |
-                 ((ds3_report.l1)       ? 0x00 : 0x4000) |
-                 ((ds3_report.square)   ? 0x00 : 0x2000) |
-                 ((ds3_report.triangle) ? 0x00 : 0x1000) |
-                 ((has_6btns)           ? 0x00 : 0x0800) |
-                 ((ds3_report.ps)       ? 0x00 : 0x0400) |
-                 ((ds3_report.r2)       ? 0x00 : 0x0200) |
-                 ((ds3_report.l2)       ? 0x00 : 0x0100) |
-                 ((ds3_report.left)     ? 0x00 : 0x08) |
-                 ((ds3_report.down)     ? 0x00 : 0x04) |
-                 ((ds3_report.right)    ? 0x00 : 0x02) |
-                 ((ds3_report.up)       ? 0x00 : 0x01) |
-                 ((ds3_report.start)    ? 0x00 : 0x80) |
-                 ((ds3_report.select)   ? 0x00 : 0x40) |
-                 ((ds3_report.cross)    ? 0x00 : 0x20) |
-                 ((ds3_report.circle)   ? 0x00 : 0x10));
+      buttons = (((ds3_report.r3)       ? 0x00 : 0x20000) |
+                 ((ds3_report.l3)       ? 0x00 : 0x10000) |
+                 ((ds3_report.r1)       ? 0x00 : 0x08000) |
+                 ((ds3_report.l1)       ? 0x00 : 0x04000) |
+                 ((ds3_report.square)   ? 0x00 : 0x02000) |
+                 ((ds3_report.triangle) ? 0x00 : 0x01000) |
+                 ((has_6btns)           ? 0x00 : 0x00800) |
+                 ((ds3_report.ps)       ? 0x00 : 0x00400) |
+                 ((ds3_report.r2)       ? 0x00 : 0x00200) |
+                 ((ds3_report.l2)       ? 0x00 : 0x00100) |
+                 ((ds3_report.left)     ? 0x00 : 0x00008) |
+                 ((ds3_report.down)     ? 0x00 : 0x00004) |
+                 ((ds3_report.right)    ? 0x00 : 0x00002) |
+                 ((ds3_report.up)       ? 0x00 : 0x00001) |
+                 ((ds3_report.start)    ? 0x00 : 0x00080) |
+                 ((ds3_report.select)   ? 0x00 : 0x00040) |
+                 ((ds3_report.cross)    ? 0x00 : 0x00020) |
+                 ((ds3_report.circle)   ? 0x00 : 0x00010));
 
       uint8_t analog_1x = ds3_report.lx;
       uint8_t analog_1y = 255 - ds3_report.ly;
@@ -2413,22 +2434,24 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       bool button_z = ds4_report.share || ds4_report.tpad;
       bool has_6btns = true;
 
-      buttons = (((ds4_report.r1)       ? 0x00 : 0x8000) |
-                 ((ds4_report.l1)       ? 0x00 : 0x4000) |
-                 ((ds4_report.square)   ? 0x00 : 0x2000) |
-                 ((ds4_report.triangle) ? 0x00 : 0x1000) |
-                 ((has_6btns)           ? 0x00 : 0x0800) |
-                 ((ds4_report.ps)       ? 0x00 : 0x0400) |
-                 ((ds4_report.r2)       ? 0x00 : 0x0200) |
-                 ((ds4_report.l2)       ? 0x00 : 0x0100) |
-                 ((dpad_left)           ? 0x00 : 0x0008) |
-                 ((dpad_down)           ? 0x00 : 0x0004) |
-                 ((dpad_right)          ? 0x00 : 0x0002) |
-                 ((dpad_up)             ? 0x00 : 0x0001) |
-                 ((ds4_report.option)   ? 0x00 : 0x0080) |
-                 ((button_z)            ? 0x00 : 0x0040) |
-                 ((ds4_report.cross)    ? 0x00 : 0x0020) |
-                 ((ds4_report.circle)   ? 0x00 : 0x0010));
+      buttons = (((ds4_report.r3)       ? 0x00 : 0x20000) |
+                 ((ds4_report.l3)       ? 0x00 : 0x10000) |
+                 ((ds4_report.r1)       ? 0x00 : 0x08000) |
+                 ((ds4_report.l1)       ? 0x00 : 0x04000) |
+                 ((ds4_report.square)   ? 0x00 : 0x02000) |
+                 ((ds4_report.triangle) ? 0x00 : 0x01000) |
+                 ((has_6btns)           ? 0x00 : 0x00800) |
+                 ((ds4_report.ps)       ? 0x00 : 0x00400) |
+                 ((ds4_report.r2)       ? 0x00 : 0x00200) |
+                 ((ds4_report.l2)       ? 0x00 : 0x00100) |
+                 ((dpad_left)           ? 0x00 : 0x00008) |
+                 ((dpad_down)           ? 0x00 : 0x00004) |
+                 ((dpad_right)          ? 0x00 : 0x00002) |
+                 ((dpad_up)             ? 0x00 : 0x00001) |
+                 ((ds4_report.option)   ? 0x00 : 0x00080) |
+                 ((button_z)            ? 0x00 : 0x00040) |
+                 ((ds4_report.cross)    ? 0x00 : 0x00020) |
+                 ((ds4_report.circle)   ? 0x00 : 0x00010));
 
       uint8_t analog_1x = ds4_report.x;
       uint8_t analog_1y = 255 - ds4_report.y;
@@ -2507,22 +2530,24 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
       bool button_z = ds5_report.share || ds5_report.tpad;
       bool has_6btns = true;
 
-      buttons = (((ds5_report.r1)       ? 0x00 : 0x8000) |
-                 ((ds5_report.l1)       ? 0x00 : 0x4000) |
-                 ((ds5_report.square)   ? 0x00 : 0x2000) |
-                 ((ds5_report.triangle) ? 0x00 : 0x1000) |
-                 ((has_6btns)           ? 0x00 : 0x0800) |
-                 ((ds5_report.ps)       ? 0x00 : 0x0400) |
-                 ((ds5_report.r2)       ? 0x00 : 0x0200) |
-                 ((ds5_report.l2)       ? 0x00 : 0x0100) |
-                 ((dpad_left)           ? 0x00 : 0x0008) |
-                 ((dpad_down)           ? 0x00 : 0x0004) |
-                 ((dpad_right)          ? 0x00 : 0x0002) |
-                 ((dpad_up)             ? 0x00 : 0x0001) |
-                 ((ds5_report.option)   ? 0x00 : 0x0080) |
-                 ((button_z)            ? 0x00 : 0x0040) |
-                 ((ds5_report.cross)    ? 0x00 : 0x0020) |
-                 ((ds5_report.circle)   ? 0x00 : 0x0010));
+      buttons = (((ds5_report.r3)       ? 0x00 : 0x20000) |
+                 ((ds5_report.l3)       ? 0x00 : 0x10000) |
+                 ((ds5_report.r1)       ? 0x00 : 0x08000) |
+                 ((ds5_report.l1)       ? 0x00 : 0x04000) |
+                 ((ds5_report.square)   ? 0x00 : 0x02000) |
+                 ((ds5_report.triangle) ? 0x00 : 0x01000) |
+                 ((has_6btns)           ? 0x00 : 0x00800) |
+                 ((ds5_report.ps)       ? 0x00 : 0x00400) |
+                 ((ds5_report.r2)       ? 0x00 : 0x00200) |
+                 ((ds5_report.l2)       ? 0x00 : 0x00100) |
+                 ((dpad_left)           ? 0x00 : 0x00008) |
+                 ((dpad_down)           ? 0x00 : 0x00004) |
+                 ((dpad_right)          ? 0x00 : 0x00002) |
+                 ((dpad_up)             ? 0x00 : 0x00001) |
+                 ((ds5_report.option)   ? 0x00 : 0x00080) |
+                 ((button_z)            ? 0x00 : 0x00040) |
+                 ((ds5_report.cross)    ? 0x00 : 0x00020) |
+                 ((ds5_report.circle)   ? 0x00 : 0x00010));
 
       uint8_t analog_1x = ds5_report.x1;
       uint8_t analog_1y = 255 - ds5_report.y1;
@@ -2581,7 +2606,9 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
     bool has_6btns = true;
 
-    buttons = (((psc_report.r1)       ? 0x00 : 0x8000) |
+    buttons = (((false)               ? 0x00 : 0x20000) |
+               ((false)               ? 0x00 : 0x10000) |
+               ((psc_report.r1)       ? 0x00 : 0x08000) |
                ((psc_report.l1)       ? 0x00 : 0x4000) |
                ((psc_report.square)   ? 0x00 : 0x2000) |
                ((psc_report.triangle) ? 0x00 : 0x1000) |
@@ -2633,7 +2660,9 @@ void process_8bit_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = (pce_report.dpad >= 5 && pce_report.dpad <= 7);
     bool has_6btns = false;
 
-    buttons = (((false)          ? 0x00 : 0x8000) |
+    buttons = (((false)          ? 0x00 : 0x20000) |
+               ((false)          ? 0x00 : 0x10000) |
+               ((false)          ? 0x00 : 0x08000) |
                ((false)          ? 0x00 : 0x4000) |
                ((false)          ? 0x00 : 0x2000) |
                ((false)          ? 0x00 : 0x1000) |
@@ -2693,7 +2722,9 @@ void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
     bool has_6btns = true;
 
-    buttons = (((input_report.l2 || input_report.l) ? 0x00 : 0x8000) |
+    buttons = (((false)               ? 0x00 : 0x20000) |
+               ((false)               ? 0x00 : 0x10000) |
+               ((input_report.l2 || input_report.l) ? 0x00 : 0x8000) |
                ((input_report.r2 || input_report.y) ? 0x00 : 0x4000) |
                ((input_report.x)      ? 0x00 : 0x2000) |
                ((input_report.a)      ? 0x00 : 0x1000) |
@@ -2761,7 +2792,9 @@ void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
     bool has_6btns = true;
 
-    buttons = (((input_report.r)      ? 0x00 : 0x8000) |
+    buttons = (((input_report.r3)     ? 0x00 : 0x20000) |
+               ((input_report.l3)     ? 0x00 : 0x10000) |
+               ((input_report.r)      ? 0x00 : 0x8000) |
                ((input_report.l)      ? 0x00 : 0x4000) |
                ((input_report.y)      ? 0x00 : 0x2000) |
                ((input_report.x)      ? 0x00 : 0x1000) |
@@ -2815,6 +2848,8 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
     if (input_report.r1) printf("R1 ");
     if (input_report.l2) printf("L2(Z) ");
     if (input_report.r2) printf("R2(C) ");
+    if (input_report.l3) printf("L3 ");
+    if (input_report.r3) printf("R3 ");
     if (input_report.s1) printf("Select ");
     if (input_report.s2) printf("Start ");
     if (input_report.a1) printf("Home ");
@@ -2827,7 +2862,9 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
     bool has_6btns = true;
 #ifdef CONFIG_PCE
-    buttons = (((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
+    buttons = (((false)           ? 0x00 : 0x20000) |
+               ((false)           ? 0x00 : 0x10000) |
+               ((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
                ((input_report.y)                    ? 0x00 : 0x4000) |
                ((input_report.x || input_report.r1) ? 0x00 : 0x2000) |
                ((input_report.a)                    ? 0x00 : 0x1000) |
@@ -2844,7 +2881,9 @@ void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, 
                ((input_report.b)                    ? 0x00 : 0x20) |
                ((input_report.r2)                   ? 0x00 : 0x10));
 #else
-    buttons = (((input_report.r1) ? 0x00 : 0x8000) |
+    buttons = (((input_report.r3) ? 0x00 : 0x20000) |
+               ((input_report.l3) ? 0x00 : 0x10000) |
+               ((input_report.r1) ? 0x00 : 0x8000) |
                ((input_report.l1) ? 0x00 : 0x4000) |
                ((input_report.y)  ? 0x00 : 0x2000) |
                ((input_report.x)  ? 0x00 : 0x1000) |
@@ -2908,7 +2947,9 @@ void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     bool dpad_left  = (astro_report.x < 127);
     bool has_6btns = true;
 
-    buttons = (((astro_report.c) ? 0x00 : 0x8000) | // VI
+    buttons = (((false)          ? 0x00 : 0x20000) |
+               ((false)          ? 0x00 : 0x10000) |
+               ((astro_report.c) ? 0x00 : 0x8000) | // VI
                ((astro_report.b) ? 0x00 : 0x4000) | // V
                ((astro_report.a) ? 0x00 : 0x2000) | // IV
                ((astro_report.d) ? 0x00 : 0x1000) | // III
@@ -2969,7 +3010,9 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool has_6btns = true;
 
 #ifdef CONFIG_PCE
-    buttons = (((wingman_report.z) ? 0x00 : 0x8000) |  // VI
+    buttons = (((false)            ? 0x00 : 0x20000) |
+               ((false)            ? 0x00 : 0x10000) |
+               ((wingman_report.z) ? 0x00 : 0x8000) |  // VI
                ((wingman_report.y) ? 0x00 : 0x4000) |  // V
                ((wingman_report.x) ? 0x00 : 0x2000) |  // IV
                ((wingman_report.a) ? 0x00 : 0x1000) |  // III
@@ -2986,7 +3029,9 @@ void process_wing_man(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((wingman_report.b) ? 0x00 : 0x20) |  // II
                ((wingman_report.c) ? 0x00 : 0x10));  // I
 #else
-    buttons = (((wingman_report.r) ? 0x00 : 0x8000) |  // R
+    buttons = (((false)            ? 0x00 : 0x20000) |
+               ((false)            ? 0x00 : 0x10000) |
+               ((wingman_report.r) ? 0x00 : 0x8000) |  // R
                ((wingman_report.l) ? 0x00 : 0x4000) |  // L
                ((wingman_report.y) ? 0x00 : 0x2000) |  // Y
                ((wingman_report.x) ? 0x00 : 0x1000) |  // X
@@ -3049,7 +3094,9 @@ void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
     bool has_6btns = true;
 
-    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+    buttons = (((false)                ? 0x00 : 0x20000) |
+               ((false)                ? 0x00 : 0x10000) |
+               ((update_report.r)      ? 0x00 : 0x8000) | // VI
                ((update_report.l)      ? 0x00 : 0x4000) | // V
                ((update_report.y)      ? 0x00 : 0x2000) | // IV
                ((update_report.x)      ? 0x00 : 0x1000) | // III
@@ -3102,7 +3149,9 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
     bool has_6btns = true;
 
-    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+    buttons = (((false)                ? 0x00 : 0x20000) |
+               ((false)                ? 0x00 : 0x10000) |
+               ((update_report.r)      ? 0x00 : 0x8000) | // VI
                ((update_report.l)      ? 0x00 : 0x4000) | // V
                ((update_report.y)      ? 0x00 : 0x2000) | // IV
                ((update_report.x)      ? 0x00 : 0x1000) | // III
@@ -3158,14 +3207,16 @@ void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     bool has_6btns = true;
 
     // TODO: handle ZL/ZR as L2/R2
-    buttons = (((update_report.r)      ? 0x00 : 0x8000) | // VI
+    buttons = (((false)                ? 0x00 : 0x20000) |
+               ((false)                ? 0x00 : 0x10000) |
+               ((update_report.r)      ? 0x00 : 0x8000) | // VI
                ((update_report.l)      ? 0x00 : 0x4000) | // V
                ((update_report.y)      ? 0x00 : 0x2000) | // IV
                ((update_report.x)      ? 0x00 : 0x1000) | // III
                ((has_6btns)            ? 0x00 : 0x0800) |
                ((false)                ? 0x00 : 0x0400) | // home
-               ((false)                ? 0x00 : 0x0200) | // r2
-               ((false)                ? 0x00 : 0x0100) | // l2
+               ((update_report.zr)     ? 0x00 : 0x0200) | // r2
+               ((update_report.zl)     ? 0x00 : 0x0100) | // l2
                ((dpad_left)            ? 0x00 : 0x0008) |
                ((dpad_down)            ? 0x00 : 0x0004) |
                ((dpad_right)           ? 0x00 : 0x0002) |
@@ -3310,6 +3361,8 @@ void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       }
 
       buttons = (
+        ((update_report.rstick) ? 0x00 : 0x20000) |
+        ((update_report.lstick) ? 0x00 : 0x10000) |
         ((bttn_6)     ? 0x00 : 0x8000) | // VI
         ((bttn_5)     ? 0x00 : 0x4000) | // V
         ((bttn_4)     ? 0x00 : 0x2000) | // IV
@@ -3411,6 +3464,8 @@ void process_gamecube(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
           bool has_6btns  = true;
 
           buttons = (
+            ((false)                         ? 0x00 : 0x20000) |
+            ((false)                         ? 0x00 : 0x10000) |
             ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
             ((gamecube_report.port[i].l)     ? 0x00 : 0x4000) | // V
             ((gamecube_report.port[i].y)     ? 0x00 : 0x2000) | // IV
@@ -3485,7 +3540,9 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     bool dpad_down  = (update_report.axis0_y > 128);
     bool has_6btns = true;
 
-    buttons = (((update_report.z)      ? 0x00 : 0x8000) | // VI
+    buttons = (((false)                ? 0x00 : 0x20000) |
+               ((false)                ? 0x00 : 0x10000) |
+               ((update_report.z)      ? 0x00 : 0x8000) | // VI
                ((update_report.y)      ? 0x00 : 0x4000) | // V
                ((update_report.x)      ? 0x00 : 0x2000) | // IV
                ((update_report.a)      ? 0x00 : 0x1000) | // III
@@ -3779,7 +3836,8 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
   bool has_6btns = true;
   bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false;
   bool btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
-       btns_three = false, btns_four = false, btns_five = false, btns_six = false;
+       btns_three = false, btns_four = false, btns_five = false, btns_six = false,
+       btns_home = false;
 
   uint32_t hatSwitchKeys = 0x0;
   uint32_t leftStickKeys = 0x0;
@@ -3823,13 +3881,13 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     {
       if (report->keycode[i] == HID_KEY_ESCAPE || report->keycode[i] == HID_KEY_EQUAL) btns_run = true; // Start
       if (report->keycode[i] == HID_KEY_P || report->keycode[i] == HID_KEY_MINUS) btns_sel = true; // Select / Z
-#ifdef CONFIG_NGC
-      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_one = true; // A
-      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_two = true; // B
-#else
+#ifdef CONFIG_PCE
       // more ideal PCE enter button for SuperSD3 Menu
       if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_two = true; // II
       if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_one = true; // I
+#else
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_one = true; // A
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_two = true; // B
 #endif
       if (report->keycode[i] == HID_KEY_L) btns_three = true; // X
       if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true; // Y
@@ -3911,17 +3969,22 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
 
       if (is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
       {
+      #ifdef CONFIG_XB1
+        btns_home = true;
+      #else
       #ifdef CONFIG_NGC
         // gc-swiss irg
         btns_sel = true;
         dpad_down = true;
         btns_two = true;
         btns_six = true;
-      #endif
+      #else
       #ifdef CONFIG_PCE
         // SSDS3 igr
         btns_sel = true;
         btns_run = true;
+      #endif
+      #endif
       #endif
       }
 
@@ -3962,12 +4025,14 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     dpad_right = hat_switch_x > 128;
   }
 
-  buttons = (((btns_six)   ? 0x00 : 0x8000) |
+  buttons = (((false)      ? 0x00 : 0x20000) | // r3
+             ((false)      ? 0x00 : 0x10000) | // l3
+             ((btns_six)   ? 0x00 : 0x8000) |
              ((btns_five)  ? 0x00 : 0x4000) |
              ((btns_four)  ? 0x00 : 0x2000) |
              ((btns_three) ? 0x00 : 0x1000) |
              ((has_6btns)  ? 0x00 : 0x0800) |
-             ((false)      ? 0x00 : 0x0400) | // home
+             ((btns_home)  ? 0x00 : 0x0400) | // home
              ((false)      ? 0x00 : 0x0200) | // r2
              ((false)      ? 0x00 : 0x0100) | // l2
              ((dpad_left)  ? 0x00 : 0x0008) |
@@ -4053,8 +4118,8 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 
   if (buttons_swapped)
   {
-     buttons = (((0xff00)) | // no six button controller byte
-                ((0x000f)) | // no dpad button presses
+     buttons = (((0xfff00)) | // no six button controller byte
+                ((0x0000f)) | // no dpad button presses
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
@@ -4062,20 +4127,20 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   }
   else
   {
-     buttons = (((0xff00)) |
-                ((0x000f)) |
+     buttons = (((0xfff00)) |
+                ((0x0000f)) |
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
   }
 
-#ifdef CONFIG_NGC
-  local_x = report->x;
-  local_y = ((~report->y) & 0xff);
-#else
+#ifdef CONFIG_PCE // mice translation
   local_x = (0 - report->x);
   local_y = (0 - report->y);
+#else // controllers
+  local_x = report->x;
+  local_y = ((~report->y) & 0xff);
 #endif
 
 
@@ -4139,7 +4204,8 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
   bool has_6btns = true;
   bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false,
     btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
-    btns_three = false, btns_four = false, btns_five = false, btns_six = false;
+    btns_three = false, btns_four = false, btns_five = false, btns_six = false,
+    btns_home = false;
 
   printf("X: %d ", report->x);
   print_bits(report->x);
@@ -4162,12 +4228,14 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, hid_gamep
   }
   printf("\n");
 
-  buttons = (((btns_six)   ? 0x00 : 0x8000) |
+  buttons = (((false)      ? 0x00 : 0x20000) | // r3
+             ((false)      ? 0x00 : 0x10000) | // l3
+             ((btns_six)   ? 0x00 : 0x8000) |
              ((btns_five)  ? 0x00 : 0x4000) |
              ((btns_four)  ? 0x00 : 0x2000) |
              ((btns_three) ? 0x00 : 0x1000) |
              ((has_6btns)  ? 0x00 : 0x0800) |
-             ((false)      ? 0x00 : 0x0400) | // home
+             ((btns_home)  ? 0x00 : 0x0400) | // home
              ((false)      ? 0x00 : 0x0200) | // r2
              ((false)      ? 0x00 : 0x0100) | // l2
              ((dpad_left)  ? 0x00 : 0x0008) |
@@ -4309,6 +4377,8 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
     bool buttonIV = current.button4;
     bool buttonV = buttonCount >=7 ? current.button5 : 0;
     bool buttonVI = buttonCount >=8 ? current.button6 : 0;
+    bool buttonVIII = buttonCount >=9 ? current.button7 : 0;
+    bool buttonXI = buttonCount >=10 ? current.button8 : 0;
     bool has_6btns = buttonCount >= 6;
 
     // assume DirectInput mapping
@@ -4320,7 +4390,9 @@ void parse_hid_report(uint8_t dev_addr, uint8_t instance, uint8_t const *report,
       buttonIV = current.button1;
     }
 
-    buttons = (((buttonVI)        ? 0x00 : 0x8000) |
+    buttons = (((buttonXI)        ? 0x00 : 0x20000) | // r3
+               ((buttonVIII)      ? 0x00 : 0x10000) | // l3
+               ((buttonVI)        ? 0x00 : 0x8000) |
                ((buttonV)         ? 0x00 : 0x4000) |
                ((buttonIV)        ? 0x00 : 0x2000) |
                ((buttonIII)       ? 0x00 : 0x1000) |
