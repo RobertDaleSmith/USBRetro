@@ -90,6 +90,35 @@ void pattern_blues(uint len, uint t) {
     }
 }
 
+void pattern_purples(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        uint8_t intensity = t; // Adjust the intensity value for a darker effect
+        put_pixel(urgb_u32(intensity / 10, 0, intensity / 1)); // Dark purple color (red + blue)
+        if (++t >= max) t = 0;
+    }
+}
+
+void pattern_reds(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        put_pixel(t * 0x00100);
+        if (++t >= max) t = 0;
+    }
+}
+
+void pattern_greens(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        uint8_t intensity = t; // Adjust the intensity value for a darker effect
+        put_pixel(urgb_u32(0, intensity / 10, 0));
+        if (++t >= max) t = 0;
+    }
+}
+
 void pattern_blue(uint len, uint t) {
     int max = 100;
     put_pixel(max * 0x00001);
@@ -109,25 +138,6 @@ void pattern_purple(uint len, uint t) {
 
 void pattern_yellow(uint len, uint t) {
     put_pixel(urgb_u32(64, 64, 0)); // yellow
-}
-
-void pattern_purples(uint len, uint t) {
-    int max = 100; // let's not draw too much current!
-    t %= max;
-    for (int i = 0; i < len; ++i) {
-        uint8_t intensity = t; // Adjust the intensity value for a darker effect
-        put_pixel(urgb_u32(intensity / 10, 0, intensity / 1)); // Dark purple color (red + blue)
-        if (++t >= max) t = 0;
-    }
-}
-void pattern_greens(uint len, uint t) {
-    int max = 100; // let's not draw too much current!
-    t %= max;
-    for (int i = 0; i < len; ++i) {
-        uint8_t intensity = t; // Adjust the intensity value for a darker effect
-        put_pixel(urgb_u32(0, intensity / 10, 0));
-        if (++t >= max) t = 0;
-    }
 }
 
 void pattern_br(uint len, uint t) {
@@ -195,26 +205,35 @@ const struct {
 } pattern_table[] = {
 #ifdef CONFIG_XB1
         {pattern_greens,  "Greens"},     // 0 controllers
-        {pattern_green,   "Green"},      // 1 controllers
-        {pattern_purple,  "Purple"},     // 2 controller
+        {pattern_green,   "Green"},      // 1 controller
+        {pattern_blue,    "Blue"},       // 2 controllers
         {pattern_red,     "Red"},        // 3 controllers
-        {pattern_blue,    "Blue"},       // 4 controller
+        {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
 #else
 #ifdef CONFIG_NGC
         {pattern_purples, "Purples"},    // 0 controllers
         {pattern_purple,  "Purple"},     // 1 controller
-        {pattern_red,     "Red"},        // 2 controllers
-        {pattern_green,   "Green"},      // 3 controllers
-        {pattern_blue,    "Blue"},       // 4 controller
+        {pattern_blue,    "Blue"},       // 2 controllers
+        {pattern_red,     "Red"},        // 3 controllers
+        {pattern_green,   "Green"},      // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
-#else // PCE
+#else
+#ifdef CONFIG_NUON
+        {pattern_reds,    "Reds"},       // 0 controllers
+        {pattern_red,     "Red"},        // 1 controller
+        {pattern_blue,    "Blue"},       // 2 controllers
+        {pattern_green,   "Green"},      // 3 controllers
+        {pattern_purple,  "Purple"},     // 4 controllers
+        {pattern_yellow,  "Yellow"},     // 5 controllers
+#else//CONFIG_PCE
         {pattern_blues,   "Blues"},      // 0 controllers
         {pattern_blue,    "Blue"},       // 1 controller
         {pattern_red,     "Red"},        // 2 controllers
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#endif
 #endif
 #endif
         {pattern_random,  "Random data"},// fun

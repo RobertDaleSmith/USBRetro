@@ -19,14 +19,17 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/tusb_xinput xinput_host)
 add_executable(usbretro_pce) # For the usbretro_pce target
 add_executable(usbretro_ngc) # For the usbretro_ngc target
 add_executable(usbretro_xb1) # For the usbretro_xb1 target
+add_executable(usbretro_nuon) # For the usbretro_nuon target
 
 target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
 target_compile_definitions(usbretro_xb1 PRIVATE CONFIG_XB1=1)
+target_compile_definitions(usbretro_nuon PRIVATE CONFIG_NUON=1)
 
 pico_add_extra_outputs(usbretro_pce)
 pico_add_extra_outputs(usbretro_ngc)
 pico_add_extra_outputs(usbretro_xb1)
+pico_add_extra_outputs(usbretro_nuon)
 
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/clock.pio )
@@ -35,6 +38,9 @@ pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/polyface_read.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/polyface_send.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
@@ -59,6 +65,10 @@ target_sources(usbretro_xb1 PUBLIC # For XB1
     ${COMMON_SOURCES}
 )
 
+target_sources(usbretro_nuon PUBLIC # For NUON
+    ${COMMON_SOURCES}
+)
+
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -70,6 +80,10 @@ target_include_directories(usbretro_ngc PUBLIC # FOR NGC
 )
 
 target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -95,4 +109,9 @@ target_link_libraries(usbretro_xb1 PRIVATE # FOR XB1
     ${COMMON_LIBRARIES}
     pico_i2c_slave
     hardware_i2c
+)
+
+target_link_libraries(usbretro_nuon PRIVATE # FOR NUON
+    ${COMMON_LIBRARIES}
+    pico_bit_ops
 )

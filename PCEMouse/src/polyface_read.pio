@@ -1,0 +1,58 @@
+;
+
+.program polyface_read
+
+packet:
+    set   y, 0
+    mov   isr, y
+    in    y, 30           ; fill unused fifo bits
+
+    wait  0 pin 1   
+    wait  1 pin 1
+    in    pins, 1
+
+    mov   y, isr
+    jmp   !y, packet      ; wait for start bit
+
+    set   x, 2 ;(3)       ; read control bit and 32 data bits (33)
+data_byte:
+    set   y, 10;(11)
+data_bit:
+    wait  0 pin 1
+    wait  1 pin 1
+    in    pins, 1
+
+    jmp   y--, data_bit
+    jmp   x--, data_byte
+    jmp   packet
+
+% c-sdk {
+static inline void polyface_read_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = polyface_read_program_get_default_config(offset);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin + 1);
+
+    // Set the IN base pin to the provided `pin` parameter. This is the data
+    // pin, and the next-numbered GPIO is used as the clock pin.
+    sm_config_set_in_pins(&c, pin);
+    // Set the pin directions to input at the PIO
+    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
+
+    // Shifting to left matches the customary MSB-first ordering of SPI.
+    sm_config_set_in_shift(
+        &c,
+        false, // Shift-to-right = false (i.e. shift to left)
+        true,  // Autopush enabled
+        32     // Autopush threshold = 32
+    );
+
+    // We only receive, so disable the TX FIFO to make the RX FIFO deeper.
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
