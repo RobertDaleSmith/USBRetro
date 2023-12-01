@@ -66,8 +66,7 @@ uint64_t turbo_frequency;
 
 #define MAX_PLAYERS 5 // PCE supports up to 5 players
 
-#ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
-
+// ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
 #define DATAIN_PIN      18
 #define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
 #define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
@@ -75,48 +74,13 @@ uint64_t turbo_frequency;
 #define OUTD2_PIN       28
 #define OUTD3_PIN       29
 
-#else
-#ifdef ADAFRUIT_QTPY_RP2040      // if build for QtPy RP2040 board
-
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
-
-#else
-#ifdef SEEED_XIAO_RP2040         // else assignments for Seed XIAO RP2040 board - note: needs specific board
-
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
-
-#else                           // else assume build for RP Pico board
-
-#define DATAIN_PIN      16
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       18              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       19
-#define OUTD2_PIN       20
-#define OUTD3_PIN       21
-
-#endif
-#endif
-#endif
-
 // PCE button modes
 #define BUTTON_MODE_2 0x00
 #define BUTTON_MODE_6 0x01
 #define BUTTON_MODE_3_SEL 0x02
 #define BUTTON_MODE_3_RUN 0x03
 
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   #include "lib/joybus-pio/include/gamecube_definitions.h"
   #include "joybus.pio.h"
   #include "GamecubeConsole.h"
@@ -157,9 +121,7 @@ uint64_t turbo_frequency;
   #define BUTTON_MODE_3  0x03
   #define BUTTON_MODE_4  0x04
   #define BUTTON_MODE_KB 0x05
-#endif
-
-#ifdef CONFIG_XB1
+#elif CONFIG_XB1
   #include "hardware/i2c.h"
   #include "pico/i2c_slave.h"
 
@@ -206,6 +168,53 @@ uint64_t turbo_frequency;
 static uint8_t i2c_slave_read_buffer[2] = {0xFA, 0xFF};
 static uint8_t i2c_slave_write_buffer[256];
 static int i2c_slave_write_buffer_index = 0;
+#elif CONFIG_NUON
+  #include "pico/util/queue.h"
+  #include "polyface_read.pio.h"
+  #include "polyface_send.pio.h"
+
+  #define MAX_PLAYERS       4
+
+  #define DATAIO_PIN        2
+  #define CLKIN_PIN         DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
+  
+  #define PACKET_TYPE_READ  1
+  #define PACKET_TYPE_WRITE 0
+
+  #define ATOD_CHANNEL_NONE 0x00
+  #define ATOD_CHANNEL_MODE 0x01
+  #define ATOD_CHANNEL_X1 0x02
+  #define ATOD_CHANNEL_Y1 0x03
+  #define ATOD_CHANNEL_X2 0x04
+  #define ATOD_CHANNEL_Y2 0x05
+
+  // NUON Controller Probe Options
+  #define DEFCFG 1
+  #define VERSION 11
+  #define TYPE 3
+  #define MFG 0
+  #define CRC16 0x8005
+  #define MAGIC 0x4A554445 // HEX to ASCII == "JUDE" (The Polyface inventor)
+
+  int crc_calc(unsigned char data,int crc);
+  static int crc_lut[256]; // crc look up table
+  uint32_t crc_data_packet(int32_t value, int8_t size);
+
+  uint32_t __rev(uint32_t);
+  uint8_t eparity(uint32_t);
+
+  uint32_t output_buttons_0 = 0;
+  uint32_t output_analog_1x = 0;
+  uint32_t output_analog_1y = 0;
+  uint32_t output_analog_2x = 0;
+  uint32_t output_analog_2y = 0;
+  uint32_t output_quad_x = 0;
+
+  uint32_t device_mode = 0b10111001100000111001010100000000;
+  uint32_t device_config = 0b10000000100000110000001100000000;
+  uint32_t device_switch = 0b10000000100000110000001100000000;
+  queue_t packet_queue;
+
 #endif
 
 bool update_pending;
@@ -259,6 +268,9 @@ typedef struct TU_ATTR_PACKED
   int button_mode;
 #ifdef CONFIG_NGC
   gc_report_t gc_report;
+#elif CONFIG_NUON
+  int32_t output_buttons_alt;
+  int16_t output_quad_x;
 #endif
 } Player_t;
 
@@ -382,6 +394,49 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center) {
         return b;
     }
 }
+#elif CONFIG_NUON
+uint8_t eparity(uint32_t data) {
+  uint32_t eparity;
+  eparity = (data>>16)^data;
+  eparity ^= (eparity>>8);
+  eparity ^= (eparity>>4);
+  eparity ^= (eparity>>2);
+  eparity ^= (eparity>>1);
+  return ((eparity)&0x1);
+}
+
+// generates data response packet with crc check bytes
+uint32_t crc_data_packet(int32_t value, int8_t size) {
+  u_int32_t packet = 0;
+  u_int16_t crc = 0;
+
+  // calculate crc and place bytes into packet position
+  for (int i=0; i<size; i++) {
+    u_int8_t byte_val = (((value>>((size-i-1)*8)) & 0xff));
+    crc = (crc_calc(byte_val, crc) & 0xffff);
+    packet |= (byte_val << ((3-i)*8));
+  }
+
+  // place crc check bytes in packet position
+  packet |= (crc << ((2-size)*8));
+
+  return (packet);
+}
+
+int crc_build_lut() {
+	int i,j,k;
+	for (i=0; i<256; i++) {
+		for(j=i<<8,k=0; k<8; k++) {
+			j=(j&0x8000) ? (j<<1)^CRC16 : (j<<1); crc_lut[i]=j;
+		}
+	}
+	return(0);
+}
+
+int crc_calc(unsigned char data, int crc) {
+	if (crc_lut[1]==0) crc_build_lut();
+	return(((crc_lut[((crc>>8)^data)&0xff])^(crc<<8))&0xffff);
+}
 #endif
 
 //
@@ -501,8 +556,7 @@ void __not_in_flash_func(update_output)(void)
                   ((bytes[2] & 0xff) << 16)| // player 3
                   ((bytes[3] & 0xff) << 24); // player 4
   output_word_1 = ((bytes[4] & 0xff));       // player 5
-#else
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   if (players[0].button_mode == BUTTON_MODE_KB) {
     gc_report = default_gc_kb_report;
   } else {
@@ -598,8 +652,7 @@ void __not_in_flash_func(update_output)(void)
     // }
   }
 
-#else
-#ifdef CONFIG_XB1
+#elif CONFIG_XB1
   unsigned short int i;
   for (i = 0; i < playersCount; ++i) {
     // base controller buttons
@@ -619,8 +672,17 @@ void __not_in_flash_func(update_output)(void)
     i2c_slave_read_buffer[1] ^= ((byte & 0x0040) == 0) ? 0x20 : 0; // VIEW
     i2c_slave_read_buffer[1] ^= ((byte & 0x0020) == 0) ? 0x80 : 0; // A
   }
-#endif
-#endif
+#elif CONFIG_NUON
+  // Calculate and set Nuon output packet values here.
+  int16_t buttons = (players[0].output_buttons & 0xffff) |
+                    (players[0].output_buttons_alt & 0xffff);
+
+  output_buttons_0 = crc_data_packet(buttons, 2);
+  output_analog_1x = crc_data_packet(players[0].output_analog_1x, 1);
+  output_analog_1y = crc_data_packet(players[0].output_analog_1y, 1);
+  output_analog_2x = crc_data_packet(players[0].output_analog_2x, 1);
+  output_analog_2y = crc_data_packet(players[0].output_analog_2y, 1);
+  output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);
 #endif
   int16_t btns= (~players[0].output_buttons & 0xff);
   int16_t prev_btns= (~players[0].prev_buttons & 0xff);
@@ -653,7 +715,8 @@ void __not_in_flash_func(post_globals)(
   uint8_t analog_2y,
   uint8_t analog_l,
   uint8_t analog_r,
-  uint32_t keys)
+  uint32_t keys,
+  uint8_t quad_x)
 {
   bool has6Btn = !(buttons & 0x0800);
 
@@ -711,8 +774,7 @@ void __not_in_flash_func(post_globals)(
 
         update_output();
       // }
-#else
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
       // cache analog and button values to player object
       if (analog_1x) players[player_index].output_analog_1x = analog_1x;
       if (analog_1y) players[player_index].output_analog_1y = analog_1y;
@@ -744,8 +806,7 @@ void __not_in_flash_func(post_globals)(
       // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
 
       update_output();
-#else
-#ifdef CONFIG_XB1
+#elif CONFIG_XB1
       // maps View + Menu + Up button combo to Guide button
       if (!((players[player_index].global_buttons) & 0xC1)) {
         players[player_index].global_buttons ^= 0x400;
@@ -762,8 +823,39 @@ void __not_in_flash_func(post_globals)(
       players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
       update_output();
-#endif
-#endif
+#elif CONFIG_NUON
+
+      uint32_t nuon_buttons = 0x0080;
+
+      // Mapping the buttons from the old format to the new format, inverting the logic
+      nuon_buttons |= (!(buttons & 0x00010)) ? 0x8000 : 0;  // Circle -> C-DOWN
+      nuon_buttons |= (!(buttons & 0x00020)) ? 0x4000 : 0;  // Cross -> A
+      nuon_buttons |= (!(buttons & 0x00080)) ? 0x2000 : 0;  // Option -> START
+      nuon_buttons |= (!(buttons & 0x00040)) ? 0x1000 : 0;  // Share -> SELECT
+      nuon_buttons |= (!(buttons & 0x00004)) ? 0x0800 : 0;  // Dpad Down -> D-DOWN
+      nuon_buttons |= (!(buttons & 0x00008)) ? 0x0400 : 0;  // Dpad Left -> D-LEFT
+      nuon_buttons |= (!(buttons & 0x00001)) ? 0x0200 : 0;  // Dpad Up -> D-UP
+      nuon_buttons |= (!(buttons & 0x00002)) ? 0x0100 : 0;  // Dpad Right -> D-RIGHT
+      // Skipping the two buttons represented by 0x0080 and 0x0040 in the new format
+      nuon_buttons |= (!(buttons & 0x04000)) ? 0x0020 : 0;  // L1 -> L
+      nuon_buttons |= (!(buttons & 0x08000)) ? 0x0010 : 0;  // R1 -> R
+      nuon_buttons |= (!(buttons & 0x02000)) ? 0x0008 : 0;  // Square -> B
+      nuon_buttons |= (!(buttons & 0x01000)) ? 0x0004 : 0;  // Triangle -> C-LEFT
+      nuon_buttons |= (!(buttons & 0x00100)) ? 0x0002 : 0;  // L2 -> C-UP
+      nuon_buttons |= (!(buttons & 0x00200)) ? 0x0001 : 0;  // R2 -> C-RIGHT
+
+      if (!instance) {
+        players[player_index].output_buttons = nuon_buttons;
+      } else {
+        players[player_index].output_buttons_alt = nuon_buttons;
+      }
+
+      if (analog_1x) players[player_index].output_analog_1x = analog_1x;
+      if (analog_1y) players[player_index].output_analog_1y = analog_1y;
+      if (analog_2x) players[player_index].output_analog_2x = analog_2x;
+      if (analog_2y) players[player_index].output_analog_2y = analog_2y;
+      if (quad_x) players[player_index].output_quad_x = quad_x;
+      update_output();
 #endif
 
   }
@@ -779,7 +871,8 @@ void __not_in_flash_func(post_mouse_globals)(
   int8_t instance,
   uint16_t buttons,
   uint8_t delta_x,
-  uint8_t delta_y)
+  uint8_t delta_y,
+  uint8_t quad_x)
 {
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
@@ -816,9 +909,7 @@ void __not_in_flash_func(post_mouse_globals)(
 
         update_output();
       }
-#endif
-
-#ifdef CONFIG_NGC
+#else
       // fixes out of range analog values (1-255)
       if (delta_x == 0) delta_x = 1;
       if (delta_y == 0) delta_y = 1;
@@ -859,6 +950,9 @@ void __not_in_flash_func(post_mouse_globals)(
       // players[player_index].output_analog_2y = delta_y;
       players[player_index].output_buttons = buttons;
 
+  #ifdef CONFIG_NUON
+      if (quad_x) players[player_index].output_quad_x = quad_x;
+  #endif
       update_output();
 #endif
 
@@ -955,7 +1049,18 @@ void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-static bool rx_bit = 0;
+#ifdef CONFIG_PCE
+  static bool rx_bit = 0;
+#elif CONFIG_NUON
+uint64_t packet = 0;
+  uint16_t state = 0;
+  uint8_t channel = 0;
+  uint8_t id = 0;
+  bool alive = false;
+  bool tagged = false;
+  bool branded = false;
+  int requestsB = 0;
+#endif
 
   while (1)
   {
@@ -1015,8 +1120,7 @@ static bool rx_bit = 0;
 
         output_exclude = true;            // continue to lock the output values (which are now zero)
      }
-#else
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
     // Wait for GameCube console to poll controller
     gc_rumble = GamecubeConsole_WaitForPoll(&gc) ? 255 : 0;
 
@@ -1046,8 +1150,7 @@ static bool rx_bit = 0;
     update_output();
 
     // printf("MODE: %d\n", gc._reading_mode);
-#else
-#ifdef CONFIG_XB1
+#elif CONFIG_XB1
     // Analog outputs
     uint16_t x1Val = ((players[0].output_analog_1x * 2047)/255);
     uint16_t y1Val = ((players[0].output_analog_1y * 2047)/255);
@@ -1092,8 +1195,181 @@ static bool rx_bit = 0;
       }
     }
     update_output();
-#endif
-#endif
+#elif CONFIG_NUON
+    packet = 0;
+    for (int i = 0; i < 2; ++i) {
+      uint32_t rxdata = pio_sm_get_blocking(pio, sm2);
+      packet = ((packet) << 32) | (rxdata & 0xFFFFFFFF);
+    }
+
+    // queue_try_add(&packet_queue, &packet);
+
+    uint8_t dataA = ((packet>>17) & 0b11111111);
+    uint8_t dataS = ((packet>>9) & 0b01111111);
+    uint8_t dataC = ((packet>>1) & 0b01111111);
+    uint8_t type0 = ((packet>>25) & 0b00000001);
+    if (dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) { // RESET
+      id = 0;
+      alive = false;
+      tagged = false;
+      branded = false;
+      state = 0;
+      channel = 0;
+    }
+    if (dataA == 0x80) { // ALIVE
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b01);
+      if (alive) word1 = __rev(((id & 0b01111111) << 1));
+      else alive = true;
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x90 && !branded) { // MAGIC
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(MAGIC);
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x94) { // PROBE
+      uint32_t word0 = 1; // default res from HPI controller
+      uint32_t word1 = __rev(0b10001011000000110000000000000000);
+
+      //DEFCFG VERSION     TYPE      MFG TAGGED BRANDED    ID P
+      //   0b1 0001011 00000011 00000000      0       0 00000 0
+      word1 = ((DEFCFG  & 1)<<31) |
+              ((VERSION & 0b01111111)<<24) |
+              ((TYPE    & 0b11111111)<<16) |
+              ((MFG     & 0b11111111)<<8) |
+              (((tagged ? 1:0) & 1)<<7) |
+              (((branded? 1:0) & 1)<<6) |
+              ((id      & 0b00011111)<<1);
+      word1 = __rev(word1 | eparity(word1));
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (ADDRESS)
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+
+      if (channel == ATOD_CHANNEL_MODE) {
+        // word1 = __rev(0b11000100100000101001101100000000); // 68
+        word1 = __rev(crc_data_packet(0b11110100, 1)); // send & recv?
+      } else {
+        // word1 = __rev(0b11000110000000101001010000000000); // 70
+        word1 = __rev(crc_data_packet(0b11110110, 1)); // send & recv?
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (B)
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+
+      // 
+      if ((0b101001001100 >> requestsB) & 0b01) {
+        word1 = __rev(0b10);
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+
+      requestsB++;
+      if (requestsB == 12) requestsB = 7;
+    }
+    else if (dataA == 0x34 && dataS == 0x01) { // CHANNEL
+      channel = dataC;
+    }
+    else if (dataA == 0x32 && dataS == 0x02 && dataC == 0x00) { // QUADX
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
+
+      word1 = __rev(output_quad_x);
+      // TODO: solve how to set unique values to first two bytes plus checksum
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
+
+      // ALL_BUTTONS: CTRLR_STDBUTTONS & CTRLR_DPAD & CTRLR_SHOULDER & CTRLR_EXTBUTTONS
+      // <= 23 - 0x51f CTRLR_TWIST & CTRLR_THROTTLE & CTRLR_ANALOG1 & ALL_BUTTONS
+      // 29-47 - 0x83f CTRLR_MOUSE & CTRLR_ANALOG1 & CTRLR_ANALOG2 & ALL_BUTTONS
+      // 48-69 - 0x01f CTRLR_ANALOG1 & ALL_BUTTONS
+      // 70-92 - 0x808 CTRLR_MOUSE & CTRLR_EXTBUTTONS
+      // >= 93 - ERROR?
+ 
+      if (channel == ATOD_CHANNEL_NONE) {
+        word1 = __rev(device_mode); // device mode packet?
+      }
+      // if (channel == ATOD_CHANNEL_MODE) {
+      //   word1 = __rev(0b10000000100000110000001100000000);
+      // }
+      if (channel == ATOD_CHANNEL_X1) {
+        word1 = __rev(output_analog_1x);
+      }
+      else if (channel == ATOD_CHANNEL_Y1) {
+        word1 = __rev(output_analog_1y);
+      }
+      else if (channel == ATOD_CHANNEL_X2) {
+        word1 = __rev(output_analog_2x);
+      }
+      else if (channel == ATOD_CHANNEL_Y2) {
+        word1 = __rev(output_analog_2y);
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(device_config); // device config packet?
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(device_switch); // extra device config?
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(output_buttons_0);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x99 && dataS == 0x01) { // STATE
+      if (type0 == PACKET_TYPE_READ) {
+        uint32_t word0 = 1;
+        uint32_t word1 = __rev(0b11000000000000101000000000000000);
+
+        if (((state >> 8) & 0xff) == 0x41 && (state & 0xff) == 0x51) {
+          word1 = __rev(0b11010001000000101110011000000000);
+        }
+        pio_sm_put_blocking(pio1, sm1, word1);
+        pio_sm_put_blocking(pio1, sm1, word0);
+      } else { // type0 == PACKET_TYPE_WRITE
+        state = ((state) << 8) | (dataC & 0xff);
+      }
+    }
+    else if (dataA == 0xb4 && dataS == 0x00) { // BRAND
+      id = dataC;
+      branded = true;
+    }
 #endif
   }
 }
@@ -1367,6 +1643,69 @@ void xb1_init() {
 
 #endif
 
+#ifdef CONFIG_NUON
+
+void nuon_init() {
+  // init for nuon communication
+  output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
+  output_analog_1x = 0b10000000100000110000001100000000; // x1 = 0
+  output_analog_1y = 0b10000000100000110000001100000000; // y1 = 0
+  output_analog_2x = 0b10000000100000110000001100000000; // x2 = 0
+  output_analog_2y = 0b10000000100000110000001100000000; // y2 = 0
+  output_quad_x = 0b10000000000000000000000000000000; // quadx = 0
+
+  // PROPERTIES DEV____MOD DEV___CONF DEV____EXT // CTRL_VALUES from SDK joystick.h
+  // 0x0000001f 0b10111001 0b10000000 0b10000000 // ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000003f 0b10000000 0b01000000 0b01000000 // ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000011d 0b11000000 0b00000000 0b10000000 // THROTTLE, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+  // 0x0000011f 0b11000000 0b01000000 0b00010000 // THROTTLE, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000014f 0b11010000 0b00000000 0b00000000 // THROTTLE, WHEEL|PADDLE, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00000300 0b11000000 0b00000000 0b11000000 // BRAKE, THROTTLE
+  // 0x00000341 0b11000000 0b00000000 0b00000000 // BRAKE, THROTTLE, WHEEL|PADDLE, STDBUTTONS
+  // 0x0000034f 0b10111001 0b10000000 0b00000000 // BRAKE, THROTTLE, WHEEL|PADDLE, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000041d 0b11000000 0b11000000 0b00000000 // RUDDER|TWIST, ANALOG1, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x00000513 0b10000000 0b00000000 0b00000000 // RUDDER|TWIST, THROTTLE, ANALOG1, DPAD, STDBUTTONS
+  // 0x0000051f 0b10000000 0b10000000 0b10000000 // RUDDER|TWIST, THROTTLE, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00000800 0b11010000 0b00000000 0b10000000 // MOUSE|TRACKBALL
+  // 0x00000808 0b11010000 0b10000000 0b10000000 // MOUSE|TRACKBALL, EXTBUTTONS
+  // 0x00000811 0b11001000 0b00010000 0b00010000 // MOUSE|TRACKBALL, ANALOG1, STDBUTTONS
+  // 0x00000815 0b11001000 0b11000000 0b00010000 // MOUSE|TRACKBALL, ANALOG1, STDBUTTONS, SHOULDER
+  // 0x0000083f 0b10011101 0b10000000 0b10000000 // MOUSE|TRACKBALL, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000103f 0b10011101 0b11000000 0b11000000 // QUADSPINNER1, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000101f 0b10111001 0b10000000 0b01000000 // QUADSPINNER1, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00001301 0b11000000 0b11000000 0b11000000 // QUADSPINNER1, BRAKE, THROTTLE, STDBUTTONS
+  // 0x0000401d 0b11010000 0b01000000 0b00010000 // THUMBWHEEL1, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+  // 0x0000451b 0b10011101 0b00000000 0b00000000 // THUMBWHEEL1, RUDDER|TWIST, THROTTLE, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x0000c011 0b10111001 0b11000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, STDBUTTONS
+  // 0x0000c01f 0b11000000 0b00000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000c03f 0b10011101 0b01000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000c51b 0b10000000 0b11000000 0b11000000 // THUMBWHEEL1, THUMBWHEEL2, RUDDER|TWIST, THROTTLE, ANALOG1, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x0001001d 0b11000000 0b11000000 0b10000000 // FISHINGREEL, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+
+  // Sets packets that define device properties
+  device_mode   = crc_data_packet(0b10011101, 1);
+  device_config = crc_data_packet(0b11000000, 1);
+  device_switch = crc_data_packet(0b11000000, 1);
+
+  // Load the clock/select (synchronizing input) programs, and configure a free state machines
+  // to run the programs.
+
+  uint offset2 = pio_add_program(pio, &polyface_read_program);
+  sm2 = pio_claim_unused_sm(pio, true);
+  polyface_read_program_init(pio, sm2, offset2, DATAIO_PIN);
+
+  // Load the plex (multiplex output) program, and configure a free state machine
+  // to run the program.
+
+  uint offset1 = pio_add_program(pio1, &polyface_send_program);
+  sm1 = pio_claim_unused_sm(pio1, true);
+  polyface_send_program_init(pio1, sm1, offset1, DATAIO_PIN);
+
+  queue_init(&packet_queue, sizeof(int64_t), 1000);
+}
+
+#endif
+
 int main(void)
 {
   board_init();
@@ -1378,6 +1717,8 @@ int main(void)
   printf("GAMECUBE");
 #elif CONFIG_XB1
   printf("XBOXONE");
+#elif CONFIG_NUON
+  printf("NUON");
 #endif
   printf("\n\n");
 
@@ -1405,6 +1746,12 @@ int main(void)
     players[i].button_mode = 0;
 #ifdef CONFIG_NGC
     players[i].gc_report = default_gc_report;
+#elif CONFIG_NUON
+    players[i].global_buttons = 0x80;
+    players[i].altern_buttons = 0x80;
+    players[i].output_buttons = 0x80;
+    players[i].output_buttons_alt = 0x80;
+    players[i].output_quad_x = 0;
 #endif
   }
   state = 3;
@@ -1419,14 +1766,12 @@ int main(void)
 
 #ifdef CONFIG_PCE
   pce_init();
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   ngc_init();
-#endif
-
-#ifdef CONFIG_XB1
+#elif CONFIG_XB1
   xb1_init();
+#elif CONFIG_NUON
+  nuon_init();
 #endif
 
   multicore_launch_core1(core1_entry);
