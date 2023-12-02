@@ -2298,8 +2298,8 @@ bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
            diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2) ||
            diff_than_n(rpt1->l2_trigger, rpt2->l2_trigger, 2) || diff_than_n(rpt1->r2_trigger, rpt2->r2_trigger, 2);
 
-  // check the rest with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 5);
+  // check the reset with mem compare
+  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds4_report_t)-4);
 
   return result;
 }
@@ -2313,8 +2313,8 @@ bool ds5_diff_report(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
            diff_than_n(rpt1->x2, rpt2->x2, 2) || diff_than_n(rpt1->y2, rpt2->y2, 2) ||
            diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
 
-  // check the rest with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 3);
+  // check the reset with mem compare
+  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds5_report_t)-7);
 
   return result;
 }
