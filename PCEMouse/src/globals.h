@@ -16,9 +16,15 @@ void __not_in_flash_func(post_globals)(
   uint8_t quad_x
 );
 
+// output logging dpad directions
+const char* dpad_str[9];
+
+// used to set the LED patterns on PS3/Switch controllers
+const uint8_t PLAYER_LEDS[11];
+
+// konami code easter egg
 bool is_fun;
 unsigned char fun_inc;
 unsigned char fun_player;
-const char* dpad_str[9];
 
 #endif // GLOBALS_H
