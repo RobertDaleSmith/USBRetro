@@ -285,6 +285,7 @@ Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 bool is_fun = false;
 unsigned char fun_inc = 0;
+unsigned char fun_player = 1;
 int last_player_count = 0;
 
 // When PCE reads, set interlock to ensure atomic update
