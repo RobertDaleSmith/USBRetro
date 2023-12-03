@@ -47,6 +47,7 @@
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
+#include "globals.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -225,12 +226,18 @@ uint8_t gc_kb_counter = 0;
 
 // CHEAT CODES :: is fun easter egg
 #define CHEAT_LENGTH 10
+#ifdef CONFIG_NUON
+#define KONAMI_CODE {0x0200, 0x0200, 0x0800, 0x0800, 0x0400, 0x0100, 0x0400, 0x0100, 0x0008, 0x4000}
+#else
 #define KONAMI_CODE {0x01, 0x01, 0x04, 0x04, 0x08, 0x02, 0x08, 0x02, 0x20, 0x10}
-uint16_t cheat_buffer[CHEAT_LENGTH] = {0};
-uint16_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
+#endif
+
+uint32_t cheat_buffer[CHEAT_LENGTH] = {0};
+uint32_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
 
 void led_blinking_task(void);
 
+extern void hid_app_init();
 extern void hid_app_task(uint8_t rumble, uint8_t leds);
 
 extern void neopixel_init(void);
@@ -277,6 +284,7 @@ typedef struct TU_ATTR_PACKED
 Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 bool is_fun = false;
+unsigned char fun_inc = 0;
 int last_player_count = 0;
 
 // When PCE reads, set interlock to ensure atomic update
@@ -350,7 +358,7 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
 }
 
 // is_fun easter egg
-void __not_in_flash_func(shift_buffer_and_insert)(uint16_t new_value) {
+void __not_in_flash_func(shift_buffer_and_insert)(uint32_t new_value) {
     // Shift all elements to the left by 1
     for (int i = 0; i < CHEAT_LENGTH - 1; i++) {
         cheat_buffer[i] = cheat_buffer[i + 1];
@@ -674,7 +682,7 @@ void __not_in_flash_func(update_output)(void)
   }
 #elif CONFIG_NUON
   // Calculate and set Nuon output packet values here.
-  int16_t buttons = (players[0].output_buttons & 0xffff) |
+  int32_t buttons = (players[0].output_buttons & 0xffff) |
                     (players[0].output_buttons_alt & 0xffff);
 
   output_buttons_0 = crc_data_packet(buttons, 2);
@@ -684,8 +692,8 @@ void __not_in_flash_func(update_output)(void)
   output_analog_2y = crc_data_packet(players[0].output_analog_2y, 1);
   output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);
 #endif
-  int16_t btns= (~players[0].output_buttons & 0xff);
-  int16_t prev_btns= (~players[0].prev_buttons & 0xff);
+  int32_t btns= (~players[0].output_buttons & 0xffff);
+  int32_t prev_btns= (~players[0].prev_buttons & 0xffff);
 
   // Stash previous buttons to detect release
   if (!btns || btns != prev_btns) {
@@ -693,8 +701,13 @@ void __not_in_flash_func(update_output)(void)
   }
 
   // Check if the Konami Code has been entered
-  if (btns && btns != prev_btns) {
-    shift_buffer_and_insert(btns);
+#ifdef CONFIG_NUON
+  if (btns != 0xff7f && btns != prev_btns) {
+    shift_buffer_and_insert(~btns & 0xff7f);
+#else
+  if ((btns & 0xff) && btns != prev_btns) {
+    shift_buffer_and_insert(btns & 0xff);
+#endif
     check_for_konami_code();
   }
 
@@ -1724,6 +1737,8 @@ int main(void)
 
   // Pause briefly for stability before starting activity
   sleep_ms(250);
+
+  hid_app_init();
 
   tusb_init();
 
