@@ -47,6 +47,7 @@
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
+#include "globals.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -66,8 +67,7 @@ uint64_t turbo_frequency;
 
 #define MAX_PLAYERS 5 // PCE supports up to 5 players
 
-#ifdef ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
-
+// ADAFRUIT_KB2040          // if build for Adafruit KB2040 board
 #define DATAIN_PIN      18
 #define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
 #define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
@@ -75,48 +75,13 @@ uint64_t turbo_frequency;
 #define OUTD2_PIN       28
 #define OUTD3_PIN       29
 
-#else
-#ifdef ADAFRUIT_QTPY_RP2040      // if build for QtPy RP2040 board
-
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
-
-#else
-#ifdef SEEED_XIAO_RP2040         // else assignments for Seed XIAO RP2040 board - note: needs specific board
-
-#define DATAIN_PIN      24
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       27
-#define OUTD2_PIN       28
-#define OUTD3_PIN       29
-
-#else                           // else assume build for RP Pico board
-
-#define DATAIN_PIN      16
-#define CLKIN_PIN       DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN       18              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN       19
-#define OUTD2_PIN       20
-#define OUTD3_PIN       21
-
-#endif
-#endif
-#endif
-
 // PCE button modes
 #define BUTTON_MODE_2 0x00
 #define BUTTON_MODE_6 0x01
 #define BUTTON_MODE_3_SEL 0x02
 #define BUTTON_MODE_3_RUN 0x03
 
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   #include "lib/joybus-pio/include/gamecube_definitions.h"
   #include "joybus.pio.h"
   #include "GamecubeConsole.h"
@@ -157,7 +122,102 @@ uint64_t turbo_frequency;
   #define BUTTON_MODE_3  0x03
   #define BUTTON_MODE_4  0x04
   #define BUTTON_MODE_KB 0x05
+#elif CONFIG_XB1
+  #include "hardware/i2c.h"
+  #include "pico/i2c_slave.h"
+
+  #define MAX_PLAYERS 4
+
+  #ifdef ADAFRUIT_QTPY_RP2040      // if build for QtPy RP2040 board
+    #define I2C_SLAVE_PORT i2c0
+    #define I2C_SLAVE_SDA_PIN 4 // TP33
+    #define I2C_SLAVE_SCL_PIN 5 // TP34
+
+    #define I2C_DAC_PORT i2c1
+    #define I2C_DAC_SDA_PIN 22
+    #define I2C_DAC_SCL_PIN 23
+
+    #define XBOX_R3_BTN_PIN 25  // TP43
+    #define XBOX_L3_BTN_PIN 24  // TP42
+    #define XBOX_GUIDE_PIN 20   // Cathode side of D27
+    #define XBOX_B_BTN_PIN 21   // TP41
+
+    #define PICO_DEFAULT_WS2812_PIN 12
+    #define NEOPIXEL_POWER_PIN 11
+    #define BOOT_BUTTON_PIN 21
+
+  #else // #ifdef ADAFRUIT_KB2040  // if build for Adafruit KB2040 boardd
+  
+    #define I2C_SLAVE_PORT i2c1
+    #define I2C_SLAVE_SDA_PIN 2
+    #define I2C_SLAVE_SCL_PIN 3
+
+    #define I2C_DAC_PORT i2c0
+    #define I2C_DAC_SDA_PIN 12
+    #define I2C_DAC_SCL_PIN 13
+
+    #define XBOX_R3_BTN_PIN 6
+    #define XBOX_L3_BTN_PIN 7
+    #define XBOX_GUIDE_PIN 8
+    #define XBOX_B_BTN_PIN 9
+  #endif
+
+#define I2C_SLAVE_ADDRESS 0x21
+#define MCP4728_I2C_ADDR0 0x60
+#define MCP4728_I2C_ADDR1 0x61
+
+static uint8_t i2c_slave_read_buffer[2] = {0xFA, 0xFF};
+static uint8_t i2c_slave_write_buffer[256];
+static int i2c_slave_write_buffer_index = 0;
+#elif CONFIG_NUON
+  #include "pico/util/queue.h"
+  #include "polyface_read.pio.h"
+  #include "polyface_send.pio.h"
+
+  #define MAX_PLAYERS       4
+
+  #define DATAIO_PIN        2
+  #define CLKIN_PIN         DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
+  
+  #define PACKET_TYPE_READ  1
+  #define PACKET_TYPE_WRITE 0
+
+  #define ATOD_CHANNEL_NONE 0x00
+  #define ATOD_CHANNEL_MODE 0x01
+  #define ATOD_CHANNEL_X1 0x02
+  #define ATOD_CHANNEL_Y1 0x03
+  #define ATOD_CHANNEL_X2 0x04
+  #define ATOD_CHANNEL_Y2 0x05
+
+  // NUON Controller Probe Options
+  #define DEFCFG 1
+  #define VERSION 11
+  #define TYPE 3
+  #define MFG 0
+  #define CRC16 0x8005
+  #define MAGIC 0x4A554445 // HEX to ASCII == "JUDE" (The Polyface inventor)
+
+  int crc_calc(unsigned char data,int crc);
+  static int crc_lut[256]; // crc look up table
+  uint32_t crc_data_packet(int32_t value, int8_t size);
+
+  uint32_t __rev(uint32_t);
+  uint8_t eparity(uint32_t);
+
+  uint32_t output_buttons_0 = 0;
+  uint32_t output_analog_1x = 0;
+  uint32_t output_analog_1y = 0;
+  uint32_t output_analog_2x = 0;
+  uint32_t output_analog_2y = 0;
+  uint32_t output_quad_x = 0;
+
+  uint32_t device_mode = 0b10111001100000111001010100000000;
+  uint32_t device_config = 0b10000000100000110000001100000000;
+  uint32_t device_switch = 0b10000000100000110000001100000000;
+  queue_t packet_queue;
+
 #endif
+
 bool update_pending;
 uint8_t gc_rumble = 0;
 uint8_t gc_kb_led = 0;
@@ -166,12 +226,18 @@ uint8_t gc_kb_counter = 0;
 
 // CHEAT CODES :: is fun easter egg
 #define CHEAT_LENGTH 10
+#ifdef CONFIG_NUON
+#define KONAMI_CODE {0x0200, 0x0200, 0x0800, 0x0800, 0x0400, 0x0100, 0x0400, 0x0100, 0x0008, 0x4000}
+#else
 #define KONAMI_CODE {0x01, 0x01, 0x04, 0x04, 0x08, 0x02, 0x08, 0x02, 0x20, 0x10}
-uint16_t cheat_buffer[CHEAT_LENGTH] = {0};
-uint16_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
+#endif
+
+uint32_t cheat_buffer[CHEAT_LENGTH] = {0};
+uint32_t konami_code[CHEAT_LENGTH] = KONAMI_CODE;
 
 void led_blinking_task(void);
 
+extern void hid_app_init();
 extern void hid_app_task(uint8_t rumble, uint8_t leds);
 
 extern void neopixel_init(void);
@@ -189,12 +255,12 @@ typedef struct TU_ATTR_PACKED
   int instance_number;
   int player_number;
 
-  int16_t global_buttons;
-  int16_t altern_buttons;
+  int32_t global_buttons;
+  int32_t altern_buttons;
   int16_t global_x;
   int16_t global_y;
 
-  int16_t output_buttons;
+  int32_t output_buttons;
   int16_t output_analog_1x;
   int16_t output_analog_1y;
   int16_t output_analog_2x;
@@ -204,17 +270,22 @@ typedef struct TU_ATTR_PACKED
 
   uint8_t keypress[3];
 
-  int16_t prev_buttons;
+  int32_t prev_buttons;
 
   int button_mode;
 #ifdef CONFIG_NGC
   gc_report_t gc_report;
+#elif CONFIG_NUON
+  int32_t output_buttons_alt;
+  int16_t output_quad_x;
 #endif
 } Player_t;
 
 Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 bool is_fun = false;
+unsigned char fun_inc = 0;
+unsigned char fun_player = 1;
 int last_player_count = 0;
 
 // When PCE reads, set interlock to ensure atomic update
@@ -272,23 +343,23 @@ static int __not_in_flash_func(add_player)(int device_address, int instance_numb
     players[playersCount].instance_number = instance_number;
     players[playersCount].player_number = playersCount + 1;
 
-    players[playersCount].global_buttons = 0xFFFF;
-    players[playersCount].altern_buttons = 0xFFFF;
+    players[playersCount].global_buttons = 0xFFFFF;
+    players[playersCount].altern_buttons = 0xFFFFF;
     players[playersCount].global_x = 0;
     players[playersCount].global_y = 0;
 
-    players[playersCount].output_buttons = 0xFFFF;
+    players[playersCount].output_buttons = 0xFFFFF;
     players[playersCount].output_analog_1x = 0;
     players[playersCount].output_analog_1y = 0;
     players[playersCount].button_mode = 0;
-    players[playersCount].prev_buttons = 0xFFFF;
+    players[playersCount].prev_buttons = 0xFFFFF;
 
     playersCount++;
     return playersCount-1; // returns player_index
 }
 
 // is_fun easter egg
-void __not_in_flash_func(shift_buffer_and_insert)(uint16_t new_value) {
+void __not_in_flash_func(shift_buffer_and_insert)(uint32_t new_value) {
     // Shift all elements to the left by 1
     for (int i = 0; i < CHEAT_LENGTH - 1; i++) {
         cheat_buffer[i] = cheat_buffer[i + 1];
@@ -331,6 +402,49 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center) {
     } else {
         return b;
     }
+}
+#elif CONFIG_NUON
+uint8_t eparity(uint32_t data) {
+  uint32_t eparity;
+  eparity = (data>>16)^data;
+  eparity ^= (eparity>>8);
+  eparity ^= (eparity>>4);
+  eparity ^= (eparity>>2);
+  eparity ^= (eparity>>1);
+  return ((eparity)&0x1);
+}
+
+// generates data response packet with crc check bytes
+uint32_t crc_data_packet(int32_t value, int8_t size) {
+  u_int32_t packet = 0;
+  u_int16_t crc = 0;
+
+  // calculate crc and place bytes into packet position
+  for (int i=0; i<size; i++) {
+    u_int8_t byte_val = (((value>>((size-i-1)*8)) & 0xff));
+    crc = (crc_calc(byte_val, crc) & 0xffff);
+    packet |= (byte_val << ((3-i)*8));
+  }
+
+  // place crc check bytes in packet position
+  packet |= (crc << ((2-size)*8));
+
+  return (packet);
+}
+
+int crc_build_lut() {
+	int i,j,k;
+	for (i=0; i<256; i++) {
+		for(j=i<<8,k=0; k<8; k++) {
+			j=(j&0x8000) ? (j<<1)^CRC16 : (j<<1); crc_lut[i]=j;
+		}
+	}
+	return(0);
+}
+
+int crc_calc(unsigned char data, int crc) {
+	if (crc_lut[1]==0) crc_build_lut();
+	return(((crc_lut[((crc>>8)^data)&0xff])^(crc<<8))&0xffff);
 }
 #endif
 
@@ -451,9 +565,7 @@ void __not_in_flash_func(update_output)(void)
                   ((bytes[2] & 0xff) << 16)| // player 3
                   ((bytes[3] & 0xff) << 24); // player 4
   output_word_1 = ((bytes[4] & 0xff));       // player 5
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   if (players[0].button_mode == BUTTON_MODE_KB) {
     gc_report = default_gc_kb_report;
   } else {
@@ -549,9 +661,40 @@ void __not_in_flash_func(update_output)(void)
     // }
   }
 
+#elif CONFIG_XB1
+  unsigned short int i;
+  for (i = 0; i < playersCount; ++i) {
+    // base controller buttons
+    int16_t byte = (players[i].output_buttons & 0xffff);
+    i2c_slave_read_buffer[0] = 0xFA;
+    i2c_slave_read_buffer[0] ^= ((byte & 0x02000) == 0) ? 0x02 : 0; // X
+    i2c_slave_read_buffer[0] ^= ((byte & 0x01000) == 0) ? 0x08 : 0; // Y
+    i2c_slave_read_buffer[0] ^= ((byte & 0x08000) == 0) ? 0x10 : 0; // R
+    i2c_slave_read_buffer[0] ^= ((byte & 0x04000) == 0) ? 0x20 : 0; // L
+    i2c_slave_read_buffer[0] ^= ((byte & 0x0080) == 0) ? 0x80 : 0; // MENU
+
+    i2c_slave_read_buffer[1] = 0xFF;
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0001) == 0) ? 0x02 : 0; // UP
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0002) == 0) ? 0x04 : 0; // RIGHT
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0004) == 0) ? 0x10 : 0; // DOWN
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0008) == 0) ? 0x08 : 0; // LEFT
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0040) == 0) ? 0x20 : 0; // VIEW
+    i2c_slave_read_buffer[1] ^= ((byte & 0x0020) == 0) ? 0x80 : 0; // A
+  }
+#elif CONFIG_NUON
+  // Calculate and set Nuon output packet values here.
+  int32_t buttons = (players[0].output_buttons & 0xffff) |
+                    (players[0].output_buttons_alt & 0xffff);
+
+  output_buttons_0 = crc_data_packet(buttons, 2);
+  output_analog_1x = crc_data_packet(players[0].output_analog_1x, 1);
+  output_analog_1y = crc_data_packet(players[0].output_analog_1y, 1);
+  output_analog_2x = crc_data_packet(players[0].output_analog_2x, 1);
+  output_analog_2y = crc_data_packet(players[0].output_analog_2y, 1);
+  output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);
 #endif
-  int16_t btns= (~players[0].output_buttons & 0xff);
-  int16_t prev_btns= (~players[0].prev_buttons & 0xff);
+  int32_t btns= (~players[0].output_buttons & 0xffff);
+  int32_t prev_btns= (~players[0].prev_buttons & 0xffff);
 
   // Stash previous buttons to detect release
   if (!btns || btns != prev_btns) {
@@ -559,8 +702,13 @@ void __not_in_flash_func(update_output)(void)
   }
 
   // Check if the Konami Code has been entered
-  if (btns && btns != prev_btns) {
-    shift_buffer_and_insert(btns);
+#ifdef CONFIG_NUON
+  if (btns != 0xff7f && btns != prev_btns) {
+    shift_buffer_and_insert(~btns & 0xff7f);
+#else
+  if ((btns & 0xff) && btns != prev_btns) {
+    shift_buffer_and_insert(btns & 0xff);
+#endif
     check_for_konami_code();
   }
 
@@ -574,14 +722,15 @@ void __not_in_flash_func(update_output)(void)
 void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
   int8_t instance,
-  uint16_t buttons,
+  uint32_t buttons,
   uint8_t analog_1x,
   uint8_t analog_1y,
   uint8_t analog_2x,
   uint8_t analog_2y,
   uint8_t analog_l,
   uint8_t analog_r,
-  uint32_t keys)
+  uint32_t keys,
+  uint8_t quad_x)
 {
   bool has6Btn = !(buttons & 0x0800);
 
@@ -639,9 +788,7 @@ void __not_in_flash_func(post_globals)(
 
         update_output();
       // }
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
       // cache analog and button values to player object
       if (analog_1x) players[player_index].output_analog_1x = analog_1x;
       if (analog_1y) players[player_index].output_analog_1y = analog_1y;
@@ -673,6 +820,56 @@ void __not_in_flash_func(post_globals)(
       // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
 
       update_output();
+#elif CONFIG_XB1
+      // maps View + Menu + Up button combo to Guide button
+      if (!((players[player_index].global_buttons) & 0xC1)) {
+        players[player_index].global_buttons ^= 0x400;
+        players[player_index].global_buttons |= 0xC1;
+      }
+
+      // cache analog and button values to player object
+      if (analog_1x) players[player_index].output_analog_1x = analog_1x;
+      if (analog_1y) players[player_index].output_analog_1y = analog_1y;
+      if (analog_2x) players[player_index].output_analog_2x = analog_2x;
+      if (analog_2y) players[player_index].output_analog_2y = analog_2y;
+      players[player_index].output_analog_l = analog_l;
+      players[player_index].output_analog_r = analog_r;
+      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+
+      update_output();
+#elif CONFIG_NUON
+
+      uint32_t nuon_buttons = 0x0080;
+
+      // Mapping the buttons from the old format to the new format, inverting the logic
+      nuon_buttons |= (!(buttons & 0x00010)) ? 0x8000 : 0;  // Circle -> C-DOWN
+      nuon_buttons |= (!(buttons & 0x00020)) ? 0x4000 : 0;  // Cross -> A
+      nuon_buttons |= (!(buttons & 0x00080)) ? 0x2000 : 0;  // Option -> START
+      nuon_buttons |= (!(buttons & 0x00040)) ? 0x1000 : 0;  // Share -> SELECT
+      nuon_buttons |= (!(buttons & 0x00004)) ? 0x0800 : 0;  // Dpad Down -> D-DOWN
+      nuon_buttons |= (!(buttons & 0x00008)) ? 0x0400 : 0;  // Dpad Left -> D-LEFT
+      nuon_buttons |= (!(buttons & 0x00001)) ? 0x0200 : 0;  // Dpad Up -> D-UP
+      nuon_buttons |= (!(buttons & 0x00002)) ? 0x0100 : 0;  // Dpad Right -> D-RIGHT
+      // Skipping the two buttons represented by 0x0080 and 0x0040 in the new format
+      nuon_buttons |= (!(buttons & 0x04000)) ? 0x0020 : 0;  // L1 -> L
+      nuon_buttons |= (!(buttons & 0x08000)) ? 0x0010 : 0;  // R1 -> R
+      nuon_buttons |= (!(buttons & 0x02000)) ? 0x0008 : 0;  // Square -> B
+      nuon_buttons |= (!(buttons & 0x01000)) ? 0x0004 : 0;  // Triangle -> C-LEFT
+      nuon_buttons |= (!(buttons & 0x00100)) ? 0x0002 : 0;  // L2 -> C-UP
+      nuon_buttons |= (!(buttons & 0x00200)) ? 0x0001 : 0;  // R2 -> C-RIGHT
+
+      if (!instance) {
+        players[player_index].output_buttons = nuon_buttons;
+      } else {
+        players[player_index].output_buttons_alt = nuon_buttons;
+      }
+
+      if (analog_1x) players[player_index].output_analog_1x = analog_1x;
+      if (analog_1y) players[player_index].output_analog_1y = analog_1y;
+      if (analog_2x) players[player_index].output_analog_2x = analog_2x;
+      if (analog_2y) players[player_index].output_analog_2y = analog_2y;
+      if (quad_x) players[player_index].output_quad_x = quad_x;
+      update_output();
 #endif
 
   }
@@ -688,7 +885,8 @@ void __not_in_flash_func(post_mouse_globals)(
   int8_t instance,
   uint16_t buttons,
   uint8_t delta_x,
-  uint8_t delta_y)
+  uint8_t delta_y,
+  uint8_t quad_x)
 {
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
@@ -725,9 +923,7 @@ void __not_in_flash_func(post_mouse_globals)(
 
         update_output();
       }
-#endif
-
-#ifdef CONFIG_NGC
+#else
       // fixes out of range analog values (1-255)
       if (delta_x == 0) delta_x = 1;
       if (delta_y == 0) delta_y = 1;
@@ -768,6 +964,9 @@ void __not_in_flash_func(post_mouse_globals)(
       // players[player_index].output_analog_2y = delta_y;
       players[player_index].output_buttons = buttons;
 
+  #ifdef CONFIG_NUON
+      if (quad_x) players[player_index].output_quad_x = quad_x;
+  #endif
       update_output();
 #endif
 
@@ -817,6 +1016,46 @@ static void __not_in_flash_func(process_signals)(void)
   }
 }
 
+#ifdef CONFIG_XB1
+void mcp4728_write_dac(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint16_t value) {
+    uint8_t buf[3];
+    buf[0] = (channel << 1) | 0x40; // Select channel and set Write DAC command
+    buf[1] = (value >> 8) & 0x0F; // Set upper 4 bits of value
+    buf[2] = value & 0xFF; // Set lower 8 bits of value
+
+    i2c_write_blocking(i2c, address, buf, 3, false);
+}
+
+void mcp4728_set_config(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8_t gain, uint8_t power_down) {
+    uint8_t buf[3];
+    buf[0] = (channel << 1) | 0x60; // Select channel and set Write DAC and EEPROM command
+    buf[1] = (gain << 4) | (power_down << 1);
+    buf[2] = 0; // Dummy value
+
+    i2c_write_blocking(i2c, address, buf, 3, false);
+}
+
+// Function to set the power-down mode for a channel on MCP4728
+// channel: 0 to 3 for the DAC channels
+// pd_mode: 0 to 3 for different power down modes
+//          0 = No power-down mode (Normal operation)
+//          1 = Power-down mode with 1kΩ to ground
+//          2 = Power-down mode with 100kΩ to ground
+//          3 = Power-down mode with 500kΩ to ground
+void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8_t pd_mode) {
+    uint8_t command[3];
+
+    // Construct command to set the power-down mode for the channel
+    // The PD bits are the least significant bits of the first command byte
+    command[0] = (0x40 | (channel << 1)) | (pd_mode & 0x03); // Upper command byte with channel and PD mode
+    command[1] = 0x00; // Lower data byte (Don't care for power-down mode)
+    command[2] = 0x00; // Upper data byte (Don't care for power-down mode)
+
+    // Send the command to the MCP4728
+    i2c_write_blocking(i2c, address, command, 3, false);
+}
+#endif
+
 //
 // core1_entry - inner-loop for the second core
 //             - when the "CLR" line is de-asserted, set lock flag
@@ -824,7 +1063,18 @@ static void __not_in_flash_func(process_signals)(void)
 //
 static void __not_in_flash_func(core1_entry)(void)
 {
-static bool rx_bit = 0;
+#ifdef CONFIG_PCE
+  static bool rx_bit = 0;
+#elif CONFIG_NUON
+uint64_t packet = 0;
+  uint16_t state = 0;
+  uint8_t channel = 0;
+  uint8_t id = 0;
+  bool alive = false;
+  bool tagged = false;
+  bool branded = false;
+  int requestsB = 0;
+#endif
 
   while (1)
   {
@@ -884,9 +1134,7 @@ static bool rx_bit = 0;
 
         output_exclude = true;            // continue to lock the output values (which are now zero)
      }
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
     // Wait for GameCube console to poll controller
     gc_rumble = GamecubeConsole_WaitForPoll(&gc) ? 255 : 0;
 
@@ -916,6 +1164,226 @@ static bool rx_bit = 0;
     update_output();
 
     // printf("MODE: %d\n", gc._reading_mode);
+#elif CONFIG_XB1
+    // Analog outputs
+    uint16_t x1Val = ((players[0].output_analog_1x * 2047)/255);
+    uint16_t y1Val = ((players[0].output_analog_1y * 2047)/255);
+             y1Val = (y1Val - 2047) * -1;
+    uint16_t x2Val = ((players[0].output_analog_2x * 2047)/255);
+    uint16_t y2Val = ((players[0].output_analog_2y * 2047)/255);
+             y2Val = (y2Val - 2047) * -1;
+    uint16_t lVal = ((players[0].output_analog_l * 2047)/255);
+             lVal = (lVal - 2047) * -1;
+    uint16_t rVal = ((players[0].output_analog_r * 2047)/255);
+             rVal = (rVal - 2047) * -1;
+
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 0, x1Val);
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 1, y1Val);
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 2, x2Val);
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 3, y2Val);
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 0, lVal);
+    mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 1, rVal);
+
+    // Individual buttons
+    gpio_put(XBOX_B_BTN_PIN, ((players[0].output_buttons & 0x0010) == 0) ? 0 : 1);
+    gpio_put(XBOX_GUIDE_PIN, ((players[0].output_buttons & 0x0400) == 0) ? 0 : 1);
+    gpio_put(XBOX_R3_BTN_PIN, ((players[0].output_buttons & 0x20000) == 0) ? 0 : 1);
+    gpio_put(XBOX_L3_BTN_PIN, ((players[0].output_buttons & 0x10000) == 0) ? 0 : 1);
+
+    update_pending = false;
+
+    unsigned short int i;
+    for (i = 0; i < MAX_PLAYERS; ++i) {
+      // decrement outputs from globals
+      if (players[i].global_x != 0) {
+        players[i].global_x = (players[i].global_x - (players[i].output_analog_1x - 128));
+        // if (players[i].global_x > 128) players[i].global_x = 128;
+        // if (players[i].global_x < -128) players[i].global_x = -128;
+        players[i].output_analog_1x = 128;
+      }
+      if (players[i].global_y != 0) {
+        players[i].global_y = (players[i].global_y - (players[i].output_analog_1y - 128));
+        // if (players[i].global_y > 128) players[i].global_y = 128;
+        // if (players[i].global_y < -128) players[i].global_y = -128;
+        players[i].output_analog_1y = 128;
+      }
+    }
+    update_output();
+#elif CONFIG_NUON
+    packet = 0;
+    for (int i = 0; i < 2; ++i) {
+      uint32_t rxdata = pio_sm_get_blocking(pio, sm2);
+      packet = ((packet) << 32) | (rxdata & 0xFFFFFFFF);
+    }
+
+    // queue_try_add(&packet_queue, &packet);
+
+    uint8_t dataA = ((packet>>17) & 0b11111111);
+    uint8_t dataS = ((packet>>9) & 0b01111111);
+    uint8_t dataC = ((packet>>1) & 0b01111111);
+    uint8_t type0 = ((packet>>25) & 0b00000001);
+    if (dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) { // RESET
+      id = 0;
+      alive = false;
+      tagged = false;
+      branded = false;
+      state = 0;
+      channel = 0;
+    }
+    if (dataA == 0x80) { // ALIVE
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b01);
+      if (alive) word1 = __rev(((id & 0b01111111) << 1));
+      else alive = true;
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x88 && dataS == 0x04 && dataC == 0x40) { // ERROR
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x90 && !branded) { // MAGIC
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(MAGIC);
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x94) { // PROBE
+      uint32_t word0 = 1; // default res from HPI controller
+      uint32_t word1 = __rev(0b10001011000000110000000000000000);
+
+      //DEFCFG VERSION     TYPE      MFG TAGGED BRANDED    ID P
+      //   0b1 0001011 00000011 00000000      0       0 00000 0
+      word1 = ((DEFCFG  & 1)<<31) |
+              ((VERSION & 0b01111111)<<24) |
+              ((TYPE    & 0b11111111)<<16) |
+              ((MFG     & 0b11111111)<<8) |
+              (((tagged ? 1:0) & 1)<<7) |
+              (((branded? 1:0) & 1)<<6) |
+              ((id      & 0b00011111)<<1);
+      word1 = __rev(word1 | eparity(word1));
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x27 && dataS == 0x01 && dataC == 0x00) { // REQUEST (ADDRESS)
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+
+      if (channel == ATOD_CHANNEL_MODE) {
+        // word1 = __rev(0b11000100100000101001101100000000); // 68
+        word1 = __rev(crc_data_packet(0b11110100, 1)); // send & recv?
+      } else {
+        // word1 = __rev(0b11000110000000101001010000000000); // 70
+        word1 = __rev(crc_data_packet(0b11110110, 1)); // send & recv?
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x84 && dataS == 0x04 && dataC == 0x40) { // REQUEST (B)
+      uint32_t word0 = 1;
+      uint32_t word1 = 0;
+
+      // 
+      if ((0b101001001100 >> requestsB) & 0b01) {
+        word1 = __rev(0b10);
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+
+      requestsB++;
+      if (requestsB == 12) requestsB = 7;
+    }
+    else if (dataA == 0x34 && dataS == 0x01) { // CHANNEL
+      channel = dataC;
+    }
+    else if (dataA == 0x32 && dataS == 0x02 && dataC == 0x00) { // QUADX
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
+
+      word1 = __rev(output_quad_x);
+      // TODO: solve how to set unique values to first two bytes plus checksum
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x35 && dataS == 0x01 && dataC == 0x00) { // ANALOG
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(0b10000000100000110000001100000000); //0
+
+      // ALL_BUTTONS: CTRLR_STDBUTTONS & CTRLR_DPAD & CTRLR_SHOULDER & CTRLR_EXTBUTTONS
+      // <= 23 - 0x51f CTRLR_TWIST & CTRLR_THROTTLE & CTRLR_ANALOG1 & ALL_BUTTONS
+      // 29-47 - 0x83f CTRLR_MOUSE & CTRLR_ANALOG1 & CTRLR_ANALOG2 & ALL_BUTTONS
+      // 48-69 - 0x01f CTRLR_ANALOG1 & ALL_BUTTONS
+      // 70-92 - 0x808 CTRLR_MOUSE & CTRLR_EXTBUTTONS
+      // >= 93 - ERROR?
+ 
+      if (channel == ATOD_CHANNEL_NONE) {
+        word1 = __rev(device_mode); // device mode packet?
+      }
+      // if (channel == ATOD_CHANNEL_MODE) {
+      //   word1 = __rev(0b10000000100000110000001100000000);
+      // }
+      if (channel == ATOD_CHANNEL_X1) {
+        word1 = __rev(output_analog_1x);
+      }
+      else if (channel == ATOD_CHANNEL_Y1) {
+        word1 = __rev(output_analog_1y);
+      }
+      else if (channel == ATOD_CHANNEL_X2) {
+        word1 = __rev(output_analog_2x);
+      }
+      else if (channel == ATOD_CHANNEL_Y2) {
+        word1 = __rev(output_analog_2y);
+      }
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x25 && dataS == 0x01 && dataC == 0x00) { // CONFIG
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(device_config); // device config packet?
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x31 && dataS == 0x01 && dataC == 0x00) { // {SWITCH[16:9]}
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(device_switch); // extra device config?
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x30 && dataS == 0x02 && dataC == 0x00) { // {SWITCH[8:1]}
+      uint32_t word0 = 1;
+      uint32_t word1 = __rev(output_buttons_0);
+
+      pio_sm_put_blocking(pio1, sm1, word1);
+      pio_sm_put_blocking(pio1, sm1, word0);
+    }
+    else if (dataA == 0x99 && dataS == 0x01) { // STATE
+      if (type0 == PACKET_TYPE_READ) {
+        uint32_t word0 = 1;
+        uint32_t word1 = __rev(0b11000000000000101000000000000000);
+
+        if (((state >> 8) & 0xff) == 0x41 && (state & 0xff) == 0x51) {
+          word1 = __rev(0b11010001000000101110011000000000);
+        }
+        pio_sm_put_blocking(pio1, sm1, word1);
+        pio_sm_put_blocking(pio1, sm1, word0);
+      } else { // type0 == PACKET_TYPE_WRITE
+        state = ((state) << 8) | (dataC & 0xff);
+      }
+    }
+    else if (dataA == 0xb4 && dataS == 0x00) { // BRAND
+      id = dataC;
+      branded = true;
+    }
 #endif
   }
 }
@@ -1089,6 +1557,169 @@ void ngc_init() {
 
 #endif
 
+#ifdef CONFIG_XB1
+
+// I2C interrupt handlers
+static void i2c_slave_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
+    int data;
+    size_t bytes_available = 0;
+    
+    // Handle I2C events
+    switch (event) {
+        case I2C_SLAVE_RECEIVE:
+            // Read data from master
+            // printf("[RECEIVE]::");
+            
+            // determine how many bytes have been received
+            bytes_available = i2c_get_read_available(i2c);
+            if (bytes_available > 0) {
+                // printf("bytes_available:%d data:", bytes_available);
+
+                // read the bytes from the RX FIFO
+                i2c_read_raw_blocking(i2c, i2c_slave_write_buffer, bytes_available);
+                // process the received bytes as needed
+                // for (int i = 0; i < bytes_available; ++i) {
+                //   printf(" 0x%x", i2c_slave_write_buffer[i]);
+                // }
+            }
+            break;
+
+        case I2C_SLAVE_REQUEST:
+            // Write data to master
+            // printf("[REQUEST]:: 0x%x 0x%x", i2c_slave_read_buffer[0], i2c_slave_read_buffer[1]);
+
+            i2c_write_raw_blocking(i2c, i2c_slave_read_buffer, sizeof(i2c_slave_read_buffer));
+            break;
+
+        default:
+            // printf("[UNHANDLED]");
+            break;
+    }
+    // printf("\n");
+}
+
+void xb1_init() {
+  sleep_ms(1000);
+
+  // corrects UART serial output after overclock
+  stdio_init_all();
+
+  gpio_init(XBOX_B_BTN_PIN);
+  // gpio_disable_pulls(XBOX_B_BTN_PIN);
+  gpio_set_dir(XBOX_B_BTN_PIN, GPIO_OUT);
+
+  gpio_init(XBOX_GUIDE_PIN);
+  gpio_set_dir(XBOX_GUIDE_PIN, GPIO_OUT);
+
+  gpio_init(XBOX_R3_BTN_PIN);
+  gpio_set_dir(XBOX_R3_BTN_PIN, GPIO_OUT);
+
+  gpio_init(XBOX_L3_BTN_PIN);
+  gpio_set_dir(XBOX_L3_BTN_PIN, GPIO_OUT);
+
+  gpio_put(XBOX_B_BTN_PIN, 1);
+  gpio_put(XBOX_GUIDE_PIN, 1);
+  gpio_put(XBOX_R3_BTN_PIN, 1);
+  gpio_put(XBOX_L3_BTN_PIN, 1);
+
+#ifdef ADAFRUIT_QTPY_RP2040
+  gpio_init(NEOPIXEL_POWER_PIN);
+  gpio_set_dir(NEOPIXEL_POWER_PIN, GPIO_OUT);
+  gpio_put(NEOPIXEL_POWER_PIN, 1);
+#endif
+
+  gpio_init(I2C_SLAVE_SDA_PIN);
+  gpio_set_function(I2C_SLAVE_SDA_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(I2C_SLAVE_SDA_PIN);
+
+  gpio_init(I2C_SLAVE_SCL_PIN);
+  gpio_set_function(I2C_SLAVE_SCL_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(I2C_SLAVE_SCL_PIN);
+
+  // Initialize Slave I2C for simulated XB1Slim GPIO expander
+  i2c_init(I2C_SLAVE_PORT, 400 * 1000);
+  i2c_slave_init(I2C_SLAVE_PORT, I2C_SLAVE_ADDRESS, &i2c_slave_handler);
+
+  // Initialize DAC I2C for simulated analog sticks/triggers
+  i2c_init(I2C_DAC_PORT, 400 * 1000);
+  gpio_set_function(I2C_DAC_SDA_PIN, GPIO_FUNC_I2C);
+  gpio_set_function(I2C_DAC_SCL_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(I2C_DAC_SDA_PIN);
+  gpio_pull_up(I2C_DAC_SCL_PIN);
+
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 0, 0, 0); // TP64 - LSX
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 1, 0, 0); // TP63 - LSY
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 2, 0, 0); // TP66 - RSX
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 3, 0, 0); // TP65 - RSY
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 0, 0, 0); // TP68 - LT
+  mcp4728_set_config(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 1, 0, 0); // TP67 - RT
+}
+
+#endif
+
+#ifdef CONFIG_NUON
+
+void nuon_init() {
+  // init for nuon communication
+  output_buttons_0 = 0b00000000100000001000001100000011; // no buttons pressed
+  output_analog_1x = 0b10000000100000110000001100000000; // x1 = 0
+  output_analog_1y = 0b10000000100000110000001100000000; // y1 = 0
+  output_analog_2x = 0b10000000100000110000001100000000; // x2 = 0
+  output_analog_2y = 0b10000000100000110000001100000000; // y2 = 0
+  output_quad_x = 0b10000000000000000000000000000000; // quadx = 0
+
+  // PROPERTIES DEV____MOD DEV___CONF DEV____EXT // CTRL_VALUES from SDK joystick.h
+  // 0x0000001f 0b10111001 0b10000000 0b10000000 // ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000003f 0b10000000 0b01000000 0b01000000 // ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000011d 0b11000000 0b00000000 0b10000000 // THROTTLE, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+  // 0x0000011f 0b11000000 0b01000000 0b00010000 // THROTTLE, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000014f 0b11010000 0b00000000 0b00000000 // THROTTLE, WHEEL|PADDLE, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00000300 0b11000000 0b00000000 0b11000000 // BRAKE, THROTTLE
+  // 0x00000341 0b11000000 0b00000000 0b00000000 // BRAKE, THROTTLE, WHEEL|PADDLE, STDBUTTONS
+  // 0x0000034f 0b10111001 0b10000000 0b00000000 // BRAKE, THROTTLE, WHEEL|PADDLE, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000041d 0b11000000 0b11000000 0b00000000 // RUDDER|TWIST, ANALOG1, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x00000513 0b10000000 0b00000000 0b00000000 // RUDDER|TWIST, THROTTLE, ANALOG1, DPAD, STDBUTTONS
+  // 0x0000051f 0b10000000 0b10000000 0b10000000 // RUDDER|TWIST, THROTTLE, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00000800 0b11010000 0b00000000 0b10000000 // MOUSE|TRACKBALL
+  // 0x00000808 0b11010000 0b10000000 0b10000000 // MOUSE|TRACKBALL, EXTBUTTONS
+  // 0x00000811 0b11001000 0b00010000 0b00010000 // MOUSE|TRACKBALL, ANALOG1, STDBUTTONS
+  // 0x00000815 0b11001000 0b11000000 0b00010000 // MOUSE|TRACKBALL, ANALOG1, STDBUTTONS, SHOULDER
+  // 0x0000083f 0b10011101 0b10000000 0b10000000 // MOUSE|TRACKBALL, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000103f 0b10011101 0b11000000 0b11000000 // QUADSPINNER1, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000101f 0b10111001 0b10000000 0b01000000 // QUADSPINNER1, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x00001301 0b11000000 0b11000000 0b11000000 // QUADSPINNER1, BRAKE, THROTTLE, STDBUTTONS
+  // 0x0000401d 0b11010000 0b01000000 0b00010000 // THUMBWHEEL1, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+  // 0x0000451b 0b10011101 0b00000000 0b00000000 // THUMBWHEEL1, RUDDER|TWIST, THROTTLE, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x0000c011 0b10111001 0b11000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, STDBUTTONS
+  // 0x0000c01f 0b11000000 0b00000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000c03f 0b10011101 0b01000000 0b01000000 // THUMBWHEEL1, THUMBWHEEL2, ANALOG1, ANALOG2, STDBUTTONS, DPAD, SHOULDER, EXTBUTTONS
+  // 0x0000c51b 0b10000000 0b11000000 0b11000000 // THUMBWHEEL1, THUMBWHEEL2, RUDDER|TWIST, THROTTLE, ANALOG1, STDBUTTONS, DPAD, EXTBUTTONS
+  // 0x0001001d 0b11000000 0b11000000 0b10000000 // FISHINGREEL, ANALOG1, STDBUTTONS, SHOULDER, EXTBUTTONS
+
+  // Sets packets that define device properties
+  device_mode   = crc_data_packet(0b10011101, 1);
+  device_config = crc_data_packet(0b11000000, 1);
+  device_switch = crc_data_packet(0b11000000, 1);
+
+  // Load the clock/select (synchronizing input) programs, and configure a free state machines
+  // to run the programs.
+
+  uint offset2 = pio_add_program(pio, &polyface_read_program);
+  sm2 = pio_claim_unused_sm(pio, true);
+  polyface_read_program_init(pio, sm2, offset2, DATAIO_PIN);
+
+  // Load the plex (multiplex output) program, and configure a free state machine
+  // to run the program.
+
+  uint offset1 = pio_add_program(pio1, &polyface_send_program);
+  sm1 = pio_claim_unused_sm(pio1, true);
+  polyface_send_program_init(pio1, sm1, offset1, DATAIO_PIN);
+
+  queue_init(&packet_queue, sizeof(int64_t), 1000);
+}
+
+#endif
+
 int main(void)
 {
   board_init();
@@ -1098,11 +1729,17 @@ int main(void)
   printf("PCENGINE");
 #elif CONFIG_NGC
   printf("GAMECUBE");
+#elif CONFIG_XB1
+  printf("XBOXONE");
+#elif CONFIG_NUON
+  printf("NUON");
 #endif
   printf("\n\n");
 
   // Pause briefly for stability before starting activity
   sleep_ms(250);
+
+  hid_app_init();
 
   tusb_init();
 
@@ -1110,21 +1747,27 @@ int main(void)
 
   unsigned short int i;
   for (i = 0; i < MAX_PLAYERS; ++i) {
-    players[i].global_buttons = 0xFFFF;
-    players[i].altern_buttons = 0xFFFF;
+    players[i].global_buttons = 0xFFFFF;
+    players[i].altern_buttons = 0xFFFFF;
     players[i].global_x = 0;
     players[i].global_y = 0;
-    players[i].output_buttons = 0xFFFF;
+    players[i].output_buttons = 0xFFFFF;
     players[i].output_analog_1x = 128;
     players[i].output_analog_1y = 128;
     players[i].output_analog_2x = 128;
     players[i].output_analog_2y = 128;
     players[i].output_analog_l = 0;
     players[i].output_analog_r = 0;
-    players[i].prev_buttons = 0xFFFF;
+    players[i].prev_buttons = 0xFFFFF;
     players[i].button_mode = 0;
 #ifdef CONFIG_NGC
     players[i].gc_report = default_gc_report;
+#elif CONFIG_NUON
+    players[i].global_buttons = 0x80;
+    players[i].altern_buttons = 0x80;
+    players[i].output_buttons = 0x80;
+    players[i].output_buttons_alt = 0x80;
+    players[i].output_quad_x = 0;
 #endif
   }
   state = 3;
@@ -1139,10 +1782,12 @@ int main(void)
 
 #ifdef CONFIG_PCE
   pce_init();
-#endif
-
-#ifdef CONFIG_NGC
+#elif CONFIG_NGC
   ngc_init();
+#elif CONFIG_XB1
+  xb1_init();
+#elif CONFIG_NUON
+  nuon_init();
 #endif
 
   multicore_launch_core1(core1_entry);
