@@ -2,10 +2,10 @@
 #include "sony_ds5.h"
 #include "globals.h"
 
-// check if device is Sony PS5 DualSense controller
+// check if device is Sony PlayStation 5 controllers
 bool is_sony_ds5(uint16_t vid, uint16_t pid)
 {
-  return ((vid == 0x054c && pid == 0x0ce6)); // DualSense wireless controller (PS5)
+  return ((vid == 0x054c && pid == 0x0ce6)); // Sony DualSense
 }
 
 // check if 2 reports are different enough
@@ -377,8 +377,14 @@ void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
 }
 
+// initialize usb hid input
+bool init_sony_ds5(uint8_t dev_addr, uint8_t instance) {
+  return true;
+}
+
 DeviceInterface sony_ds5_interface = {
-    .is_device = is_sony_ds5,
-    .process = process_sony_ds5,
-    .task = task_sony_ds5
+  .is_device = is_sony_ds5,
+  .process = process_sony_ds5,
+  .task = task_sony_ds5,
+  .init = init_sony_ds5
 };

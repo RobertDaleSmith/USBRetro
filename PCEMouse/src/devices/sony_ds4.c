@@ -2,7 +2,7 @@
 #include "sony_ds4.h"
 #include "globals.h"
 
-// check if device is Sony DualShock 4
+// check if device is Sony PlayStation 4 controllers
 bool is_sony_ds4(uint16_t vid, uint16_t pid)
 {
   return ( (vid == 0x054c && (pid == 0x09cc || pid == 0x05c4)) // Sony DualShock4 
@@ -327,8 +327,14 @@ void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
 }
 
+// initialize usb hid input
+bool init_sony_ds4(uint8_t dev_addr, uint8_t instance) {
+  return true;
+}
+
 DeviceInterface sony_ds4_interface = {
-    .is_device = is_sony_ds4,
-    .process = process_sony_ds4,
-    .task = task_sony_ds4
+  .is_device = is_sony_ds4,
+  .process = process_sony_ds4,
+  .task = task_sony_ds4,
+  .init = init_sony_ds4
 };
