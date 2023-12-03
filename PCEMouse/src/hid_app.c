@@ -38,6 +38,8 @@
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "hid_parser.h"
+#include "devices/device_utils.h"
+#include "devices/device_registry.h"
 
 #define HID_DEBUG 0
 #define LANGUAGE_ID 0x0409
@@ -193,109 +195,6 @@ typedef union
   uint8_t buf[49];
 } sony_ds3_output_report_01_t;
 
-// Sony DS4 report layout detail https://www.psdevwiki.com/ps4/DS4-USB
-typedef struct TU_ATTR_PACKED
-{
-  uint8_t x, y, z, rz; // joystick
-
-  struct {
-    uint8_t dpad     : 4; // (hat format, 0x08 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
-    uint8_t square   : 1; // west
-    uint8_t cross    : 1; // south
-    uint8_t circle   : 1; // east
-    uint8_t triangle : 1; // north
-  };
-
-  struct {
-    uint8_t l1     : 1;
-    uint8_t r1     : 1;
-    uint8_t l2     : 1;
-    uint8_t r2     : 1;
-    uint8_t share  : 1;
-    uint8_t option : 1;
-    uint8_t l3     : 1;
-    uint8_t r3     : 1;
-  };
-
-  struct {
-    uint8_t ps      : 1; // playstation button
-    uint8_t tpad    : 1; // track pad click
-    uint8_t counter : 6; // +1 each report
-  };
-
-  uint8_t l2_trigger; // 0 released, 0xff fully pressed
-  uint8_t r2_trigger; // as above
-
-  uint16_t timestamp;
-  uint8_t  battery;
-  int16_t  gyro[3];  // x, y, z;
-  int16_t  accel[3]; // x, y, z
-  int8_t   unknown_a[5]; // who knows?
-  uint8_t  headset;
-  int8_t   unknown_b[2]; // future use?
-
-  struct {
-    uint8_t tpad_event : 4; // track pad event 0x01 = 2 finger tap; 0x02 last on edge?
-    uint8_t unknown_c  : 4; // future use?
-  };
-
-  uint8_t  tpad_counter;
-
-  struct {
-    uint8_t tpad_f1_count : 7;
-    uint8_t tpad_f1_down  : 1;
-  };
-
-  int8_t tpad_f1_pos[3];
-
-  // struct {
-  //   uint8_t tpad_f2_count : 7;
-  //   uint8_t tpad_f2_down  : 1;
-  // };
-
-  // int8_t tpad_f2_pos[3];
-
-  // struct {
-  //   uint8_t tpad_f1_count_prev : 7;
-  //   uint8_t tpad_f1_down_prev  : 1;
-  // };
-
-  // int8_t [3];
-
-} sony_ds4_report_t;
-
-typedef struct TU_ATTR_PACKED {
-  // First 16 bits set what data is pertinent in this structure (1 = set; 0 = not set)
-  uint8_t set_rumble : 1;
-  uint8_t set_led : 1;
-  uint8_t set_led_blink : 1;
-  uint8_t set_ext_write : 1;
-  uint8_t set_left_volume : 1;
-  uint8_t set_right_volume : 1;
-  uint8_t set_mic_volume : 1;
-  uint8_t set_speaker_volume : 1;
-  uint8_t set_flags2;
-
-  uint8_t reserved;
-
-  uint8_t motor_right;
-  uint8_t motor_left;
-
-  uint8_t lightbar_red;
-  uint8_t lightbar_green;
-  uint8_t lightbar_blue;
-  uint8_t lightbar_blink_on;
-  uint8_t lightbar_blink_off;
-
-  uint8_t ext_data[8];
-
-  uint8_t volume_left;
-  uint8_t volume_right;
-  uint8_t volume_mic;
-  uint8_t volume_speaker;
-
-  uint8_t other[9];
-} sony_ds4_output_report_t;
 
 // Sony DS5 controller
 typedef struct TU_ATTR_PACKED
@@ -875,20 +774,6 @@ static inline bool is_sony_ds3(uint8_t dev_addr)
   return ((vid == 0x054c && pid == 0x0268)); // Sony DualShock3
 }
 
-// check if device is Sony DualShock 4
-static inline bool is_sony_ds4(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ( (vid == 0x054c && (pid == 0x09cc || pid == 0x05c4)) // Sony DualShock4 
-           || (vid == 0x0f0d && pid == 0x005e)                 // Hori FC4 
-           || (vid == 0x0f0d && pid == 0x00ee)                 // Hori PS4 Mini (PS4-099U) 
-           || (vid == 0x1f4f && pid == 0x1002)                 // ASW GG xrd controller
-           || (vid == 0x1532 && pid == 0x0401)                 // Razer Panthera PS4 Controller (GP2040-CE PS4 Mode)
-         );
-}
-
 // check if device is Wii U Pokken USB Controller
 static inline bool is_pokken(uint8_t dev_addr)
 {
@@ -1127,7 +1012,7 @@ extern int __not_in_flash_func(find_player_index)(int device_address, int instan
 extern void remove_players_by_address(int device_address, int instance);
 
 extern bool is_fun;
-unsigned char fun_inc = 0;
+extern unsigned char fun_inc;
 unsigned char fun_player = 1;
 /** Used to set the LEDs on the controllers */
 const uint8_t PLAYER_LEDS[] = {
@@ -1158,6 +1043,10 @@ bool switch_send_command(uint8_t dev_addr, uint8_t instance, uint8_t *data, uint
   memcpy(buf + 8, data, len);
 
   tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
+}
+
+void hid_app_init() {
+  register_devices();
 }
 
 void hid_app_task(uint8_t rumble, uint8_t leds)
@@ -1282,158 +1171,11 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       // send DS4 LED and rumble response
       if (devices[dev_addr].instances[instance].type == CONTROLLER_DS4) {
         uint32_t current_time_ms = board_millis();
-        if ( current_time_ms - start_ms_ds4 >= interval_ms)
-        {
+        if (current_time_ms - start_ms_ds4 >= interval_ms) {
           int player_index = find_player_index(dev_addr, instance);
           start_ms_ds4 = current_time_ms;
 
-          sony_ds4_output_report_t output_report = {0};
-          output_report.set_led = 1;
-
-#ifdef CONFIG_NGC
-          switch (player_index+1)
-          {
-          case 1: // purple
-            output_report.lightbar_red = 20; // purple
-            output_report.lightbar_blue = 40;//
-            break;
-
-          case 2: // blue
-            output_report.lightbar_blue = 64;
-            break;
-
-          case 3: // red
-            output_report.lightbar_red = 64;
-            break;
-
-          case 4: // green
-            output_report.lightbar_green = 64;
-            break;
-
-          case 5: // yellow
-            output_report.lightbar_red = 64;
-            output_report.lightbar_green = 64;
-            break;
-
-          default: // white
-            output_report.lightbar_blue = 32;
-            output_report.lightbar_green = 32;
-            output_report.lightbar_red = 32;
-            break;
-          }
-#elif CONFIG_XB1
-          switch (player_index+1)
-          {
-          case 1: // green
-            output_report.lightbar_green = 64;
-            break;
-
-          case 2: // blue
-            output_report.lightbar_blue = 64;
-            break;
-
-          case 3: // red
-            output_report.lightbar_red = 64;
-            break;
-
-          case 4: // purple
-            output_report.lightbar_red = 20; // purple
-            output_report.lightbar_blue = 40;//
-            break;
-
-          case 5: // yellow
-            output_report.lightbar_red = 64;
-            output_report.lightbar_green = 64;
-            break;
-
-          default: // white
-            output_report.lightbar_blue = 32;
-            output_report.lightbar_green = 32;
-            output_report.lightbar_red = 32;
-            break;
-          }
-#elif CONFIG_NUON
-          switch (player_index+1)
-          {
-          case 1: // red
-            output_report.lightbar_red = 64;
-            break;
-
-          case 2: // blue
-            output_report.lightbar_blue = 64;
-            break;
-
-          case 3: // green
-            output_report.lightbar_green = 64;
-            break;
-
-          case 4: // purple
-            output_report.lightbar_red = 20; // purple
-            output_report.lightbar_blue = 40;//
-            break;
-
-          case 5: // yellow
-            output_report.lightbar_red = 64;
-            output_report.lightbar_green = 64;
-            break;
-
-          default: // white
-            output_report.lightbar_blue = 32;
-            output_report.lightbar_green = 32;
-            output_report.lightbar_red = 32;
-            break;
-          }
-#elif CONFIG_PCE
-          switch (player_index+1)
-          {
-          case 1: // blue
-            output_report.lightbar_blue = 64;
-            break;
-
-          case 2: // red
-            output_report.lightbar_red = 64;
-            break;
-
-          case 3: // green
-            output_report.lightbar_green = 64;
-            break;
-
-          case 4: // purple
-            output_report.lightbar_red = 20; // purple
-            output_report.lightbar_blue = 40;//
-            break;
-
-          case 5: // yellow
-            output_report.lightbar_red = 64;
-            output_report.lightbar_green = 64;
-            break;
-
-          default: // white
-            output_report.lightbar_blue = 32;
-            output_report.lightbar_green = 32;
-            output_report.lightbar_red = 32;
-            break;
-          }
-#endif
-          // fun
-          if (player_index+1 && is_fun) {
-            output_report.lightbar_red = fun_inc;
-            output_report.lightbar_green = (fun_inc%2 == 0) ? fun_inc+64 : 0;
-            output_report.lightbar_blue = (fun_inc%2 == 0) ? 0 : fun_inc+128;
-          }
-
-          output_report.set_rumble = 1;
-          output_report.motor_left = devices[dev_addr].instances[instance].motor_left;
-          output_report.motor_right = devices[dev_addr].instances[instance].motor_right;
-
-          if (rumble != last_rumble) {
-            if (rumble) {
-              output_report.motor_left = 192;
-              output_report.motor_right = 192;
-            }
-            last_rumble = rumble;
-          }
-          tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
+          device_interfaces[0]->task(dev_addr, instance, player_index, rumble);
         }
       }
 
@@ -1981,11 +1723,13 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
 }
 
 bool isKnownController(uint8_t dev_addr) {
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
   if      (is_sony_ds3(dev_addr)  ) {
     printf("DEVICE:[PS3 Dualshock 3 Controller]\n");
     return true;
   }
-  else if (is_sony_ds4(dev_addr)  ) {
+  else if (device_interfaces[0]->is_device(vid, pid)  ) {
     printf("DEVICE:[PS4 DualShock 4 Controller]\n");
     return true;
   }
@@ -2073,18 +1817,6 @@ bool isKnownController(uint8_t dev_addr) {
   return false;
 }
 
-void ensureNonZero(uint8_t* value) {
-    if (!*value) {
-        *value = 1;
-    }
-}
-
-void ensureAllNonZero(uint8_t* axis_1x, uint8_t* axis_1y, uint8_t* axis_2x, uint8_t* axis_2y) {
-    ensureNonZero(axis_1x);
-    ensureNonZero(axis_1y);
-    ensureNonZero(axis_2x);
-    ensureNonZero(axis_2y);
-}
 //--------------------------------------------------------------------+
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
@@ -2160,7 +1892,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].motor_left = 0;
     devices[dev_addr].instances[instance].motor_right = 0;
   }
-  else if (is_sony_ds4(dev_addr))
+  else if (device_interfaces[0]->is_device(vid, pid))
   {
     devices[dev_addr].instances[instance].type = CONTROLLER_DS4;
     devices[dev_addr].instances[instance].motor_left = 0;
@@ -2267,12 +1999,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
-// check if different than 2
-bool diff_than_n(uint16_t x, uint16_t y, uint8_t n)
-{
-  return (x - y > n) || (y - x > n);
-}
-
 // check if 2 reports are different enough
 bool ds3_diff_report(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt2)
 {
@@ -2284,22 +2010,6 @@ bool ds3_diff_report(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt
 
   // check the rest with mem compare
   result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3);
-
-  return result;
-}
-
-// check if 2 reports are different enough
-bool ds4_diff_report(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt2)
-{
-  bool result;
-
-  // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1->x, rpt2->x, 2) || diff_than_n(rpt1->y, rpt2->y, 2) ||
-           diff_than_n(rpt1->z, rpt2->z, 2) || diff_than_n(rpt1->rz, rpt2->rz, 2) ||
-           diff_than_n(rpt1->l2_trigger, rpt2->l2_trigger, 2) || diff_than_n(rpt1->r2_trigger, rpt2->r2_trigger, 2);
-
-  // check the reset with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds4_report_t)-4);
 
   return result;
 }
@@ -2613,149 +2323,7 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
   }
 }
 
-void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static sony_ds4_report_t prev_report[5] = { 0 };
 
-  uint8_t const report_id = report[0];
-  report++;
-  len--;
-
-  // all buttons state is stored in ID 1
-  if (report_id == 1)
-  {
-    sony_ds4_report_t ds4_report;
-    memcpy(&ds4_report, report, sizeof(ds4_report));
-
-    // counter is +1, assign to make it easier to compare 2 report
-    prev_report[dev_addr-1].counter = ds4_report.counter;
-
-    // only print if changes since it is polled ~ 5ms
-    // Since count+1 after each report and  x, y, z, rz fluctuate within 1 or 2
-    // We need more than memcmp to check if report is different enough
-    if ( ds4_diff_report(&prev_report[dev_addr-1], &ds4_report) )
-    {
-      printf("(x, y, z, rz, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, ds4_report.r2_trigger, ds4_report.l2_trigger);
-      printf("DPad = %s ", ds4_report.dpad);
-
-      if (ds4_report.square   ) printf("Square ");
-      if (ds4_report.cross    ) printf("Cross ");
-      if (ds4_report.circle   ) printf("Circle ");
-      if (ds4_report.triangle ) printf("Triangle ");
-
-      if (ds4_report.l1       ) printf("L1 ");
-      if (ds4_report.r1       ) printf("R1 ");
-      if (ds4_report.l2       ) printf("L2 ");
-      if (ds4_report.r2       ) printf("R2 ");
-
-      if (ds4_report.share    ) printf("Share ");
-      if (ds4_report.option   ) printf("Option ");
-      if (ds4_report.l3       ) printf("L3 ");
-      if (ds4_report.r3       ) printf("R3 ");
-
-      if (ds4_report.ps       ) printf("PS ");
-      if (ds4_report.tpad     ) printf("TPad ");
-
-      if (!ds4_report.tpad_f1_down) printf("F1 ");
-
-      uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
-      uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
-      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-      printf("\r\n");
-
-      bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
-      bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
-      bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5));
-      bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7));
-      bool button_z = ds4_report.share || ds4_report.tpad;
-      bool has_6btns = true;
-
-      buttons = (((ds4_report.r3)       ? 0x00 : 0x20000) |
-                 ((ds4_report.l3)       ? 0x00 : 0x10000) |
-                 ((ds4_report.r1)       ? 0x00 : 0x08000) |
-                 ((ds4_report.l1)       ? 0x00 : 0x04000) |
-                 ((ds4_report.square)   ? 0x00 : 0x02000) |
-                 ((ds4_report.triangle) ? 0x00 : 0x01000) |
-                 ((has_6btns)           ? 0x00 : 0x00800) |
-                 ((ds4_report.ps)       ? 0x00 : 0x00400) |
-                 ((ds4_report.r2)       ? 0x00 : 0x00200) |
-                 ((ds4_report.l2)       ? 0x00 : 0x00100) |
-                 ((dpad_left)           ? 0x00 : 0x00008) |
-                 ((dpad_down)           ? 0x00 : 0x00004) |
-                 ((dpad_right)          ? 0x00 : 0x00002) |
-                 ((dpad_up)             ? 0x00 : 0x00001) |
-                 ((ds4_report.option)   ? 0x00 : 0x00080) |
-                 ((button_z)            ? 0x00 : 0x00040) |
-                 ((ds4_report.cross)    ? 0x00 : 0x00020) |
-                 ((ds4_report.circle)   ? 0x00 : 0x00010));
-
-      uint8_t analog_1x = ds4_report.x;
-      uint8_t analog_1y = 255 - ds4_report.y;
-      uint8_t analog_2x = ds4_report.z;
-      uint8_t analog_2y = 255 - ds4_report.rz;
-      uint8_t analog_l = ds4_report.l2_trigger;
-      uint8_t analog_r = ds4_report.r2_trigger;
-
-#ifdef CONFIG_NUON
-      // Touch Pad - Atari50 Tempest like spinner input
-      if (!ds4_report.tpad_f1_down) {
-        // scroll spinner value while swipping
-        if (tpadDragging) {
-          // get directional difference delta
-          int16_t delta = 0;
-          if (tx >= tpadLastPos) delta = tx - tpadLastPos;
-          else delta = (-1) * (tpadLastPos - tx);
-
-          // check max/min delta value
-          if (delta > 12) delta = 12;
-          if (delta < -12) delta = -12;
-
-          // inc global spinner value by delta
-          spinner += delta;
-
-          // check max/min spinner value
-          if (spinner > 255) spinner -= 255;
-          if (spinner < 0) spinner = 256 - (-1 * spinner);
-        }
-
-        tpadLastPos = tx;
-        tpadDragging = true;
-      } else {
-        tpadDragging = false;
-      }
-      // printf(" (spinner) = (%u)\r\n", spinner);
-#endif
-      // keep analog within range [1-255]
-      ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
-
-      // adds deadzone
-      uint8_t deadzone = 40;
-      if (analog_1x > (128-(deadzone/2)) && analog_1x < (128+(deadzone/2))) analog_1x = 128;
-      if (analog_1y > (128-(deadzone/2)) && analog_1y < (128+(deadzone/2))) analog_1y = 128;
-      if (analog_2x > (128-(deadzone/2)) && analog_2x < (128+(deadzone/2))) analog_2x = 128;
-      if (analog_2y > (128-(deadzone/2)) && analog_2y < (128+(deadzone/2))) analog_2y = 128;
-
-      // add to accumulator and post to the state machine
-      // if a scan from the host machine is ongoing, wait
-      post_globals(
-        dev_addr,
-        instance,
-        buttons,
-        analog_1x, // Left Analog X
-        analog_1y, // Left Analog Y
-        analog_2x, // Right Analog X
-        analog_2y, // Right Analog Y
-        analog_l,  // Left Trigger
-        analog_r,  // Right Trigger
-        0,
-        spinner    // Spinner Quad X
-      );
-
-      prev_report[dev_addr-1] = ds4_report;
-    }
-  }
-}
 
 void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
@@ -3904,6 +3472,8 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+  uint16_t vid = devices[dev_addr].vid;
+  uint16_t pid = devices[dev_addr].pid;
 
   switch (itf_protocol)
   {
@@ -3919,7 +3489,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
     default:
       if      ( is_sony_ds3(dev_addr) ) process_sony_ds3(dev_addr, instance, report, len);
-      else if ( is_sony_ds4(dev_addr) ) process_sony_ds4(dev_addr, instance, report, len);
+      else if ( device_interfaces[0]->is_device(vid, pid) ) device_interfaces[0]->process(dev_addr, instance, report, len);
       else if ( is_sony_ds5(dev_addr) ) process_sony_ds5(dev_addr, instance, report, len);
       else if ( is_sony_psc(dev_addr) ) process_sony_psc(dev_addr, instance, report, len);
       else if ( is_8bit_pce(dev_addr) ) process_8bit_pce(dev_addr, instance, report, len);
