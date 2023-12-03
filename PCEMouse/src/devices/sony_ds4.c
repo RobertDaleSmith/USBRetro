@@ -314,8 +314,8 @@ void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   }
 
   output_report.set_rumble = 1;
-  // output_report.motor_left = motor_left;
-  // output_report.motor_right = motor_right;
+  output_report.motor_left = 0;
+  output_report.motor_right = 0;
 
   if (rumble != last_rumble) {
     if (rumble) {
