@@ -54,6 +54,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_psc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_pce.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_m30.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_bta.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_registry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
