@@ -327,14 +327,10 @@ void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
 }
 
-// initialize usb hid input
-bool init_sony_ds4(uint8_t dev_addr, uint8_t instance) {
-  return true;
-}
-
 DeviceInterface sony_ds4_interface = {
+  .name = "Sony DualShock 4",
   .is_device = is_sony_ds4,
   .process = process_sony_ds4,
   .task = task_sony_ds4,
-  .init = init_sony_ds4
+  .init = NULL
 };

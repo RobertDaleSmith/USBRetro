@@ -205,6 +205,7 @@ bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
 }
 
 DeviceInterface sony_ds3_interface = {
+  .name = "Sony DualShock 3",
   .is_device = is_sony_ds3,
   .process = process_sony_ds3,
   .task = task_sony_ds3,

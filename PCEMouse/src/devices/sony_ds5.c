@@ -377,14 +377,10 @@ void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
 }
 
-// initialize usb hid input
-bool init_sony_ds5(uint8_t dev_addr, uint8_t instance) {
-  return true;
-}
-
 DeviceInterface sony_ds5_interface = {
+  .name = "Sony DualSense",
   .is_device = is_sony_ds5,
   .process = process_sony_ds5,
   .task = task_sony_ds5,
-  .init = init_sony_ds5
+  .init = NULL
 };
