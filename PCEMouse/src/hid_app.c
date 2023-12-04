@@ -132,39 +132,6 @@ typedef union
   uint64_t value : 56;
 } pad_buttons;
 
-// 8BitDo M30 Bluetooth gamepad
-typedef struct TU_ATTR_PACKED
-{
-  struct {
-    uint8_t a : 1;
-    uint8_t b : 1;
-    uint8_t home : 1;
-    uint8_t x : 1;
-    uint8_t y : 1;
-    uint8_t padding1 : 1;
-    uint8_t l : 1; // z
-    uint8_t r : 1; // c
-  };
-
-  struct {
-    uint8_t l2 : 1;
-    uint8_t r2 : 1;
-    uint8_t select : 1;
-    uint8_t start : 1;
-    uint8_t padding2 : 1;
-    uint8_t l3 : 1;
-    uint8_t r3 : 1;
-  };
-
-  struct {
-    uint8_t dpad   : 4;
-    uint8_t cap : 1;
-  };
-
-  uint8_t x1, y1, x2, y2;
-
-} bitdo_m30_report_t;
-
 // 8BitDo Bluetooth Adapter
 typedef struct TU_ATTR_PACKED
 {
@@ -609,18 +576,6 @@ static inline bool is_8bit_neo(uint8_t dev_addr)
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x2dc8 && (pid == 0x9025 || pid == 0x9026))); // 8BitDo NeoGeo 2.4g Receiver
-}
-
-// check if device is 8BitDo Bluetooth gamepad (D-input)
-static inline bool is_8bit_m30(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ((vid == 0x2dc8 && (
-    pid == 0x5006 || // 8BitDo M30 BT (D-input)
-    pid == 0x3104    // 8BitDo Bluetooth Adapter (Gray)
-  )));
 }
 
 // check if device is 8BitDo Bluetooth Adapter (D-input)
@@ -1201,10 +1156,6 @@ bool isKnownController(uint8_t dev_addr) {
     printf("DEVICE:[8BitDo NeoGeo 2.4g Controller]\n");
     return true;
   }
-  else if (is_8bit_m30(dev_addr)  ) {
-    printf("DEVICE:[8BitDo M30 Bluetooth Controller]\n");
-    return true;
-  }
   else if (is_8bit_bta(dev_addr)  ) {
     printf("DEVICE:[8BitDo Wireless Adapter ");
     if (devices[dev_addr].pid == 0x3105) {
@@ -1451,16 +1402,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
-bool m30_diff_report(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* rpt2)
-{
-  bool result;
-
-  // check the all with mem compare
-  result |= memcmp(&rpt1, &rpt2, 7);
-
-  return result;
-}
-
 bool bta_diff_report(bitdo_bta_report_t const* rpt1, bitdo_bta_report_t const* rpt2)
 {
   bool result;
@@ -1624,76 +1565,6 @@ bool dragonrise_diff_report(dragonrise_report_t const* rpt1, dragonrise_report_t
   result |= memcmp(&rpt1->axis0_y + 1, &rpt2->axis0_y + 1, 2);
 
   return result;
-}
-
-void process_8bit_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static bitdo_m30_report_t prev_report[5] = { 0 };
-
-  bitdo_m30_report_t input_report;
-  memcpy(&input_report, report, sizeof(input_report));
-
-  if ( m30_diff_report(&prev_report[dev_addr-1], &input_report) )
-  {
-    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", input_report.x1, input_report.y1, input_report.x2, input_report.y2);
-    printf("DPad = %d ", input_report.dpad);
-
-    if (input_report.a) printf("A ");
-    if (input_report.b) printf("B ");
-    if (input_report.r) printf("R (C) ");
-    if (input_report.x) printf("X ");
-    if (input_report.y) printf("Y ");
-    if (input_report.l) printf("L (Z) ");
-    if (input_report.l2) printf("L2 ");
-    if (input_report.r2) printf("R2 ");
-    if (input_report.l3) printf("L3 ");
-    if (input_report.r3) printf("R3 ");
-    if (input_report.cap) printf("Capture ");
-    if (input_report.select) printf("Select ");
-    if (input_report.start) printf("Start ");
-    if (input_report.home) printf("Home ");
-
-    printf("\r\n");
-    bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
-    bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
-    bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
-    bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
-    bool has_6btns = true;
-
-    buttons = (((false)               ? 0x00 : 0x20000) |
-               ((false)               ? 0x00 : 0x10000) |
-               ((input_report.l2 || input_report.l) ? 0x00 : 0x8000) |
-               ((input_report.r2 || input_report.y) ? 0x00 : 0x4000) |
-               ((input_report.x)      ? 0x00 : 0x2000) |
-               ((input_report.a)      ? 0x00 : 0x1000) |
-               ((has_6btns)           ? 0x00 : 0x0800) |
-               ((input_report.home)   ? 0x00 : 0x0400) |
-               ((input_report.r2)     ? 0x00 : 0x0200) |
-               ((input_report.l2)     ? 0x00 : 0x0100) |
-               ((dpad_left)           ? 0x00 : 0x08) |
-               ((dpad_down)           ? 0x00 : 0x04) |
-               ((dpad_right)          ? 0x00 : 0x02) |
-               ((dpad_up)             ? 0x00 : 0x01) |
-               ((input_report.start)  ? 0x00 : 0x80) |
-               ((input_report.select) ? 0x00 : 0x40) |
-               ((input_report.b)      ? 0x00 : 0x20) |
-               ((input_report.r)      ? 0x00 : 0x10));
-
-    uint8_t analog_1x = input_report.x1;
-    uint8_t analog_1y = (input_report.y1 == 0) ? 255 : 256 - input_report.y1;
-    uint8_t analog_2x = input_report.x2;
-    uint8_t analog_2y = (input_report.y2 == 0) ? 255 : 256 - input_report.y2;
-
-    // keep analog within range [1-255]
-    ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
-
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, 0, 0, 0, 0);
-
-    prev_report[dev_addr-1] = input_report;
-  }
 }
 
 void process_8bit_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -2543,8 +2414,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
           break;
         }
       }
-      if ( is_8bit_m30(dev_addr) ) process_8bit_m30(dev_addr, instance, report, len);
-      else if ( is_8bit_bta(dev_addr) ) process_8bit_bta(dev_addr, instance, report, len);
+      if ( is_8bit_bta(dev_addr) ) process_8bit_bta(dev_addr, instance, report, len);
       else if ( is_horipad(dev_addr) ) process_horipad(dev_addr, instance, report, len);
       else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);

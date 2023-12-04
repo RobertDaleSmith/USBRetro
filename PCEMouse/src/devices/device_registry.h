@@ -1,7 +1,7 @@
 // device_registry.h
 #include "device_interface.h"
 
-#define MAX_DEVICE_TYPES 5  // Define the max number of devices
+#define MAX_DEVICE_TYPES 6  // Define the max number of devices
 
 extern DeviceInterface* device_interfaces[MAX_DEVICE_TYPES];
 

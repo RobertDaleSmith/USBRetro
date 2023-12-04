@@ -5,6 +5,7 @@
 #include "sony_ds5.h"
 #include "sony_psc.h"
 #include "8bitdo_pce.h"
+#include "8bitdo_m30.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[MAX_DEVICE_TYPES] = {0};
@@ -15,6 +16,7 @@ void register_devices() {
     device_interfaces[2] = &sony_ds5_interface;
     device_interfaces[3] = &sony_psc_interface;
     device_interfaces[4] = &bitdo_pce_interface;
+    device_interfaces[5] = &bitdo_m30_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 }
