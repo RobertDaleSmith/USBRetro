@@ -8,6 +8,7 @@
 #include "8bitdo_neo.h"
 #include "8bitdo_m30.h"
 #include "8bitdo_pce.h"
+#include "gamecube_adapter.h"
 #include "hori_horipad.h"
 #include "hori_pokken.h"
 #include "logitech_wingman.h"
@@ -29,6 +30,7 @@ void register_devices() {
     device_interfaces[9] = &hori_pokken_interface;
     device_interfaces[10] = &logitech_wingman_interface;
     device_interfaces[11] = &sega_astrocity_interface;
+    device_interfaces[12] = &gamecube_adapter_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 

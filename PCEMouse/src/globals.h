@@ -16,6 +16,8 @@ void __not_in_flash_func(post_globals)(
   uint8_t quad_x
 );
 
+void remove_players_by_address(int device_address, int instance);
+
 // output logging dpad directions
 const char* dpad_str[9];
 
