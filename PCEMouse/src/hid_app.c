@@ -66,9 +66,6 @@
 #define CONTROLLER_KEYBOARD 0x07
 
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
-uint16_t tplctr_serial_v1[] = {0x031a, 'N', 'E', 'S', '-', 'S', 'N', 'E', 'S', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
-uint16_t tplctr_serial_v2[] = {0x0320, 'N', 'E', 'S', '-', 'N', 'T', 'T', '-', 'G', 'E', 'N', 'E', 'S', 'I', 'S'};
-uint16_t tplctr_serial_v2_1[] = {0x031a, 'S', '-', 'N', 'E', 'S', '-', 'G', 'E', 'N', '-', 'V', '2'};
 
 uint8_t output_sequence_counter = 0;
 uint8_t last_rumble = 0;
@@ -131,71 +128,6 @@ typedef union
   };
   uint64_t value : 56;
 } pad_buttons;
-
-// TripleController v2 (Arduino based HID)
-typedef struct TU_ATTR_PACKED
-{
-  struct {
-    uint8_t b : 1;
-    uint8_t a : 1;
-    uint8_t y : 1;
-    uint8_t x : 1;
-    uint8_t l : 1;
-    uint8_t r : 1;
-    uint8_t select : 1;
-    uint8_t start : 1;
-  };
-
-  struct {
-    uint8_t ntt_0 : 1;
-    uint8_t ntt_1 : 1;
-    uint8_t ntt_2 : 1;
-    uint8_t ntt_3 : 1;
-    uint8_t ntt_4 : 1;
-    uint8_t ntt_5 : 1;
-    uint8_t ntt_6 : 1;
-    uint8_t ntt_7 : 1;
-  };
-
-  struct {
-    uint8_t ntt_8 : 1;
-    uint8_t ntt_9 : 1;
-    uint8_t ntt_star : 1;
-    uint8_t ntt_hash : 1;
-    uint8_t ntt_dot : 1;
-    uint8_t ntt_clear : 1;
-    uint8_t ntt_null : 1;
-    uint8_t ntt_end : 1;
-  };
-
-  uint8_t axis_x;
-  uint8_t axis_y;
-
-} triple_v2_report_t;
-
-// TripleController v1 (Arduino based HID)
-typedef struct TU_ATTR_PACKED
-{
-  struct {
-    uint8_t b : 1; // A
-    uint8_t a : 1; // B
-    uint8_t y : 1; // C
-    uint8_t x : 1; // X
-    uint8_t l : 1; // Y
-    uint8_t r : 1; // Z
-    uint8_t select : 1; // Mode
-    uint8_t start : 1;
-  };
-
-  struct {
-    uint8_t home : 1;
-    uint8_t null : 7;
-  };
-
-  uint8_t axis_x;
-  uint8_t axis_y;
-
-} triple_v1_report_t;
 
 // Nintedo Switch Pro USB Controller
 typedef struct {
@@ -323,47 +255,6 @@ static inline bool is_switch(uint8_t dev_addr)
            pid == 0x2009 || // Nintendo Switch Pro
            pid == 0x200e    // JoyCon Charge Grip
          )));
-}
-
-// check if device is TripleController (Arduino based HID)
-static inline bool is_triple_v2(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  bool serial_match = false;
-  bool vidpid_match = (vid == 0x2341 && pid == 0x8036); // Arduino Leonardo
-
-  if (!vidpid_match) return false;
-
-  // Compare the the fetched serial with "S-NES-GEN-V2" or "NES-NTT-GENESIS"
-  if(memcmp(devices[dev_addr].serial, tplctr_serial_v2, sizeof(tplctr_serial_v2)) == 0 ||
-     memcmp(devices[dev_addr].serial, tplctr_serial_v2_1, sizeof(tplctr_serial_v2_1)) == 0)
-  {
-    serial_match = true;
-  }
-
-  return serial_match;
-}
-
-// check if device is TripleController (Arduino based HID)
-static inline bool is_triple_v1(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  bool serial_match = false;
-  bool vidpid_match = (vid == 0x2341 && pid == 0x8036); // Arduino Leonardo
-
-  if (!vidpid_match) return false;
-
-  // Compare the the fetched serial with "NES-SNES-GENESIS"
-  if(memcmp(devices[dev_addr].serial, tplctr_serial_v1, sizeof(tplctr_serial_v1)) == 0)
-  {
-    serial_match = true;
-  }
-
-  return serial_match;
 }
 
 //--------------------------------------------------------------------+
@@ -838,15 +729,7 @@ bool isKnownController(uint8_t dev_addr) {
       return true;
     }
   }
-  if (is_triple_v2(dev_addr) ) {
-    printf("DEVICE:[TripleController Adapter v2]\n");
-    return true;
-  }
-  else if (is_triple_v1(dev_addr) ) {
-    printf("DEVICE:[TripleController Adapter v1]\n");
-    return true;
-  }
-  else if (is_switch(dev_addr)    ) {
+  if (is_switch(dev_addr)    ) {
     if (devices[dev_addr].pid == 0x200e) {
       printf("DEVICE:[Switch JoyCon Charging Grip]\n");
     } else {
@@ -1043,44 +926,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
-bool triple_v2_diff_report(triple_v2_report_t const* rpt1, triple_v2_report_t const* rpt2)
-{
-  bool result;
-
-  result |= rpt1->axis_x != rpt2->axis_x;
-  result |= rpt1->axis_y != rpt2->axis_y;
-  result |= rpt1->b != rpt2->b;
-  result |= rpt1->a != rpt2->a;
-  result |= rpt1->y != rpt2->y;
-  result |= rpt1->x != rpt2->x;
-  result |= rpt1->l != rpt2->l;
-  result |= rpt1->r != rpt2->r;
-  result |= rpt1->select != rpt2->select;
-  result |= rpt1->start != rpt2->start;
-  result |= rpt1->ntt_0 != rpt2->ntt_0;
-
-  return result;
-}
-
-bool triple_v1_diff_report(triple_v1_report_t const* rpt1, triple_v1_report_t const* rpt2)
-{
-  bool result;
-
-  result |= rpt1->axis_x != rpt2->axis_x;
-  result |= rpt1->axis_y != rpt2->axis_y;
-  result |= rpt1->b != rpt2->b;
-  result |= rpt1->a != rpt2->a;
-  result |= rpt1->y != rpt2->y;
-  result |= rpt1->x != rpt2->x;
-  result |= rpt1->l != rpt2->l;
-  result |= rpt1->r != rpt2->r;
-  result |= rpt1->select != rpt2->select;
-  result |= rpt1->start != rpt2->start;
-  result |= rpt1->home != rpt2->home;
-
-  return result;
-}
-
 bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2)
 {
   bool result;
@@ -1094,116 +939,6 @@ bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2
   result |= memcmp(&rpt1->subcommand_ack, &rpt2->subcommand_ack, 36);
 
   return result;
-}
-
-void process_triple_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static triple_v2_report_t prev_report[5][5];
-
-  triple_v2_report_t update_report;
-  memcpy(&update_report, report, sizeof(update_report));
-
-  if ( triple_v2_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
-  {
-    printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.y) printf("Y ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    printf("\r\n");
-
-    int threshold = 28;
-    bool dpad_up    = update_report.axis_y ? (update_report.axis_y > (128 - threshold)) : 0;
-    bool dpad_right = update_report.axis_x ? (update_report.axis_x < (128 + threshold)) : 0;
-    bool dpad_down  = update_report.axis_y ? (update_report.axis_y < (128 + threshold)) : 0;
-    bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
-    bool has_6btns = true;
-
-    buttons = (((false)                ? 0x00 : 0x20000) |
-               ((false)                ? 0x00 : 0x10000) |
-               ((update_report.r)      ? 0x00 : 0x8000) | // VI
-               ((update_report.l)      ? 0x00 : 0x4000) | // V
-               ((update_report.y)      ? 0x00 : 0x2000) | // IV
-               ((update_report.x)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0x0800) |
-               ((false)                ? 0x00 : 0x0400) | // home
-               ((false)                ? 0x00 : 0x0200) | // r2
-               ((false)                ? 0x00 : 0x0100) | // l2
-               ((dpad_left)            ? 0x00 : 0x0008) |
-               ((dpad_down)            ? 0x00 : 0x0004) |
-               ((dpad_right)           ? 0x00 : 0x0002) |
-               ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select) ? 0x00 : 0x0040) | // Select
-               ((update_report.b)      ? 0x00 : 0x0020) | // II
-               ((update_report.a)      ? 0x00 : 0x0010)); // I
-
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0, 0);
-
-    prev_report[dev_addr-1][instance] = update_report;
-  }
-}
-
-void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static triple_v1_report_t prev_report[5][5];
-
-  triple_v1_report_t update_report;
-  memcpy(&update_report, report, sizeof(update_report));
-
-  if ( triple_v1_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
-  {
-    printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.y) printf("Y ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    printf("\r\n");
-
-    int threshold = 28;
-    bool dpad_up    = update_report.axis_y ? (update_report.axis_y > (128 - threshold)) : 0;
-    bool dpad_right = update_report.axis_x ? (update_report.axis_x < (128 + threshold)) : 0;
-    bool dpad_down  = update_report.axis_y ? (update_report.axis_y < (128 + threshold)) : 0;
-    bool dpad_left  = update_report.axis_x ? (update_report.axis_x > (128 - threshold)) : 0;
-    bool has_6btns = true;
-
-    buttons = (((false)                ? 0x00 : 0x20000) |
-               ((false)                ? 0x00 : 0x10000) |
-               ((update_report.r)      ? 0x00 : 0x8000) | // VI
-               ((update_report.l)      ? 0x00 : 0x4000) | // V
-               ((update_report.y)      ? 0x00 : 0x2000) | // IV
-               ((update_report.x)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0x0800) |
-               ((false)                ? 0x00 : 0x0400) | // home
-               ((false)                ? 0x00 : 0x0200) | // r2
-               ((false)                ? 0x00 : 0x0100) | // l2
-               ((dpad_left)            ? 0x00 : 0x0008) |
-               ((dpad_down)            ? 0x00 : 0x0004) |
-               ((dpad_right)           ? 0x00 : 0x0002) |
-               ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select) ? 0x00 : 0x0040) | // Select
-               ((update_report.b)      ? 0x00 : 0x0020) | // II
-               ((update_report.a)      ? 0x00 : 0x0010)); // I
-
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0, 0);
-
-    prev_report[dev_addr-1][instance] = update_report;
-  }
 }
 
 void print_report(switch_report_01_t* report, uint32_t length) {
@@ -1413,9 +1148,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
         }
       }
 
-      if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
-      else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
-      else if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
+      if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
       else if ( !known ) {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
