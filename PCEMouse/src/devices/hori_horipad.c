@@ -12,16 +12,15 @@ bool is_hori_horipad(uint16_t vid, uint16_t pid)
 // check if 2 reports are different enough
 bool diff_report_horipad(hori_horipad_report_t const* rpt1, hori_horipad_report_t const* rpt2)
 {
-  bool result;
+  bool result = memcmp(rpt1, rpt2, 3) != 0;
 
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1->axis_x, rpt2->axis_x, 2) ||
-           diff_than_n(rpt1->axis_y, rpt2->axis_y, 2) ||
-           diff_than_n(rpt1->axis_z, rpt2->axis_z, 2) ||
-           diff_than_n(rpt1->axis_rz, rpt2->axis_rz, 2);
+  result |= diff_than_n(rpt1->axis_x, rpt2->axis_x, 2) ||
+            diff_than_n(rpt1->axis_y, rpt2->axis_y, 2) ||
+            diff_than_n(rpt1->axis_z, rpt2->axis_z, 2) ||
+            diff_than_n(rpt1->axis_rz, rpt2->axis_rz, 2);
 
-  // Compare the first 2 bytes of the reports
-  return memcmp(rpt1, rpt2, 3) != 0;
+  return result;
 }
 
 // process usb hid input reports

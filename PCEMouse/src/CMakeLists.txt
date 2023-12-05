@@ -49,6 +49,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_parser.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_horipad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_pokken.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds3.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds4.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds5.c
