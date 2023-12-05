@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is 8BitDo PCE 2.4g controllers
-bool is_8bitdo_pce(uint16_t vid, uint16_t pid)
-{
+bool is_8bitdo_pce(uint16_t vid, uint16_t pid) {
   return ((vid == 0x0f0d && pid == 0x0138)); // 8BitDo PCE 2.4g
 }
 
 // check if 2 reports are different enough
-bool diff_report_pce(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* rpt2)
-{
+bool diff_report_pce(bitdo_pce_report_t const* rpt1, bitdo_pce_report_t const* rpt2) {
   bool result;
 
   // x1, y1, x2, y2 must different than 2 to be counted

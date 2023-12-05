@@ -3,8 +3,7 @@
 #include "globals.h"
 
 // check if device is generic NES USB Controller
-static inline bool is_dragonrise(uint16_t vid, uint16_t pid)
-{
+static inline bool is_dragonrise(uint16_t vid, uint16_t pid) {
   return ((vid == 0x0079 && pid == 0x0011)); // Generic NES USB
 }
 

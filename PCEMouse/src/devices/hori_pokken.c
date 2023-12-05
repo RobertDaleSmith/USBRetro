@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is HORI Pokken controller for Wii U
-static inline bool is_hori_pokken(uint16_t vid, uint16_t pid)
-{
+static inline bool is_hori_pokken(uint16_t vid, uint16_t pid) {
   return ((vid == 0x0f0d && pid == 0x0092)); // Wii U Pokken
 }
 
 // check if 2 reports are different enough
-bool diff_report_pokken(hori_pokken_report_t const* rpt1, hori_pokken_report_t const* rpt2)
-{
+bool diff_report_pokken(hori_pokken_report_t const* rpt1, hori_pokken_report_t const* rpt2) {
   bool result = memcmp(rpt1, rpt2, 3) != 0;
 
   // x, y, z, rz must different than 2 to be counted

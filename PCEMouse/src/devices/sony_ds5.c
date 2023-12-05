@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is Sony PlayStation 5 controllers
-bool is_sony_ds5(uint16_t vid, uint16_t pid)
-{
+bool is_sony_ds5(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DualSense
 }
 
 // check if 2 reports are different enough
-bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt2)
-{
+bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt2) {
   bool result;
 
   // x1, y1, x2, y2, rx, ry must different than 2 to be counted
@@ -25,8 +23,7 @@ bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
 }
 
 // process usb hid input reports
-void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
+void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
   static sony_ds5_report_t prev_report[5] = { 0 };
 

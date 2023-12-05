@@ -3,8 +3,7 @@
 #include "globals.h"
 
 // check if device is Sony PlayStation 4 controllers
-bool is_sony_ds4(uint16_t vid, uint16_t pid)
-{
+bool is_sony_ds4(uint16_t vid, uint16_t pid) {
   return ( (vid == 0x054c && (pid == 0x09cc || pid == 0x05c4)) // Sony DualShock4 
     || (vid == 0x0f0d && pid == 0x005e) // Hori FC4 
     || (vid == 0x0f0d && pid == 0x00ee) // Hori PS4 Mini (PS4-099U) 

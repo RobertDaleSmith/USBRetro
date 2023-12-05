@@ -10,8 +10,7 @@ bool is_hori_horipad(uint16_t vid, uint16_t pid)
 }
 
 // check if 2 reports are different enough
-bool diff_report_horipad(hori_horipad_report_t const* rpt1, hori_horipad_report_t const* rpt2)
-{
+bool diff_report_horipad(hori_horipad_report_t const* rpt1, hori_horipad_report_t const* rpt2) {
   bool result = memcmp(rpt1, rpt2, 3) != 0;
 
   // x, y, z, rz must different than 2 to be counted

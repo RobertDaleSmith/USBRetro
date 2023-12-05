@@ -3,8 +3,7 @@
 #include "globals.h"
 
 // check if device is Sony PlayStation 3 controllers
-bool is_sony_ds3(uint16_t vid, uint16_t pid)
-{
+bool is_sony_ds3(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0268)); // Sony DualShock3
 }
 
