@@ -52,6 +52,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_neo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_m30.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_pce.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/gamecube_adapter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_horipad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_pokken.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/logitech_wingman.c
