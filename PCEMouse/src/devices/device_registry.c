@@ -7,6 +7,7 @@
 #include "8bitdo_pce.h"
 #include "8bitdo_m30.h"
 #include "8bitdo_bta.h"
+#include "hori_horipad.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[MAX_DEVICE_TYPES] = {0};
@@ -19,6 +20,7 @@ void register_devices() {
     device_interfaces[4] = &bitdo_pce_interface;
     device_interfaces[5] = &bitdo_m30_interface;
     device_interfaces[6] = &bitdo_bta_interface;
+    device_interfaces[7] = &hori_horipad_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 }
