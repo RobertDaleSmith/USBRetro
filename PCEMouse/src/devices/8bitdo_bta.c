@@ -3,8 +3,7 @@
 #include "globals.h"
 
 // check if device is 8BitDo Wireless Adapter (D-input)
-bool is_8bitdo_bta(uint16_t vid, uint16_t pid)
-{
+bool is_8bitdo_bta(uint16_t vid, uint16_t pid) {
   return ((vid == 0x2dc8 && (
     pid == 0x3100 || // 8BitDo Wireless Adapter (Red)
     pid == 0x3105 || // 8BitDo Wireless Adapter (Black) [05:HID_MODE]
@@ -14,8 +13,7 @@ bool is_8bitdo_bta(uint16_t vid, uint16_t pid)
 }
 
 // check if 2 reports are different enough
-bool diff_report_bta(bitdo_bta_report_t const* rpt1, bitdo_bta_report_t const* rpt2)
-{
+bool diff_report_bta(bitdo_bta_report_t const* rpt1, bitdo_bta_report_t const* rpt2) {
   bool result;
 
   // x1, y1, x2, y2, rx, ry must different than 2 to be counted

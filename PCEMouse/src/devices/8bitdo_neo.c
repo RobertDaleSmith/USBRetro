@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is 8BitDo NeoGeo gamepad
-bool is_8bitdo_neo(uint16_t vid, uint16_t pid)
-{
+bool is_8bitdo_neo(uint16_t vid, uint16_t pid) {
   return ((vid == 0x2dc8 && (pid == 0x9025 || pid == 0x9026))); // 8BitDo NeoGeo 2.4g Receiver
 }
 
 // check if 2 reports are different enough
-bool diff_report_neo(bitdo_neo_report_t const* rpt1, bitdo_neo_report_t const* rpt2)
-{
+bool diff_report_neo(bitdo_neo_report_t const* rpt1, bitdo_neo_report_t const* rpt2) {
   return true;
 }
 

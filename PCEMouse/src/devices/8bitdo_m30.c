@@ -3,8 +3,7 @@
 #include "globals.h"
 
 // check if device is 8BitDo Bluetooth gamepad (D-input)
-bool is_8bitdo_m30(uint16_t vid, uint16_t pid)
-{
+bool is_8bitdo_m30(uint16_t vid, uint16_t pid) {
   return ((vid == 0x2dc8 && (
     pid == 0x5006 || // 8BitDo M30 Bluetooth
     pid == 0x3104    // 8BitDo Bluetooth Adapter (Gray)
@@ -12,8 +11,7 @@ bool is_8bitdo_m30(uint16_t vid, uint16_t pid)
 }
 
 // check if 2 reports are different enough
-bool diff_report_m30(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* rpt2)
-{
+bool diff_report_m30(bitdo_m30_report_t const* rpt1, bitdo_m30_report_t const* rpt2) {
   return memcmp(rpt1, rpt2, 7) != 0;
 }
 

@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is PlayStation Classic controller
-bool is_sony_psc(uint16_t vid, uint16_t pid)
-{
+bool is_sony_psc(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0cda)); // Sony PSClassic
 }
 
 // check if 2 reports are different enough
-bool diff_report_psc(sony_psc_report_t const* rpt1, sony_psc_report_t const* rpt2)
-{
+bool diff_report_psc(sony_psc_report_t const* rpt1, sony_psc_report_t const* rpt2) {
     // Compare the first 2 bytes of the reports
     return memcmp(rpt1, rpt2, sizeof(sony_psc_report_t)-1) != 0;
 }

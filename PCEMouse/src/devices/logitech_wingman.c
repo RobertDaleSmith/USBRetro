@@ -3,14 +3,12 @@
 #include "globals.h"
 
 // check if device is Logitech WingMan Action controller
-static inline bool is_logitech_wingman(uint16_t vid, uint16_t pid)
-{
+static inline bool is_logitech_wingman(uint16_t vid, uint16_t pid) {
   return ((vid == 0x046d && pid == 0xc20b)); // Logitech WingMan Action controller
 }
 
 // check if 2 reports are different enough
-bool wingman_diff_report(logitech_wingman_report_t const* rpt1, logitech_wingman_report_t const* rpt2)
-{
+bool diff_report_logitech_wingman(logitech_wingman_report_t const* rpt1, logitech_wingman_report_t const* rpt2) {
   bool result;
 
   result |= rpt1->analog_x != rpt2->analog_x;
@@ -39,8 +37,7 @@ void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const*
   logitech_wingman_report_t wingman_report;
   memcpy(&wingman_report, report, sizeof(wingman_report));
 
-  if ( wingman_diff_report(&prev_report[dev_addr-1], &wingman_report) )
-  {
+  if (diff_report_logitech_wingman(&prev_report[dev_addr-1], &wingman_report)) {
     // printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
     // printf("DPad = %d ", wingman_report.dpad);
     // if (wingman_report.a) printf("A ");
