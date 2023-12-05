@@ -27,4 +27,7 @@ void register_devices() {
     device_interfaces[9] = &hori_pokken_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
+
+    // DEPRECATED: by generic HID
+    // device_interfaces[0] = &dragonrise_interface;
 }
