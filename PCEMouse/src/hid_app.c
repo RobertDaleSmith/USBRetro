@@ -252,35 +252,6 @@ typedef struct TU_ATTR_PACKED
 
 } triple_v1_report_t;
 
-// Pokken Wii U USB Controller
-typedef struct TU_ATTR_PACKED
-{
-  struct {
-    uint8_t y : 1;
-    uint8_t b : 1;
-    uint8_t a : 1;
-    uint8_t x : 1;
-    uint8_t l : 1;
-    uint8_t r : 1;
-    uint8_t zl : 1;
-    uint8_t zr : 1;
-  };
-
-  struct {
-    uint8_t select : 1;
-    uint8_t start  : 1;
-    uint8_t padding1 : 6;
-  };
-
-  struct {
-    uint8_t dpad   : 4;
-    uint8_t padding2 : 4;
-  };
-
-  uint8_t x_axis, y_axis, z_axis, rz_axis;
-
-} pokken_report_t;
-
 // Nintedo Switch Pro USB Controller
 typedef struct {
     uint8_t  report_id;   // The first byte is always the report ID
@@ -458,15 +429,6 @@ static device_t devices[MAX_DEVICES] = { 0 };
 // Keyboard LED control
 static uint8_t kbd_leds = 0;
 static uint8_t prev_kbd_leds = 0xFF;
-
-// check if device is Wii U Pokken USB Controller
-static inline bool is_pokken(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ((vid == 0x0f0d && pid == 0x0092)); // Wii U Pokken
-}
 
 // check if device is Nintendo Switch
 static inline bool is_switch(uint8_t dev_addr)
@@ -1039,7 +1001,7 @@ bool isKnownController(uint8_t dev_addr) {
       return true;
     }
   }
-  else if (is_astro_city(dev_addr)) {
+  if (is_astro_city(dev_addr)) {
     if (devices[dev_addr].pid == 0x0024) {
       printf("DEVICE:[8BitDo M30 2.4g Controller]\n");
     } else {
@@ -1059,10 +1021,6 @@ bool isKnownController(uint8_t dev_addr) {
   }
   else if (is_triple_v1(dev_addr) ) {
     printf("DEVICE:[TripleController Adapter v1]\n");
-    return true;
-  }
-  else if (is_pokken(dev_addr)    ) {
-    printf("DEVICE:[Wii U Pokken Controller]\n");
     return true;
   }
   else if (is_switch(dev_addr)    ) {
@@ -1346,28 +1304,6 @@ bool triple_v1_diff_report(triple_v1_report_t const* rpt1, triple_v1_report_t co
   result |= rpt1->select != rpt2->select;
   result |= rpt1->start != rpt2->start;
   result |= rpt1->home != rpt2->home;
-
-  return result;
-}
-
-bool pokken_diff_report(pokken_report_t const* rpt1, pokken_report_t const* rpt2)
-{
-  bool result;
-
-  result = diff_than_n(rpt1->x_axis, rpt2->x_axis, 2) || diff_than_n(rpt1->y_axis, rpt2->y_axis, 2) ||
-           diff_than_n(rpt1->z_axis, rpt2->z_axis, 2) || diff_than_n(rpt1->rz_axis, rpt2->rz_axis, 2);
-
-  result |= rpt1->dpad != rpt2->dpad;
-  result |= rpt1->b != rpt2->b;
-  result |= rpt1->a != rpt2->a;
-  result |= rpt1->y != rpt2->y;
-  result |= rpt1->x != rpt2->x;
-  result |= rpt1->l != rpt2->l;
-  result |= rpt1->r != rpt2->r;
-  result |= rpt1->zl != rpt2->zl;
-  result |= rpt1->zr != rpt2->zr;
-  result |= rpt1->select != rpt2->select;
-  result |= rpt1->start != rpt2->start;
 
   return result;
 }
@@ -1669,73 +1605,6 @@ void process_triple_v1(uint8_t dev_addr, uint8_t instance, uint8_t const* report
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
     post_globals(dev_addr, instance, buttons, 128, 128, 128, 128, 0, 0, 0, 0);
-
-    prev_report[dev_addr-1][instance] = update_report;
-  }
-}
-
-void process_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static pokken_report_t prev_report[5][5];
-
-  pokken_report_t update_report;
-  memcpy(&update_report, report, sizeof(update_report));
-
-  if ( pokken_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
-  {
-    printf("(x, y, z, rz) = (%u, %u %u, %u)\r\n", update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis);
-    printf("DPad = %d ", update_report.dpad);
-    if (update_report.y) printf("Y ");
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.zl) printf("ZL ");
-    if (update_report.zr) printf("ZR ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    printf("\r\n");
-
-    bool dpad_up    = (update_report.dpad == 0 || update_report.dpad == 1 || update_report.dpad == 7);
-    bool dpad_right = (update_report.dpad >= 1 && update_report.dpad <= 3);
-    bool dpad_down  = (update_report.dpad >= 3 && update_report.dpad <= 5);
-    bool dpad_left  = (update_report.dpad >= 5 && update_report.dpad <= 7);
-    bool has_6btns = true;
-
-    // TODO: handle ZL/ZR as L2/R2
-    buttons = (((false)                ? 0x00 : 0x20000) |
-               ((false)                ? 0x00 : 0x10000) |
-               ((update_report.r)      ? 0x00 : 0x8000) | // VI
-               ((update_report.l)      ? 0x00 : 0x4000) | // V
-               ((update_report.y)      ? 0x00 : 0x2000) | // IV
-               ((update_report.x)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0x0800) |
-               ((false)                ? 0x00 : 0x0400) | // home
-               ((update_report.zr)     ? 0x00 : 0x0200) | // r2
-               ((update_report.zl)     ? 0x00 : 0x0100) | // l2
-               ((dpad_left)            ? 0x00 : 0x0008) |
-               ((dpad_down)            ? 0x00 : 0x0004) |
-               ((dpad_right)           ? 0x00 : 0x0002) |
-               ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select) ? 0x00 : 0x0040) | // Select
-               ((update_report.b)      ? 0x00 : 0x0020) | // II
-               ((update_report.a)      ? 0x00 : 0x0010)); // I
-
-    // invert vertical axis
-    uint8_t axis_x = (update_report.x_axis == 255) ? 255 : update_report.x_axis + 1;
-    uint8_t axis_y = (update_report.y_axis == 0) ? 255 : 255 - update_report.y_axis;
-    uint8_t axis_z = (update_report.z_axis == 255) ? 255 : update_report.z_axis + 1;
-    uint8_t axis_rz = (update_report.rz_axis == 0) ? 255 : 255 - update_report.rz_axis;
-
-    // keep analog within range [1-255]
-    ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
-
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0, 0);
 
     prev_report[dev_addr-1][instance] = update_report;
   }
@@ -2107,7 +1976,6 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);
-      else if ( is_pokken(dev_addr) ) process_pokken(dev_addr, instance, report, len);
       else if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
       else if ( is_gamecube(dev_addr) ) process_gamecube(dev_addr, instance, report, len);
       // else if ( is_dragonrise(dev_addr) ) process_dragonrise(dev_addr, instance, report, len);
