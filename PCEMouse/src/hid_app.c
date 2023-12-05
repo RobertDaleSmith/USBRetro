@@ -498,15 +498,6 @@ static inline bool is_dragonrise(uint8_t dev_addr)
   return ((vid == 0x0079 && pid == 0x0011)); // Generic NES USB
 }
 
-// check if device is 8BitDo NeoGeo gamepad
-static inline bool is_8bit_neo(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ((vid == 0x2dc8 && (pid == 0x9025 || pid == 0x9026))); // 8BitDo NeoGeo 2.4g Receiver
-}
-
 // check if device is Astro City mini controller
 static inline bool is_astro_city(uint8_t dev_addr)
 {
@@ -520,7 +511,6 @@ static inline bool is_astro_city(uint8_t dev_addr)
          )));
 }
 
-
 // check if device is Logitech WingMan Action controller
 static inline bool is_wing_man(uint8_t dev_addr)
 {
@@ -528,15 +518,6 @@ static inline bool is_wing_man(uint8_t dev_addr)
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x046d && pid == 0xc20b)); // Logitech WingMan Action controller
-}
-
-bool compare_utf16(uint16_t* s1, uint16_t* s2, size_t n) {
-    for(size_t i = 0; i < n; i++) {
-        if(s1[i] != s2[i]) {
-            return false;
-        }
-    }
-    return true;
 }
 
 // check if device is TripleController (Arduino based HID)
@@ -1057,10 +1038,6 @@ bool isKnownController(uint8_t dev_addr) {
       printf("DEVICE:[%s]\n", device_interfaces[i]->name);
       return true;
     }
-  }
-  if (is_8bit_neo(dev_addr)  ) {
-    printf("DEVICE:[8BitDo NeoGeo 2.4g Controller]\n");
-    return true;
   }
   else if (is_astro_city(dev_addr)) {
     if (devices[dev_addr].pid == 0x0024) {
@@ -2097,6 +2074,7 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     prev_report[dev_addr-1][instance] = update_report;
   }
 }
+
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
