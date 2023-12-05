@@ -132,42 +132,6 @@ typedef union
   uint64_t value : 56;
 } pad_buttons;
 
-// HORI HORIPAD (also Sega Genesis mini compatible controllers)
-typedef struct TU_ATTR_PACKED
-{
-  struct {
-    uint8_t y : 1;
-    uint8_t b : 1;
-    uint8_t a : 1;
-    uint8_t x : 1;
-    uint8_t l1 : 1;
-    uint8_t r1 : 1;
-    uint8_t l2 : 1; // sega-z
-    uint8_t r2 : 1; // sega-c
-  };
-
-  struct {
-    uint8_t s1 : 1; // select / sega-mode
-    uint8_t s2 : 1; // start
-    uint8_t l3 : 1;
-    uint8_t r3 : 1;
-    uint8_t a1 : 1; // home
-    uint8_t a2 : 1; // capture
-    uint8_t padding1 : 2;
-  };
-
-  struct {
-    uint8_t dpad : 4;
-    uint8_t padding2 : 4;
-  };
-
-  uint8_t axis_x;
-  uint8_t axis_y;
-  uint8_t axis_z;
-  uint8_t axis_rz;
-
-} horipad_report_t;
-
 // Sega Astro City mini controller
 typedef struct TU_ATTR_PACKED
 {
@@ -541,15 +505,6 @@ static inline bool is_8bit_neo(uint8_t dev_addr)
   uint16_t pid = devices[dev_addr].pid;
 
   return ((vid == 0x2dc8 && (pid == 0x9025 || pid == 0x9026))); // 8BitDo NeoGeo 2.4g Receiver
-}
-
-// check if device is Switch HORI HORIPAD (or Sega Genesis mini compatible)
-static inline bool is_horipad(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ((vid == 0x0f0d && pid == 0x00c1)); // Switch HORI HORIPAD
 }
 
 // check if device is Astro City mini controller
@@ -1107,10 +1062,6 @@ bool isKnownController(uint8_t dev_addr) {
     printf("DEVICE:[8BitDo NeoGeo 2.4g Controller]\n");
     return true;
   }
-  else if (is_horipad(dev_addr) ) {
-    printf("DEVICE:[HORI HORIPAD (or Genesis/MD Mini) Controller]\n");
-    return true;
-  }
   else if (is_astro_city(dev_addr)) {
     if (devices[dev_addr].pid == 0x0024) {
       printf("DEVICE:[8BitDo M30 2.4g Controller]\n");
@@ -1342,15 +1293,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
 }
 
-bool horipad_diff_report(horipad_report_t const* rpt1, horipad_report_t const* rpt2)
-{
-  bool result;
-
-  result |= memcmp(&rpt1, &rpt2, 7);
-
-  return result;
-}
-
 bool astro_diff_report(astro_city_report_t const* rpt1, astro_city_report_t const* rpt2)
 {
   bool result;
@@ -1495,97 +1437,6 @@ bool dragonrise_diff_report(dragonrise_report_t const* rpt1, dragonrise_report_t
   result |= memcmp(&rpt1->axis0_y + 1, &rpt2->axis0_y + 1, 2);
 
   return result;
-}
-
-void process_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static horipad_report_t prev_report[5] = { 0 };
-
-  horipad_report_t input_report;
-  memcpy(&input_report, report, sizeof(input_report));
-
-  if ( horipad_diff_report(&prev_report[dev_addr-1], &input_report) )
-  {
-    printf("(x, y, z, rz) = (%d, %d, %d, %d) ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
-    printf("DPad = %d ", input_report.dpad);
-
-    if (input_report.b) printf("B ");
-    if (input_report.a) printf("A ");
-    if (input_report.y) printf("Y ");
-    if (input_report.x) printf("X ");
-    if (input_report.l1) printf("L1 ");
-    if (input_report.r1) printf("R1 ");
-    if (input_report.l2) printf("L2(Z) ");
-    if (input_report.r2) printf("R2(C) ");
-    if (input_report.l3) printf("L3 ");
-    if (input_report.r3) printf("R3 ");
-    if (input_report.s1) printf("Select ");
-    if (input_report.s2) printf("Start ");
-    if (input_report.a1) printf("Home ");
-    if (input_report.a2) printf("Capture ");
-    printf("\r\n");
-
-    bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
-    bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
-    bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
-    bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
-    bool has_6btns = true;
-#ifdef CONFIG_PCE
-    buttons = (((false)           ? 0x00 : 0x20000) |
-               ((false)           ? 0x00 : 0x10000) |
-               ((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
-               ((input_report.y)                    ? 0x00 : 0x4000) |
-               ((input_report.x || input_report.r1) ? 0x00 : 0x2000) |
-               ((input_report.a)                    ? 0x00 : 0x1000) |
-               ((has_6btns)                         ? 0x00 : 0x0800) |
-               ((input_report.a1)                   ? 0x00 : 0x0400) |
-               ((false)           ? 0x00 : 0x0200) |
-               ((false)           ? 0x00 : 0x0100) |
-               ((dpad_left)                         ? 0x00 : 0x08) |
-               ((dpad_down)                         ? 0x00 : 0x04) |
-               ((dpad_right)                        ? 0x00 : 0x02) |
-               ((dpad_up)                           ? 0x00 : 0x01) |
-               ((input_report.s2)                   ? 0x00 : 0x80) |
-               ((input_report.s1)                   ? 0x00 : 0x40) |
-               ((input_report.b)                    ? 0x00 : 0x20) |
-               ((input_report.r2)                   ? 0x00 : 0x10));
-#else
-    buttons = (((input_report.r3) ? 0x00 : 0x20000) |
-               ((input_report.l3) ? 0x00 : 0x10000) |
-               ((input_report.r1) ? 0x00 : 0x8000) |
-               ((input_report.l1) ? 0x00 : 0x4000) |
-               ((input_report.y)  ? 0x00 : 0x2000) |
-               ((input_report.x)  ? 0x00 : 0x1000) |
-               ((has_6btns)       ? 0x00 : 0x0800) |
-               ((input_report.a1) ? 0x00 : 0x0400) |
-               ((false)           ? 0x00 : 0x0200) |
-               ((false)           ? 0x00 : 0x0100) |
-               ((dpad_left)       ? 0x00 : 0x08) |
-               ((dpad_down)       ? 0x00 : 0x04) |
-               ((dpad_right)      ? 0x00 : 0x02) |
-               ((dpad_up)         ? 0x00 : 0x01) |
-               ((input_report.s2) ? 0x00 : 0x80) |
-               ((input_report.s1 || input_report.r2 || input_report.l2) ? 0x00 : 0x40) |
-               ((input_report.b)  ? 0x00 : 0x20) |
-               ((input_report.a)  ? 0x00 : 0x10));
-#endif
-    // invert vertical axis
-    uint8_t axis_x = input_report.axis_x;
-    uint8_t axis_y = (input_report.axis_y == 0) ? 255 : 256 - input_report.axis_y;
-    uint8_t axis_z = input_report.axis_z;
-    uint8_t axis_rz = (input_report.axis_rz == 0) ? 255 : 256 - input_report.axis_rz;
-
-    // keep analog within range [1-255]
-    ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
-
-    // add to accumulator and post to the state machine
-    // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0, 0);
-
-    prev_report[dev_addr-1] = input_report;
-  }
-
 }
 
 void process_astro_city(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
@@ -2274,8 +2125,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
           break;
         }
       }
-      if ( is_horipad(dev_addr) ) process_horipad(dev_addr, instance, report, len);
-      else if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
+      if ( is_astro_city(dev_addr) ) process_astro_city(dev_addr, instance, report, len);
       else if ( is_wing_man(dev_addr) ) process_wing_man(dev_addr, instance, report, len);
       else if ( is_triple_v2(dev_addr) ) process_triple_v2(dev_addr, instance, report, len);
       else if ( is_triple_v1(dev_addr) ) process_triple_v1(dev_addr, instance, report, len);

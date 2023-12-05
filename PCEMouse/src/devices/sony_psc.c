@@ -15,7 +15,6 @@ bool diff_report_psc(sony_psc_report_t const* rpt1, sony_psc_report_t const* rpt
     return memcmp(rpt1, rpt2, sizeof(sony_psc_report_t)-1) != 0;
 }
 
-
 // process usb hid input reports
 void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
