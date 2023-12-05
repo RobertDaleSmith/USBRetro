@@ -10,6 +10,7 @@
 #include "8bitdo_pce.h"
 #include "hori_horipad.h"
 #include "hori_pokken.h"
+#include "logitech_wingman.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[MAX_DEVICE_TYPES] = {0};
@@ -25,6 +26,7 @@ void register_devices() {
     device_interfaces[7] = &bitdo_pce_interface;
     device_interfaces[8] = &hori_horipad_interface;
     device_interfaces[9] = &hori_pokken_interface;
+    device_interfaces[10] = &logitech_wingman_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 
