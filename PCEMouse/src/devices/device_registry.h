@@ -3,6 +3,7 @@
 
 // Controller Types
 typedef enum {
+    CONTROLLER_NONE = -1,
     CONTROLLER_DUALSHOCK3,
     CONTROLLER_DUALSHOCK4,
     CONTROLLER_DUALSENSE,

@@ -327,7 +327,6 @@ void hid_app_init() {
 void hid_app_task(uint8_t rumble, uint8_t leds)
 {
   const uint32_t interval_ms = 200;
-  static uint32_t start_ms_ds5 = 0;
   static uint32_t start_ms_nsw = 0;
 
   if (is_fun) {
@@ -343,22 +342,22 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++)
     {
       int player_index = find_player_index(dev_addr, instance);
-      if (player_index >= 0)
+      switch (devices[dev_addr].instances[instance].type)
       {
-        switch (devices[dev_addr].instances[instance].type)
-        {
-        case CONTROLLER_DUALSHOCK3: // send DS3 Init, LED and rumble responses
-          device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
-          break;
-        case CONTROLLER_DUALSHOCK4: // send DS4 LED and rumble response
-          device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
-          break;
-        case CONTROLLER_DUALSENSE: // send DS5 LED and rumble response
-          device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
-          break;
-        default:
-          break;
-        }
+      case CONTROLLER_DUALSHOCK3: // send DS3 Init, LED and rumble responses
+        device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
+        break;
+      case CONTROLLER_DUALSHOCK4: // send DS4 LED and rumble response
+        device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
+        break;
+      case CONTROLLER_DUALSENSE: // send DS5 LED and rumble response
+        device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
+        break;
+      case CONTROLLER_GAMECUBE: // send GameCube WiiU/Switch Adapter rumble response
+        device_interfaces[CONTROLLER_GAMECUBE]->task(dev_addr, instance, player_index, rumble);
+        break;
+      default:
+        break;
       }
 
       // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
@@ -508,7 +507,8 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       }
 
       // keyboard LED
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD) {
+      else if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD)
+      {
         if (!devices[dev_addr].instances[instance].kbd_init && devices[dev_addr].instances[instance].kbd_ready) {
           devices[dev_addr].instances[instance].kbd_init = true;
 
@@ -541,10 +541,6 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
         }
       }
 
-      // GameCube WiiU Adapter Rumble
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_GAMECUBE) {
-        device_interfaces[CONTROLLER_GAMECUBE]->task(dev_addr, instance, player_index, rumble);
-      }
     }
   }
 }
@@ -674,8 +670,7 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
 }
 
 bool isKnownController(uint8_t dev_addr) {
-
-  if (is_switch(dev_addr)    ) {
+  if (is_switch(dev_addr)) {
     if (devices[dev_addr].pid == 0x200e) {
       printf("DEVICE:[Switch JoyCon Charging Grip]\n");
     } else {
@@ -874,7 +869,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     devices[dev_addr].instance_count = 0;
   }
 
-  devices[dev_addr].instances[instance].type = CONTROLLER_DINPUT;
+  devices[dev_addr].instances[instance].type = CONTROLLER_NONE;
 }
 
 bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2)
