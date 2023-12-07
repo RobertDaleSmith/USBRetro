@@ -1,6 +1,7 @@
 // sony_ds3.c
 #include "sony_ds3.h"
 #include "globals.h"
+#include "bsp/board_api.h"
 
 // Special PS3 Controller enable commands
 const uint8_t ds3_init_cmd_buf[4] = {0x42, 0x0c, 0x00, 0x00};
@@ -131,6 +132,7 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
     }
   };
   static uint8_t last_rumble = 0;
+  static uint8_t last_leds = 0;
 
   // led player indicator
   switch (player_index+1)
@@ -168,18 +170,20 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
     }
   }
 
-  if (rumble != last_rumble) {
-    if (rumble) {
-      output_report.data.rumble.right_motor_on = 1;
-      output_report.data.rumble.left_motor_force = 128;
-      output_report.data.rumble.left_duration = 128;
-      output_report.data.rumble.right_duration = 128;
-    }
-    last_rumble = rumble;
+  if (rumble) {
+    output_report.data.rumble.right_motor_on = 1;
+    output_report.data.rumble.left_motor_force = 128;
+    output_report.data.rumble.left_duration = 128;
+    output_report.data.rumble.right_duration = 128;
   }
 
-  // Send report without the report ID, start at index 1 instead of 0
-  tuh_hid_send_report(dev_addr, instance, output_report.data.report_id, &(output_report.buf[1]), sizeof(output_report) - 1);
+  if (rumble != last_rumble || last_leds != output_report.data.leds_bitmap) {
+    last_rumble = rumble;
+    last_leds = output_report.data.leds_bitmap;
+
+    // Send report without the report ID, start at index 1 instead of 0
+    tuh_hid_send_report(dev_addr, instance, output_report.data.report_id, &(output_report.buf[1]), sizeof(output_report) - 1);
+  }
 }
 
 // initialize usb hid input
@@ -201,8 +205,8 @@ static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
 }
 
 // process usb hid output reports
-static inline void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
-  const uint32_t interval_ms = 1000;
+void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+  const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = board_millis();

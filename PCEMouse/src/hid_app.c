@@ -327,7 +327,6 @@ void hid_app_init() {
 void hid_app_task(uint8_t rumble, uint8_t leds)
 {
   const uint32_t interval_ms = 200;
-  static uint32_t start_ms_ds4 = 0;
   static uint32_t start_ms_ds5 = 0;
   static uint32_t start_ms_nsw = 0;
 
@@ -344,19 +343,13 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       int player_index = find_player_index(dev_addr, instance);
 
       // send DS3 Init, LED and rumble responses
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK3) {
+      if (player_index >= 0 && devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK3) {
         device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
       }
 
       // send DS4 LED and rumble response
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK4) {
-        uint32_t current_time_ms = board_millis();
-        if (current_time_ms - start_ms_ds4 >= interval_ms) {
-          int player_index = find_player_index(dev_addr, instance);
-          start_ms_ds4 = current_time_ms;
-
-          device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
-        }
+      else if (player_index >= 0 && devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK4) {
+        device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
       }
 
       // send DS5 LED and rumble response
@@ -364,7 +357,6 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
         uint32_t current_time_ms = board_millis();
         if ( current_time_ms - start_ms_ds5 >= interval_ms)
         {
-          int player_index = find_player_index(dev_addr, instance);
           start_ms_ds5 = current_time_ms;
 
           device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
@@ -429,7 +421,7 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
             switch_send_command(dev_addr, instance, data, 10 + 4);
 
           } else if (devices[dev_addr].instances[instance].switch_command_ack) {
-            int player_index = find_player_index(dev_addr, devices[dev_addr].instance_count == 1 ? instance : devices[dev_addr].instance_root);
+            player_index = find_player_index(dev_addr, devices[dev_addr].instance_count == 1 ? instance : devices[dev_addr].instance_root);
 
             if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
               devices[dev_addr].instances[instance].switch_player_led_set = player_index;
@@ -553,7 +545,6 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
 
       // GameCube WiiU Adapter Rumble
       if (devices[dev_addr].instances[instance].type == CONTROLLER_GAMECUBE) {
-        int player_index = find_player_index(dev_addr, instance);
         device_interfaces[CONTROLLER_GAMECUBE]->task(dev_addr, instance, player_index, rumble);
       }
     }
@@ -748,8 +739,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   // Set device type and defaults
   if (device_interfaces[CONTROLLER_DUALSHOCK3]->is_device(vid, pid))
   {
+    device_interfaces[CONTROLLER_DUALSHOCK3]->init(dev_addr, instance);
     devices[dev_addr].instances[instance].type = CONTROLLER_DUALSHOCK3;
-    device_interfaces[CONTROLLER_DUALSHOCK3]->init(vid, pid);
   }
   else if (device_interfaces[CONTROLLER_DUALSHOCK4]->is_device(vid, pid))
   {
