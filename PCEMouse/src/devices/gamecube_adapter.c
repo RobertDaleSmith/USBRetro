@@ -1,6 +1,7 @@
 // gamecube_adapter.c
 #include "gamecube_adapter.h"
 #include "globals.h"
+#include "bsp/board_api.h"
 
 // check if device is GameCube Adapter for WiiU/Switch
 static inline bool is_gamecube_adapter(uint16_t vid, uint16_t pid) {
@@ -23,7 +24,7 @@ bool diff_report_gamecube_adapter(gamecube_adapter_report_t const* rpt1, gamecub
 }
 
 // process usb hid input reports
-void process_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
   static gamecube_adapter_report_t prev_report[5][4];
 
@@ -112,22 +113,38 @@ void process_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const*
 }
 
 // process usb hid output reports
-void task_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble)
+{
   static uint8_t last_rumble = 0;
-  if (rumble != last_rumble) {
+  if (rumble != last_rumble)
+  {
+    last_rumble = rumble;
+
     uint8_t buf4[5] = { 0x11, /* GC_CMD_RUMBLE */ };
-    for(int i = 0; i < 4; i++) {
+    for(int i = 0; i < 4; i++)
+    {
       buf4[i+1] = rumble ? 1 : 0;
     }
     tuh_hid_send_report(dev_addr, instance, buf4[0], &(buf4[0])+1, sizeof(buf4) - 1);
-    last_rumble = rumble;
+  }
+}
+
+// process usb hid output reports
+void task_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+  const uint32_t interval_ms = 20;
+  static uint32_t start_ms = 0;
+
+  uint32_t current_time_ms = board_millis();
+  if (current_time_ms - start_ms >= interval_ms) {
+    start_ms = current_time_ms;
+    output_gamecube_adapter(dev_addr, instance, player_index, rumble);
   }
 }
 
 DeviceInterface gamecube_adapter_interface = {
   .name = "GameCube Adapter for WiiU/Switch",
   .is_device = is_gamecube_adapter,
-  .process = process_gamecube_adapter,
+  .process = input_gamecube_adapter,
   .task = task_gamecube_adapter,
   .init = NULL
 };
