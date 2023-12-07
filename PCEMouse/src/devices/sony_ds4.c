@@ -1,6 +1,7 @@
 // sony_ds4.c
 #include "sony_ds4.h"
 #include "globals.h"
+#include "bsp/board_api.h"
 
 // check if device is Sony PlayStation 4 controllers
 bool is_sony_ds4(uint16_t vid, uint16_t pid) {
@@ -33,7 +34,7 @@ bool diff_report_ds4(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
 }
 
 // process usb hid input reports
-void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   // previous report used to compare for changes
   static sony_ds4_report_t prev_report[5] = { 0 };
@@ -178,9 +179,10 @@ void process_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 }
 
 // process usb hid output reports
-void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
   sony_ds4_output_report_t output_report = {0};
   static uint8_t last_rumble = 0;
+  static uint8_t last_leds = 0xff;
   output_report.set_led = 1;
 
 #ifdef CONFIG_NGC
@@ -316,20 +318,35 @@ void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   output_report.motor_left = 0;
   output_report.motor_right = 0;
 
-  if (rumble != last_rumble) {
-    if (rumble) {
-      output_report.motor_left = 192;
-      output_report.motor_right = 192;
-    }
-    last_rumble = rumble;
+  if (rumble) {
+    output_report.motor_left = 192;
+    output_report.motor_right = 192;
   }
-  tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
+
+  if (rumble != last_rumble || last_leds != player_index || is_fun) {
+    last_rumble = rumble;
+    last_leds = player_index;
+
+    tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
+  }
+}
+
+// process usb hid output reports
+void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+  const uint32_t interval_ms = 20;
+  static uint32_t start_ms = 0;
+
+  uint32_t current_time_ms = board_millis();
+  if (current_time_ms - start_ms >= interval_ms) {
+    start_ms = current_time_ms;
+    output_sony_ds4(dev_addr, instance, player_index, rumble);
+  }
 }
 
 DeviceInterface sony_ds4_interface = {
   .name = "Sony DualShock 4",
   .is_device = is_sony_ds4,
-  .process = process_sony_ds4,
+  .process = input_sony_ds4,
   .task = task_sony_ds4,
   .init = NULL
 };

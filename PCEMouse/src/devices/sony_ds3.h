@@ -2,7 +2,6 @@
 #ifndef SONY_DS3_HEADER_H
 #define SONY_DS3_HEADER_H
 
-#include "bsp/board_api.h"
 #include "device_interface.h"
 #include "device_utils.h"
 #include "tusb.h"
