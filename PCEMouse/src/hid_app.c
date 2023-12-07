@@ -338,28 +338,26 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
   }
 
   // iterate devices and instances that can receive responses
-  for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
-    for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
+  for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++)
+  {
+    for(uint8_t instance=0; instance<CFG_TUH_HID; instance++)
+    {
       int player_index = find_player_index(dev_addr, instance);
-
-      // send DS3 Init, LED and rumble responses
-      if (player_index >= 0 && devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK3) {
-        device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
-      }
-
-      // send DS4 LED and rumble response
-      else if (player_index >= 0 && devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK4) {
-        device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
-      }
-
-      // send DS5 LED and rumble response
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSENSE) {
-        uint32_t current_time_ms = board_millis();
-        if ( current_time_ms - start_ms_ds5 >= interval_ms)
+      if (player_index >= 0)
+      {
+        switch (devices[dev_addr].instances[instance].type)
         {
-          start_ms_ds5 = current_time_ms;
-
+        case CONTROLLER_DUALSHOCK3: // send DS3 Init, LED and rumble responses
+          device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
+          break;
+        case CONTROLLER_DUALSHOCK4: // send DS4 LED and rumble response
+          device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
+          break;
+        case CONTROLLER_DUALSENSE: // send DS5 LED and rumble response
           device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
+          break;
+        default:
+          break;
         }
       }
 
