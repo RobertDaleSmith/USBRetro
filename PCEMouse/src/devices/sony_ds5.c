@@ -1,6 +1,7 @@
 // sony_ds5.c
 #include "sony_ds5.h"
 #include "globals.h"
+#include "bsp/board_api.h"
 
 // check if device is Sony PlayStation 5 controllers
 bool is_sony_ds5(uint16_t vid, uint16_t pid) {
@@ -23,7 +24,7 @@ bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
 }
 
 // process usb hid input reports
-void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
   static sony_ds5_report_t prev_report[5] = { 0 };
 
@@ -158,9 +159,10 @@ void process_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
 }
 
 // process usb hid output reports
-void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
   ds5_feedback_t ds5_fb = {0};
   static uint8_t last_rumble = 0;
+  static uint8_t last_leds = 0xff;
   int32_t perc_threshold_l = -1;
   int32_t perc_threshold_r = -1;
 
@@ -364,20 +366,35 @@ void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   ds5_fb.rumble_l = 0;
   ds5_fb.rumble_r = 0;
 
-  if (rumble != last_rumble) {
-    if (rumble) {
-      ds5_fb.rumble_l = 192;
-      ds5_fb.rumble_r = 192;
-    }
-    last_rumble = rumble;
+  if (rumble) {
+    ds5_fb.rumble_l = 192;
+    ds5_fb.rumble_r = 192;
   }
-  tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
+
+  if (rumble != last_rumble || last_leds != ds5_fb.player_led) {
+    last_rumble = rumble;
+    last_leds = ds5_fb.player_led;
+
+    tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
+  }
+}
+
+// process usb hid output reports
+void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+  const uint32_t interval_ms = 20;
+  static uint32_t start_ms = 0;
+
+  uint32_t current_time_ms = board_millis();
+  if (current_time_ms - start_ms >= interval_ms) {
+    start_ms = current_time_ms;
+    output_sony_ds5(dev_addr, instance, player_index, rumble);
+  }
 }
 
 DeviceInterface sony_ds5_interface = {
   .name = "Sony DualSense",
   .is_device = is_sony_ds5,
-  .process = process_sony_ds5,
+  .process = input_sony_ds5,
   .task = task_sony_ds5,
   .init = NULL
 };
