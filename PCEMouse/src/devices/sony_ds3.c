@@ -2,6 +2,9 @@
 #include "sony_ds3.h"
 #include "globals.h"
 
+// Special PS3 Controller enable commands
+const uint8_t ds3_init_cmd_buf[4] = {0x42, 0x0c, 0x00, 0x00};
+
 // check if device is Sony PlayStation 3 controllers
 bool is_sony_ds3(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0268)); // Sony DualShock3
@@ -22,8 +25,8 @@ bool diff_report_ds3(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt
   return result;
 }
 
-// process usb hid input reports
-void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+// process input input reports
+void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
   static sony_ds3_report_t prev_report[5] = { 0 };
 
@@ -111,8 +114,8 @@ void process_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
   }
 }
 
-// process usb hid output reports
-void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+// process output report for rumble and player LED assignment
+void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
   sony_ds3_output_report_01_t output_report = {
     .buf = {
       0x01,
@@ -180,7 +183,7 @@ void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
 }
 
 // initialize usb hid input
-bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
+static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
   /*
   * The Sony Sixaxis does not handle HID Output Reports on the
   * Interrupt EP like it could, so we need to force HID Output
@@ -193,20 +196,26 @@ bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
   */
   printf("PS3 Init..\n");
 
-  uint8_t cmd_buf[4];
-  cmd_buf[0] = 0x42; // Special PS3 Controller enable commands
-  cmd_buf[1] = 0x0c;
-  cmd_buf[2] = 0x00;
-  cmd_buf[3] = 0x00;
-
   // Send a Set Report request to the control endpoint
-  return tuh_hid_set_report(dev_addr, instance, 0xF4, HID_REPORT_TYPE_FEATURE, &(cmd_buf), sizeof(cmd_buf));
+  return tuh_hid_set_report(dev_addr, instance, 0xF4, HID_REPORT_TYPE_FEATURE, (void *)(ds3_init_cmd_buf), sizeof(ds3_init_cmd_buf));
+}
+
+// process usb hid output reports
+static inline void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+  const uint32_t interval_ms = 1000;
+  static uint32_t start_ms = 0;
+
+  uint32_t current_time_ms = board_millis();
+  if (current_time_ms - start_ms >= interval_ms) {
+    start_ms = current_time_ms;
+    output_sony_ds3(dev_addr, instance, player_index, rumble);
+  }
 }
 
 DeviceInterface sony_ds3_interface = {
   .name = "Sony DualShock 3",
+  .init = init_sony_ds3,
   .is_device = is_sony_ds3,
-  .process = process_sony_ds3,
-  .task = task_sony_ds3,
-  .init = init_sony_ds3
+  .process = input_sony_ds3,
+  .task = task_sony_ds3
 };
