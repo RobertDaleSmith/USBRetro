@@ -55,16 +55,6 @@
 #define PROCON_CMD_LED_HOME    0x38
 #define PROCON_ARG_INPUT_FULL  0x30
 
-// Controller Types
-#define CONTROLLER_GENERIC 0x00
-#define CONTROLLER_HID 0x01
-#define CONTROLLER_DS3 0x02
-#define CONTROLLER_DS4 0x03
-#define CONTROLLER_DS5 0x04
-#define CONTROLLER_SWITCH 0x05
-#define CONTROLLER_GAMECUBE 0x06
-#define CONTROLLER_KEYBOARD 0x07
-
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 
 uint8_t output_sequence_counter = 0;
@@ -199,8 +189,6 @@ typedef struct TU_ATTR_PACKED
   //
   bool kbd_init;
   bool kbd_ready;
-  bool ds3_init;
-  bool ds3_led_set;
   bool switch_conn_ack;
   bool switch_baud;
   bool switch_baud_ack;
@@ -339,7 +327,6 @@ void hid_app_init() {
 void hid_app_task(uint8_t rumble, uint8_t leds)
 {
   const uint32_t interval_ms = 200;
-  static uint32_t start_ms_ds3 = 0;
   static uint32_t start_ms_ds4 = 0;
   static uint32_t start_ms_ds5 = 0;
   static uint32_t start_ms_nsw = 0;
@@ -354,56 +341,33 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
   // iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++){
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++){
+      int player_index = find_player_index(dev_addr, instance);
+
       // send DS3 Init, LED and rumble responses
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS3) {
-        if (!devices[dev_addr].instances[instance].ds3_init) {
-          // init call would not work for some reason, so left logic here for now
-          // device_interfaces[0]->init(dev_addr, instance);
-          printf("PS3 Init..\n");
-
-          uint8_t cmd_buf[4];
-          cmd_buf[0] = 0x42; // Special PS3 Controller enable commands
-          cmd_buf[1] = 0x0c;
-          cmd_buf[2] = 0x00;
-          cmd_buf[3] = 0x00;
-
-          // Send a Set Report request to the control endpoint
-          tuh_hid_set_report(dev_addr, instance, 0xF4, HID_REPORT_TYPE_FEATURE, &(cmd_buf), sizeof(cmd_buf));
-
-          devices[dev_addr].instances[instance].ds3_init = true;
-        } else if (!devices[dev_addr].instances[instance].ds3_led_set) {
-          int player_index = find_player_index(dev_addr, instance);
-
-          uint32_t current_time_ms = board_millis();
-          if ( current_time_ms - start_ms_ds3 >= interval_ms)
-          {
-            start_ms_ds3 = current_time_ms;
-            device_interfaces[0]->task(dev_addr, instance, player_index, rumble);
-          }
-          // devices[dev_addr].instances[instance].ds3_led_set = true;
-        }
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK3) {
+        device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
       }
 
       // send DS4 LED and rumble response
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS4) {
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSHOCK4) {
         uint32_t current_time_ms = board_millis();
         if (current_time_ms - start_ms_ds4 >= interval_ms) {
           int player_index = find_player_index(dev_addr, instance);
           start_ms_ds4 = current_time_ms;
 
-          device_interfaces[1]->task(dev_addr, instance, player_index, rumble);
+          device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
         }
       }
 
       // send DS5 LED and rumble response
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_DS5) {
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_DUALSENSE) {
         uint32_t current_time_ms = board_millis();
         if ( current_time_ms - start_ms_ds5 >= interval_ms)
         {
           int player_index = find_player_index(dev_addr, instance);
           start_ms_ds5 = current_time_ms;
 
-          device_interfaces[2]->task(dev_addr, instance, player_index, rumble);
+          device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
         }
       }
 
@@ -590,7 +554,7 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       // GameCube WiiU Adapter Rumble
       if (devices[dev_addr].instances[instance].type == CONTROLLER_GAMECUBE) {
         int player_index = find_player_index(dev_addr, instance);
-        device_interfaces[12]->task(dev_addr, instance, player_index, rumble);
+        device_interfaces[CONTROLLER_GAMECUBE]->task(dev_addr, instance, player_index, rumble);
       }
     }
   }
@@ -721,14 +685,7 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
 }
 
 bool isKnownController(uint8_t dev_addr) {
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-  for (int i = 0; i < MAX_DEVICE_TYPES; i++) {
-    if (device_interfaces[i] && device_interfaces[i]->is_device(vid, pid)) {
-      printf("DEVICE:[%s]\n", device_interfaces[i]->name);
-      return true;
-    }
-  }
+
   if (is_switch(dev_addr)    ) {
     if (devices[dev_addr].pid == 0x200e) {
       printf("DEVICE:[Switch JoyCon Charging Grip]\n");
@@ -738,9 +695,16 @@ bool isKnownController(uint8_t dev_addr) {
     return true;
   }
   else {
-    printf("DEVICE:[UKNOWN]\n");
+    for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
+      if (device_interfaces[i] &&
+          device_interfaces[i]->is_device(devices[dev_addr].vid, devices[dev_addr].pid)) {
+        printf("DEVICE:[%s]\n", device_interfaces[i]->name);
+        return true;
+      }
+    }    
   }
 
+  printf("DEVICE:[UKNOWN]\n");
   return false;
 }
 
@@ -781,6 +745,47 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   bool isKnownCtrlr = isKnownController(dev_addr);
   printf("mapped: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
 
+  // Set device type and defaults
+  if (device_interfaces[CONTROLLER_DUALSHOCK3]->is_device(vid, pid))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSHOCK3;
+    device_interfaces[CONTROLLER_DUALSHOCK3]->init(vid, pid);
+  }
+  else if (device_interfaces[CONTROLLER_DUALSHOCK4]->is_device(vid, pid))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSHOCK4;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+  }
+  else if (device_interfaces[CONTROLLER_DUALSENSE]->is_device(vid, pid))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSENSE;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+  }
+  else if (is_switch(dev_addr))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
+    printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+  }
+  else if (device_interfaces[CONTROLLER_GAMECUBE]->is_device(vid, pid))
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_GAMECUBE;
+    devices[dev_addr].instances[instance].motor_left = 0;
+    devices[dev_addr].instances[instance].motor_right = 0;
+  }
+  else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
+  {
+    devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
+    devices[dev_addr].instances[instance].kbd_ready = false;
+    devices[dev_addr].instances[instance].kbd_init = false;
+  }
+  else {
+    devices[dev_addr].instances[instance].type = CONTROLLER_DINPUT;
+    devices[dev_addr].instances[instance].kbd_ready = false;
+    devices[dev_addr].instances[instance].kbd_init = false;
+  }
+
   if (!isKnownCtrlr && itf_protocol != HID_ITF_PROTOCOL_KEYBOARD)
   {
     if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
@@ -802,57 +807,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     info = NULL;
   }
 
-  uint16_t temp_buf[128];
-  if (0 == tuh_descriptor_get_serial_string_sync(dev_addr, LANGUAGE_ID, temp_buf, sizeof(temp_buf)))
-  {
-    for(int i=0; i<20; i++){
-      devices[dev_addr].serial[i] = temp_buf[i];
-    }
-  }
-
-  // Set device type and defaults
-  if (device_interfaces[0]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DS3;
-    devices[dev_addr].instances[instance].ds3_init = false;
-    devices[dev_addr].instances[instance].ds3_led_set = false;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (device_interfaces[1]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DS4;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (device_interfaces[2]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DS5;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (is_switch(dev_addr))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
-    printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
-  }
-  else if (device_interfaces[12]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_GAMECUBE;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
-    devices[dev_addr].instances[instance].kbd_ready = false;
-    devices[dev_addr].instances[instance].kbd_init = false;
-  }
-  else {
-    devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
-    devices[dev_addr].instances[instance].kbd_ready = false;
-    devices[dev_addr].instances[instance].kbd_init = false;
-  }
+  // gets serial for discovering some devices
+  // uint16_t temp_buf[128];
+  // if (0 == tuh_descriptor_get_serial_string_sync(dev_addr, LANGUAGE_ID, temp_buf, sizeof(temp_buf)))
+  // {
+  //   for(int i=0; i<20; i++){
+  //     devices[dev_addr].serial[i] = temp_buf[i];
+  //   }
+  // }
 
   // request to receive report
   // tuh_hid_report_received_cb() will be invoked when report is available
@@ -913,7 +875,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     switch_reset(dev_addr, instance);
   }
   // Reset HID Config
-  else if (devices[dev_addr].instances[instance].type == CONTROLLER_HID) {
+  else if (devices[dev_addr].instances[instance].type == CONTROLLER_DINPUT) {
     hid_reset(dev_addr, instance);
   }
 
@@ -923,7 +885,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     devices[dev_addr].instance_count = 0;
   }
 
-  devices[dev_addr].instances[instance].type = CONTROLLER_GENERIC;
+  devices[dev_addr].instances[instance].type = CONTROLLER_DINPUT;
 }
 
 bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2)
@@ -1140,16 +1102,20 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     break;
 
     default:
-      for (int i = 0; i < MAX_DEVICE_TYPES; i++) {
-        if (device_interfaces[i] && device_interfaces[i]->is_device(vid, pid)) {
-          device_interfaces[i]->process(dev_addr, instance, report, len);
-          known = true;
-          break;
+      if ( is_switch(dev_addr) ) {
+        process_switch(dev_addr, instance, report, len);
+        known = true;
+      } else {
+        for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
+          if (device_interfaces[i] && device_interfaces[i]->is_device(vid, pid)) {
+            device_interfaces[i]->process(dev_addr, instance, report, len);
+            known = true;
+            break;
+          }
         }
       }
 
-      if ( is_switch(dev_addr) ) process_switch(dev_addr, instance, report, len);
-      else if ( !known ) {
+      if (!known) {
         // Generic report requires matching ReportID and contents with previous parsed report info
         process_generic_report(dev_addr, instance, report, len);
       }

@@ -5,7 +5,6 @@
 #include "sony_ds5.h"
 #include "sony_psc.h"
 #include "8bitdo_bta.h"
-#include "8bitdo_neo.h"
 #include "8bitdo_m30.h"
 #include "8bitdo_pce.h"
 #include "gamecube_adapter.h"
@@ -15,25 +14,25 @@
 #include "sega_astrocity.h"
 // Include other devices here
 
-DeviceInterface* device_interfaces[MAX_DEVICE_TYPES] = {0};
+DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT] = {0};
 
 void register_devices() {
-    device_interfaces[0] = &sony_ds3_interface;
-    device_interfaces[1] = &sony_ds4_interface;
-    device_interfaces[2] = &sony_ds5_interface;
-    device_interfaces[3] = &sony_psc_interface;
-    device_interfaces[4] = &bitdo_bta_interface;
-    device_interfaces[5] = &bitdo_neo_interface;
-    device_interfaces[6] = &bitdo_m30_interface;
-    device_interfaces[7] = &bitdo_pce_interface;
-    device_interfaces[8] = &hori_horipad_interface;
-    device_interfaces[9] = &hori_pokken_interface;
-    device_interfaces[10] = &logitech_wingman_interface;
-    device_interfaces[11] = &sega_astrocity_interface;
-    device_interfaces[12] = &gamecube_adapter_interface;
+    device_interfaces[CONTROLLER_DUALSHOCK3] = &sony_ds3_interface;
+    device_interfaces[CONTROLLER_DUALSHOCK4] = &sony_ds4_interface;
+    device_interfaces[CONTROLLER_DUALSENSE] = &sony_ds5_interface;
+    device_interfaces[CONTROLLER_PSCLASSIC] = &sony_psc_interface;
+    device_interfaces[CONTROLLER_8BITDO_BTA] = &bitdo_bta_interface;
+    device_interfaces[CONTROLLER_8BITDO_M30] = &bitdo_m30_interface;
+    device_interfaces[CONTROLLER_8BITDO_PCE] = &bitdo_pce_interface;
+    device_interfaces[CONTROLLER_HORIPAD] = &hori_horipad_interface;
+    device_interfaces[CONTROLLER_POKKEN] = &hori_pokken_interface;
+    device_interfaces[CONTROLLER_WINGMAN] = &logitech_wingman_interface;
+    device_interfaces[CONTROLLER_ASTROCITY] = &sega_astrocity_interface;
+    device_interfaces[CONTROLLER_GAMECUBE] = &gamecube_adapter_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 
-    // DEPRECATED: by generic HID
-    // device_interfaces[0] = &dragonrise_interface;
+    // disabled devices
+    // device_interfaces[CONTROLLER_DRAGONRISE] = &dragonrise_interface; // deprecated
+    // device_interfaces[CONTROLLER_8BITDO_NEO] = &bitdo_neo_interface; // incomplete
 }

@@ -6,6 +6,7 @@ include(pico_sdk_import.cmake)
 project(usbretro C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3") # Set optimization level to O3
 
 #set(PICO_EXAMPLES_PATH ${PROJECT_SOURCE_DIR})
 
@@ -25,6 +26,17 @@ target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
 target_compile_definitions(usbretro_xb1 PRIVATE CONFIG_XB1=1)
 target_compile_definitions(usbretro_nuon PRIVATE CONFIG_NUON=1)
+
+target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_xb1 PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_nuon PRIVATE -O3) # Set optimization level to O3 for your_target
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
+else()
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+endif()
 
 pico_add_extra_outputs(usbretro_pce)
 pico_add_extra_outputs(usbretro_ngc)
