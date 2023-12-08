@@ -1,5 +1,0 @@
-Partlist exported from /Users/davidshadoff/Documents/EAGLE/projects/PCFX_Contrl_Socket/rev_B/PCFX_Contrl_Socket_rev_B.sch at 2021-08-05 11:59 AM
-
-Qty Value Device                      Package      Parts                      Description                                                                                                      PROD_ID   
-7         CONN_01PTH_NO_SILK_YES_STOP 1X01_NO_SILK J1, J2, J3, J4, J5, J6, J7 Single connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections           
-1         CONN_06NO_SILK_FEMALE_PTH   1X06_NO_SILK J9                         Multi connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections  CONN-08437
