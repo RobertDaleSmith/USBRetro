@@ -3,6 +3,21 @@
 #include "globals.h"
 #include "bsp/board_api.h"
 
+// DualSense instance state
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t rumble;
+  uint8_t player;
+} ds4_instance_t;
+
+// Cached device report properties on mount
+typedef struct TU_ATTR_PACKED
+{
+  ds4_instance_t instances[CFG_TUH_HID];
+} ds4_device_t;
+
+static ds4_device_t ds4_devices[MAX_DEVICES] = { 0 };
+
 // check if device is Sony PlayStation 4 controllers
 bool is_sony_ds4(uint16_t vid, uint16_t pid) {
   return ( (vid == 0x054c && (pid == 0x09cc || pid == 0x05c4)) // Sony DualShock4 
@@ -179,10 +194,8 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process usb hid output reports
-void output_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   sony_ds4_output_report_t output_report = {0};
-  static uint8_t last_rumble = 0;
-  static uint8_t last_leds = 0xff;
   output_report.set_led = 1;
 
 #ifdef CONFIG_NGC
@@ -315,24 +328,26 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
   }
 
   output_report.set_rumble = 1;
-  output_report.motor_left = 0;
-  output_report.motor_right = 0;
-
   if (rumble) {
     output_report.motor_left = 192;
     output_report.motor_right = 192;
+  } else {
+    output_report.motor_left = 0;
+    output_report.motor_right = 0;
   }
 
-  if (rumble != last_rumble || last_leds != player_index || is_fun) {
-    last_rumble = rumble;
-    last_leds = player_index;
-
+  if (ds4_devices[dev_addr].instances[instance].rumble != rumble ||
+      ds4_devices[dev_addr].instances[instance].player != player_index+1 ||
+      is_fun)
+  {
+    ds4_devices[dev_addr].instances[instance].rumble = rumble;
+    ds4_devices[dev_addr].instances[instance].player = is_fun ? fun_inc : player_index+1;
     tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
   }
 }
 
 // process usb hid output reports
-void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void task_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
@@ -343,10 +358,17 @@ void task_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   }
 }
 
+// resets default values in case devices are hotswapped
+void unmount_sony_ds4(uint8_t dev_addr, uint8_t instance)
+{
+  ds4_devices[dev_addr].instances[instance].rumble = 0;
+  ds4_devices[dev_addr].instances[instance].player = 0xff;
+}
+
 DeviceInterface sony_ds4_interface = {
   .name = "Sony DualShock 4",
   .is_device = is_sony_ds4,
   .process = input_sony_ds4,
   .task = task_sony_ds4,
-  .init = NULL
+  .unmount = unmount_sony_ds4,
 };

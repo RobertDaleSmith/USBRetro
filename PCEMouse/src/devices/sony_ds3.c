@@ -3,6 +3,21 @@
 #include "globals.h"
 #include "bsp/board_api.h"
 
+// DualSense instance state
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t rumble;
+  uint8_t player;
+} ds3_instance_t;
+
+// Cached device report properties on mount
+typedef struct TU_ATTR_PACKED
+{
+  ds3_instance_t instances[CFG_TUH_HID];
+} ds3_device_t;
+
+static ds3_device_t ds3_devices[MAX_DEVICES] = { 0 };
+
 // Special PS3 Controller enable commands
 const uint8_t ds3_init_cmd_buf[4] = {0x42, 0x0c, 0x00, 0x00};
 
@@ -14,16 +29,26 @@ bool is_sony_ds3(uint16_t vid, uint16_t pid) {
 // check if 2 reports are different enough
 bool diff_report_ds3(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt2)
 {
-  bool result;
-
   // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1->lx, rpt2->lx, 2) || diff_than_n(rpt1->ly, rpt2->ly, 2) ||
-           diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
+  if (diff_than_n(rpt1->lx, rpt2->lx, 2) || diff_than_n(rpt1->ly, rpt2->ly, 2) ||
+      diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2) ||
+#ifdef CONFIG_NGC
+      diff_than_n(rpt1->pressure[10], rpt2->pressure[10], 2) ||
+      diff_than_n(rpt1->pressure[11], rpt2->pressure[11], 2) ||
+#endif
+      diff_than_n(rpt1->pressure[8], rpt2->pressure[8], 2) ||
+      diff_than_n(rpt1->pressure[9], rpt2->pressure[9], 2))
+  {
+    return true;
+  }
 
   // check the rest with mem compare
-  result |= memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3);
+  if (memcmp(&rpt1->reportId + 1, &rpt2->reportId + 1, 3))
+  {
+    return true;
+  }
 
-  return result;
+  return false;
 }
 
 // process input input reports
@@ -77,12 +102,33 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
       printf("\r\n");
 
+      uint8_t analog_1x = ds3_report.lx;
+      uint8_t analog_1y = 255 - ds3_report.ly;
+      uint8_t analog_2x = ds3_report.rx;
+      uint8_t analog_2y = 255 - ds3_report.ry;
+      uint8_t analog_l = ds3_report.pressure[8];
+      uint8_t analog_r = ds3_report.pressure[9];
+
+#ifdef CONFIG_NGC
+      // us pressure value of L1/R1 to simulate analog
+      if (ds3_report.pressure[10] > analog_l) {
+        analog_l = ds3_report.pressure[10];
+      }
+      if (ds3_report.pressure[11] > analog_r) {
+        analog_r = ds3_report.pressure[11];
+      }
+      bool button_r1 = false;
+      bool button_l1 = false;
+#else
+      bool button_r1 = ds3_report.r1;
+      bool button_l1 = ds3_report.l1;
+#endif
       bool has_6btns = true;
 
       buttons = (((ds3_report.r3)       ? 0x00 : 0x20000) |
                  ((ds3_report.l3)       ? 0x00 : 0x10000) |
-                 ((ds3_report.r1)       ? 0x00 : 0x08000) |
-                 ((ds3_report.l1)       ? 0x00 : 0x04000) |
+                 ((button_r1)           ? 0x00 : 0x08000) |
+                 ((button_l1)           ? 0x00 : 0x04000) |
                  ((ds3_report.square)   ? 0x00 : 0x02000) |
                  ((ds3_report.triangle) ? 0x00 : 0x01000) |
                  ((has_6btns)           ? 0x00 : 0x00800) |
@@ -98,17 +144,12 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                  ((ds3_report.cross)    ? 0x00 : 0x00020) |
                  ((ds3_report.circle)   ? 0x00 : 0x00010));
 
-      uint8_t analog_1x = ds3_report.lx;
-      uint8_t analog_1y = 255 - ds3_report.ly;
-      uint8_t analog_2x = ds3_report.rx;
-      uint8_t analog_2y = 255 - ds3_report.ry;
-
       // keep analog within range [1-255]
       ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, 0, 0, 0, 0);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0, 0);
 
       prev_report[dev_addr-1] = ds3_report;
     }
@@ -116,7 +157,7 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process output report for rumble and player LED assignment
-void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   sony_ds3_output_report_01_t output_report = {
     .buf = {
       0x01,
@@ -131,8 +172,6 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     }
   };
-  static uint8_t last_rumble = 0;
-  static uint8_t last_leds = 0;
 
   // led player indicator
   switch (player_index+1)
@@ -177,9 +216,12 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
     output_report.data.rumble.right_duration = 128;
   }
 
-  if (rumble != last_rumble || last_leds != output_report.data.leds_bitmap) {
-    last_rumble = rumble;
-    last_leds = output_report.data.leds_bitmap;
+  if (ds3_devices[dev_addr].instances[instance].rumble != rumble ||
+      ds3_devices[dev_addr].instances[instance].player != output_report.data.leds_bitmap ||
+      is_fun)
+  {
+    ds3_devices[dev_addr].instances[instance].rumble = rumble;
+    ds3_devices[dev_addr].instances[instance].player = output_report.data.leds_bitmap;
 
     // Send report without the report ID, start at index 1 instead of 0
     tuh_hid_send_report(dev_addr, instance, output_report.data.report_id, &(output_report.buf[1]), sizeof(output_report) - 1);
@@ -205,7 +247,7 @@ static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
 }
 
 // process usb hid output reports
-void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void task_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
@@ -216,10 +258,18 @@ void task_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   }
 }
 
+// resets default values in case devices are hotswapped
+void unmount_sony_ds3(uint8_t dev_addr, uint8_t instance)
+{
+  ds3_devices[dev_addr].instances[instance].rumble = 0;
+  ds3_devices[dev_addr].instances[instance].player = 0xff;
+}
+
 DeviceInterface sony_ds3_interface = {
   .name = "Sony DualShock 3",
   .init = init_sony_ds3,
   .is_device = is_sony_ds3,
   .process = input_sony_ds3,
-  .task = task_sony_ds3
+  .task = output_sony_ds3, // skips throttle task to resolve delayed responses
+  .unmount = unmount_sony_ds3,
 };
