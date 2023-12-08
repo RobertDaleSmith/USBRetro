@@ -3,6 +3,21 @@
 #include "globals.h"
 #include "bsp/board_api.h"
 
+// DualSense instance state
+typedef struct TU_ATTR_PACKED
+{
+  uint8_t rumble;
+  uint8_t player;
+} ds5_instance_t;
+
+// Cached device report properties on mount
+typedef struct TU_ATTR_PACKED
+{
+  ds5_instance_t instances[CFG_TUH_HID];
+} ds5_device_t;
+
+static ds5_device_t ds5_devices[MAX_DEVICES] = { 0 };
+
 // check if device is Sony PlayStation 5 controllers
 bool is_sony_ds5(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DualSense
@@ -10,17 +25,29 @@ bool is_sony_ds5(uint16_t vid, uint16_t pid) {
 
 // check if 2 reports are different enough
 bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt2) {
-  bool result;
+  // Check x1 to ry with a threshold
+  if (diff_than_n(rpt1->x1, rpt2->x1, 2) || diff_than_n(rpt1->y1, rpt2->y1, 2) ||
+      diff_than_n(rpt1->x2, rpt2->x2, 2) || diff_than_n(rpt1->y2, rpt2->y2, 2) ||
+      diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2)) {
+    return true;
+  }
 
-  // x1, y1, x2, y2, rx, ry must different than 2 to be counted
-  result = diff_than_n(rpt1->x1, rpt2->x1, 2) || diff_than_n(rpt1->y1, rpt2->y1, 2) ||
-           diff_than_n(rpt1->x2, rpt2->x2, 2) || diff_than_n(rpt1->y2, rpt2->y2, 2) ||
-           diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2);
+  // check the base buttons dpad -> r3 then
+  // manually check fields up to 'counter'
+  if (memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 2) ||
+      rpt1->ps != rpt2->ps ||
+      rpt1->tpad != rpt2->tpad ||
+      rpt1->mute != rpt2->mute) {
+    return true;
+  }
 
-  // check the reset with mem compare
-  result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, sizeof(sony_ds5_report_t)-7);
+  // Check tpad_f1_down and tpad_f1_pos
+  if (rpt1->tpad_f1_down != rpt2->tpad_f1_down ||
+    memcmp(rpt1->tpad_f1_pos, rpt2->tpad_f1_pos, sizeof(rpt1->tpad_f1_pos)) != 0) {
+    return true;
+  }
 
-  return result;
+  return false;
 }
 
 // process usb hid input reports
@@ -159,10 +186,8 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process usb hid output reports
-void output_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   ds5_feedback_t ds5_fb = {0};
-  static uint8_t last_rumble = 0;
-  static uint8_t last_leds = 0xff;
   int32_t perc_threshold_l = -1;
   int32_t perc_threshold_r = -1;
 
@@ -363,24 +388,26 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, u
     ds5_fb.lightbar_b = fun_inc+128;
   }
 
-  ds5_fb.rumble_l = 0;
-  ds5_fb.rumble_r = 0;
-
   if (rumble) {
     ds5_fb.rumble_l = 192;
     ds5_fb.rumble_r = 192;
+  } else {
+    ds5_fb.rumble_l = 0;
+    ds5_fb.rumble_r = 0;
   }
 
-  if (rumble != last_rumble || last_leds != ds5_fb.player_led) {
-    last_rumble = rumble;
-    last_leds = ds5_fb.player_led;
-
+  if (ds5_devices[dev_addr].instances[instance].rumble != rumble ||
+      ds5_devices[dev_addr].instances[instance].player != ds5_fb.player_led ||
+      is_fun)
+  {
+    ds5_devices[dev_addr].instances[instance].rumble = rumble;
+    ds5_devices[dev_addr].instances[instance].player = ds5_fb.player_led & 0xff;
     tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
   }
 }
 
 // process usb hid output reports
-void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble) {
+void task_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
@@ -391,10 +418,17 @@ void task_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uin
   }
 }
 
+// resets default values in case devices are hotswapped
+void unmount_sony_ds5(uint8_t dev_addr, uint8_t instance)
+{
+  ds5_devices[dev_addr].instances[instance].rumble = 0;
+  ds5_devices[dev_addr].instances[instance].player = 0xff;
+}
+
 DeviceInterface sony_ds5_interface = {
   .name = "Sony DualSense",
   .is_device = is_sony_ds5,
   .process = input_sony_ds5,
   .task = task_sony_ds5,
-  .init = NULL
+  .unmount = unmount_sony_ds5,
 };

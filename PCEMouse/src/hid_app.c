@@ -240,7 +240,7 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
   {
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++)
     {
-      int player_index = find_player_index(dev_addr, instance);
+      int8_t player_index = find_player_index(dev_addr, instance);
       int8_t ctrl_type = devices[dev_addr].instances[instance].type;
       switch (ctrl_type)
       {
@@ -559,10 +559,14 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
 
   // Reset device states
-  switch (devices[dev_addr].instances[instance].type)
+  device_type_t controller_type = devices[dev_addr].instances[instance].type;
+  switch (controller_type)
   {
+  case CONTROLLER_DUALSENSE:
+  case CONTROLLER_DUALSHOCK3:
+  case CONTROLLER_DUALSHOCK4:
   case CONTROLLER_SWITCH:
-    device_interfaces[CONTROLLER_SWITCH]->unmount(dev_addr, instance);
+    device_interfaces[controller_type]->unmount(dev_addr, instance);
     break;
   case CONTROLLER_DINPUT:
     hid_reset(dev_addr, instance);

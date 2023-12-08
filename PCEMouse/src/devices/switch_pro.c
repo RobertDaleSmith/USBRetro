@@ -15,7 +15,7 @@ typedef struct TU_ATTR_PACKED
   bool usb_enable_ack;
   bool home_led;
   bool command_ack;
-  int switch_player_led_set;
+  int player_led_set;
 } switch_instance_t;
 
 // Cached device report properties on mount
@@ -76,7 +76,7 @@ void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
   switch_devices[dev_addr].instances[instance].usb_enable_ack = false;
   switch_devices[dev_addr].instances[instance].home_led = false;
   switch_devices[dev_addr].instances[instance].command_ack = false;
-  switch_devices[dev_addr].instances[instance].switch_player_led_set = 0;
+  switch_devices[dev_addr].instances[instance].player_led_set = 0;
 }
 
 // prints raw switch pro input report byte data
@@ -270,7 +270,7 @@ bool send_command_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t *data, 
 }
 
 // process usb hid output reports
-void output_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble)
+void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble)
 {
   static uint8_t last_rumble = 0;
   static uint8_t output_sequence_counter = 0;
@@ -333,8 +333,8 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t player_index,
       } else if (switch_devices[dev_addr].instances[instance].command_ack) {
         // player_index = find_player_index(dev_addr, switch_devices[dev_addr].instance_count == 1 ? instance : switch_devices[dev_addr].instance_root);
 
-        if (switch_devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
-          switch_devices[dev_addr].instances[instance].switch_player_led_set = player_index;
+        if (switch_devices[dev_addr].instances[instance].player_led_set != player_index || is_fun) {
+          switch_devices[dev_addr].instances[instance].player_led_set = player_index;
 
           // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
           data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
@@ -421,7 +421,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t player_index,
 }
 
 // process usb hid output reports
-void task_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t player_index, uint8_t rumble)
+void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble)
 {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
