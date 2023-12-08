@@ -3,4 +3,4 @@
 *.orig
 *.swp
 .vscode
-build
+src/build
