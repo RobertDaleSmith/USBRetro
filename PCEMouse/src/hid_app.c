@@ -44,20 +44,8 @@
 #define HID_DEBUG 0
 #define LANGUAGE_ID 0x0409
 
-// SWITCH PRO
-#define PROCON_REPORT_SEND_USB 0x80
-#define PROCON_USB_HANDSHAKE   0x02
-#define PROCON_USB_BAUD        0x03
-#define PROCON_USB_ENABLE      0x04
-#define PROCON_USB_DO_CMD      0x92
-#define PROCON_CMD_AND_RUMBLE  0x01
-#define PROCON_CMD_MODE        0x03
-#define PROCON_CMD_LED_HOME    0x38
-#define PROCON_ARG_INPUT_FULL  0x30
-
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 
-uint8_t output_sequence_counter = 0;
 uint8_t last_rumble = 0;
 uint8_t last_leds = 0;
 
@@ -119,57 +107,6 @@ typedef union
   uint64_t value : 56;
 } pad_buttons;
 
-// Nintedo Switch Pro USB Controller
-typedef struct {
-    uint8_t  report_id;   // The first byte is always the report ID
-    uint8_t  timer;       // Timer tick (1 tick = 5ms)
-    uint8_t  battery_level_and_connection_info; // Battery level and connection info
-    struct {
-      uint8_t y    : 1;
-      uint8_t x    : 1;
-      uint8_t b    : 1;
-      uint8_t a    : 1;
-      uint8_t sr_r : 1;
-      uint8_t sl_r : 1;
-      uint8_t r    : 1;
-      uint8_t zr   : 1;
-    };
-
-    struct {
-      uint8_t select  : 1;
-      uint8_t start   : 1;
-      uint8_t rstick  : 1;
-      uint8_t lstick  : 1;
-      uint8_t home    : 1;
-      uint8_t cap     : 1;
-      uint8_t padding : 2;
-    };
-
-    struct {
-      uint8_t down  : 1;
-      uint8_t up    : 1;
-      uint8_t right : 1;
-      uint8_t left  : 1;
-      uint8_t sr_l  : 1;
-      uint8_t sl_l  : 1;
-      uint8_t l     : 1;
-      uint8_t zl    : 1;
-    };
-    uint8_t  left_stick[3]; // 12 bits for X and Y each (little endian)
-    uint8_t  right_stick[3]; // 12 bits for X and Y each (little endian)
-    uint8_t  vibration_ack; // Acknowledge output reports that trigger vibration
-    uint8_t  subcommand_ack; // Acknowledge if a subcommand was executed
-    uint8_t  subcommand_reply_data[35]; // Reply data for executed subcommands
-
-    uint16_t left_x, left_y, right_x, right_y;
-} switch_report_t;
-
-typedef union
-{
-  switch_report_t data;
-  uint8_t buf[sizeof(switch_report_t)];
-} switch_report_01_t;
-
 #define MAX_BUTTONS 12 // max generic HID buttons to map
 #define MAX_DEVICES 6
 #define MAX_REPORT  5
@@ -180,25 +117,15 @@ typedef struct {
     uint32_t mid;
 } InputLocation;
 
-// Each HID instance can has multiple reports
+// Each HID instance can have multiple reports
 typedef struct TU_ATTR_PACKED
 {
-  uint8_t type;
+  device_type_t type;
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
   //
   bool kbd_init;
   bool kbd_ready;
-  bool switch_conn_ack;
-  bool switch_baud;
-  bool switch_baud_ack;
-  bool switch_handshake;
-  bool switch_handshake_ack;
-  bool switch_usb_enable;
-  bool switch_usb_enable_ack;
-  bool switch_home_led;
-  bool switch_command_ack;
-  int switch_player_led_set;
   uint8_t motor_left;
   uint8_t motor_right;
   uint8_t analog_l;
@@ -232,18 +159,6 @@ static device_t devices[MAX_DEVICES] = { 0 };
 // Keyboard LED control
 static uint8_t kbd_leds = 0;
 static uint8_t prev_kbd_leds = 0xFF;
-
-// check if device is Nintendo Switch
-static inline bool is_switch(uint8_t dev_addr)
-{
-  uint16_t vid = devices[dev_addr].vid;
-  uint16_t pid = devices[dev_addr].pid;
-
-  return ((vid == 0x057e && (
-           pid == 0x2009 || // Nintendo Switch Pro
-           pid == 0x200e    // JoyCon Charge Grip
-         )));
-}
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
@@ -304,22 +219,6 @@ extern bool is_fun;
 extern unsigned char fun_inc;
 extern unsigned char fun_player;
 
-bool switch_send_command(uint8_t dev_addr, uint8_t instance, uint8_t *data, uint8_t len) {
-  uint8_t buf[8 + len];
-  buf[0] = 0x80; // PROCON_REPORT_SEND_USB
-  buf[1] = 0x92; // PROCON_USB_DO_CMD
-  buf[2] = 0x00;
-  buf[3] = 0x31;
-  buf[4] = 0x00;
-  buf[5] = 0x00;
-  buf[6] = 0x00;
-  buf[7] = 0x00;
-
-  memcpy(buf + 8, data, len);
-
-  tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
-}
-
 void hid_app_init() {
   register_devices();
 }
@@ -342,172 +241,22 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++)
     {
       int player_index = find_player_index(dev_addr, instance);
-      switch (devices[dev_addr].instances[instance].type)
+      int8_t ctrl_type = devices[dev_addr].instances[instance].type;
+      switch (ctrl_type)
       {
       case CONTROLLER_DUALSHOCK3: // send DS3 Init, LED and rumble responses
-        device_interfaces[CONTROLLER_DUALSHOCK3]->task(dev_addr, instance, player_index, rumble);
-        break;
       case CONTROLLER_DUALSHOCK4: // send DS4 LED and rumble response
-        device_interfaces[CONTROLLER_DUALSHOCK4]->task(dev_addr, instance, player_index, rumble);
-        break;
       case CONTROLLER_DUALSENSE: // send DS5 LED and rumble response
-        device_interfaces[CONTROLLER_DUALSENSE]->task(dev_addr, instance, player_index, rumble);
-        break;
       case CONTROLLER_GAMECUBE: // send GameCube WiiU/Switch Adapter rumble response
-        device_interfaces[CONTROLLER_GAMECUBE]->task(dev_addr, instance, player_index, rumble);
+      case CONTROLLER_SWITCH: // Switch Pro home LED and rumble response
+        device_interfaces[ctrl_type]->task(dev_addr, instance, player_index, rumble);
         break;
       default:
         break;
       }
 
-      // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
-      // See: https://github.com/Dan611/hid-procon/
-      //      https://github.com/felis/USB_Host_Shield_2.0/
-      //      https://github.com/nicman23/dkms-hid-nintendo/
-      //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
-      if (devices[dev_addr].instances[instance].type == CONTROLLER_SWITCH &&
-          devices[dev_addr].instances[instance].switch_conn_ack)
-      {
-        // set the faster baud rate
-        // if (!devices[dev_addr].instances[instance].switch_baud) {
-        //   devices[dev_addr].instances[instance].switch_baud = true;
-
-        //   printf("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
-        //   uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
-        //   tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
-
-        // // wait for baud ask and then send init handshake
-        // } else
-        if (!devices[dev_addr].instances[instance].switch_handshake/* && devices[dev_addr].instances[instance].switch_baud_ack*/) {
-          devices[dev_addr].instances[instance].switch_handshake = true;
-
-          printf("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
-          uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
-          tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
-
-        // wait for handshake ack and then send USB enable mode
-        } else if (!devices[dev_addr].instances[instance].switch_usb_enable && devices[dev_addr].instances[instance].switch_handshake_ack) {
-          devices[dev_addr].instances[instance].switch_usb_enable = true;
-
-          printf("SWITCH[%d|%d]: Enable USB\r\n", dev_addr, instance);
-          uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
-          tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
-
-        // wait for usb enabled acknowledgment
-        } else if (devices[dev_addr].instances[instance].switch_usb_enable_ack) {
-          // SWITCH SUB-COMMANDS
-          //
-          // Based on: https://github.com/Dan611/hid-procon
-          //           https://github.com/nicman23/dkms-hid-nintendo
-          //
-          uint8_t data[14] = { 0 };
-          data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
-
-          if (!devices[dev_addr].instances[instance].switch_home_led) {
-            devices[dev_addr].instances[instance].switch_home_led = true;
-
-            // It is possible set up to 15 mini cycles, but we simply just set the LED constantly on after momentary off.
-            // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x38-set-home-light
-            data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
-
-            data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
-            data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
-            data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
-            data[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
-
-            switch_send_command(dev_addr, instance, data, 10 + 4);
-
-          } else if (devices[dev_addr].instances[instance].switch_command_ack) {
-            player_index = find_player_index(dev_addr, devices[dev_addr].instance_count == 1 ? instance : devices[dev_addr].instance_root);
-
-            if (devices[dev_addr].instances[instance].switch_player_led_set != player_index || is_fun) {
-              devices[dev_addr].instances[instance].switch_player_led_set = player_index;
-
-              // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
-              data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
-
-              data[0x0A + 0] = 0x30; // PROCON_CMD_LED
-
-              // led player indicator
-              switch (player_index+1)
-              {
-              case 1:
-              case 2:
-              case 3:
-              case 4:
-              case 5:
-                data[0x0A + 1] = PLAYER_LEDS[player_index+1];
-                break;
-
-              default: // unassigned
-                // turn all leds on
-                data[0x0A + 1] = 0x0f;
-                break;
-              }
-
-              // fun
-              if (player_index+1 && is_fun) {
-                data[0x0A + 1] = (fun_inc & 0b00001111);
-              }
-
-              devices[dev_addr].instances[instance].switch_command_ack = false;
-              switch_send_command(dev_addr, instance, data, 10 + 2);
-            } else if (rumble != last_rumble) {
-              uint8_t buf[10] = { 0 };
-              buf[0x00] = 0x10; // Report ID - PROCON_CMD_RUMBLE_ONLY
-              buf[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
-              
-              // // Snippet values from https://github.com/DanielOgorchock/linux/blob/7811b8f1f00ee9f195b035951749c57498105d52/drivers/hid/hid-nintendo.c#L197
-              // // joycon_rumble_frequencies.freq = { 0x2000, 0x28,   95 }
-              // uint16_t freq_data_high_high = 0x2000;
-              // uint8_t freq_data_low_low = 0x28;
-              // // joycon_rumble_amplitudes.amp = { 0x78, 0x005e,  422 }
-              // uint8_t amp_data_high = 0x78;
-              // uint16_t amp_data_low = 0x005e;
-              // printf("0x%x 0x%x 0x%x 0x%x\n\n", (freq_data_high_high >> 8) & 0xFF, (freq_data_high_high & 0xFF) + amp_data_high, freq_data_low_low + ((amp_data_low >> 8) & 0xFF), amp_data_low & 0xFF);
-
-              if (rumble) {
-                // Left rumble ON data
-                buf[0x02 + 0] = 0x20;
-                buf[0x02 + 1] = 0x78;
-                buf[0x02 + 2] = 0x28;
-                buf[0x02 + 3] = 0x5e;
-                // buf[0x02 + 0] = (freq_data_high_high >> 8) & 0xFF;
-                // buf[0x02 + 1] = (freq_data_high_high & 0xFF) + amp_data_high;
-                // buf[0x02 + 2] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
-                // buf[0x02 + 3] = amp_data_low & 0xFF;
-
-                // Right rumble ON data
-                buf[0x02 + 4] = 0x20;
-                buf[0x02 + 5] = 0x78;
-                buf[0x02 + 6] = 0x28;
-                buf[0x02 + 7] = 0x5e;
-                // buf[0x02 + 4] = (freq_data_high_high >> 8) & 0xFF;
-                // buf[0x02 + 5] = (freq_data_high_high & 0xFF) + amp_data_high;
-                // buf[0x02 + 6] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
-                // buf[0x02 + 7] = amp_data_low & 0xFF;
-              } else {
-                // Left rumble OFF data
-                buf[0x02 + 0] = 0x00;
-                buf[0x02 + 1] = 0x01;
-                buf[0x02 + 2] = 0x40;
-                buf[0x02 + 3] = 0x40;
-
-                // Right rumble OFF data
-                buf[0x02 + 4] = 0x00;
-                buf[0x02 + 5] = 0x01;
-                buf[0x02 + 6] = 0x40;
-                buf[0x02 + 7] = 0x40;
-              }
-              last_rumble = rumble;
-              switch_send_command(dev_addr, instance, buf, 10);
-            }
-          }
-        }
-      }
-
       // keyboard LED
-      else if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD)
+      if (devices[dev_addr].instances[instance].type == CONTROLLER_KEYBOARD)
       {
         if (!devices[dev_addr].instances[instance].kbd_init && devices[dev_addr].instances[instance].kbd_ready) {
           devices[dev_addr].instances[instance].kbd_init = true;
@@ -540,7 +289,6 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
           }
         }
       }
-
     }
   }
 }
@@ -669,27 +417,18 @@ void parse_hid_descriptor(uint8_t dev_addr, uint8_t instance)
   devices[dev_addr].instances[instance].buttonCnt = btns_count;
 }
 
-bool isKnownController(uint8_t dev_addr) {
-  if (is_switch(dev_addr)) {
-    if (devices[dev_addr].pid == 0x200e) {
-      printf("DEVICE:[Switch JoyCon Charging Grip]\n");
-    } else {
-      printf("DEVICE:[Switch Pro Controller]\n");
+device_type_t get_device_type(uint8_t dev_addr)
+{
+  for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
+    if (device_interfaces[i] &&
+        device_interfaces[i]->is_device(devices[dev_addr].vid, devices[dev_addr].pid)) {
+      printf("DEVICE:[%s]\n", device_interfaces[i]->name);
+      return (device_type_t)i;
     }
-    return true;
-  }
-  else {
-    for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
-      if (device_interfaces[i] &&
-          device_interfaces[i]->is_device(devices[dev_addr].vid, devices[dev_addr].pid)) {
-        printf("DEVICE:[%s]\n", device_interfaces[i]->name);
-        return true;
-      }
-    }    
   }
 
   printf("DEVICE:[UKNOWN]\n");
-  return false;
+  return CONTROLLER_UNKNOWN;
 }
 
 //--------------------------------------------------------------------+
@@ -726,51 +465,32 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   // By default host stack will use activate boot protocol on supported interface.
   // Therefore for this simple example, we only need to parse generic report descriptor (with built-in parser)
-  bool isKnownCtrlr = isKnownController(dev_addr);
-  printf("mapped: %d, dev: %d, instance: %d\n", isKnownCtrlr?1:0, dev_addr, instance);
+  device_type_t controller_type = get_device_type(dev_addr);
+  printf("mapped: %d, dev: %d, instance: %d\n", controller_type >= 0 ? 1 : 0, dev_addr, instance);
+
+  devices[dev_addr].instances[instance].type = controller_type;
 
   // Set device type and defaults
-  if (device_interfaces[CONTROLLER_DUALSHOCK3]->is_device(vid, pid))
+  switch (controller_type)
   {
+  case CONTROLLER_DUALSHOCK3:
     device_interfaces[CONTROLLER_DUALSHOCK3]->init(dev_addr, instance);
-    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSHOCK3;
-  }
-  else if (device_interfaces[CONTROLLER_DUALSHOCK4]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSHOCK4;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (device_interfaces[CONTROLLER_DUALSENSE]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DUALSENSE;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (is_switch(dev_addr))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_SWITCH;
+    break;
+  case CONTROLLER_SWITCH:
     printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
-  }
-  else if (device_interfaces[CONTROLLER_GAMECUBE]->is_device(vid, pid))
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_GAMECUBE;
-    devices[dev_addr].instances[instance].motor_left = 0;
-    devices[dev_addr].instances[instance].motor_right = 0;
-  }
-  else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
-  {
-    devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
-    devices[dev_addr].instances[instance].kbd_ready = false;
-    devices[dev_addr].instances[instance].kbd_init = false;
-  }
-  else {
-    devices[dev_addr].instances[instance].type = CONTROLLER_DINPUT;
-    devices[dev_addr].instances[instance].kbd_ready = false;
-    devices[dev_addr].instances[instance].kbd_init = false;
+    break;
+  default:
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
+    {
+      controller_type = CONTROLLER_KEYBOARD;
+      devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
+      devices[dev_addr].instances[instance].kbd_ready = false;
+      devices[dev_addr].instances[instance].kbd_init = false;
+    }
+    break;
   }
 
-  if (!isKnownCtrlr && itf_protocol != HID_ITF_PROTOCOL_KEYBOARD)
+  if (controller_type == CONTROLLER_UNKNOWN && itf_protocol != HID_ITF_PROTOCOL_KEYBOARD)
   {
     if (itf_protocol == HID_ITF_PROTOCOL_NONE) {
       devices[dev_addr].instances[instance].report_count = tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORT, desc_report, desc_len);
@@ -809,22 +529,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 }
 
 // resets default values in case devices are hotswapped
-void switch_reset(uint8_t dev_addr, uint8_t instance)
-{
-  printf("SWITCH[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
-  devices[dev_addr].instances[instance].switch_conn_ack = false;
-  devices[dev_addr].instances[instance].switch_baud = false;
-  devices[dev_addr].instances[instance].switch_baud_ack = false;
-  devices[dev_addr].instances[instance].switch_handshake = false;
-  devices[dev_addr].instances[instance].switch_handshake_ack = false;
-  devices[dev_addr].instances[instance].switch_usb_enable = false;
-  devices[dev_addr].instances[instance].switch_usb_enable_ack = false;
-  devices[dev_addr].instances[instance].switch_home_led = false;
-  devices[dev_addr].instances[instance].switch_command_ack = false;
-  devices[dev_addr].instances[instance].switch_player_led_set = 0;
-}
-
-// resets default values in case devices are hotswapped
 void hid_reset(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
@@ -854,13 +558,17 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
 
-  // Reset Switch Config
-  if (devices[dev_addr].instances[instance].type == CONTROLLER_SWITCH) {
-    switch_reset(dev_addr, instance);
-  }
-  // Reset HID Config
-  else if (devices[dev_addr].instances[instance].type == CONTROLLER_DINPUT) {
+  // Reset device states
+  switch (devices[dev_addr].instances[instance].type)
+  {
+  case CONTROLLER_SWITCH:
+    device_interfaces[CONTROLLER_SWITCH]->unmount(dev_addr, instance);
+    break;
+  case CONTROLLER_DINPUT:
     hid_reset(dev_addr, instance);
+    break;
+  default:
+    break;
   }
 
   if (devices[dev_addr].instance_count > 0) {
@@ -869,200 +577,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     devices[dev_addr].instance_count = 0;
   }
 
-  devices[dev_addr].instances[instance].type = CONTROLLER_NONE;
-}
-
-bool switch_diff_report(switch_report_t const* rpt1, switch_report_t const* rpt2)
-{
-  bool result;
-
-  // x, y, z, rz must different than 2 to be counted
-  result = diff_than_n(rpt1->left_x, rpt2->left_x, 4) || diff_than_n(rpt1->left_y, rpt2->left_y, 4) ||
-           diff_than_n(rpt1->right_x, rpt2->right_x, 4) || diff_than_n(rpt1->right_y, rpt2->right_y, 4);
-
-  // check the reset with mem compare (everything but the sticks)
-  result |= memcmp(&rpt1->battery_level_and_connection_info + 1, &rpt2->battery_level_and_connection_info + 1, 3);
-  result |= memcmp(&rpt1->subcommand_ack, &rpt2->subcommand_ack, 36);
-
-  return result;
-}
-
-void print_report(switch_report_01_t* report, uint32_t length) {
-    printf("Bytes: ");
-    for(uint32_t i = 0; i < length; i++) {
-        printf("%02X ", report->buf[i]);
-    }
-    printf("\n");
-}
-
-uint8_t byteScaleSwitchAnalog(uint16_t switch_val) {
-    // If the input is zero, then output min value of 1
-    if (switch_val == 0) {
-        return 1;
-    }
-
-    // Otherwise, scale the switch value from [1, 4095] to [1, 255]
-    return 1 + ((switch_val - 1) * 255) / 4095;
-}
-
-void process_switch(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  // previous report used to compare for changes
-  static switch_report_t prev_report[5][5];
-
-  switch_report_t update_report;
-  memcpy(&update_report, report, sizeof(update_report));
-
-  if (update_report.report_id == 0x30) { // Switch Controller Report
-
-    devices[dev_addr].instances[instance].switch_usb_enable_ack = true;
-
-    update_report.left_x = (update_report.left_stick[0] & 0xFF) | ((update_report.left_stick[1] & 0x0F) << 8);
-    update_report.left_y = ((update_report.left_stick[1] & 0xF0) >> 4) | ((update_report.left_stick[2] & 0xFF) << 4);
-    update_report.right_x = (update_report.right_stick[0] & 0xFF) | ((update_report.right_stick[1] & 0x0F) << 8);
-    update_report.right_y = ((update_report.right_stick[1] & 0xF0) >> 4) | ((update_report.right_stick[2] & 0xFF) << 4);
-
-    if (switch_diff_report(&prev_report[dev_addr-1][instance], &update_report)) {
-
-      printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, update_report.report_id);
-      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", update_report.left_x, update_report.left_y, update_report.right_x, update_report.right_y);
-      printf("DPad = ");
-
-      if (update_report.down) printf("Down ");
-      if (update_report.up) printf("Up ");
-      if (update_report.right) printf("Right ");
-      if (update_report.left ) printf("Left ");
-
-      printf("; Buttons = ");
-      if (update_report.y) printf("Y ");
-      if (update_report.b) printf("B ");
-      if (update_report.a) printf("A ");
-      if (update_report.x) printf("X ");
-      if (update_report.l) printf("L ");
-      if (update_report.r) printf("R ");
-      if (update_report.zl) printf("ZL ");
-      if (update_report.zr) printf("ZR ");
-      if (update_report.lstick) printf("LStick ");
-      if (update_report.rstick) printf("RStick ");
-      if (update_report.select) printf("Select ");
-      if (update_report.start) printf("Start ");
-      if (update_report.home) printf("Home ");
-      if (update_report.cap) printf("Cap ");
-      if (update_report.sr_r) printf("sr_r ");
-      if (update_report.sl_l) printf("sl_l ");
-      printf("\r\n");
-
-      bool has_6btns = true;
-      int threshold = 256;
-      bool dpad_up    = update_report.up;
-      bool dpad_right = update_report.right;
-      bool dpad_down  = update_report.down;
-      bool dpad_left  = update_report.left;
-      bool bttn_1 = update_report.a;
-      bool bttn_2 = update_report.b;
-      bool bttn_3 = update_report.x;
-      bool bttn_4 = update_report.y;
-      bool bttn_5 = update_report.l;
-      bool bttn_6 = update_report.r;
-      bool bttn_run = update_report.start;
-      bool bttn_sel = update_report.select || update_report.zl || update_report.zr;
-      bool bttn_home = update_report.home;
-
-      uint8_t leftX = 0;
-      uint8_t leftY = 0;
-      uint8_t rightX = 0;
-      uint8_t rightY = 0;
-
-      if (devices[dev_addr].pid == 0x200e) { // is_joycon_grip
-        bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
-        bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
-        if (is_left_joycon) {
-          dpad_up    = update_report.up;
-          dpad_right = update_report.right;
-          dpad_down  = update_report.down;
-          dpad_left  = update_report.left;
-          bttn_5 = update_report.l;
-          bttn_run = false;
-
-          leftX = byteScaleSwitchAnalog(update_report.left_x + 127);
-          leftY = byteScaleSwitchAnalog(update_report.left_y - 127);
-        }
-        else if (is_right_joycon) {
-          dpad_up    = false; // (right_stick_y > (2048 + threshold));
-          dpad_right = false; // (right_stick_x > (2048 + threshold));
-          dpad_down  = false; // (right_stick_y < (2048 - threshold));
-          dpad_left  = false; // (right_stick_x < (2048 - threshold));
-          bttn_home = false;
-
-          rightX = byteScaleSwitchAnalog(update_report.right_x);
-          rightY = byteScaleSwitchAnalog(update_report.right_y + 127);
-        }
-      } else {
-        leftX = byteScaleSwitchAnalog(update_report.left_x);
-        leftY = byteScaleSwitchAnalog(update_report.left_y);
-        rightX = byteScaleSwitchAnalog(update_report.right_x);
-        rightY = byteScaleSwitchAnalog(update_report.right_y);
-      }
-
-      buttons = (
-        ((update_report.rstick) ? 0x00 : 0x20000) |
-        ((update_report.lstick) ? 0x00 : 0x10000) |
-        ((bttn_6)     ? 0x00 : 0x8000) | // VI
-        ((bttn_5)     ? 0x00 : 0x4000) | // V
-        ((bttn_4)     ? 0x00 : 0x2000) | // IV
-        ((bttn_3)     ? 0x00 : 0x1000) | // III
-        ((has_6btns)  ? 0x00 : 0x0800) |
-        ((bttn_home)  ? 0x00 : 0x0400) | // home
-        ((update_report.sr_r) ? 0x00 : 0x0200) | // r2
-        ((update_report.sr_l) ? 0x00 : 0x0100) | // l2
-        ((dpad_left)  ? 0x00 : 0x0008) |
-        ((dpad_down)  ? 0x00 : 0x0004) |
-        ((dpad_right) ? 0x00 : 0x0002) |
-        ((dpad_up)    ? 0x00 : 0x0001) |
-        ((bttn_run)   ? 0x00 : 0x0080) | // Run
-        ((bttn_sel)   ? 0x00 : 0x0040) | // Select
-        ((bttn_2)     ? 0x00 : 0x0020) | // II
-        ((bttn_1)     ? 0x00 : 0x0010)   // I
-      );
-
-      // add to accumulator and post to the state machine
-      // if a scan from the host machine is ongoing, wait
-      bool is_root = instance == devices[dev_addr].instance_root;
-      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
-
-      prev_report[dev_addr-1][instance] = update_report;
-    }
-
-  // process input reports for events and command acknowledgments
-  } else {
-
-    switch_report_01_t state_report;
-    memcpy(&state_report, report, sizeof(state_report));
-
-    // JC_INPUT_USB_RESPONSE (connection events & command acknowledgments)
-    if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x01) { // JC_USB_CMD_CONN_STATUS
-      if (state_report.buf[2] == 0x00) { // connect
-        devices[dev_addr].instances[instance].switch_conn_ack = true;
-      } else if (state_report.buf[2] == 0x03) { // disconnect
-        switch_reset(dev_addr, instance);
-        remove_players_by_address(dev_addr, instance);
-      }
-    }
-    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x02) { // JC_USB_CMD_HANDSHAKE
-      devices[dev_addr].instances[instance].switch_handshake_ack = true;
-    }
-    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x03) { // JC_USB_CMD_BAUDRATE_3M
-      devices[dev_addr].instances[instance].switch_baud_ack = true;
-    }
-    else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x92) { // command ack
-      devices[dev_addr].instances[instance].switch_command_ack = true;
-    }
-
-    printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, state_report.data.report_id);
-
-    uint32_t length = sizeof(state_report.buf) / sizeof(state_report.buf[0]);
-    print_report(&state_report, length);
-  }
+  devices[dev_addr].instances[instance].type = CONTROLLER_UNKNOWN;
 }
 
 // Invoked when received report from device via interrupt endpoint
@@ -1086,16 +601,11 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     break;
 
     default:
-      if ( is_switch(dev_addr) ) {
-        process_switch(dev_addr, instance, report, len);
-        known = true;
-      } else {
-        for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
-          if (device_interfaces[i] && device_interfaces[i]->is_device(vid, pid)) {
-            device_interfaces[i]->process(dev_addr, instance, report, len);
-            known = true;
-            break;
-          }
+      for (int i = 0; i < CONTROLLER_TYPE_COUNT; i++) {
+        if (device_interfaces[i] && device_interfaces[i]->is_device(vid, pid)) {
+          device_interfaces[i]->process(dev_addr, instance, report, len);
+          known = true;
+          break;
         }
       }
 

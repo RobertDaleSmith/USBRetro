@@ -12,6 +12,7 @@
 #include "hori_pokken.h"
 #include "logitech_wingman.h"
 #include "sega_astrocity.h"
+#include "switch_pro.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT] = {0};
@@ -29,6 +30,7 @@ void register_devices() {
     device_interfaces[CONTROLLER_WINGMAN] = &logitech_wingman_interface;
     device_interfaces[CONTROLLER_ASTROCITY] = &sega_astrocity_interface;
     device_interfaces[CONTROLLER_GAMECUBE] = &gamecube_adapter_interface;
+    device_interfaces[CONTROLLER_SWITCH] = &switch_pro_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 

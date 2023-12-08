@@ -2,6 +2,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#define MAX_DEVICES 6
+
 void __not_in_flash_func(post_globals)(
   uint8_t dev_addr,
   int8_t instance,

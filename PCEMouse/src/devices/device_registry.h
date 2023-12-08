@@ -3,7 +3,7 @@
 
 // Controller Types
 typedef enum {
-    CONTROLLER_NONE = -1,
+    CONTROLLER_UNKNOWN=-1,
     CONTROLLER_DUALSHOCK3,
     CONTROLLER_DUALSHOCK4,
     CONTROLLER_DUALSENSE,
@@ -21,7 +21,7 @@ typedef enum {
     CONTROLLER_KEYBOARD,
     // Add more controller types here
     CONTROLLER_TYPE_COUNT // Automatically equals the number of controller types
-} ControllerType;
+} device_type_t;
 
 extern DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT];
 
