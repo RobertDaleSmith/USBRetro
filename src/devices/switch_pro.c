@@ -15,13 +15,16 @@ typedef struct TU_ATTR_PACKED
   bool usb_enable_ack;
   bool home_led;
   bool command_ack;
-  int player_led_set;
+  uint8_t rumble;
+  uint8_t player_led_set;
 } switch_instance_t;
 
 // Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
 {
   switch_instance_t instances[CFG_TUH_HID];
+  uint8_t instance_count;
+  uint8_t instance_root;
 } switch_device_t;
 
 static switch_device_t switch_devices[MAX_DEVICES] = { 0 };
@@ -76,7 +79,23 @@ void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
   switch_devices[dev_addr].instances[instance].usb_enable_ack = false;
   switch_devices[dev_addr].instances[instance].home_led = false;
   switch_devices[dev_addr].instances[instance].command_ack = false;
-  switch_devices[dev_addr].instances[instance].player_led_set = 0;
+  switch_devices[dev_addr].instances[instance].rumble = 0;
+  switch_devices[dev_addr].instances[instance].player_led_set = 0xff;
+
+  if (switch_devices[dev_addr].instance_count > 1) {
+    switch_devices[dev_addr].instance_count--;
+  } else {
+    switch_devices[dev_addr].instance_count = 0;
+  }
+
+  // if (switch_devices[dev_addr].instance_count == 1 &&
+  //     switch_devices[dev_addr].instance_root == instance) {
+  //   if (switch_devices[dev_addr].instance_root == 1) {
+  //     switch_devices[dev_addr].instance_root = 0;
+  //   } else {
+  //     switch_devices[dev_addr].instance_root = 1;
+  //   }
+  // }
 }
 
 // prints raw switch pro input report byte data
@@ -213,8 +232,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
-      // bool is_root = instance == switch_devices[dev_addr].instance_root;
-      bool is_root = instance == 0;
+      bool is_root = instance == switch_devices[dev_addr].instance_root;
       post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
@@ -272,7 +290,6 @@ bool send_command_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t *data, 
 // process usb hid output reports
 void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble)
 {
-  static uint8_t last_rumble = 0;
   static uint8_t output_sequence_counter = 0;
   // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
   // See: https://github.com/Dan611/hid-procon/
@@ -331,9 +348,10 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
         send_command_switch_pro(dev_addr, instance, data, 10 + 4);
 
       } else if (switch_devices[dev_addr].instances[instance].command_ack) {
-        // player_index = find_player_index(dev_addr, switch_devices[dev_addr].instance_count == 1 ? instance : switch_devices[dev_addr].instance_root);
+        player_index = find_player_index(dev_addr, switch_devices[dev_addr].instance_count == 1 ? instance : switch_devices[dev_addr].instance_root);
 
-        if (switch_devices[dev_addr].instances[instance].player_led_set != player_index || is_fun) {
+        if (switch_devices[dev_addr].instances[instance].player_led_set != player_index || is_fun)
+        {
           switch_devices[dev_addr].instances[instance].player_led_set = player_index;
 
           // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
@@ -365,7 +383,11 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
 
           switch_devices[dev_addr].instances[instance].command_ack = false;
           send_command_switch_pro(dev_addr, instance, data, 10 + 2);
-        } else if (rumble != last_rumble) {
+        }
+        else if (switch_devices[dev_addr].instances[instance].rumble != rumble)
+        {
+          switch_devices[dev_addr].instances[instance].rumble = rumble;
+
           uint8_t buf[10] = { 0 };
           buf[0x00] = 0x10; // Report ID - PROCON_CMD_RUMBLE_ONLY
           buf[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
@@ -412,7 +434,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
             buf[0x02 + 6] = 0x40;
             buf[0x02 + 7] = 0x40;
           }
-          last_rumble = rumble;
+          switch_devices[dev_addr].instances[instance].command_ack = false;
           send_command_switch_pro(dev_addr, instance, buf, 10);
         }
       }
@@ -434,11 +456,20 @@ void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   }
 }
 
+// initialize usb hid input
+static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance) {
+  printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+
+  if ((++switch_devices[dev_addr].instance_count) == 1) {
+    switch_devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
+  }
+}
+
 DeviceInterface switch_pro_interface = {
   .name = "Switch Pro",
   .is_device = is_switch_pro,
   .process = input_report_switch_pro,
-  .task = task_switch_pro,
+  .task = output_switch_pro,
   .unmount = unmount_switch_pro,
-  .init = NULL
+  .init = init_switch_pro,
 };

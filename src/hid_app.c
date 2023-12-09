@@ -70,7 +70,6 @@ const uint8_t PLAYER_LEDS[] = {
 #define INVALID_REPORT_ID -1
 // means 1/X of half range of analog would be dead zone
 #define DEAD_ZONE 4U
-static const char *const BUTTON_NAMES[] = {"NONE", "^", ">", "\\/", "<", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"};
 //(hat format, 8 is released, 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
 static const uint8_t HAT_SWITCH_TO_DIRECTION_BUTTONS[] = {0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001, 0b0000};
 
@@ -147,11 +146,9 @@ HID_ReportInfo_t *info;
 // Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
 {
-  uint16_t serial[20];
+  // uint16_t serial[20];
   uint16_t vid, pid;
   instance_t instances[CFG_TUH_HID];
-  uint8_t instance_count;
-  uint8_t instance_root;
 } device_t;
 
 static device_t devices[MAX_DEVICES] = { 0 };
@@ -453,9 +450,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   // Stash device vid/pid/serial device type detection
   devices[dev_addr].vid = vid;
   devices[dev_addr].pid = pid;
-  if ((++devices[dev_addr].instance_count) == 1) {
-    devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
-  }
 
   // Interface protocol (hid_interface_protocol_enum_t)
   const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
@@ -474,10 +468,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   switch (controller_type)
   {
   case CONTROLLER_DUALSHOCK3:
-    device_interfaces[CONTROLLER_DUALSHOCK3]->init(dev_addr, instance);
-    break;
   case CONTROLLER_SWITCH:
-    printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+    device_interfaces[controller_type]->init(dev_addr, instance);
     break;
   default:
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
@@ -573,12 +565,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     break;
   default:
     break;
-  }
-
-  if (devices[dev_addr].instance_count > 0) {
-    devices[dev_addr].instance_count--;
-  } else {
-    devices[dev_addr].instance_count = 0;
   }
 
   devices[dev_addr].instances[instance].type = CONTROLLER_UNKNOWN;
