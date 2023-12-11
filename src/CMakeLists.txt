@@ -58,8 +58,9 @@ pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/hid_parser.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_gamepad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_bta.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_neo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_m30.c

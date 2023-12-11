@@ -74,8 +74,14 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     // We need more than memcmp to check if report is different enough
     if ( diff_report_ds3(&prev_report[dev_addr-1], &ds3_report) )
     {
-      //TODO: parse left and right analog trigger pressure values
-      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", ds3_report.lx, ds3_report.ly, ds3_report.rx, ds3_report.ry);
+      uint8_t analog_1x = ds3_report.lx;
+      uint8_t analog_1y = 255 - ds3_report.ly;
+      uint8_t analog_2x = ds3_report.rx;
+      uint8_t analog_2y = 255 - ds3_report.ry;
+      uint8_t analog_l = ds3_report.pressure[8];
+      uint8_t analog_r = ds3_report.pressure[9];
+
+      printf("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
       printf("DPad = ");
 
       if (ds3_report.up       ) printf("Up ");
@@ -101,13 +107,6 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       if (ds3_report.ps       ) printf("PS ");
 
       printf("\r\n");
-
-      uint8_t analog_1x = ds3_report.lx;
-      uint8_t analog_1y = 255 - ds3_report.ly;
-      uint8_t analog_2x = ds3_report.rx;
-      uint8_t analog_2y = 255 - ds3_report.ry;
-      uint8_t analog_l = ds3_report.pressure[8];
-      uint8_t analog_r = ds3_report.pressure[9];
 
 #ifdef CONFIG_NGC
       // us pressure value of L1/R1 to simulate analog

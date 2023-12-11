@@ -19,9 +19,10 @@ typedef enum {
     CONTROLLER_SWITCH,
     CONTROLLER_DINPUT,
     CONTROLLER_KEYBOARD,
+    CONTROLLER_MOUSE,
     // Add more controller types here
     CONTROLLER_TYPE_COUNT // Automatically equals the number of controller types
-} device_type_t;
+} dev_type_t;
 
 extern DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT];
 
