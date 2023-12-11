@@ -102,7 +102,7 @@ typedef struct {
 
 uint32_t buttons;
 extern int16_t spinner;
-extern uint16_t tpadLastPos;
-extern bool tpadDragging;
+uint16_t tpadLastPos;
+bool tpadDragging;
 
 #endif
