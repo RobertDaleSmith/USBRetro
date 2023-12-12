@@ -45,8 +45,8 @@ static inline bool USB_GetHIDReportItemInfoWithReportId(const uint8_t *ReportDat
   if (HID_DEBUG) printf("ReportID: %d ", ReportItem->ReportID);
   if (ReportItem->ReportID)
   {
-    if (ReportItem->ReportID != ReportData[0])
-      return false;
+    // if (ReportItem->ReportID != ReportData[0])
+    //   return false;
 
     ReportData++;
   }
@@ -59,11 +59,20 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
   HID_ReportItem_t *item = info->FirstReportItem;
   //iterate filtered reports info to match report from data
   uint8_t btns_count = 0;
+  uint8_t idOffset = 0;
+
+  // check if reportID exists within input report
+  if (item->ReportID)
+  {
+    printf("ReportID in report = %04x\r\n", item->ReportID);
+    idOffset = 8;
+  }
+
   while (item)
   {
     uint8_t midValue = (item->Attributes.Logical.Maximum - item->Attributes.Logical.Minimum) / 2;
     uint8_t bitSize = item->Attributes.BitSize ? item->Attributes.BitSize : 0; // bits per usage
-    uint8_t bitOffset = item->BitOffset ? item->BitOffset : 0; // bits offset from start
+    uint8_t bitOffset = (item->BitOffset ? item->BitOffset : 0) + idOffset; // bits offset from start
     uint16_t bitMask = ((0xFFFF >> (16 - bitSize)) << bitOffset % 8); // usage bits byte mask
     uint8_t byteIndex = (int)(bitOffset / 8); // usage start byte
 
@@ -87,92 +96,101 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
       if (HID_DEBUG) printf("PAGE: %d ", item->Attributes.Usage.Page);
       switch (item->Attributes.Usage.Page)
       {
-      case HID_USAGE_PAGE_DESKTOP:
-        switch (item->Attributes.Usage.Usage)
+        case HID_USAGE_PAGE_DESKTOP:
         {
-        case HID_USAGE_DESKTOP_X: // Left Analog X
-        {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_X ");
-          hid_devices[dev_addr].instances[instance].xLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].xLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].xLoc.max = item->Attributes.Logical.Maximum;
+          switch (item->Attributes.Usage.Usage)
+          {
+          case HID_USAGE_DESKTOP_X: // Left Analog X
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_X ");
+            hid_devices[dev_addr].instances[instance].xLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].xLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].xLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_Y: // Left Analog Y
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Y ");
+            hid_devices[dev_addr].instances[instance].yLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].yLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].yLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_Z: // Right Analog X
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Z ");
+            hid_devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].zLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_RZ: // Right Analog Y
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RZ ");
+            hid_devices[dev_addr].instances[instance].rzLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].rzLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].rzLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_RX: // Left Analog Trigger
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RX ");
+            hid_devices[dev_addr].instances[instance].rxLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].rxLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].rxLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_RY: // Right Analog Trigger
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RY ");
+            hid_devices[dev_addr].instances[instance].ryLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].ryLoc.bitMask = bitMask;
+            hid_devices[dev_addr].instances[instance].ryLoc.max = item->Attributes.Logical.Maximum;
+            break;
+          }
+          case HID_USAGE_DESKTOP_HAT_SWITCH:
+          {
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
+            hid_devices[dev_addr].instances[instance].hatLoc.byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].hatLoc.bitMask = bitMask;
+            break;
+          }
+          default:
+            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_NOT_HANDLED 0x%x", item->Attributes.Usage.Usage);
+            break;
+          // case HID_USAGE_DESKTOP_SLIDER:
+          // case HID_USAGE_DESKTOP_DIAL:
+          //   break;
+          // case HID_USAGE_DESKTOP_DPAD_UP:
+          //   current.up |= 1;
+          //   break;
+          // case HID_USAGE_DESKTOP_DPAD_RIGHT:
+          //   current.right |= 1;
+          //   break;
+          // case HID_USAGE_DESKTOP_DPAD_DOWN:
+          //   current.down |= 1;
+          //   break;
+          // case HID_USAGE_DESKTOP_DPAD_LEFT:
+          //   current.left |= 1;
+          //   break;
+          }
           break;
         }
-        case HID_USAGE_DESKTOP_Y: // Left Analog Y
+        case HID_USAGE_PAGE_BUTTON:
         {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Y ");
-          hid_devices[dev_addr].instances[instance].yLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].yLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].yLoc.max = item->Attributes.Logical.Maximum;
-          break;
-        }
-        case HID_USAGE_DESKTOP_Z: // Right Analog X
-        {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Z ");
-          hid_devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].zLoc.max = item->Attributes.Logical.Maximum;
-          break;
-        }
-        case HID_USAGE_DESKTOP_RZ: // Right Analog Y
-        {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RZ ");
-          hid_devices[dev_addr].instances[instance].rzLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].rzLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].rzLoc.max = item->Attributes.Logical.Maximum;
-          break;
-        }
-        case HID_USAGE_DESKTOP_RX: // Left Analog Trigger
-        {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RX ");
-          hid_devices[dev_addr].instances[instance].rxLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].rxLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].rxLoc.max = item->Attributes.Logical.Maximum;
-          break;
-        }
-        case HID_USAGE_DESKTOP_RY: // Right Analog Trigger
-        {
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RY ");
-          hid_devices[dev_addr].instances[instance].ryLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].ryLoc.bitMask = bitMask;
-          hid_devices[dev_addr].instances[instance].ryLoc.max = item->Attributes.Logical.Maximum;
-          break;
-        }
-        case HID_USAGE_DESKTOP_HAT_SWITCH:
-          if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
-          hid_devices[dev_addr].instances[instance].hatLoc.byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].hatLoc.bitMask = bitMask;
+          if (HID_DEBUG) printf(" HID_USAGE_PAGE_BUTTON ");
+          uint8_t usage = item->Attributes.Usage.Usage;
 
+          if (usage >= 1 && usage <= MAX_BUTTONS) {
+            hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].byteIndex = byteIndex;
+            hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].bitMask = bitMask;
+          }
+          btns_count++;
           break;
-        // case HID_USAGE_DESKTOP_DPAD_UP:
-        //   current.up |= 1;
-        //   break;
-        // case HID_USAGE_DESKTOP_DPAD_RIGHT:
-        //   current.right |= 1;
-        //   break;
-        // case HID_USAGE_DESKTOP_DPAD_DOWN:
-        //   current.down |= 1;
-        //   break;
-        // case HID_USAGE_DESKTOP_DPAD_LEFT:
-        //   current.left |= 1;
-        //   break;
         }
-        break;
-        // case HID_USAGE_DESKTOP_SLIDER:
-        // case HID_USAGE_DESKTOP_DIAL:
-        break;
-      case HID_USAGE_PAGE_BUTTON:
-      {
-        if (HID_DEBUG) printf(" HID_USAGE_PAGE_BUTTON ");
-        uint8_t usage = item->Attributes.Usage.Usage;
-
-        if (usage >= 1 && usage <= MAX_BUTTONS) {
-          hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].byteIndex = byteIndex;
-          hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].bitMask = bitMask;
-        }
-        btns_count++;
-      }
-      break;
+        default:
+          if (HID_DEBUG) printf(" HID_USAGE_PAGE_NOT_HANDLED 0x%x", item->Attributes.Usage.Page);
+          break;
       }
     }
     item = item->Next;
@@ -180,6 +198,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
   }
 
   hid_devices[dev_addr].instances[instance].buttonCnt = btns_count;
+  // hid_devices[dev_addr].instances[instance].reportID = item->ReportID;
 }
 
 //
@@ -224,9 +243,9 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
   if (CurrentItem->ItemType != HID_REPORT_ITEM_In)
     return false;
 
-  // if (devices[dev_addr].instances[instance].reportID == INVALID_REPORT_ID)
+  // if (hid_devices[dev_addr].instances[instance].reportID == INVALID_REPORT_ID)
   // {
-  //   devices[dev_addr].instances[instance].reportID = CurrentItem->ReportID;
+  //   hid_devices[dev_addr].instances[instance].reportID = CurrentItem->ReportID;
   // }
   switch (CurrentItem->Attributes.Usage.Page)
   {
@@ -238,6 +257,8 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
         case HID_USAGE_DESKTOP_Y:
         case HID_USAGE_DESKTOP_Z:
         case HID_USAGE_DESKTOP_RZ:
+        case HID_USAGE_DESKTOP_RX:
+        case HID_USAGE_DESKTOP_RY:
         case HID_USAGE_DESKTOP_HAT_SWITCH:
         case HID_USAGE_DESKTOP_DPAD_UP:
         case HID_USAGE_DESKTOP_DPAD_DOWN:
@@ -396,7 +417,7 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
     if (HID_DEBUG) {
       printf("Super HID Report: ");
       printf("Button Count: %d\n", hid_devices[dev_addr].instances[instance].buttonCnt);
-      printf(" xValue:%d yValue:%d dPad:%d \n",xValue, yValue, hatValue);
+      printf(" x:%d, y:%d, z:%d, rz:%d dPad:%d \n", current.x, current.y, current.z, current.rz, hatValue);
       for (int i = 0; i < 12; i++) {
         printf(" B%d:%d", i + 1, (report[hid_devices[dev_addr].instances[instance].buttonLoc[i].byteIndex] & hid_devices[dev_addr].instances[instance].buttonLoc[i].bitMask) ? 1 : 0 );
       }
@@ -412,8 +433,10 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
     bool buttonIV = current.button4;
     bool buttonV = buttonCount >=7 ? current.button5 : 0;
     bool buttonVI = buttonCount >=8 ? current.button6 : 0;
-    bool buttonVIII = buttonCount >=9 ? current.button7 : 0;
-    bool buttonXI = buttonCount >=10 ? current.button8 : 0;
+    bool buttonVII = buttonCount >=9 ? current.button7 : 0;
+    bool buttonVIII = buttonCount >=10 ? current.button8 : 0;
+    bool buttonIX = buttonCount >=11 ? current.button9 : 0;
+    bool buttonX = buttonCount >=12 ? current.button10 : 0;
     bool has_6btns = buttonCount >= 6;
 
     // assume DirectInput mapping
@@ -425,16 +448,16 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
       buttonIV = current.button1;
     }
 
-    buttons = (((buttonXI)        ? 0x00 : 0x20000) | // r3
-               ((buttonVIII)      ? 0x00 : 0x10000) | // l3
+    buttons = (((current.button12)? 0x00 : 0x20000) | // r3
+               ((current.button11)? 0x00 : 0x10000) | // l3
                ((buttonVI)        ? 0x00 : 0x8000) |
                ((buttonV)         ? 0x00 : 0x4000) |
                ((buttonIV)        ? 0x00 : 0x2000) |
                ((buttonIII)       ? 0x00 : 0x1000) |
                ((has_6btns)       ? 0x00 : 0x0800) |
                ((false)           ? 0x00 : 0x0400) | // home
-               ((false)           ? 0x00 : 0x0200) | // r2
-               ((false)           ? 0x00 : 0x0100) | // l2
+               ((buttonVIII)      ? 0x00 : 0x0200) | // r2
+               ((buttonVII)       ? 0x00 : 0x0100) | // l2
                ((current.left)    ? 0x00 : 0x0008) |
                ((current.down)    ? 0x00 : 0x0004) |
                ((current.right)   ? 0x00 : 0x0002) |

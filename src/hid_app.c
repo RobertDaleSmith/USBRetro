@@ -201,7 +201,7 @@ dev_type_t get_dev_type(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_
   // Interface protocol (hid_interface_protocol_enum_t)
   const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
-  printf("DEVICE:[HID Interface Protocol = %s]\r\n", protocol_str[itf_protocol]);
+  printf("HID Interface Protocol = %s\r\n", protocol_str[itf_protocol]);
 
   switch (itf_protocol)
   {
@@ -209,7 +209,7 @@ dev_type_t get_dev_type(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_
     return CONTROLLER_KEYBOARD;
     break;
   case HID_ITF_PROTOCOL_MOUSE:
-    return CONTROLLER_MOUSE;
+    return CONTROLLER_UNKNOWN;
     break;
   default:
     break;
@@ -252,8 +252,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     devices[dev_addr].instances[instance].type = CONTROLLER_KEYBOARD;
     devices[dev_addr].instances[instance].kbd_ready = false;
     devices[dev_addr].instances[instance].kbd_init = false;
-  case CONTROLLER_MOUSE:
-    devices[dev_addr].instances[instance].type = CONTROLLER_MOUSE;
+  // case CONTROLLER_MOUSE:
+  //   devices[dev_addr].instances[instance].type = CONTROLLER_MOUSE;
     break;
   default:
     break;
