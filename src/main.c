@@ -566,6 +566,8 @@ void __not_in_flash_func(update_output)(void)
                   ((bytes[3] & 0xff) << 24); // player 4
   output_word_1 = ((bytes[4] & 0xff));       // player 5
 #elif CONFIG_NGC
+  static bool kbModeButtonHeld = false;
+
   if (players[0].button_mode == BUTTON_MODE_KB) {
     gc_report = default_gc_kb_report;
   } else {
@@ -576,23 +578,28 @@ void __not_in_flash_func(update_output)(void)
   for (i = 0; i < playersCount; ++i) {
     // base controller buttons
     int16_t byte = (players[i].output_buttons & 0xffff);
-
-    if (players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14) {
-      if (players[0].button_mode != BUTTON_MODE_KB) {
-        players[0].button_mode = BUTTON_MODE_KB; // global
-        players[i].button_mode = BUTTON_MODE_KB;
-        GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
-        gc_report = default_gc_kb_report;
-        // players[i].gc_report = default_gc_kb_report;
-        gc_kb_led = 0x4;
-      } else {
-        players[0].button_mode = BUTTON_MODE_3; // global
-        players[i].button_mode = BUTTON_MODE_3;
-        GamecubeConsole_SetMode(&gc, GamecubeMode_3);
-        gc_report = default_gc_report;
-        // players[i].gc_report = default_gc_report;
-        gc_kb_led = 0;
+    bool kbModeButtonPress = players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14;
+    if (kbModeButtonPress) {
+      if (!kbModeButtonHeld) {
+          if (players[0].button_mode != BUTTON_MODE_KB) {
+          players[0].button_mode = BUTTON_MODE_KB; // global
+          players[i].button_mode = BUTTON_MODE_KB;
+          GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
+          gc_report = default_gc_kb_report;
+          // players[i].gc_report = default_gc_kb_report;
+          gc_kb_led = 0x4;
+        } else {
+          players[0].button_mode = BUTTON_MODE_3; // global
+          players[i].button_mode = BUTTON_MODE_3;
+          GamecubeConsole_SetMode(&gc, GamecubeMode_3);
+          gc_report = default_gc_report;
+          // players[i].gc_report = default_gc_report;
+          gc_kb_led = 0;
+        }
       }
+      kbModeButtonHeld = true;
+    } else {
+      kbModeButtonHeld = false;
     }
 
     if (players[0].button_mode != BUTTON_MODE_KB) {
@@ -713,6 +720,29 @@ void __not_in_flash_func(update_output)(void)
   }
 
   update_pending = true;
+}
+
+uint32_t map_nuon_buttons (uint32_t buttons) {
+    uint32_t nuon_buttons = 0x0080;
+
+    // Mapping the buttons from the old format to the new format, inverting the logic
+    nuon_buttons |= (!(buttons & 0x00010)) ? 0x8000 : 0;  // Circle -> C-DOWN
+    nuon_buttons |= (!(buttons & 0x00020)) ? 0x4000 : 0;  // Cross -> A
+    nuon_buttons |= (!(buttons & 0x00080)) ? 0x2000 : 0;  // Option -> START
+    nuon_buttons |= (!(buttons & 0x00040)) ? 0x1000 : 0;  // Share -> SELECT
+    nuon_buttons |= (!(buttons & 0x00004)) ? 0x0800 : 0;  // Dpad Down -> D-DOWN
+    nuon_buttons |= (!(buttons & 0x00008)) ? 0x0400 : 0;  // Dpad Left -> D-LEFT
+    nuon_buttons |= (!(buttons & 0x00001)) ? 0x0200 : 0;  // Dpad Up -> D-UP
+    nuon_buttons |= (!(buttons & 0x00002)) ? 0x0100 : 0;  // Dpad Right -> D-RIGHT
+    // Skipping the two buttons represented by 0x0080 and 0x0040 in the new format
+    nuon_buttons |= (!(buttons & 0x04000)) ? 0x0020 : 0;  // L1 -> L
+    nuon_buttons |= (!(buttons & 0x08000)) ? 0x0010 : 0;  // R1 -> R
+    nuon_buttons |= (!(buttons & 0x02000)) ? 0x0008 : 0;  // Square -> B
+    nuon_buttons |= (!(buttons & 0x01000)) ? 0x0004 : 0;  // Triangle -> C-LEFT
+    nuon_buttons |= (!(buttons & 0x00100)) ? 0x0002 : 0;  // L2 -> C-UP
+    nuon_buttons |= (!(buttons & 0x00200)) ? 0x0001 : 0;  // R2 -> C-RIGHT
+
+    return nuon_buttons;
 }
 
 //
@@ -838,26 +868,7 @@ void __not_in_flash_func(post_globals)(
 
       update_output();
 #elif CONFIG_NUON
-
-      uint32_t nuon_buttons = 0x0080;
-
-      // Mapping the buttons from the old format to the new format, inverting the logic
-      nuon_buttons |= (!(buttons & 0x00010)) ? 0x8000 : 0;  // Circle -> C-DOWN
-      nuon_buttons |= (!(buttons & 0x00020)) ? 0x4000 : 0;  // Cross -> A
-      nuon_buttons |= (!(buttons & 0x00080)) ? 0x2000 : 0;  // Option -> START
-      nuon_buttons |= (!(buttons & 0x00040)) ? 0x1000 : 0;  // Share -> SELECT
-      nuon_buttons |= (!(buttons & 0x00004)) ? 0x0800 : 0;  // Dpad Down -> D-DOWN
-      nuon_buttons |= (!(buttons & 0x00008)) ? 0x0400 : 0;  // Dpad Left -> D-LEFT
-      nuon_buttons |= (!(buttons & 0x00001)) ? 0x0200 : 0;  // Dpad Up -> D-UP
-      nuon_buttons |= (!(buttons & 0x00002)) ? 0x0100 : 0;  // Dpad Right -> D-RIGHT
-      // Skipping the two buttons represented by 0x0080 and 0x0040 in the new format
-      nuon_buttons |= (!(buttons & 0x04000)) ? 0x0020 : 0;  // L1 -> L
-      nuon_buttons |= (!(buttons & 0x08000)) ? 0x0010 : 0;  // R1 -> R
-      nuon_buttons |= (!(buttons & 0x02000)) ? 0x0008 : 0;  // Square -> B
-      nuon_buttons |= (!(buttons & 0x01000)) ? 0x0004 : 0;  // Triangle -> C-LEFT
-      nuon_buttons |= (!(buttons & 0x00100)) ? 0x0002 : 0;  // L2 -> C-UP
-      nuon_buttons |= (!(buttons & 0x00200)) ? 0x0001 : 0;  // R2 -> C-RIGHT
-
+      uint32_t nuon_buttons = map_nuon_buttons(buttons);
       if (!instance) {
         players[player_index].output_buttons = nuon_buttons;
       } else {
@@ -874,7 +885,6 @@ void __not_in_flash_func(post_globals)(
 
   }
 }
-
 
 //
 // post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
@@ -923,7 +933,19 @@ void __not_in_flash_func(post_mouse_globals)(
 
         update_output();
       }
-#else
+#elif CONFIG_NUON
+      players[player_index].global_buttons = buttons;
+      players[player_index].output_buttons = map_nuon_buttons(players[player_index].global_buttons & players[player_index].altern_buttons);
+      players[player_index].output_analog_1x = 128;
+      players[player_index].output_analog_1y = 128;
+      players[player_index].output_analog_2x = 128;
+      players[player_index].output_analog_2y = 128;
+      players[player_index].output_analog_l = 0;
+      players[player_index].output_analog_r = 0;
+      if (quad_x) players[player_index].output_quad_x = quad_x;
+
+      update_output();
+#else //NGC
       // fixes out of range analog values (1-255)
       if (delta_x == 0) delta_x = 1;
       if (delta_y == 0) delta_y = 1;
@@ -964,9 +986,6 @@ void __not_in_flash_func(post_mouse_globals)(
       // players[player_index].output_analog_2y = delta_y;
       players[player_index].output_buttons = buttons;
 
-  #ifdef CONFIG_NUON
-      if (quad_x) players[player_index].output_quad_x = quad_x;
-  #endif
       update_output();
 #endif
 

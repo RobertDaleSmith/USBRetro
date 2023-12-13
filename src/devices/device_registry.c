@@ -14,6 +14,8 @@
 #include "sega_astrocity.h"
 #include "switch_pro.h"
 #include "hid_gamepad.h"
+#include "hid_keyboard.h"
+#include "hid_mouse.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT] = {0};
@@ -33,6 +35,8 @@ void register_devices() {
     device_interfaces[CONTROLLER_GAMECUBE] = &gamecube_adapter_interface;
     device_interfaces[CONTROLLER_SWITCH] = &switch_pro_interface;
     device_interfaces[CONTROLLER_DINPUT] = &hid_gamepad_interface;
+    device_interfaces[CONTROLLER_KEYBOARD] = &hid_keyboard_interface;
+    device_interfaces[CONTROLLER_MOUSE] = &hid_mouse_interface;
     // Register other devices here
     // device_interfaces[1] = &another_device_interface;
 
