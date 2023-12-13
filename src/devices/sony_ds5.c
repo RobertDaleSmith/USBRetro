@@ -407,7 +407,7 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
 }
 
 // process usb hid output reports
-void task_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
+void task_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 

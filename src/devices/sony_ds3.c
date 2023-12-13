@@ -156,7 +156,7 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process output report for rumble and player LED assignment
-void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
+void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds) {
   sony_ds3_output_report_01_t output_report = {
     .buf = {
       0x01,
@@ -246,14 +246,14 @@ static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
 }
 
 // process usb hid output reports
-void task_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
+void task_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = board_millis();
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
-    output_sony_ds3(dev_addr, instance, player_index, rumble);
+    output_sony_ds3(dev_addr, instance, player_index, rumble, leds);
   }
 }
 

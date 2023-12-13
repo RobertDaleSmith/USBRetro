@@ -59,6 +59,8 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_keyboard.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_mouse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_gamepad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_bta.c

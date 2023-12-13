@@ -18,6 +18,15 @@ void __not_in_flash_func(post_globals)(
   uint8_t quad_x
 );
 
+void __not_in_flash_func(post_mouse_globals)(
+  uint8_t dev_addr,
+  int8_t instance,
+  uint16_t buttons,
+  uint8_t delta_x,
+  uint8_t delta_y,
+  uint8_t spinner
+);
+
 int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
 
 void remove_players_by_address(int device_address, int instance);
