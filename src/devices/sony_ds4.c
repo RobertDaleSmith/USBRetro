@@ -72,33 +72,33 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
     // We need more than memcmp to check if report is different enough
     if ( diff_report_ds4(&prev_report[dev_addr-1], &ds4_report) )
     {
-      printf("(x, y, z, rz, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, ds4_report.r2_trigger, ds4_report.l2_trigger);
-      printf("DPad = %s ", ds4_report.dpad);
+      TU_LOG1("(x, y, z, rz, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", ds4_report.x, ds4_report.y, ds4_report.z, ds4_report.rz, ds4_report.r2_trigger, ds4_report.l2_trigger);
+      TU_LOG1("DPad = %s ", ds4_report.dpad);
 
-      if (ds4_report.square   ) printf("Square ");
-      if (ds4_report.cross    ) printf("Cross ");
-      if (ds4_report.circle   ) printf("Circle ");
-      if (ds4_report.triangle ) printf("Triangle ");
+      if (ds4_report.square   ) TU_LOG1("Square ");
+      if (ds4_report.cross    ) TU_LOG1("Cross ");
+      if (ds4_report.circle   ) TU_LOG1("Circle ");
+      if (ds4_report.triangle ) TU_LOG1("Triangle ");
 
-      if (ds4_report.l1       ) printf("L1 ");
-      if (ds4_report.r1       ) printf("R1 ");
-      if (ds4_report.l2       ) printf("L2 ");
-      if (ds4_report.r2       ) printf("R2 ");
+      if (ds4_report.l1       ) TU_LOG1("L1 ");
+      if (ds4_report.r1       ) TU_LOG1("R1 ");
+      if (ds4_report.l2       ) TU_LOG1("L2 ");
+      if (ds4_report.r2       ) TU_LOG1("R2 ");
 
-      if (ds4_report.share    ) printf("Share ");
-      if (ds4_report.option   ) printf("Option ");
-      if (ds4_report.l3       ) printf("L3 ");
-      if (ds4_report.r3       ) printf("R3 ");
+      if (ds4_report.share    ) TU_LOG1("Share ");
+      if (ds4_report.option   ) TU_LOG1("Option ");
+      if (ds4_report.l3       ) TU_LOG1("L3 ");
+      if (ds4_report.r3       ) TU_LOG1("R3 ");
 
-      if (ds4_report.ps       ) printf("PS ");
-      if (ds4_report.tpad     ) printf("TPad ");
+      if (ds4_report.ps       ) TU_LOG1("PS ");
+      if (ds4_report.tpad     ) TU_LOG1("TPad ");
 
-      if (!ds4_report.tpad_f1_down) printf("F1 ");
+      if (!ds4_report.tpad_f1_down) TU_LOG1("F1 ");
 
       uint16_t tx = (((ds4_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds4_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds4_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds4_report.tpad_f1_pos[2] & 0xff) << 4);
-      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-      // printf("\r\n");
+      // TU_LOG1(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      // TU_LOG1("\r\n");
 
       bool dpad_up    = (ds4_report.dpad == 0 || ds4_report.dpad == 1 || ds4_report.dpad == 7);
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
@@ -160,7 +160,7 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       } else {
         tpadDragging = false;
       }
-      // printf(" (spinner) = (%u)\r\n", spinner);
+      // TU_LOG1(" (spinner) = (%u)\r\n", spinner);
 #endif
       // keep analog within range [1-255]
       ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);

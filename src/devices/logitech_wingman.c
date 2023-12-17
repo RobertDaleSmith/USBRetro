@@ -38,19 +38,19 @@ void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const*
   memcpy(&wingman_report, report, sizeof(wingman_report));
 
   if (diff_report_logitech_wingman(&prev_report[dev_addr-1], &wingman_report)) {
-    // printf("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
-    // printf("DPad = %d ", wingman_report.dpad);
-    // if (wingman_report.a) printf("A ");
-    // if (wingman_report.b) printf("B ");
-    // if (wingman_report.c) printf("C ");
-    // if (wingman_report.x) printf("X ");
-    // if (wingman_report.y) printf("Y ");
-    // if (wingman_report.z) printf("Z ");
-    // if (wingman_report.l) printf("L ");
-    // if (wingman_report.r) printf("R ");
-    // if (wingman_report.mode) printf("Mode ");
-    // if (wingman_report.s) printf("S ");
-    // printf("\r\n");
+    TU_LOG1("(x, y, z) = (%u, %u, %u)\r\n", wingman_report.analog_x, wingman_report.analog_y, wingman_report.analog_z);
+    TU_LOG1("DPad = %d ", wingman_report.dpad);
+    if (wingman_report.a) TU_LOG1("A ");
+    if (wingman_report.b) TU_LOG1("B ");
+    if (wingman_report.c) TU_LOG1("C ");
+    if (wingman_report.x) TU_LOG1("X ");
+    if (wingman_report.y) TU_LOG1("Y ");
+    if (wingman_report.z) TU_LOG1("Z ");
+    if (wingman_report.l) TU_LOG1("L ");
+    if (wingman_report.r) TU_LOG1("R ");
+    if (wingman_report.mode) TU_LOG1("Mode ");
+    if (wingman_report.s) TU_LOG1("S ");
+    TU_LOG1("\r\n");
 
     uint8_t analog_x1 = (wingman_report.analog_x == 255) ? 255 : wingman_report.analog_x + 1;
     uint8_t analog_y1 = (wingman_report.analog_y == 0) ? 255 : 255 - wingman_report.analog_y;

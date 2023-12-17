@@ -69,7 +69,7 @@ uint8_t scale_analog_switch_pro(uint16_t switch_val)
 // resets default values in case devices are hotswapped
 void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
 {
-  printf("SWITCH[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
+  TU_LOG1("SWITCH[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
   switch_devices[dev_addr].instances[instance].conn_ack = false;
   switch_devices[dev_addr].instances[instance].baud = false;
   switch_devices[dev_addr].instances[instance].baud_ack = false;
@@ -101,11 +101,11 @@ void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
 // prints raw switch pro input report byte data
 void print_report_switch_pro(switch_pro_report_01_t* report, uint32_t length)
 {
-    printf("Bytes: ");
+    TU_LOG1("Bytes: ");
     for(uint32_t i = 0; i < length; i++) {
-        printf("%02X ", report->buf[i]);
+        TU_LOG1("%02X ", report->buf[i]);
     }
-    printf("\n");
+    TU_LOG1("\n");
 }
 
 // process usb hid input reports
@@ -128,33 +128,33 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
 
     if (diff_report_switch_pro(&prev_report[dev_addr-1][instance], &update_report))
     {
-      printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, update_report.report_id);
-      printf("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", update_report.left_x, update_report.left_y, update_report.right_x, update_report.right_y);
-      printf("DPad = ");
+      TU_LOG1("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, update_report.report_id);
+      TU_LOG1("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", update_report.left_x, update_report.left_y, update_report.right_x, update_report.right_y);
+      TU_LOG1("DPad = ");
 
-      if (update_report.down) printf("Down ");
-      if (update_report.up) printf("Up ");
-      if (update_report.right) printf("Right ");
-      if (update_report.left ) printf("Left ");
+      if (update_report.down) TU_LOG1("Down ");
+      if (update_report.up) TU_LOG1("Up ");
+      if (update_report.right) TU_LOG1("Right ");
+      if (update_report.left ) TU_LOG1("Left ");
 
-      printf("; Buttons = ");
-      if (update_report.y) printf("Y ");
-      if (update_report.b) printf("B ");
-      if (update_report.a) printf("A ");
-      if (update_report.x) printf("X ");
-      if (update_report.l) printf("L ");
-      if (update_report.r) printf("R ");
-      if (update_report.zl) printf("ZL ");
-      if (update_report.zr) printf("ZR ");
-      if (update_report.lstick) printf("LStick ");
-      if (update_report.rstick) printf("RStick ");
-      if (update_report.select) printf("Select ");
-      if (update_report.start) printf("Start ");
-      if (update_report.home) printf("Home ");
-      if (update_report.cap) printf("Cap ");
-      if (update_report.sr_r) printf("sr_r ");
-      if (update_report.sl_l) printf("sl_l ");
-      printf("\r\n");
+      TU_LOG1("; Buttons = ");
+      if (update_report.y) TU_LOG1("Y ");
+      if (update_report.b) TU_LOG1("B ");
+      if (update_report.a) TU_LOG1("A ");
+      if (update_report.x) TU_LOG1("X ");
+      if (update_report.l) TU_LOG1("L ");
+      if (update_report.r) TU_LOG1("R ");
+      if (update_report.zl) TU_LOG1("ZL ");
+      if (update_report.zr) TU_LOG1("ZR ");
+      if (update_report.lstick) TU_LOG1("LStick ");
+      if (update_report.rstick) TU_LOG1("RStick ");
+      if (update_report.select) TU_LOG1("Select ");
+      if (update_report.start) TU_LOG1("Start ");
+      if (update_report.home) TU_LOG1("Home ");
+      if (update_report.cap) TU_LOG1("Cap ");
+      if (update_report.sr_r) TU_LOG1("sr_r ");
+      if (update_report.sl_l) TU_LOG1("sl_l ");
+      TU_LOG1("\r\n");
 
       bool has_6btns = true;
       int threshold = 256;
@@ -262,7 +262,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       switch_devices[dev_addr].instances[instance].command_ack = true;
     }
 
-    printf("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, state_report.data.report_id);
+    TU_LOG1("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, state_report.data.report_id);
 
     uint32_t length = sizeof(state_report.buf) / sizeof(state_report.buf[0]);
     print_report_switch_pro(&state_report, length);
@@ -302,7 +302,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
     // if (!switch_devices[dev_addr].instances[instance].baud) {
     //   switch_devices[dev_addr].instances[instance].baud = true;
 
-    //   printf("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
+    //   TU_LOG1("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
     //   uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
     //   tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
 
@@ -311,7 +311,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
     if (!switch_devices[dev_addr].instances[instance].handshake/* && switch_devices[dev_addr].instances[instance].baud_ack*/) {
       switch_devices[dev_addr].instances[instance].handshake = true;
 
-      printf("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
+      TU_LOG1("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
       uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
       tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
 
@@ -319,7 +319,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
     } else if (!switch_devices[dev_addr].instances[instance].usb_enable && switch_devices[dev_addr].instances[instance].handshake_ack) {
       switch_devices[dev_addr].instances[instance].usb_enable = true;
 
-      printf("SWITCH[%d|%d]: Enable USB\r\n", dev_addr, instance);
+      TU_LOG1("SWITCH[%d|%d]: Enable USB\r\n", dev_addr, instance);
       uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
       tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
 
@@ -399,7 +399,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
           // // joycon_rumble_amplitudes.amp = { 0x78, 0x005e,  422 }
           // uint8_t amp_data_high = 0x78;
           // uint16_t amp_data_low = 0x005e;
-          // printf("0x%x 0x%x 0x%x 0x%x\n\n", (freq_data_high_high >> 8) & 0xFF, (freq_data_high_high & 0xFF) + amp_data_high, freq_data_low_low + ((amp_data_low >> 8) & 0xFF), amp_data_low & 0xFF);
+          // TU_LOG1("0x%x 0x%x 0x%x 0x%x\n\n", (freq_data_high_high >> 8) & 0xFF, (freq_data_high_high & 0xFF) + amp_data_high, freq_data_low_low + ((amp_data_low >> 8) & 0xFF), amp_data_low & 0xFF);
 
           if (rumble) {
             // Left rumble ON data
@@ -459,7 +459,7 @@ void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8
 // initialize usb hid input
 static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
 {
-  printf("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
+  TU_LOG1("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
 
   if ((++switch_devices[dev_addr].instance_count) == 1) {
     switch_devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into

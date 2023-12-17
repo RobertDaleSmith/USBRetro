@@ -31,24 +31,24 @@ void process_hori_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* rep
   memcpy(&input_report, report, sizeof(input_report));
 
   if (diff_report_horipad(&prev_report[dev_addr-1], &input_report)) {
-    printf("(x, y, z, rz) = (%d, %d, %d, %d) ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
-    printf("DPad = %d ", input_report.dpad);
+    TU_LOG1("(x, y, z, rz) = (%d, %d, %d, %d) ", input_report.axis_x, input_report.axis_y, input_report.axis_z, input_report.axis_rz);
+    TU_LOG1("DPad = %d ", input_report.dpad);
 
-    if (input_report.b) printf("B ");
-    if (input_report.a) printf("A ");
-    if (input_report.y) printf("Y ");
-    if (input_report.x) printf("X ");
-    if (input_report.l1) printf("L1 ");
-    if (input_report.r1) printf("R1 ");
-    if (input_report.l2) printf("L2(Z) ");
-    if (input_report.r2) printf("R2(C) ");
-    if (input_report.l3) printf("L3 ");
-    if (input_report.r3) printf("R3 ");
-    if (input_report.s1) printf("Select ");
-    if (input_report.s2) printf("Start ");
-    if (input_report.a1) printf("Home ");
-    if (input_report.a2) printf("Capture ");
-    printf("\r\n");
+    if (input_report.b) TU_LOG1("B ");
+    if (input_report.a) TU_LOG1("A ");
+    if (input_report.y) TU_LOG1("Y ");
+    if (input_report.x) TU_LOG1("X ");
+    if (input_report.l1) TU_LOG1("L1 ");
+    if (input_report.r1) TU_LOG1("R1 ");
+    if (input_report.l2) TU_LOG1("L2(Z) ");
+    if (input_report.r2) TU_LOG1("R2(C) ");
+    if (input_report.l3) TU_LOG1("L3 ");
+    if (input_report.r3) TU_LOG1("R3 ");
+    if (input_report.s1) TU_LOG1("Select ");
+    if (input_report.s2) TU_LOG1("Start ");
+    if (input_report.a1) TU_LOG1("Home ");
+    if (input_report.a2) TU_LOG1("Capture ");
+    TU_LOG1("\r\n");
 
     bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
     bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);

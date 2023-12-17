@@ -42,7 +42,7 @@ static const uint8_t HAT_SWITCH_TO_DIRECTION_BUTTONS[] = {0b0001, 0b0011, 0b0010
 // Gets HID descriptor report item for specific ReportID
 static inline bool USB_GetHIDReportItemInfoWithReportId(const uint8_t *ReportData, HID_ReportItem_t *const ReportItem)
 {
-  if (HID_DEBUG) printf("ReportID: %d ", ReportItem->ReportID);
+  if (HID_DEBUG) TU_LOG1("ReportID: %d ", ReportItem->ReportID);
   if (ReportItem->ReportID)
   {
     // if (ReportItem->ReportID != ReportData[0])
@@ -64,7 +64,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
   // check if reportID exists within input report
   if (item->ReportID)
   {
-    printf("ReportID in report = %04x\r\n", item->ReportID);
+    TU_LOG1("ReportID in report = %04x\r\n", item->ReportID);
     idOffset = 8;
   }
 
@@ -77,13 +77,13 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
     uint8_t byteIndex = (int)(bitOffset / 8); // usage start byte
 
     if (HID_DEBUG) {
-      printf("minimum: %d ", item->Attributes.Logical.Minimum);
-      printf("mid: %d ", midValue);
-      printf("maximum: %d ", item->Attributes.Logical.Maximum);
-      printf("bitSize: %d ", bitSize);
-      printf("bitOffset: %d ", bitOffset);
-      printf("bitMask: 0x%x ", bitMask);
-      printf("byteIndex: %d ", byteIndex);
+      TU_LOG1("minimum: %d ", item->Attributes.Logical.Minimum);
+      TU_LOG1("mid: %d ", midValue);
+      TU_LOG1("maximum: %d ", item->Attributes.Logical.Maximum);
+      TU_LOG1("bitSize: %d ", bitSize);
+      TU_LOG1("bitOffset: %d ", bitOffset);
+      TU_LOG1("bitMask: 0x%x ", bitMask);
+      TU_LOG1("byteIndex: %d ", byteIndex);
     }
     // TODO: this is limiting to repordId 0..
     // Need to parse reportId and match later with received reports.
@@ -93,7 +93,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
     uint8_t report[1] = {0}; // reportId = 0; original ex maps report to descriptor data structure
     if (USB_GetHIDReportItemInfoWithReportId(report, item))
     {
-      if (HID_DEBUG) printf("PAGE: %d ", item->Attributes.Usage.Page);
+      if (HID_DEBUG) TU_LOG1("PAGE: %d ", item->Attributes.Usage.Page);
       switch (item->Attributes.Usage.Page)
       {
         case HID_USAGE_PAGE_DESKTOP:
@@ -102,7 +102,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           {
           case HID_USAGE_DESKTOP_X: // Left Analog X
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_X ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_X ");
             hid_devices[dev_addr].instances[instance].xLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].xLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].xLoc.max = item->Attributes.Logical.Maximum;
@@ -110,7 +110,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_Y: // Left Analog Y
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Y ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_Y ");
             hid_devices[dev_addr].instances[instance].yLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].yLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].yLoc.max = item->Attributes.Logical.Maximum;
@@ -118,7 +118,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_Z: // Right Analog X
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_Z ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_Z ");
             hid_devices[dev_addr].instances[instance].zLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].zLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].zLoc.max = item->Attributes.Logical.Maximum;
@@ -126,7 +126,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_RZ: // Right Analog Y
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RZ ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_RZ ");
             hid_devices[dev_addr].instances[instance].rzLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].rzLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].rzLoc.max = item->Attributes.Logical.Maximum;
@@ -134,7 +134,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_RX: // Left Analog Trigger
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RX ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_RX ");
             hid_devices[dev_addr].instances[instance].rxLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].rxLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].rxLoc.max = item->Attributes.Logical.Maximum;
@@ -142,7 +142,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_RY: // Right Analog Trigger
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_RY ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_RY ");
             hid_devices[dev_addr].instances[instance].ryLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].ryLoc.bitMask = bitMask;
             hid_devices[dev_addr].instances[instance].ryLoc.max = item->Attributes.Logical.Maximum;
@@ -150,13 +150,13 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           }
           case HID_USAGE_DESKTOP_HAT_SWITCH:
           {
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_HAT_SWITCH ");
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_HAT_SWITCH ");
             hid_devices[dev_addr].instances[instance].hatLoc.byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].hatLoc.bitMask = bitMask;
             break;
           }
           default:
-            if (HID_DEBUG) printf(" HID_USAGE_DESKTOP_NOT_HANDLED 0x%x", item->Attributes.Usage.Usage);
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_NOT_HANDLED 0x%x", item->Attributes.Usage.Usage);
             break;
           // case HID_USAGE_DESKTOP_SLIDER:
           // case HID_USAGE_DESKTOP_DIAL:
@@ -178,7 +178,7 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
         }
         case HID_USAGE_PAGE_BUTTON:
         {
-          if (HID_DEBUG) printf(" HID_USAGE_PAGE_BUTTON ");
+          if (HID_DEBUG) TU_LOG1(" HID_USAGE_PAGE_BUTTON ");
           uint8_t usage = item->Attributes.Usage.Usage;
 
           if (usage >= 1 && usage <= MAX_BUTTONS) {
@@ -189,12 +189,12 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           break;
         }
         default:
-          if (HID_DEBUG) printf(" HID_USAGE_PAGE_NOT_HANDLED 0x%x", item->Attributes.Usage.Page);
+          if (HID_DEBUG) TU_LOG1(" HID_USAGE_PAGE_NOT_HANDLED 0x%x", item->Attributes.Usage.Page);
           break;
       }
     }
     item = item->Next;
-    if (HID_DEBUG) printf("\n\n");
+    if (HID_DEBUG) TU_LOG1("\n\n");
   }
 
   hid_devices[dev_addr].instances[instance].buttonCnt = btns_count;
@@ -217,7 +217,7 @@ bool parse_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   }
   else
   {
-    printf("Error: USB_ProcessHIDReport failed: %d\r\n", ret);
+    TU_LOG1("Error: USB_ProcessHIDReport failed: %d\r\n", ret);
   }
 
   // free up memory for next report to be parsed
@@ -250,7 +250,7 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
   switch (CurrentItem->Attributes.Usage.Page)
   {
     case HID_USAGE_PAGE_DESKTOP:
-      // printf("HID_USAGE: 0x%x\n", CurrentItem->Attributes.Usage.Usage);
+      // TU_LOG1("HID_USAGE: 0x%x\n", CurrentItem->Attributes.Usage.Usage);
       switch (CurrentItem->Attributes.Usage.Usage)
       {
         case HID_USAGE_DESKTOP_X:
@@ -415,13 +415,13 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
     previous[dev_addr-1][instance] = current;
 
     if (HID_DEBUG) {
-      printf("Super HID Report: ");
-      printf("Button Count: %d\n", hid_devices[dev_addr].instances[instance].buttonCnt);
-      printf(" x:%d, y:%d, z:%d, rz:%d dPad:%d \n", current.x, current.y, current.z, current.rz, hatValue);
+      TU_LOG1("Super HID Report: ");
+      TU_LOG1("Button Count: %d\n", hid_devices[dev_addr].instances[instance].buttonCnt);
+      TU_LOG1(" x:%d, y:%d, z:%d, rz:%d dPad:%d \n", current.x, current.y, current.z, current.rz, hatValue);
       for (int i = 0; i < 12; i++) {
-        printf(" B%d:%d", i + 1, (report[hid_devices[dev_addr].instances[instance].buttonLoc[i].byteIndex] & hid_devices[dev_addr].instances[instance].buttonLoc[i].bitMask) ? 1 : 0 );
+        TU_LOG1(" B%d:%d", i + 1, (report[hid_devices[dev_addr].instances[instance].buttonLoc[i].byteIndex] & hid_devices[dev_addr].instances[instance].buttonLoc[i].bitMask) ? 1 : 0 );
       }
-      printf("\n");
+      TU_LOG1("\n");
     }
 
     uint8_t buttonCount = hid_devices[dev_addr].instances[instance].buttonCnt;
@@ -483,7 +483,7 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
 // resets default values in case devices are hotswapped
 void unmount_hid_gamepad(uint8_t dev_addr, uint8_t instance)
 {
-  printf("DINPUT[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
+  TU_LOG1("DINPUT[%d|%d]: Unmount Reset\r\n", dev_addr, instance);
   hid_devices[dev_addr].instances[instance].xLoc.byteIndex = 0;
   hid_devices[dev_addr].instances[instance].xLoc.bitMask = 0;
   hid_devices[dev_addr].instances[instance].xLoc.max = 0;

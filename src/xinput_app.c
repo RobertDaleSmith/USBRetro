@@ -50,7 +50,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
 
   if (xid_itf->connected && xid_itf->new_pad_data)
   {
-    printf("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
+    TU_LOG1("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
            dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
 #ifdef CONFIG_NUON
@@ -79,7 +79,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
       int16_t angle = 0;
       angle = calcAngle(analog_2x-128, analog_2y-128)+179; // 0-359 (360deg)
-      // printf("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
+      // TU_LOG1("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
 
       // get directional difference delta
       int16_t delta = 0;

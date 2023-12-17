@@ -81,32 +81,32 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t analog_l = ds3_report.pressure[8];
       uint8_t analog_r = ds3_report.pressure[9];
 
-      printf("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
-      printf("DPad = ");
+      TU_LOG1("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
+      TU_LOG1("DPad = ");
 
-      if (ds3_report.up       ) printf("Up ");
-      if (ds3_report.down     ) printf("Down ");
-      if (ds3_report.left     ) printf("Left ");
-      if (ds3_report.right    ) printf("Right ");
+      if (ds3_report.up       ) TU_LOG1("Up ");
+      if (ds3_report.down     ) TU_LOG1("Down ");
+      if (ds3_report.left     ) TU_LOG1("Left ");
+      if (ds3_report.right    ) TU_LOG1("Right ");
 
-      if (ds3_report.square   ) printf("Square ");
-      if (ds3_report.cross    ) printf("Cross ");
-      if (ds3_report.circle   ) printf("Circle ");
-      if (ds3_report.triangle ) printf("Triangle ");
+      if (ds3_report.square   ) TU_LOG1("Square ");
+      if (ds3_report.cross    ) TU_LOG1("Cross ");
+      if (ds3_report.circle   ) TU_LOG1("Circle ");
+      if (ds3_report.triangle ) TU_LOG1("Triangle ");
 
-      if (ds3_report.l1       ) printf("L1 ");
-      if (ds3_report.r1       ) printf("R1 ");
-      if (ds3_report.l2       ) printf("L2 ");
-      if (ds3_report.r2       ) printf("R2 ");
+      if (ds3_report.l1       ) TU_LOG1("L1 ");
+      if (ds3_report.r1       ) TU_LOG1("R1 ");
+      if (ds3_report.l2       ) TU_LOG1("L2 ");
+      if (ds3_report.r2       ) TU_LOG1("R2 ");
 
-      if (ds3_report.select   ) printf("Select ");
-      if (ds3_report.start    ) printf("Start ");
-      if (ds3_report.l3       ) printf("L3 ");
-      if (ds3_report.r3       ) printf("R3 ");
+      if (ds3_report.select   ) TU_LOG1("Select ");
+      if (ds3_report.start    ) TU_LOG1("Start ");
+      if (ds3_report.l3       ) TU_LOG1("L3 ");
+      if (ds3_report.r3       ) TU_LOG1("R3 ");
 
-      if (ds3_report.ps       ) printf("PS ");
+      if (ds3_report.ps       ) TU_LOG1("PS ");
 
-      printf("\r\n");
+      TU_LOG1("\r\n");
 
 #ifdef CONFIG_NGC
       // us pressure value of L1/R1 to simulate analog
@@ -239,7 +239,7 @@ static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
   * packet, so we have to discard buf[0] when sending the actual
   * control message, even for numbered reports, humpf!
   */
-  printf("PS3 Init..\n");
+  TU_LOG1("PS3 Init..\n");
 
   // Send a Set Report request to the control endpoint
   return tuh_hid_set_report(dev_addr, instance, 0xF4, HID_REPORT_TYPE_FEATURE, (void *)(ds3_init_cmd_buf), sizeof(ds3_init_cmd_buf));

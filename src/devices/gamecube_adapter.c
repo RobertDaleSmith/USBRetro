@@ -35,29 +35,29 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
     for(int i = 0; i < 4; i++) {
       if (gamecube_report.port[i].connected) {
         if (diff_report_gamecube_adapter(&prev_report[dev_addr-1][instance + i], &gamecube_report, i)) {
-          printf("GAMECUBE[%d|%d]: Report ID = 0x%x\r\n", dev_addr, (instance + i), gamecube_report.report_id);
-          printf("(x, y, cx, cy, zl, zr) = (%u, %u, %u, %u, %u, %u)\r\n",
+          TU_LOG1("GAMECUBE[%d|%d]: Report ID = 0x%x\r\n", dev_addr, (instance + i), gamecube_report.report_id);
+          TU_LOG1("(x, y, cx, cy, zl, zr) = (%u, %u, %u, %u, %u, %u)\r\n",
             gamecube_report.port[i].x1,
             gamecube_report.port[i].y1,
             gamecube_report.port[i].x2,
             gamecube_report.port[i].y2,
             gamecube_report.port[i].zl,
             gamecube_report.port[i].zr);
-          printf("DPad = ");
+          TU_LOG1("DPad = ");
 
-          if (gamecube_report.port[i].down) printf("Down ");
-          if (gamecube_report.port[i].up) printf("Up ");
-          if (gamecube_report.port[i].right) printf("Right ");
-          if (gamecube_report.port[i].left) printf("Left ");
-          if (gamecube_report.port[i].a) printf("A ");
-          if (gamecube_report.port[i].b) printf("B ");
-          if (gamecube_report.port[i].x) printf("X ");
-          if (gamecube_report.port[i].y) printf("Y ");
-          if (gamecube_report.port[i].z) printf("Z ");
-          if (gamecube_report.port[i].l) printf("L ");
-          if (gamecube_report.port[i].r) printf("R ");
-          if (gamecube_report.port[i].start) printf("Start ");
-          printf("\n");
+          if (gamecube_report.port[i].down) TU_LOG1("Down ");
+          if (gamecube_report.port[i].up) TU_LOG1("Up ");
+          if (gamecube_report.port[i].right) TU_LOG1("Right ");
+          if (gamecube_report.port[i].left) TU_LOG1("Left ");
+          if (gamecube_report.port[i].a) TU_LOG1("A ");
+          if (gamecube_report.port[i].b) TU_LOG1("B ");
+          if (gamecube_report.port[i].x) TU_LOG1("X ");
+          if (gamecube_report.port[i].y) TU_LOG1("Y ");
+          if (gamecube_report.port[i].z) TU_LOG1("Z ");
+          if (gamecube_report.port[i].l) TU_LOG1("L ");
+          if (gamecube_report.port[i].r) TU_LOG1("R ");
+          if (gamecube_report.port[i].start) TU_LOG1("Start ");
+          TU_LOG1("\n");
 
           bool dpad_left  = gamecube_report.port[i].left;
           bool dpad_right = gamecube_report.port[i].right;

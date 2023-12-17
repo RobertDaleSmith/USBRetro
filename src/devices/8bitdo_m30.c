@@ -24,25 +24,25 @@ void process_8bitdo_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
   memcpy(&input_report, report, sizeof(input_report));
 
   if (diff_report_m30(&prev_report[dev_addr-1], &input_report)) {
-    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", input_report.x1, input_report.y1, input_report.x2, input_report.y2);
-    printf("DPad = %d ", input_report.dpad);
+    TU_LOG1("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", input_report.x1, input_report.y1, input_report.x2, input_report.y2);
+    TU_LOG1("DPad = %d ", input_report.dpad);
 
-    if (input_report.a) printf("A ");
-    if (input_report.b) printf("B ");
-    if (input_report.r) printf("R (C) ");
-    if (input_report.x) printf("X ");
-    if (input_report.y) printf("Y ");
-    if (input_report.l) printf("L (Z) ");
-    if (input_report.l2) printf("L2 ");
-    if (input_report.r2) printf("R2 ");
-    if (input_report.l3) printf("L3 ");
-    if (input_report.r3) printf("R3 ");
-    if (input_report.cap) printf("Capture ");
-    if (input_report.select) printf("Select ");
-    if (input_report.start) printf("Start ");
-    if (input_report.home) printf("Home ");
+    if (input_report.a) TU_LOG1("A ");
+    if (input_report.b) TU_LOG1("B ");
+    if (input_report.r) TU_LOG1("R (C) ");
+    if (input_report.x) TU_LOG1("X ");
+    if (input_report.y) TU_LOG1("Y ");
+    if (input_report.l) TU_LOG1("L (Z) ");
+    if (input_report.l2) TU_LOG1("L2 ");
+    if (input_report.r2) TU_LOG1("R2 ");
+    if (input_report.l3) TU_LOG1("L3 ");
+    if (input_report.r3) TU_LOG1("R3 ");
+    if (input_report.cap) TU_LOG1("Capture ");
+    if (input_report.select) TU_LOG1("Select ");
+    if (input_report.start) TU_LOG1("Start ");
+    if (input_report.home) TU_LOG1("Home ");
 
-    printf("\r\n");
+    TU_LOG1("\r\n");
     bool dpad_up    = (input_report.dpad == 0 || input_report.dpad == 1 || input_report.dpad == 7);
     bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
     bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);

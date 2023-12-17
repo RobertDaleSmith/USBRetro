@@ -40,18 +40,18 @@ void process_sega_astrocity(uint8_t dev_addr, uint8_t instance, uint8_t const* r
   memcpy(&astro_report, report, sizeof(astro_report));
 
   if (diff_report_sega_astrocity(&prev_report[dev_addr-1], &astro_report)) {
-    printf("DPad = x:%d, y:%d ", astro_report.x, astro_report.y);
-    if (astro_report.a) printf("A "); // X   <-M30 buttons
-    if (astro_report.b) printf("B "); // Y
-    if (astro_report.c) printf("C "); // Z
-    if (astro_report.d) printf("D "); // A
-    if (astro_report.e) printf("E "); // B
-    if (astro_report.f) printf("F "); // C
-    if (astro_report.l) printf("L ");
-    if (astro_report.r) printf("R ");
-    if (astro_report.credit) printf("Credit "); // Select
-    if (astro_report.start) printf("Start ");
-    printf("\r\n");
+    TU_LOG1("DPad = x:%d, y:%d ", astro_report.x, astro_report.y);
+    if (astro_report.a) TU_LOG1("A "); // X   <-M30 buttons
+    if (astro_report.b) TU_LOG1("B "); // Y
+    if (astro_report.c) TU_LOG1("C "); // Z
+    if (astro_report.d) TU_LOG1("D "); // A
+    if (astro_report.e) TU_LOG1("E "); // B
+    if (astro_report.f) TU_LOG1("F "); // C
+    if (astro_report.l) TU_LOG1("L ");
+    if (astro_report.r) TU_LOG1("R ");
+    if (astro_report.credit) TU_LOG1("Credit "); // Select
+    if (astro_report.start) TU_LOG1("Start ");
+    TU_LOG1("\r\n");
 
     bool dpad_up    = (astro_report.y < 127);
     bool dpad_right = (astro_report.x > 127);
