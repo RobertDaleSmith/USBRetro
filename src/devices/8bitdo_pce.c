@@ -30,15 +30,15 @@ void process_8bitdo_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
   memcpy(&pce_report, report, sizeof(pce_report));
 
   if (diff_report_pce(&prev_report[dev_addr-1], &pce_report)) {
-    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", pce_report.x1, pce_report.y1, pce_report.x2, pce_report.y2);
-    printf("DPad = %d ", pce_report.dpad);
+    TU_LOG1("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", pce_report.x1, pce_report.y1, pce_report.x2, pce_report.y2);
+    TU_LOG1("DPad = %d ", pce_report.dpad);
 
-    if (pce_report.sel) printf("Select ");
-    if (pce_report.run) printf("Run ");
-    if (pce_report.one) printf("I ");
-    if (pce_report.two) printf("II ");
+    if (pce_report.sel) TU_LOG1("Select ");
+    if (pce_report.run) TU_LOG1("Run ");
+    if (pce_report.one) TU_LOG1("I ");
+    if (pce_report.two) TU_LOG1("II ");
 
-    printf("\r\n");
+    TU_LOG1("\r\n");
 
     bool dpad_up    = (pce_report.dpad == 0 || pce_report.dpad == 1 || pce_report.dpad == 7);
     bool dpad_right = (pce_report.dpad >= 1 && pce_report.dpad <= 3);

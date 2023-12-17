@@ -32,19 +32,19 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
   if ( dragonrise_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
   {
-    printf("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y);
+    TU_LOG1("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y);
     // Y,X,L,R extra button data may or may not be used by similiar generic controller variants
-    if (update_report.y) printf("Y ");
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.z) printf("Z ");
-    if (update_report.c) printf("C ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    printf("\r\n");
+    if (update_report.y) TU_LOG1("Y ");
+    if (update_report.b) TU_LOG1("B ");
+    if (update_report.a) TU_LOG1("A ");
+    if (update_report.x) TU_LOG1("X ");
+    if (update_report.l) TU_LOG1("L ");
+    if (update_report.r) TU_LOG1("R ");
+    if (update_report.z) TU_LOG1("Z ");
+    if (update_report.c) TU_LOG1("C ");
+    if (update_report.select) TU_LOG1("Select ");
+    if (update_report.start) TU_LOG1("Start ");
+    TU_LOG1("\r\n");
 
     bool dpad_left  = (update_report.axis0_x < 126);
     bool dpad_right  = (update_report.axis0_x > 128);

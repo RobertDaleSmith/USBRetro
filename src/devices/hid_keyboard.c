@@ -217,7 +217,7 @@ void calculate_coordinates(uint32_t stick_keys, int intensity, uint8_t *x_value,
     break;
   }
 
-  // printf("in: %d° %d%, x:%d, y:%d, keys: %x\n", angle_degrees, intensity, *x_value, *y_value, stick_keys);
+  // TU_LOG1("in: %d° %d%, x:%d, y:%d, keys: %x\n", angle_degrees, intensity, *x_value, *y_value, stick_keys);
   return;
 }
 
@@ -398,7 +398,7 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
         // exist in previous report means the current key is holding
       }else
       {
-        // printf("keycode(%d)\r\n", report->keycode[i]);
+        // TU_LOG1("keycode(%d)\r\n", report->keycode[i]);
         // not existed in previous report means the current key is pressed
         // bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
         // uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];

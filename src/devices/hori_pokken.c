@@ -29,19 +29,19 @@ void process_hori_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
   memcpy(&update_report, report, sizeof(update_report));
 
   if (diff_report_pokken(&prev_report[dev_addr-1][instance], &update_report)) {
-    printf("(x, y, z, rz) = (%u, %u %u, %u)\r\n", update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis);
-    printf("DPad = %d ", update_report.dpad);
-    if (update_report.y) printf("Y ");
-    if (update_report.b) printf("B ");
-    if (update_report.a) printf("A ");
-    if (update_report.x) printf("X ");
-    if (update_report.l) printf("L ");
-    if (update_report.r) printf("R ");
-    if (update_report.zl) printf("ZL ");
-    if (update_report.zr) printf("ZR ");
-    if (update_report.select) printf("Select ");
-    if (update_report.start) printf("Start ");
-    printf("\r\n");
+    TU_LOG1("(x, y, z, rz) = (%u, %u %u, %u)\r\n", update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis);
+    TU_LOG1("DPad = %d ", update_report.dpad);
+    if (update_report.y) TU_LOG1("Y ");
+    if (update_report.b) TU_LOG1("B ");
+    if (update_report.a) TU_LOG1("A ");
+    if (update_report.x) TU_LOG1("X ");
+    if (update_report.l) TU_LOG1("L ");
+    if (update_report.r) TU_LOG1("R ");
+    if (update_report.zl) TU_LOG1("ZL ");
+    if (update_report.zr) TU_LOG1("ZR ");
+    if (update_report.select) TU_LOG1("Select ");
+    if (update_report.start) TU_LOG1("Start ");
+    TU_LOG1("\r\n");
 
     bool dpad_up    = (update_report.dpad == 0 || update_report.dpad == 1 || update_report.dpad == 7);
     bool dpad_right = (update_report.dpad >= 1 && update_report.dpad <= 3);

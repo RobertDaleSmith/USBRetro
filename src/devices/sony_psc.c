@@ -25,21 +25,21 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
   prev_report[dev_addr-1].counter = psc_report.counter;
 
   if (diff_report_psc(&prev_report[dev_addr-1], &psc_report)) {
-    printf("DPad = %d ", psc_report.dpad);
+    TU_LOG1("DPad = %d ", psc_report.dpad);
 
-    if (psc_report.square   ) printf("Square ");
-    if (psc_report.cross    ) printf("Cross ");
-    if (psc_report.circle   ) printf("Circle ");
-    if (psc_report.triangle ) printf("Triangle ");
-    if (psc_report.l1       ) printf("L1 ");
-    if (psc_report.r1       ) printf("R1 ");
-    if (psc_report.l2       ) printf("L2 ");
-    if (psc_report.r2       ) printf("R2 ");
-    if (psc_report.share    ) printf("Share ");
-    if (psc_report.option   ) printf("Option ");
-    if (psc_report.ps       ) printf("PS ");
+    if (psc_report.square   ) TU_LOG1("Square ");
+    if (psc_report.cross    ) TU_LOG1("Cross ");
+    if (psc_report.circle   ) TU_LOG1("Circle ");
+    if (psc_report.triangle ) TU_LOG1("Triangle ");
+    if (psc_report.l1       ) TU_LOG1("L1 ");
+    if (psc_report.r1       ) TU_LOG1("R1 ");
+    if (psc_report.l2       ) TU_LOG1("L2 ");
+    if (psc_report.r2       ) TU_LOG1("R2 ");
+    if (psc_report.share    ) TU_LOG1("Share ");
+    if (psc_report.option   ) TU_LOG1("Option ");
+    if (psc_report.ps       ) TU_LOG1("PS ");
 
-    printf("\r\n");
+    TU_LOG1("\r\n");
 
     bool dpad_up    = (psc_report.dpad >= 0 && psc_report.dpad <= 2);
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);

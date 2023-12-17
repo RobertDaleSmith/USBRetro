@@ -20,33 +20,33 @@ void cursor_movement(int8_t x, int8_t y, int8_t wheel, uint8_t spinner)
   // Move X using ansi escape
   if ( x < 0)
   {
-    printf(ANSI_CURSOR_BACKWARD(%d), (-x)); // move left
+    TU_LOG1(ANSI_CURSOR_BACKWARD(%d), (-x)); // move left
   }else if ( x > 0)
   {
-    printf(ANSI_CURSOR_FORWARD(%d), x); // move right
+    TU_LOG1(ANSI_CURSOR_FORWARD(%d), x); // move right
   }
 
   // Move Y using ansi escape
   if ( y < 0)
   {
-    printf(ANSI_CURSOR_UP(%d), (-y)); // move up
+    TU_LOG1(ANSI_CURSOR_UP(%d), (-y)); // move up
   }else if ( y > 0)
   {
-    printf(ANSI_CURSOR_DOWN(%d), y); // move down
+    TU_LOG1(ANSI_CURSOR_DOWN(%d), y); // move down
   }
 
   // Scroll using ansi escape
   if (wheel < 0)
   {
-    printf(ANSI_SCROLL_UP(%d), (-wheel)); // scroll up
+    TU_LOG1(ANSI_SCROLL_UP(%d), (-wheel)); // scroll up
   }else if (wheel > 0)
   {
-    printf(ANSI_SCROLL_DOWN(%d), wheel); // scroll down
+    TU_LOG1(ANSI_SCROLL_DOWN(%d), wheel); // scroll down
   }
 
-  printf("\r\n");
+  TU_LOG1("\r\n");
 #else
-  printf("(%d %d %d %d)\r\n", x, y, wheel, spinner);
+  TU_LOG1("(%d %d %d %d)\r\n", x, y, wheel, spinner);
 #endif
 }
 
@@ -61,7 +61,7 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
   uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
   if ( button_changed_mask & report->buttons)
   {
-    printf(" %c%c%c%c%c ",
+    TU_LOG1(" %c%c%c%c%c ",
        report->buttons & MOUSE_BUTTON_BACKWARD  ? 'R' : '-',
        report->buttons & MOUSE_BUTTON_FORWARD   ? 'S' : '-',
        report->buttons & MOUSE_BUTTON_LEFT      ? '2' : '-',

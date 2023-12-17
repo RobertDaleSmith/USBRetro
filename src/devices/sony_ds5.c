@@ -70,34 +70,34 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
     if ( diff_report_ds5(&prev_report[dev_addr-1], &ds5_report) )
     {
-      printf("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
-      printf("DPad = %s ", dpad_str[ds5_report.dpad]);
+      TU_LOG1("(x1, y1, x2, y2, rx, ry) = (%u, %u, %u, %u, %u, %u)\r\n", ds5_report.x1, ds5_report.y1, ds5_report.x2, ds5_report.y2, ds5_report.rx, ds5_report.ry);
+      TU_LOG1("DPad = %s ", dpad_str[ds5_report.dpad]);
 
-      if (ds5_report.square   ) printf("Square ");
-      if (ds5_report.cross    ) printf("Cross ");
-      if (ds5_report.circle   ) printf("Circle ");
-      if (ds5_report.triangle ) printf("Triangle ");
+      if (ds5_report.square   ) TU_LOG1("Square ");
+      if (ds5_report.cross    ) TU_LOG1("Cross ");
+      if (ds5_report.circle   ) TU_LOG1("Circle ");
+      if (ds5_report.triangle ) TU_LOG1("Triangle ");
 
-      if (ds5_report.l1       ) printf("L1 ");
-      if (ds5_report.r1       ) printf("R1 ");
-      if (ds5_report.l2       ) printf("L2 ");
-      if (ds5_report.r2       ) printf("R2 ");
+      if (ds5_report.l1       ) TU_LOG1("L1 ");
+      if (ds5_report.r1       ) TU_LOG1("R1 ");
+      if (ds5_report.l2       ) TU_LOG1("L2 ");
+      if (ds5_report.r2       ) TU_LOG1("R2 ");
 
-      if (ds5_report.share    ) printf("Share ");
-      if (ds5_report.option   ) printf("Option ");
-      if (ds5_report.l3       ) printf("L3 ");
-      if (ds5_report.r3       ) printf("R3 ");
+      if (ds5_report.share    ) TU_LOG1("Share ");
+      if (ds5_report.option   ) TU_LOG1("Option ");
+      if (ds5_report.l3       ) TU_LOG1("L3 ");
+      if (ds5_report.r3       ) TU_LOG1("R3 ");
 
-      if (ds5_report.ps       ) printf("PS ");
-      if (ds5_report.tpad     ) printf("TPad ");
-      if (ds5_report.mute     ) printf("Mute ");
+      if (ds5_report.ps       ) TU_LOG1("PS ");
+      if (ds5_report.tpad     ) TU_LOG1("TPad ");
+      if (ds5_report.mute     ) TU_LOG1("Mute ");
 
-      if (!ds5_report.tpad_f1_down) printf("F1 ");
+      if (!ds5_report.tpad_f1_down) TU_LOG1("F1 ");
 
       uint16_t tx = (((ds5_report.tpad_f1_pos[1] & 0x0f) << 8)) | ((ds5_report.tpad_f1_pos[0] & 0xff) << 0);
       uint16_t ty = (((ds5_report.tpad_f1_pos[1] & 0xf0) >> 4)) | ((ds5_report.tpad_f1_pos[2] & 0xff) << 4);
-      // printf(" (tx, ty) = (%u, %u)\r\n", tx, ty);
-      printf("\r\n");
+      // TU_LOG1(" (tx, ty) = (%u, %u)\r\n", tx, ty);
+      TU_LOG1("\r\n");
 
       bool dpad_up    = (ds5_report.dpad == 0 || ds5_report.dpad == 1 || ds5_report.dpad == 7);
       bool dpad_right = (ds5_report.dpad >= 1 && ds5_report.dpad <= 3);
@@ -152,7 +152,7 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       } else {
         tpadDragging = false;
       }
-      // printf(" (spinner) = (%u)\r\n", spinner);
+      // TU_LOG1(" (spinner) = (%u)\r\n", spinner);
 #endif
       uint8_t analog_1x = ds5_report.x1;
       uint8_t analog_1y = 255 - ds5_report.y1;
