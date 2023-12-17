@@ -43,15 +43,15 @@ pico_add_extra_outputs(usbretro_ngc)
 pico_add_extra_outputs(usbretro_xb1)
 pico_add_extra_outputs(usbretro_nuon)
 
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/plex.pio )
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/clock.pio )
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/select.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/plex.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/clock.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/select.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
-pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/polyface_read.pio )
-pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/polyface_send.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_read.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_send.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
 ## SET TARGE SOURCES
@@ -86,24 +86,24 @@ set(COMMON_SOURCES
 
 target_sources(usbretro_pce PUBLIC # For PCE
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine/pcengine.c
 )
 
 target_sources(usbretro_ngc PUBLIC # For NGC
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube/gamecube.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/joybus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
 )
 
 target_sources(usbretro_xb1 PUBLIC # For XB1
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone/xboxone.c
 )
 
 target_sources(usbretro_nuon PUBLIC # For NUON
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon/nuon.c
 )
 
 ## SET TARGET INCLUDE DIRS
