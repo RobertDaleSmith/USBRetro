@@ -10,17 +10,17 @@ static inline bool is_triple_adapter_v2(uint16_t vid, uint16_t pid) {
   if (!vidpid_match) return false;
 
   // Compare the the fetched serial with "S-NES-GEN-V2" or "NES-NTT-GENESIS"
-  if(memcmp(devices[dev_addr].serial, tplctr_serial_v2, sizeof(tplctr_serial_v2)) == 0 ||
-     memcmp(devices[dev_addr].serial, tplctr_serial_v2_1, sizeof(tplctr_serial_v2_1)) == 0)
-  {
-    serial_match = true;
-  }
+  // if(memcmp(devices[dev_addr].serial, tplctr_serial_v2, sizeof(tplctr_serial_v2)) == 0 ||
+  //    memcmp(devices[dev_addr].serial, tplctr_serial_v2_1, sizeof(tplctr_serial_v2_1)) == 0)
+  // {
+  //   serial_match = true;
+  // }
 
   return serial_match;
 }
 
 // check if 2 reports are different enough
-bool diff_report_triple_adapter_v2(triple_adapter_v2_report_t const* rpt1, triple_adapter_v2_report_t const* rpt2, uint8_t player) {
+bool diff_report_triple_adapter_v2(triple_adapter_v2_report_t const* rpt1, triple_adapter_v2_report_t const* rpt2) {
   bool result;
 
   result |= rpt1->axis_x != rpt2->axis_x;
@@ -41,12 +41,12 @@ bool diff_report_triple_adapter_v2(triple_adapter_v2_report_t const* rpt1, tripl
 // process usb hid input reports
 void process_triple_adapter_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   // previous report used to compare for changes
-  static triple_v2_report_t prev_report[5][5];
+  static triple_adapter_v2_report_t prev_report[5][5];
 
-  triple_v2_report_t update_report;
+  triple_adapter_v2_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if ( triple_v2_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  if (diff_report_triple_adapter_v2(&prev_report[dev_addr-1][instance], &update_report) )
   {
     printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
     if (update_report.b) printf("B ");

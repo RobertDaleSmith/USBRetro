@@ -10,16 +10,16 @@ static inline bool is_triple_adapter_v1(uint16_t vid, uint16_t pid) {
   if (!vidpid_match) return false;
 
   // Compare the the fetched serial with "NES-SNES-GENESIS"
-  if(memcmp(devices[dev_addr].serial, tplctr_serial_v1, sizeof(tplctr_serial_v1)) == 0)
-  {
-    serial_match = true;
-  }
+  // if(memcmp(devices[dev_addr].serial, tplctr_serial_v1, sizeof(tplctr_serial_v1)) == 0)
+  // {
+  //   serial_match = true;
+  // }
 
   return serial_match;
 }
 
 // check if 2 reports are different enough
-bool diff_report_triple_adapter_v1(triple_adapter_v1_report_t const* rpt1, triple_adapter_v1_report_t const* rpt2, uint8_t player) {
+bool diff_report_triple_adapter_v1(triple_adapter_v1_report_t const* rpt1, triple_adapter_v1_report_t const* rpt2) {
   bool result;
 
   result |= rpt1->axis_x != rpt2->axis_x;
@@ -45,7 +45,7 @@ void process_triple_adapter_v1(uint8_t dev_addr, uint8_t instance, uint8_t const
   triple_adapter_v1_report_t update_report;
   memcpy(&update_report, report, sizeof(update_report));
 
-  if ( triple_v1_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
+  if (diff_report_triple_adapter_v1(&prev_report[dev_addr-1][instance], &update_report) )
   {
     printf("(x, y) = (%u, %u)\r\n", update_report.axis_x, update_report.axis_y);
     if (update_report.b) printf("B ");
