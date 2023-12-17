@@ -46,21 +46,19 @@ pico_add_extra_outputs(usbretro_nuon)
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/clock.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/select.pio )
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
-pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
-pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
+pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
+pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_read.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_send.pio )
-pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/codes.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/players.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/codes.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/players.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_keyboard.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_mouse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
@@ -81,6 +79,8 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/switch_pro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
 
@@ -109,19 +109,23 @@ target_sources(usbretro_nuon PUBLIC # For NUON
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 
 target_include_directories(usbretro_ngc PUBLIC # FOR NGC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/include
 )
 
 target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 
 ## SET TARGET LINK LIBS
