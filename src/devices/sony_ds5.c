@@ -18,6 +18,8 @@ typedef struct TU_ATTR_PACKED
 
 static ds5_device_t ds5_devices[MAX_DEVICES] = { 0 };
 
+const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
+
 // check if device is Sony PlayStation 5 controllers
 bool is_sony_ds5(uint16_t vid, uint16_t pid) {
   return ((vid == 0x054c && pid == 0x0ce6)); // Sony DualSense

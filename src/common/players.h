@@ -16,8 +16,8 @@
 // Define constants
 typedef struct TU_ATTR_PACKED
 {
-  int device_address;
-  int instance_number;
+  int dev_addr;
+  int instance;
   int player_number;
 
   int32_t global_buttons;
@@ -50,9 +50,12 @@ typedef struct TU_ATTR_PACKED
 Player_t players[MAX_PLAYERS];
 int playersCount;
 
+// used to set the LED patterns on PS3/Switch controllers
+const uint8_t PLAYER_LEDS[11];
+
 // Function declarations
-int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
-int __not_in_flash_func(add_player)(int device_address, int instance_number);
-void remove_players_by_address(int device_address, int instance);
+int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
+int __not_in_flash_func(add_player)(int dev_addr, int instance);
+void remove_players_by_address(int dev_addr, int instance);
 
 #endif // PLAYERS_H

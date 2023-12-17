@@ -7,23 +7,6 @@
 // #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
 
-const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
-
-// Used to set the LEDs on the controllers
-const uint8_t PLAYER_LEDS[] = {
-  0x00, // OFF
-  0x01, // LED1  0001
-  0x02, // LED2  0010
-  0x04, // LED3  0100
-  0x08, // LED4  1000
-  0x09, // LED5  1001
-  0x0A, // LED6  1010
-  0x0C, // LED7  1100
-  0x0D, // LED8  1101
-  0x0E, // LED9  1110
-  0x0F, // LED10 1111
-};
-
 // Each HID instance can have multiple reports
 typedef struct TU_ATTR_PACKED
 {
@@ -35,9 +18,9 @@ typedef struct TU_ATTR_PACKED
 // Cached device report properties on mount
 typedef struct TU_ATTR_PACKED
 {
-  // uint16_t serial[20];
   uint16_t vid, pid;
   instance_t instances[CFG_TUH_HID];
+  // uint16_t serial[20];
 } device_t;
 
 static device_t devices[MAX_DEVICES] = { 0 };
@@ -45,27 +28,6 @@ int16_t spinner = 0;
 uint32_t buttons;
 
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-
-extern void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint32_t buttons,
-  uint8_t analog_1x,
-  uint8_t analog_1y,
-  uint8_t analog_2x,
-  uint8_t analog_2y,
-  uint8_t analog_l,
-  uint8_t analog_r,
-  uint32_t keys,
-  uint8_t quad_x
-);
-extern void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance, uint16_t buttons, uint8_t delta_x, uint8_t delta_y, uint8_t spinner);
-extern int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
-extern void remove_players_by_address(int device_address, int instance);
-
-extern bool is_fun;
-extern unsigned char fun_inc;
-extern unsigned char fun_player;
 
 void hid_app_init()
 {
@@ -88,12 +50,12 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       int8_t ctrl_type = devices[dev_addr].instances[instance].type;
       switch (ctrl_type)
       {
+      case CONTROLLER_DUALSENSE: // send DS5 LED and rumble
       case CONTROLLER_DUALSHOCK3: // send DS3 Init, LED and rumble
       case CONTROLLER_DUALSHOCK4: // send DS4 LED and rumble
-      case CONTROLLER_DUALSENSE: // send DS5 LED and rumble
       case CONTROLLER_GAMECUBE: // send GameCube WiiU/Switch Adapter rumble
-      case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
       case CONTROLLER_KEYBOARD: // send Keyboard LEDs
+      case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
         device_interfaces[ctrl_type]->task(dev_addr, instance, player_index, rumble, leds);
         break;
       default:
@@ -206,12 +168,12 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   dev_type_t dev_type = devices[dev_addr].instances[instance].type;
   switch (dev_type)
   {
-  case CONTROLLER_KEYBOARD:
+  case CONTROLLER_DINPUT:
   case CONTROLLER_DUALSENSE:
   case CONTROLLER_DUALSHOCK3:
   case CONTROLLER_DUALSHOCK4:
+  case CONTROLLER_KEYBOARD:
   case CONTROLLER_SWITCH:
-  case CONTROLLER_DINPUT:
     device_interfaces[dev_type]->unmount(dev_addr, instance);
   default:
     break;
