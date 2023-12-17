@@ -44,7 +44,7 @@
 
 // Declaration of global variables
 PIO pio;
-uint sm1, sm2; // sm1 = plex; sm2 = clock, sm3 = select
+uint sm1, sm2; // sm1 = send; sm2 = read
 
 static int crc_lut[256]; // crc look up table
 // queue_t packet_queue;

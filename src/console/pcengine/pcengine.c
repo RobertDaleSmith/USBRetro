@@ -4,16 +4,10 @@
 #include "hardware/clocks.h"
 
 // Definition of global variables
-uint32_t output_buttons_0 = 0;
 uint32_t output_analog_1x = 0;
 uint32_t output_analog_1y = 0;
 uint32_t output_analog_2x = 0;
 uint32_t output_analog_2y = 0;
-uint32_t output_quad_x = 0;
-
-uint32_t device_mode   = 0b10111001100000111001010100000000;
-uint32_t device_config = 0b10000000100000110000001100000000;
-uint32_t device_switch = 0b10000000100000110000001100000000;
 
 // When PCE reads, set interlock to ensure atomic update
 //
