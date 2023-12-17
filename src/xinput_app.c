@@ -187,10 +187,10 @@ void xinput_task(uint8_t rumble)
     // TODO: throttle and only fire if device is xinput
     // if (players[i].xinput)
     // {
-      tuh_xinput_set_led(players[i].device_address, players[i].instance_number, i+1, true);
-      tuh_xinput_set_rumble(players[i].device_address, players[i].instance_number, rumble, rumble, true);
+      tuh_xinput_set_led(players[i].dev_addr, players[i].instance, i+1, true);
+      tuh_xinput_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble, true);
     // } else {
-    //   hid_set_rumble(players[i].device_address, players[i].instance_number, rumble, rumble);
+    //   hid_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble);
     // }
   }
 }

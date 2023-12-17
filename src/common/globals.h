@@ -7,20 +7,12 @@
 
 #define MAX_DEVICES 6
 
-//
-Player_t players[MAX_PLAYERS];
-int playersCount;
+// handles state of multi-player inputs
 bool update_pending;
 
 // GameCube rumble and keyboard LED states
 uint8_t gc_rumble;
 uint8_t gc_kb_led;
-
-// output logging dpad directions
-const char* dpad_str[9];
-
-// used to set the LED patterns on PS3/Switch controllers
-const uint8_t PLAYER_LEDS[11];
 
 // konami code easter egg
 bool is_fun;
@@ -52,8 +44,8 @@ void __not_in_flash_func(post_mouse_globals)(
   uint8_t spinner
 );
 
-int __not_in_flash_func(find_player_index)(int device_address, int instance_number);
-int __not_in_flash_func(add_player)(int device_address, int instance_number);
-void remove_players_by_address(int device_address, int instance);
+int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
+int __not_in_flash_func(add_player)(int dev_addr, int instance);
+void remove_players_by_address(int dev_addr, int instance);
 
 #endif // GLOBALS_H
