@@ -1,12 +1,15 @@
 // hid_app.c
-#include "bsp/board_api.h"
 #include "tusb.h"
+#include "globals.h"
 #include "devices/device_utils.h"
 #include "devices/device_registry.h"
 
+// #define LANGUAGE_ID 0x0409
+#define MAX_REPORTS 5
+
 const char* dpad_str[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW", "none" };
 
-/** Used to set the LEDs on the controllers */
+// Used to set the LEDs on the controllers
 const uint8_t PLAYER_LEDS[] = {
   0x00, // OFF
   0x01, // LED1  0001
@@ -20,10 +23,6 @@ const uint8_t PLAYER_LEDS[] = {
   0x0E, // LED9  1110
   0x0F, // LED10 1111
 };
-
-#define LANGUAGE_ID 0x0409
-#define MAX_DEVICES 6
-#define MAX_REPORTS 5
 
 // Each HID instance can have multiple reports
 typedef struct TU_ATTR_PACKED

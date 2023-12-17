@@ -56,6 +56,8 @@ pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/codes.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/players.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
@@ -84,20 +86,24 @@ set(COMMON_SOURCES
 
 target_sources(usbretro_pce PUBLIC # For PCE
     ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine.c
 )
 
 target_sources(usbretro_ngc PUBLIC # For NGC
     ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/joybus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
 )
 
 target_sources(usbretro_xb1 PUBLIC # For XB1
     ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone.c
 )
 
 target_sources(usbretro_nuon PUBLIC # For NUON
     ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon.c
 )
 
 ## SET TARGET INCLUDE DIRS
