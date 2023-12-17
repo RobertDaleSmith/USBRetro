@@ -19,13 +19,13 @@
 
 // include console specific handling
 #ifdef CONFIG_NGC
-#include "console/gamecube.h"
+#include "console/gamecube/gamecube.h"
 #elif CONFIG_NUON
-#include "console/nuon.h"
+#include "console/nuon/nuon.h"
 #elif CONFIG_PCE
-#include "console/pcengine.h"
+#include "console/pcengine/pcengine.h"
 #elif CONFIG_XB1
-#include "console/xboxone.h"
+#include "console/xboxone/xboxone.h"
 #endif
 
 extern void hid_app_init(void);
