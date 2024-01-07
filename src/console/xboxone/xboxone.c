@@ -291,6 +291,14 @@ void __not_in_flash_func(post_globals)(
     players[player_index].output_analog_r = analog_r;
     players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
+    if (!((players[player_index].output_buttons) & 0x00200))
+    {
+      players[player_index].output_analog_r = 255;
+    }
+    if (!((players[player_index].output_buttons) & 0x00100))
+    {
+      players[player_index].output_analog_l = 255;
+    }
     update_output();
   }
 }
