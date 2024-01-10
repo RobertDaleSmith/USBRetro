@@ -117,6 +117,7 @@ void calculate_coordinates(uint32_t stick_keys, int intensity, uint8_t *x_value,
       case 0x482: // S ⇾ D ⇾ A
       case 0x214: // A ⇾ W ⇾ S
       case 0x248: // D ⇾ A ⇾ S
+      case 0x428: // D ⇾ S ⇾ A
           angle_degrees = 225;
           break;
       case 0x124: // A ⇾ S ⇾ W
@@ -217,7 +218,7 @@ void calculate_coordinates(uint32_t stick_keys, int intensity, uint8_t *x_value,
     break;
   }
 
-  // TU_LOG1("in: %d° %d%, x:%d, y:%d, keys: %x\n", angle_degrees, intensity, *x_value, *y_value, stick_keys);
+  TU_LOG1("in: %d° %d%, x:%d, y:%d, keys: %x\n", angle_degrees, intensity, *x_value, *y_value, stick_keys);
   return;
 }
 
