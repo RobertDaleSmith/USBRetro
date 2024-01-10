@@ -1,31 +1,8 @@
 ;
-; By Dave Shadoff (c) 2021
+; By Robrt Dale Smith (c) 2022
 ;
 ;
-; Interfacing for a PC Engine mouse
-;
-; Two state machines are in use:
-; 
-; 1) Multiplexer, free-running:
-;     - Select one nybble from the most-recent word from FIFO
-;       to be sent to the OUT pins, based on:
-;       a) the value of the input SEL line (from joypad)
-;       b) a counter sent in the ISR, baed on the number of
-;          times the CLR joypad line has gone low in a
-;          scanning cycle
-;
-; 2) Clocked input, which monitors the CLR joypad line for
-;    high->low transitions, to set the state counter
-; 
-;
-; This implements state machine #1
-;
-; Structure of the word sent to the FIFO from the ARM:
-; |P4__BYTE|P3__BYTE|P2__BYTE|P1__BYTE
-; Where:
-;  - Pn__BYTE = 8 bit button values, arranged in
-;    Run/Sel/II/I/Left/Down/Right/Up sequence for PC Engine use
-;
+; Interfacing for a PC Engine controllers
 ;
 
 .program plex

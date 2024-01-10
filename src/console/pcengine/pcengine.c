@@ -16,13 +16,24 @@ volatile bool  output_exclude = false;
 // output_word -> is the word sent to the state machine for output
 //
 // Structure of the word sent to the FIFO from the ARM:
-// |00000000|00ssbbbb|xxxxxxxx|yyyyyyyy
-// Where:
-//  - 0 = must be zero
-//  - s = state (which nybble to output, 3/2/1/0)
+// |  word_1|                             word_0
+// |PLAYER_5|PLAYER_4|PLAYER_3|PLAYER_2|PLAYER_1
+//
+// 2-button mode byte: [Left, Down, Right, Up, Run, Select, II, I]
+//  - all player button bytes are sent every cycle.
+// 6-button mode byte: [III, IV, V, VI, 0, 0, 0, 0]
+//  - every other cycle alternates between default
+//    2-button byte and extended button byte.
+// pce-mouse mode bytes:
+//  - when mouse present, player buttons [Run, Select, II, I] are sent
+//    as the most significant nybble. the least significant nybble holds
+//    the x-axis and y-axis broken into nyybles sent over four cycles.
+//    |CYCLE__4|CYCLE__3|CYCLE__2|CYCLE__1
+//    |bbbbXXXX|bbbbxxxx|bbbbYYYY|bbbbyyyy
+// where:
 //  - b = button values, arranged in Run/Sel/II/I sequence for PC Engine use
-//  - x = mouse 'x' movement; left is {1 - 0x7F} ; right is {0xFF - 0x80 }
-//  - y = mouse 'y' movement;  up  is {1 - 0x7F} ; down  is {0xFF - 0x80 }
+//  - Xx = mouse 'x' movement; left is {1 - 0x7F} ; right is {0xFF - 0x80 }
+//  - Yy = mouse 'y' movement;  up  is {1 - 0x7F} ; down  is {0xFF - 0x80 }
 //
 uint32_t output_word_0 = 0;
 uint32_t output_word_1 = 0;
