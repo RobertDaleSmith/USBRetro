@@ -3,6 +3,25 @@
 <p align="center"><img src="static/PNGs/USBRetro_Outline.png" width="300"/></p>
 <p align="justify">USBRetro is an open source controller adapter firmware for converting USB controllers, keyboards, and mice to various retro consoles' native controller protocols.</p>
 
+### Update Instructions
+
+**USB-2-PCE** [controlleradapter.com/products/usb-2-pce](https://controlleradapter.com/products/usb-2-pce)<br>
+**NUON USB** [controlleradapter.com/products/nuon-usb](https://controlleradapter.com/products/nuon-usb)
+
+1. Download the latest release usbretro_[console].uf2 file.
+2. Disconnected adapter from the console and all connected USB devices.
+3. While holding the boot(+) button, connect the USB-C port to a computer.
+4. A virual drive called RPI-RP2 will appear, drag-n-drop the UF2 update file onto the drive.
+5. The virtual drive will automatically unmount when the update is completed. 🚀
+
+**GC USB** [controlleradapter.com/products/gc-usb](https://controlleradapter.com/products/gc-usb)
+
+1. Download the latest release usbretro_ngc.uf2 file.
+2. Disconnected adapter from the console and all connected USB devices.
+3. Connect the USB-C port to a computer.
+4. A virual drive called RPI-RP2 will appear, drag-n-drop the UF2 update file onto the drive.
+5. The virtual drive will automatically unmount and remount when the update is completed. 🚀
+
 ## Compatibility
 
 ### USB Host Input
@@ -54,6 +73,10 @@
     - [ ] Virtual VMU/Rumble Pack
 - [ ] Any retro console or computer..
 
+## Bugs and Feature Requests
+
+If you run into any issues, then please submit a bug report on the issues tab of this repo. If you would like to see support for specific USB controllers or think of something I missed, then you are welcome to open a feature request under the issues tab. Don't be shy. 👂
+
 ## Button Mapping
 
 ### Input Map
@@ -94,34 +117,56 @@
 | A2          |               | Nuon        | Z           |             |
 
 ## Compiling
-### Dependencies
-#### TinyUSB
-First, clone the [TinyUSB](https://github.com/hathach/tinyusb) repo to your local dev environment. Then point the `PICO_SDK_PATH` environment variable to it.
-
-#### Submodules
+### Setup
+#### 1.) Raspberry Pi Pico SDK
+First, clone the [pico-sdk](https://github.com/raspberrypi/pico-sdk) repo to your local dev environment. Then point the `PICO_SDK_PATH` environment variable to it.
 ```cmd
+cd ~/git
+git clone https://github.com/raspberrypi/pico-sdk.git
+
+cd ~/git/pico-sdk
+git submodule init
+git submodule update
+
+export PICO_SDK_PATH=~/git/pico-sdk
+```
+
+#### 2.) TinyUSB
+Then the TinyUSB library within pico-sdk should be on the latest `master` branch. Change to that directory and checkout `master` if not already on it.
+```cmd
+cd ~/git/pico-sdk/lib/tinyusb
+git checkout master
+```
+
+#### 3.) Clone USBRetro and Submodules
+Once you have cloned this repo to your local environment. The external submodule dependencies must be initialized and updated.
+```cmd
+cd ~/git
+git clone https://github.com/RobertDaleSmith/usbretro.git
+
+cd ~/git/usbretro
 git submodule init
 git submodule update
 ```
 
-#### KB2040 Board
+#### 4.) RP2040 Board Setup
+Finally, run the specific microcontroller build script to create a `src/build` directory.
 ```cmd
-cd src
+cd ~/git/usbretro/src
 sh build_ada_kb2040.sh
 ```
 
-### Build All Console Firmwares
+### Build Firmwares
+#### Build All
+To build all the various console specific firmwares:
 
 ```cmd
-cd src
-sh build_ada_kb2040.sh
-
-cd build
+cd ~/git/usbretro/src/build
 cmake ..
 make
 ```
 
-### Build Specific Console Firmware
+#### Build Individual
 If you ever want to build firmware for only a single output console, then you can use `make usbretro_[console]`.
 ```cmd
 make usbretro_pce
