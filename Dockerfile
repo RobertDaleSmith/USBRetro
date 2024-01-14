@@ -1,4 +1,4 @@
-FROM docker.io/debian:bookworm-slim
+FROM docker.io/debian:buster-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update
