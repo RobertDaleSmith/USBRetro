@@ -20,8 +20,7 @@ RUN git checkout 4b3b401ce
 
 WORKDIR /root/workspace/USBRetro
 COPY . .
-RUN git submodule init
-RUN git submodule update
+RUN git submodule update --init
 
 WORKDIR /root/workspace/USBRetro/src
 
