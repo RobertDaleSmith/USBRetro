@@ -1,0 +1,25 @@
+name: Build USBRetro
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build Docker image and compile for all consoles
+        run: |
+          docker build -t usbretro .
+          docker run --rm -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build usbretro /bin/bash -c "sh build.sh && cd build && cmake .. && make"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: all_console_firmwares_raspberry_pi_pico
+          path: ${{ github.workspace }}/src/build/*.uf2
