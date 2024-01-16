@@ -4,22 +4,28 @@ on:
   push:
     branches:
       - master
+      - build-matrix
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        board: [rpi_pico, ada_qtpy, ada_kb2040]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
       - name: Build Docker image and compile for all consoles
-        run: |
-          docker build -t usbretro .
-          docker run --rm -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build usbretro /bin/bash -c "sh build.sh && cd build && cmake .. && make"
+        run: docker build -t usbretro .
+
+      - name: Compile for target board ${{ matrix.board }}
+        run: docker run --rm -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build usbretro /bin/bash -c "sh build_${{ matrix.board }}.sh && cd build && cmake .. && make"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: all_console_firmwares_raspberry_pi_pico
+          name: all_console_firmwares_${{ matrix.board }}
           path: ${{ github.workspace }}/src/build/*.uf2
