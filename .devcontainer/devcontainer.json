@@ -1,8 +1,8 @@
 {
   "name": "USBRetro Development",
   "build": {
-    "dockerfile": "Dockerfile",
     "context": "..",
+    "dockerfile": "../Dockerfile",
     "args": { 
       "DEBIAN_FRONTEND": "noninteractive"
     }
