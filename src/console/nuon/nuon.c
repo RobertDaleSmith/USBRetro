@@ -177,8 +177,9 @@ void __not_in_flash_func(core1_entry)(void)
     uint32_t word0 = 1;
     uint32_t word1 = 0;
 
-    if (dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) // RESET
-    {
+    if ((dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) || // RESET
+        (alive && !playersCount) // USB controller disconnected
+    ) {
       id = 0;
       alive = false;
       tagged = false;
@@ -186,6 +187,10 @@ void __not_in_flash_func(core1_entry)(void)
       state = 0;
       channel = 0;
     }
+
+    // No response unless USB controller connected
+    if (!playersCount) continue;
+
     if (dataA == 0x80) // ALIVE
     {
       word0 = 1;
