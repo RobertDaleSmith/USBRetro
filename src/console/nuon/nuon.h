@@ -18,6 +18,10 @@
 #define DATAIO_PIN        2
 #define CLKIN_PIN         DATAIO_PIN + 1  // Note - in pins must be a consecutive 'in' group
 
+// for internal in-game reset
+#define POWER_PIN         4
+#define STOP_PIN          11
+
 // Nuon packet start bit type
 #define PACKET_TYPE_READ  1
 #define PACKET_TYPE_WRITE 0
@@ -51,6 +55,7 @@ static int crc_lut[256]; // crc look up table
 
 // Function declarations
 void nuon_init(void);
+void nuon_task(void);
 uint32_t __rev(uint32_t);
 uint8_t eparity(uint32_t);
 int crc_calc(unsigned char data,int crc);
