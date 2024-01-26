@@ -308,6 +308,10 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
       if (report->keycode[i] == HID_KEY_O) btns_five = true; // L
       if (report->keycode[i] == HID_KEY_E) btns_six = true; // R
 
+#ifdef CONFIG_NGC
+      // light shield
+      if (report->keycode[i] == HID_KEY_SLASH) analog_r = 127; // R at 50%
+#endif
       // HAT SWITCH
       switch (report->keycode[i])
       {
