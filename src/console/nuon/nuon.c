@@ -14,6 +14,10 @@ uint32_t device_mode   = 0b10111001100000111001010100000000;
 uint32_t device_config = 0b10000000100000110000001100000000;
 uint32_t device_switch = 0b10000000100000110000001100000000;
 
+bool softReset = false;
+uint32_t pressTime = 0;
+const uint32_t requiredHoldDuration = 2000; // Duration in milliseconds for which the button combination must be held
+
 // init for nuon communication
 void nuon_init(void)
 {
@@ -146,6 +150,49 @@ int crc_calc(unsigned char data, int crc)
 	return(((crc_lut[((crc>>8)^data)&0xff])^(crc<<8))&0xffff);
 }
 
+void trigger_button_press(uint8_t pin)
+{
+  // Configure the button pin as output
+  gpio_init(pin);
+  gpio_set_dir(pin, GPIO_OUT);
+
+  // Set the button pin to low
+  gpio_put(pin, 0);
+
+  // Wait for a brief moment
+  sleep_ms(100); // Wait for 100 milliseconds
+
+  // Reconfigure the button pin as an input
+  gpio_set_dir(pin, GPIO_IN);
+}
+
+void nuon_task()
+{
+  // Calculate and set Nuon output packet values here.
+  int32_t buttons = (players[0].output_buttons & 0xffff) |
+                    (players[0].output_buttons_alt & 0xffff);
+
+  // Check for button combination (Nuon + Start + L + R)
+  if ((buttons & 0x3030) == 0x3030) {
+    if (!softReset) {
+      softReset = true;
+      pressTime = to_ms_since_boot(get_absolute_time()); // Start timing when buttons are pressed
+    } else {
+      uint32_t holdDuration = to_ms_since_boot(get_absolute_time()) - pressTime;
+      if (holdDuration >= requiredHoldDuration) {
+        // long press and release
+        trigger_button_press(POWER_PIN);
+        softReset = false;
+        pressTime = 0; // Reset pressTime for next button press
+      }
+    }
+  } else if (softReset) {
+    // quick press and release
+    trigger_button_press(STOP_PIN);
+    softReset = false;
+  }
+}
+
 //
 // core1_entry - inner-loop for the second core
 void __not_in_flash_func(core1_entry)(void)
@@ -177,8 +224,9 @@ void __not_in_flash_func(core1_entry)(void)
     uint32_t word0 = 1;
     uint32_t word1 = 0;
 
-    if (dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) // RESET
-    {
+    if ((dataA == 0xb1 && dataS == 0x00 && dataC == 0x00) || // RESET
+        (alive && !playersCount) // USB controller disconnected
+    ) {
       id = 0;
       alive = false;
       tagged = false;
@@ -186,6 +234,10 @@ void __not_in_flash_func(core1_entry)(void)
       state = 0;
       channel = 0;
     }
+
+    // No response unless USB controller connected
+    if (!playersCount) continue;
+
     if (dataA == 0x80) // ALIVE
     {
       word0 = 1;
@@ -390,7 +442,6 @@ void __not_in_flash_func(update_output)(void)
 
   update_pending = true;
 }
-
 
 //
 // post_globals - accumulate button and analog values
