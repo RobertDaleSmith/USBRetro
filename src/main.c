@@ -70,6 +70,9 @@ static void __not_in_flash_func(process_signals)(void)
     // detection of when a PCE scan is no longer in process (reset period)
     pce_task();
 
+#elif CONFIG_NUON
+    nuon_task();
+
 #endif
   }
 }
