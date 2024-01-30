@@ -56,9 +56,9 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
 #ifdef CONFIG_NUON
     float max_thresh = 32768;
     float left1X = (128 * (p->sThumbLX / max_thresh)) + ((p->sThumbLX >= 0) ? 127 : 128);
-    float left1Y = (128 * (-1 * p->sThumbLY / max_thresh)) + ((-1 * p->sThumbLY >= 0) ? 127 : 128);
+    float left1Y = (128 * (p->sThumbLY / max_thresh)) + ((p->sThumbLY >= 0) ? 127 : 128);
     float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
-    float left2Y = (128 * (-1 * p->sThumbRY / max_thresh)) + ((-1 * p->sThumbRY >= 0) ? 127 : 128);
+    float left2Y = (128 * (p->sThumbRY / max_thresh)) + ((p->sThumbRY >= 0) ? 127 : 128);
 
     if (p->sThumbLX == 0) left1X = 127;
     if (p->sThumbLY == 0) left1Y = 127;

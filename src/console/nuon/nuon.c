@@ -447,9 +447,9 @@ void __not_in_flash_func(post_globals)(
     }
 
     if (analog_1x) players[player_index].output_analog_1x = analog_1x;
-    if (analog_1y) players[player_index].output_analog_1y = analog_1y;
+    if (analog_1y) players[player_index].output_analog_1y = 256 - analog_1y;
     if (analog_2x) players[player_index].output_analog_2x = analog_2x;
-    if (analog_2y) players[player_index].output_analog_2y = analog_2y;
+    if (analog_2y) players[player_index].output_analog_2y = 256 - analog_2y;
     if (quad_x) players[player_index].output_quad_x = quad_x;
     update_output();
   }
