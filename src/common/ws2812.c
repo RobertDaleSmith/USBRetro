@@ -100,6 +100,16 @@ void pattern_purples(uint len, uint t) {
     }
 }
 
+void pattern_pinks(uint len, uint t) {
+    int max = 100; // let's not draw too much current!
+    t %= max;
+    for (int i = 0; i < len; ++i) {
+        uint8_t intensity = t; // Adjust the intensity value for a darker effect
+        put_pixel(urgb_u32(intensity / 2, 0, intensity / 1)); // Dark purple color (red + blue)
+        if (++t >= max) t = 0;
+    }
+}
+
 void pattern_reds(uint len, uint t) {
     int max = 100; // let's not draw too much current!
     t %= max;
@@ -134,6 +144,10 @@ void pattern_green(uint len, uint t) {
 
 void pattern_purple(uint len, uint t) {
     put_pixel(urgb_u32(6, 0, 64)); // purple
+}
+
+void pattern_pink(uint len, uint t) {
+    put_pixel(urgb_u32(64, 20, 32)); // purple
 }
 
 void pattern_yellow(uint len, uint t) {
@@ -226,6 +240,14 @@ const struct {
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#else
+#ifdef CONFIG_LOOPY
+        {pattern_pinks,   "Pinks"},      // 0 controllers
+        {pattern_pink,    "Pink"},       // 1 controller
+        {pattern_blue,    "Blue"},       // 2 controllers
+        {pattern_red,     "Red"},        // 3 controllers
+        {pattern_green,   "Green"},      // 4 controllers
+        {pattern_yellow,  "Yellow"},     // 5 controllers
 #else//CONFIG_PCE
         {pattern_blues,   "Blues"},      // 0 controllers
         {pattern_blue,    "Blue"},       // 1 controller
@@ -233,6 +255,7 @@ const struct {
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#endif
 #endif
 #endif
 #endif
