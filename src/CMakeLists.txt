@@ -21,16 +21,19 @@ add_executable(usbretro_pce) # For the usbretro_pce target
 add_executable(usbretro_ngc) # For the usbretro_ngc target
 add_executable(usbretro_xb1) # For the usbretro_xb1 target
 add_executable(usbretro_nuon) # For the usbretro_nuon target
+add_executable(usbretro_loopy) # For the usbretro_loopy target
 
 target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
 target_compile_definitions(usbretro_xb1 PRIVATE CONFIG_XB1=1)
 target_compile_definitions(usbretro_nuon PRIVATE CONFIG_NUON=1)
+target_compile_definitions(usbretro_loopy PRIVATE CONFIG_LOOPY=1)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_xb1 PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_nuon PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_loopy PRIVATE -O3) # Set optimization level to O3 for your_target
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
@@ -42,6 +45,7 @@ pico_add_extra_outputs(usbretro_pce)
 pico_add_extra_outputs(usbretro_ngc)
 pico_add_extra_outputs(usbretro_xb1)
 pico_add_extra_outputs(usbretro_nuon)
+pico_add_extra_outputs(usbretro_loopy)
 
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/clock.pio )
@@ -53,6 +57,8 @@ pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pi
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_read.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_send.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
+pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/console/loopy/loopy.pio )
+pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
@@ -106,6 +112,11 @@ target_sources(usbretro_nuon PUBLIC # For NUON
     ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon/nuon.c
 )
 
+target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
+    ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/loopy/loopy.c
+)
+
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -124,6 +135,11 @@ target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
 )
 
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+
+target_include_directories(usbretro_loopy PUBLIC # FOR LOOPY
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
@@ -153,6 +169,11 @@ target_link_libraries(usbretro_xb1 PRIVATE # FOR XB1
 )
 
 target_link_libraries(usbretro_nuon PRIVATE # FOR NUON
+    ${COMMON_LIBRARIES}
+    pico_bit_ops
+)
+
+target_link_libraries(usbretro_loopy PRIVATE # FOR LOOPY
     ${COMMON_LIBRARIES}
     pico_bit_ops
 )

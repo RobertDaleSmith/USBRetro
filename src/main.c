@@ -20,6 +20,8 @@
 // include console specific handling
 #ifdef CONFIG_NGC
 #include "console/gamecube/gamecube.h"
+#elif CONFIG_LOOPY
+#include "console/loopy/loopy.h"
 #elif CONFIG_NUON
 #include "console/nuon/nuon.h"
 #elif CONFIG_PCE
@@ -83,8 +85,10 @@ int main(void)
 
   board_init();
 
+#ifndef CONFIG_LOOPY
   // pause briefly for stability before starting activity
   sleep_ms(250);
+#endif
 
   hid_app_init(); // init hid device interfaces
 
@@ -97,6 +101,9 @@ int main(void)
 #ifdef CONFIG_NGC
   printf("GAMECUBE");
   ngc_init();
+#elif CONFIG_LOOPY
+  printf("LOOPY");
+  loopy_init();
 #elif CONFIG_NUON
   printf("NUON");
   nuon_init();
