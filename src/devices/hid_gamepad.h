@@ -33,6 +33,10 @@ typedef union
     bool button11 : 1;
     bool button12 : 1;
 
+    // TODO: add support for A1/A2 buttons for dinput/generic HID gamepad input
+    // bool button13 : 1;
+    // bool button14 : 1;
+
     uint8_t x, y, z, rz, rx, ry; // analog joystick/triggers
   };
   struct

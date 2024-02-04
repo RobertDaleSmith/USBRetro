@@ -104,27 +104,26 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool dpad_right = ((ds4_report.dpad >= 1 && ds4_report.dpad <= 3));
       bool dpad_down  = ((ds4_report.dpad >= 3 && ds4_report.dpad <= 5));
       bool dpad_left  = ((ds4_report.dpad >= 5 && ds4_report.dpad <= 7));
-      bool button_z = ds4_report.share || ds4_report.tpad;
-      bool has_6btns = true;
 
-      buttons = (((ds4_report.r3)       ? 0x00 : 0x20000) |
-                 ((ds4_report.l3)       ? 0x00 : 0x10000) |
-                 ((ds4_report.r1)       ? 0x00 : 0x08000) |
-                 ((ds4_report.l1)       ? 0x00 : 0x04000) |
-                 ((ds4_report.square)   ? 0x00 : 0x02000) |
-                 ((ds4_report.triangle) ? 0x00 : 0x01000) |
-                 ((has_6btns)           ? 0x00 : 0x00800) |
-                 ((ds4_report.ps)       ? 0x00 : 0x00400) |
-                 ((ds4_report.r2)       ? 0x00 : 0x00200) |
-                 ((ds4_report.l2)       ? 0x00 : 0x00100) |
-                 ((dpad_left)           ? 0x00 : 0x00008) |
-                 ((dpad_down)           ? 0x00 : 0x00004) |
-                 ((dpad_right)          ? 0x00 : 0x00002) |
-                 ((dpad_up)             ? 0x00 : 0x00001) |
-                 ((ds4_report.option)   ? 0x00 : 0x00080) |
-                 ((button_z)            ? 0x00 : 0x00040) |
-                 ((ds4_report.cross)    ? 0x00 : 0x00020) |
-                 ((ds4_report.circle)   ? 0x00 : 0x00010));
+      buttons = (((dpad_up)             ? 0x00 : USBR_BUTTON_DU) |
+                 ((dpad_down)           ? 0x00 : USBR_BUTTON_DD) |
+                 ((dpad_left)           ? 0x00 : USBR_BUTTON_DL) |
+                 ((dpad_right)          ? 0x00 : USBR_BUTTON_DR) |
+                 ((ds4_report.cross)    ? 0x00 : USBR_BUTTON_B1) |
+                 ((ds4_report.circle)   ? 0x00 : USBR_BUTTON_B2) |
+                 ((ds4_report.square)   ? 0x00 : USBR_BUTTON_B3) |
+                 ((ds4_report.triangle) ? 0x00 : USBR_BUTTON_B4) |
+                 ((ds4_report.l1)       ? 0x00 : USBR_BUTTON_L1) |
+                 ((ds4_report.r1)       ? 0x00 : USBR_BUTTON_R1) |
+                 ((ds4_report.l2)       ? 0x00 : USBR_BUTTON_L2) |
+                 ((ds4_report.r2)       ? 0x00 : USBR_BUTTON_R2) |
+                 ((ds4_report.share)    ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds4_report.option)   ? 0x00 : USBR_BUTTON_S2) |
+                 ((ds4_report.l3)       ? 0x00 : USBR_BUTTON_L3) |
+                 ((ds4_report.r3)       ? 0x00 : USBR_BUTTON_R3) |
+                 ((ds4_report.ps)       ? 0x00 : USBR_BUTTON_A1) |
+                 ((ds4_report.tpad)     ? 0x00 : USBR_BUTTON_A2) |
+                 ((1)/*has_6btns*/      ? 0x00 : 0x800));
 
       uint8_t analog_1x = ds4_report.x;
       uint8_t analog_1y = 255 - ds4_report.y;

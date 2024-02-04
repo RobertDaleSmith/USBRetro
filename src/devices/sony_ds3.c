@@ -122,26 +122,25 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       bool button_r1 = ds3_report.r1;
       bool button_l1 = ds3_report.l1;
 #endif
-      bool has_6btns = true;
 
-      buttons = (((ds3_report.r3)       ? 0x00 : 0x20000) |
-                 ((ds3_report.l3)       ? 0x00 : 0x10000) |
-                 ((button_r1)           ? 0x00 : 0x08000) |
-                 ((button_l1)           ? 0x00 : 0x04000) |
-                 ((ds3_report.square)   ? 0x00 : 0x02000) |
-                 ((ds3_report.triangle) ? 0x00 : 0x01000) |
-                 ((has_6btns)           ? 0x00 : 0x00800) |
-                 ((ds3_report.ps)       ? 0x00 : 0x00400) |
-                 ((ds3_report.r2)       ? 0x00 : 0x00200) |
-                 ((ds3_report.l2)       ? 0x00 : 0x00100) |
-                 ((ds3_report.left)     ? 0x00 : 0x00008) |
-                 ((ds3_report.down)     ? 0x00 : 0x00004) |
-                 ((ds3_report.right)    ? 0x00 : 0x00002) |
-                 ((ds3_report.up)       ? 0x00 : 0x00001) |
-                 ((ds3_report.start)    ? 0x00 : 0x00080) |
-                 ((ds3_report.select)   ? 0x00 : 0x00040) |
-                 ((ds3_report.cross)    ? 0x00 : 0x00020) |
-                 ((ds3_report.circle)   ? 0x00 : 0x00010));
+      buttons = (((ds3_report.up)       ? 0x00 : USBR_BUTTON_DU) |
+                 ((ds3_report.down)     ? 0x00 : USBR_BUTTON_DD) |
+                 ((ds3_report.left)     ? 0x00 : USBR_BUTTON_DL) |
+                 ((ds3_report.right)    ? 0x00 : USBR_BUTTON_DR) |
+                 ((ds3_report.cross)    ? 0x00 : USBR_BUTTON_B1) |
+                 ((ds3_report.circle)   ? 0x00 : USBR_BUTTON_B2) |
+                 ((ds3_report.square)   ? 0x00 : USBR_BUTTON_B3) |
+                 ((ds3_report.triangle) ? 0x00 : USBR_BUTTON_B4) |
+                 ((button_l1)           ? 0x00 : USBR_BUTTON_L1) |
+                 ((button_r1)           ? 0x00 : USBR_BUTTON_R1) |
+                 ((ds3_report.l2)       ? 0x00 : USBR_BUTTON_L2) |
+                 ((ds3_report.r2)       ? 0x00 : USBR_BUTTON_R2) |
+                 ((ds3_report.select)   ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds3_report.start)    ? 0x00 : USBR_BUTTON_S2) |
+                 ((ds3_report.l3)       ? 0x00 : USBR_BUTTON_L3) |
+                 ((ds3_report.r3)       ? 0x00 : USBR_BUTTON_R3) |
+                 ((ds3_report.ps)       ? 0x00 : USBR_BUTTON_A1) |
+                 ((1)/*has_6btns*/      ? 0x00 : 0x800));
 
       // keep analog within range [1-255]
       ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);

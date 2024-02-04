@@ -172,10 +172,10 @@ void __not_in_flash_func(core1_entry)(void)
     mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 1, rVal);
 
     // Individual buttons
-    gpio_put(XBOX_B_BTN_PIN, ((players[0].output_buttons & 0x0010) == 0) ? 0 : 1);
-    gpio_put(XBOX_GUIDE_PIN, ((players[0].output_buttons & 0x0400) == 0) ? 0 : 1);
-    gpio_put(XBOX_R3_BTN_PIN, ((players[0].output_buttons & 0x20000) == 0) ? 0 : 1);
-    gpio_put(XBOX_L3_BTN_PIN, ((players[0].output_buttons & 0x10000) == 0) ? 0 : 1);
+    gpio_put(XBOX_B_BTN_PIN, ((players[0].output_buttons & USBR_BUTTON_B2) == 0) ? 0 : 1);
+    gpio_put(XBOX_GUIDE_PIN, ((players[0].output_buttons & USBR_BUTTON_A1) == 0) ? 0 : 1);
+    gpio_put(XBOX_R3_BTN_PIN,((players[0].output_buttons & USBR_BUTTON_R3) == 0) ? 0 : 1);
+    gpio_put(XBOX_L3_BTN_PIN,((players[0].output_buttons & USBR_BUTTON_L3) == 0) ? 0 : 1);
 
     update_pending = false;
 
@@ -212,19 +212,19 @@ void __not_in_flash_func(update_output)(void)
     // base controller buttons
     int16_t byte = (players[i].output_buttons & 0xffff);
     i2c_slave_read_buffer[0] = 0xFA;
-    i2c_slave_read_buffer[0] ^= ((byte & 0x02000) == 0) ? 0x02 : 0; // X
-    i2c_slave_read_buffer[0] ^= ((byte & 0x01000) == 0) ? 0x08 : 0; // Y
-    i2c_slave_read_buffer[0] ^= ((byte & 0x08000) == 0) ? 0x10 : 0; // R
-    i2c_slave_read_buffer[0] ^= ((byte & 0x04000) == 0) ? 0x20 : 0; // L
-    i2c_slave_read_buffer[0] ^= ((byte & 0x0080) == 0) ? 0x80 : 0; // MENU
+    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B3) == 0) ? 0x02 : 0; // X
+    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B4) == 0) ? 0x08 : 0; // Y
+    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_R1) == 0) ? 0x10 : 0; // R
+    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_L1) == 0) ? 0x20 : 0; // L
+    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_S2) == 0) ? 0x80 : 0; // MENU
 
     i2c_slave_read_buffer[1] = 0xFF;
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0001) == 0) ? 0x02 : 0; // UP
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0002) == 0) ? 0x04 : 0; // RIGHT
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0004) == 0) ? 0x10 : 0; // DOWN
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0008) == 0) ? 0x08 : 0; // LEFT
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0040) == 0) ? 0x20 : 0; // VIEW
-    i2c_slave_read_buffer[1] ^= ((byte & 0x0020) == 0) ? 0x80 : 0; // A
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DU) == 0) ? 0x02 : 0; // UP
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DR) == 0) ? 0x04 : 0; // RIGHT
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DD) == 0) ? 0x10 : 0; // DOWN
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DL) == 0) ? 0x08 : 0; // LEFT
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_S1) == 0) ? 0x20 : 0; // VIEW
+    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_B1) == 0) ? 0x80 : 0; // A
   }
 
   codes_task();
@@ -248,14 +248,12 @@ void __not_in_flash_func(post_globals)(
   uint32_t keys,
   uint8_t quad_x)
 {
-  bool has6Btn = !(buttons & 0x0800);
-
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0800)) || keys;
+  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
   if (player_index < 0 && buttons_pressed)
   {
     printf("[add player] [%d, %d]\n", dev_addr, instance);
@@ -277,9 +275,9 @@ void __not_in_flash_func(post_globals)(
     }
 
     // maps View + Menu + Up button combo to Guide button
-    if (!((players[player_index].global_buttons) & 0xC1)) {
-      players[player_index].global_buttons ^= 0x400;
-      players[player_index].global_buttons |= 0xC1;
+    if (!((players[player_index].global_buttons) & XBOX_GUIDE_COMBO)) {
+      players[player_index].global_buttons ^= USBR_BUTTON_A1; // Guide button
+      players[player_index].global_buttons |= XBOX_GUIDE_COMBO; // Negate combo buttons
     }
 
     // cache analog and button values to player object
@@ -291,11 +289,11 @@ void __not_in_flash_func(post_globals)(
     players[player_index].output_analog_r = analog_r;
     players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
-    if (!((players[player_index].output_buttons) & 0x00200))
+    if (!((players[player_index].output_buttons) & USBR_BUTTON_R2))
     {
       players[player_index].output_analog_r = 255;
     }
-    if (!((players[player_index].output_buttons) & 0x00100))
+    if (!((players[player_index].output_buttons) & USBR_BUTTON_L2))
     {
       players[player_index].output_analog_l = 255;
     }
