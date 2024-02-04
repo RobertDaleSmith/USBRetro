@@ -1,0 +1,53 @@
+;
+; By Robrt Dale Smith (c) 2022
+;
+;
+; Interfacing for a Casio Loopy controllers
+;
+
+.program loopy
+
+; Wait for the jump pin to go high
+wait_for_trigger:
+    jmp pin, continue
+    jmp wait_for_trigger
+
+; Output the first 4 bits of the word from the CPU
+continue:
+    out pins, 4
+
+; Loop back to wait for the next trigger
+    jmp wait_for_trigger
+
+% c-sdk {
+static inline void loopy_program_init(PIO pio, uint sm, uint offset, uint jmppin, uint outpin) {
+    pio_sm_config c = loopy_program_get_default_config(offset);
+
+    // Connect these GPIOs to this PIO block
+    pio_gpio_init(pio, jmppin);
+
+    pio_gpio_init(pio, outpin);
+    pio_gpio_init(pio, outpin + 1);
+    pio_gpio_init(pio, outpin + 2);
+    pio_gpio_init(pio, outpin + 3);
+
+    // No need to set INPINs; we need a JMP pin though
+
+    // Set the JMP pin to the provided `jmppin` parameter.
+    sm_config_set_jmp_pin (&c, jmppin);
+
+    // Set the OUT pin to the provided `outpin` parameter. This is where the data is sent out
+    sm_config_set_out_pins(&c, outpin, 4);
+
+    sm_config_set_out_shift(
+        &c,
+        false, // Shift-to-right = false
+        false, // Autopull disabled
+        32     // Doesn't matter in this case as autopull is disabled
+    );
+
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
