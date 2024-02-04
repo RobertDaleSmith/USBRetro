@@ -45,26 +45,25 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     bool dpad_right = (psc_report.dpad == 2 || psc_report.dpad == 6 || psc_report.dpad == 10);
     bool dpad_down  = (psc_report.dpad >= 8 && psc_report.dpad <= 10);
     bool dpad_left  = (psc_report.dpad == 0 || psc_report.dpad == 4 || psc_report.dpad == 8);
-    bool has_6btns = true;
 
-    buttons = (((false)               ? 0x00 : 0x20000) |
-               ((false)               ? 0x00 : 0x10000) |
-               ((psc_report.r1)       ? 0x00 : 0x08000) |
-               ((psc_report.l1)       ? 0x00 : 0x4000) |
-               ((psc_report.square)   ? 0x00 : 0x2000) |
-               ((psc_report.triangle) ? 0x00 : 0x1000) |
-               ((has_6btns)           ? 0x00 : 0x0800) |
-               ((psc_report.ps)       ? 0x00 : 0x0400) |
-               ((psc_report.r2)       ? 0x00 : 0x0200) |
-               ((psc_report.l2)       ? 0x00 : 0x0100) |
-               ((dpad_left)           ? 0x00 : 0x08) |
-               ((dpad_down)           ? 0x00 : 0x04) |
-               ((dpad_right)          ? 0x00 : 0x02) |
-               ((dpad_up)             ? 0x00 : 0x01) |
-               ((psc_report.option)   ? 0x00 : 0x80) |
-               ((psc_report.share)    ? 0x00 : 0x40) |
-               ((psc_report.cross)    ? 0x00 : 0x20) |
-               ((psc_report.circle)   ? 0x00 : 0x10));
+    buttons = (((dpad_up)             ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)           ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)           ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)          ? 0x00 : USBR_BUTTON_DR) |
+               ((psc_report.cross)    ? 0x00 : USBR_BUTTON_B1) |
+               ((psc_report.circle)   ? 0x00 : USBR_BUTTON_B2) |
+               ((psc_report.square)   ? 0x00 : USBR_BUTTON_B3) |
+               ((psc_report.triangle) ? 0x00 : USBR_BUTTON_B4) |
+               ((psc_report.l1)       ? 0x00 : USBR_BUTTON_L1) |
+               ((psc_report.r1)       ? 0x00 : USBR_BUTTON_R1) |
+               ((psc_report.l2)       ? 0x00 : USBR_BUTTON_L2) |
+               ((psc_report.r2)       ? 0x00 : USBR_BUTTON_R2) |
+               ((psc_report.share)    ? 0x00 : USBR_BUTTON_S1) |
+               ((psc_report.option)   ? 0x00 : USBR_BUTTON_S2) |
+               ((0)                   ? 0x00 : USBR_BUTTON_L3) |
+               ((0)                   ? 0x00 : USBR_BUTTON_R3) |
+               ((psc_report.ps)       ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/      ? 0x00 : 0x800));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait

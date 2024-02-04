@@ -72,8 +72,10 @@ void __not_in_flash_func(core1_entry)(void)
     int16_t player_2 = (players[1].output_buttons & 0xffff);
     int16_t player_3 = (players[2].output_buttons & 0xffff);
     int16_t player_4 = (players[3].output_buttons & 0xffff);
-    bool isMouse = (!(player_1 & 0x000f)) || (!(player_2 & 0x000f)) ||
-                   (!(player_3 & 0x000f)) || (!(player_4 & 0x000f));
+    bool isMouse = (!(player_1 & 0x0f))
+                || (!(player_2 & 0x0f))
+                || (!(player_3 & 0x0f))
+                || (!(player_4 & 0x0f));
 
     if (!isMouse) {
       // Gamepad output
@@ -87,80 +89,80 @@ void __not_in_flash_func(core1_entry)(void)
       if (gpio_get(ROW0_PIN)) {
         // Player 1 - ROW0
         gpio_put(BIT0_PIN, 1); // Presence
-        gpio_put(BIT1_PIN, ((player_1 & 0x0080) == 0) ? 1 : 0); // Start
-        gpio_put(BIT2_PIN, ((player_1 & 0x4000) == 0) ? 1 : 0); // L
-        gpio_put(BIT3_PIN, ((player_1 & 0x8000) == 0) ? 1 : 0); // R
+        gpio_put(BIT1_PIN, ((player_1 & USBR_BUTTON_S2) == 0) ? 1 : 0); // Start
+        gpio_put(BIT2_PIN, ((player_1 & USBR_BUTTON_L1) == 0) ? 1 : 0); // L
+        gpio_put(BIT3_PIN, ((player_1 & USBR_BUTTON_R1) == 0) ? 1 : 0); // R
 
         // Player 2 - ROW0
         gpio_put(BIT4_PIN, 1); // Presence
-        gpio_put(BIT5_PIN, ((player_2 & 0x0080) == 0) ? 1 : 0); // Start
-        gpio_put(BIT6_PIN, ((player_2 & 0x4000) == 0) ? 1 : 0); // L
-        gpio_put(BIT7_PIN, ((player_2 & 0x8000) == 0) ? 1 : 0); // R
+        gpio_put(BIT5_PIN, ((player_2 & USBR_BUTTON_S2) == 0) ? 1 : 0); // Start
+        gpio_put(BIT6_PIN, ((player_2 & USBR_BUTTON_L1) == 0) ? 1 : 0); // L
+        gpio_put(BIT7_PIN, ((player_2 & USBR_BUTTON_R1) == 0) ? 1 : 0); // R
 
       } else if (gpio_get(ROW1_PIN)) {
         // Player 1 - ROW1
-        gpio_put(BIT0_PIN, ((player_1 & 0x0020) == 0) ? 1 : 0); // A
-        gpio_put(BIT1_PIN, ((player_1 & 0x2000) == 0) ? 1 : 0); // D
-        gpio_put(BIT2_PIN, ((player_1 & 0x1000) == 0) ? 1 : 0); // C
-        gpio_put(BIT3_PIN, ((player_1 & 0x0010) == 0) ? 1 : 0); // B
+        gpio_put(BIT0_PIN, ((player_1 & USBR_BUTTON_B1) == 0) ? 1 : 0); // A
+        gpio_put(BIT1_PIN, ((player_1 & USBR_BUTTON_B4) == 0) ? 1 : 0); // D
+        gpio_put(BIT2_PIN, ((player_1 & USBR_BUTTON_B3) == 0) ? 1 : 0); // C
+        gpio_put(BIT3_PIN, ((player_1 & USBR_BUTTON_B2) == 0) ? 1 : 0); // B
 
         // Player 2 - ROW1
-        gpio_put(BIT4_PIN, ((player_2 & 0x0020) == 0) ? 1 : 0); // A
-        gpio_put(BIT5_PIN, ((player_2 & 0x2000) == 0) ? 1 : 0); // D
-        gpio_put(BIT6_PIN, ((player_2 & 0x1000) == 0) ? 1 : 0); // C
-        gpio_put(BIT7_PIN, ((player_2 & 0x0010) == 0) ? 1 : 0); // B
+        gpio_put(BIT4_PIN, ((player_2 & USBR_BUTTON_B1) == 0) ? 1 : 0); // A
+        gpio_put(BIT5_PIN, ((player_2 & USBR_BUTTON_B4) == 0) ? 1 : 0); // D
+        gpio_put(BIT6_PIN, ((player_2 & USBR_BUTTON_B3) == 0) ? 1 : 0); // C
+        gpio_put(BIT7_PIN, ((player_2 & USBR_BUTTON_B2) == 0) ? 1 : 0); // B
 
       } else if (gpio_get(ROW2_PIN)) {
         // Player 1 - ROW2
-        gpio_put(BIT0_PIN, ((player_1 & 0x0001) == 0) ? 1 : 0); // Up
-        gpio_put(BIT1_PIN, ((player_1 & 0x0004) == 0) ? 1 : 0); // Down
-        gpio_put(BIT2_PIN, ((player_1 & 0x0008) == 0) ? 1 : 0); // Left
-        gpio_put(BIT3_PIN, ((player_1 & 0x0002) == 0) ? 1 : 0); // Right
+        gpio_put(BIT0_PIN, ((player_1 & USBR_BUTTON_DU) == 0) ? 1 : 0); // Up
+        gpio_put(BIT1_PIN, ((player_1 & USBR_BUTTON_DD) == 0) ? 1 : 0); // Down
+        gpio_put(BIT2_PIN, ((player_1 & USBR_BUTTON_DL) == 0) ? 1 : 0); // Left
+        gpio_put(BIT3_PIN, ((player_1 & USBR_BUTTON_DR) == 0) ? 1 : 0); // Right
 
         // Player 2 - ROW2
-        gpio_put(BIT4_PIN, ((player_2 & 0x0001) == 0) ? 1 : 0); // Up
-        gpio_put(BIT5_PIN, ((player_2 & 0x0004) == 0) ? 1 : 0); // Down
-        gpio_put(BIT6_PIN, ((player_2 & 0x0008) == 0) ? 1 : 0); // Left
-        gpio_put(BIT7_PIN, ((player_2 & 0x0002) == 0) ? 1 : 0); // Right
+        gpio_put(BIT4_PIN, ((player_2 & USBR_BUTTON_DU) == 0) ? 1 : 0); // Up
+        gpio_put(BIT5_PIN, ((player_2 & USBR_BUTTON_DD) == 0) ? 1 : 0); // Down
+        gpio_put(BIT6_PIN, ((player_2 & USBR_BUTTON_DL) == 0) ? 1 : 0); // Left
+        gpio_put(BIT7_PIN, ((player_2 & USBR_BUTTON_DR) == 0) ? 1 : 0); // Right
 
       } else if (gpio_get(ROW3_PIN)) {
         // Player 3 - ROW0
         gpio_put(BIT0_PIN, 1); // Presence
-        gpio_put(BIT1_PIN, ((player_3 & 0x0080) == 0) ? 1 : 0); // Start
-        gpio_put(BIT2_PIN, ((player_3 & 0x4000) == 0) ? 1 : 0); // L
-        gpio_put(BIT3_PIN, ((player_3 & 0x8000) == 0) ? 1 : 0); // R
+        gpio_put(BIT1_PIN, ((player_3 & USBR_BUTTON_S2) == 0) ? 1 : 0); // Start
+        gpio_put(BIT2_PIN, ((player_3 & USBR_BUTTON_L1) == 0) ? 1 : 0); // L
+        gpio_put(BIT3_PIN, ((player_3 & USBR_BUTTON_R1) == 0) ? 1 : 0); // R
 
         // Player 4 - ROW0
         gpio_put(BIT4_PIN, 1); // Presence
-        gpio_put(BIT5_PIN, ((player_4 & 0x0080) == 0) ? 1 : 0); // Start
-        gpio_put(BIT6_PIN, ((player_4 & 0x4000) == 0) ? 1 : 0); // L
-        gpio_put(BIT7_PIN, ((player_4 & 0x8000) == 0) ? 1 : 0); // R
+        gpio_put(BIT5_PIN, ((player_4 & USBR_BUTTON_S2) == 0) ? 1 : 0); // Start
+        gpio_put(BIT6_PIN, ((player_4 & USBR_BUTTON_L1) == 0) ? 1 : 0); // L
+        gpio_put(BIT7_PIN, ((player_4 & USBR_BUTTON_R1) == 0) ? 1 : 0); // R
 
       } else if (gpio_get(ROW4_PIN)) {
         // Player 3 - ROW1
-        gpio_put(BIT0_PIN, ((player_3 & 0x0020) == 0) ? 1 : 0); // A
-        gpio_put(BIT1_PIN, ((player_3 & 0x2000) == 0) ? 1 : 0); // D
-        gpio_put(BIT2_PIN, ((player_3 & 0x1000) == 0) ? 1 : 0); // C
-        gpio_put(BIT3_PIN, ((player_3 & 0x0010) == 0) ? 1 : 0); // B
+        gpio_put(BIT0_PIN, ((player_3 & USBR_BUTTON_B1) == 0) ? 1 : 0); // A
+        gpio_put(BIT1_PIN, ((player_3 & USBR_BUTTON_B4) == 0) ? 1 : 0); // D
+        gpio_put(BIT2_PIN, ((player_3 & USBR_BUTTON_B3) == 0) ? 1 : 0); // C
+        gpio_put(BIT3_PIN, ((player_3 & USBR_BUTTON_B2) == 0) ? 1 : 0); // B
 
         // Player 4 - ROW1
-        gpio_put(BIT4_PIN, ((player_4 & 0x0020) == 0) ? 1 : 0); // A
-        gpio_put(BIT5_PIN, ((player_4 & 0x2000) == 0) ? 1 : 0); // D
-        gpio_put(BIT6_PIN, ((player_4 & 0x1000) == 0) ? 1 : 0); // C
-        gpio_put(BIT7_PIN, ((player_4 & 0x0010) == 0) ? 1 : 0); // B
+        gpio_put(BIT4_PIN, ((player_4 & USBR_BUTTON_B1) == 0) ? 1 : 0); // A
+        gpio_put(BIT5_PIN, ((player_4 & USBR_BUTTON_B4) == 0) ? 1 : 0); // D
+        gpio_put(BIT6_PIN, ((player_4 & USBR_BUTTON_B3) == 0) ? 1 : 0); // C
+        gpio_put(BIT7_PIN, ((player_4 & USBR_BUTTON_B2) == 0) ? 1 : 0); // B
 
       } else if (gpio_get(ROW5_PIN)) {
         // Player 3 - ROW2
-        gpio_put(BIT0_PIN, ((player_3 & 0x0001) == 0) ? 1 : 0); // Up
-        gpio_put(BIT1_PIN, ((player_3 & 0x0004) == 0) ? 1 : 0); // Down
-        gpio_put(BIT2_PIN, ((player_3 & 0x0008) == 0) ? 1 : 0); // Left
-        gpio_put(BIT3_PIN, ((player_3 & 0x0002) == 0) ? 1 : 0); // Right
+        gpio_put(BIT0_PIN, ((player_3 & USBR_BUTTON_DU) == 0) ? 1 : 0); // Up
+        gpio_put(BIT1_PIN, ((player_3 & USBR_BUTTON_DD) == 0) ? 1 : 0); // Down
+        gpio_put(BIT2_PIN, ((player_3 & USBR_BUTTON_DL) == 0) ? 1 : 0); // Left
+        gpio_put(BIT3_PIN, ((player_3 & USBR_BUTTON_DR) == 0) ? 1 : 0); // Right
 
         // Player 4 - ROW2
-        gpio_put(BIT4_PIN, ((player_4 & 0x0001) == 0) ? 1 : 0); // Up
-        gpio_put(BIT5_PIN, ((player_4 & 0x0004) == 0) ? 1 : 0); // Down
-        gpio_put(BIT6_PIN, ((player_4 & 0x0008) == 0) ? 1 : 0); // Left
-        gpio_put(BIT7_PIN, ((player_4 & 0x0002) == 0) ? 1 : 0); // Right
+        gpio_put(BIT4_PIN, ((player_4 & USBR_BUTTON_DU) == 0) ? 1 : 0); // Up
+        gpio_put(BIT5_PIN, ((player_4 & USBR_BUTTON_DD) == 0) ? 1 : 0); // Down
+        gpio_put(BIT6_PIN, ((player_4 & USBR_BUTTON_DL) == 0) ? 1 : 0); // Left
+        gpio_put(BIT7_PIN, ((player_4 & USBR_BUTTON_DR) == 0) ? 1 : 0); // Right
       } else {
         // Time between ROWs
         gpio_put(BIT0_PIN, 0);
@@ -182,14 +184,17 @@ void __not_in_flash_func(core1_entry)(void)
       // [X encoder raw]   [Y encoder raw]   Left     N/C      Right    Presence
       //
 
-      gpio_put(BIT0_PIN, ((player_1 & 0x0008) == 0) ? 1 : 0); // X
-      gpio_put(BIT1_PIN, ((player_1 & 0x0004) == 0) ? 1 : 0); // X
-      gpio_put(BIT2_PIN, ((player_1 & 0x0001) == 0) ? 1 : 0); // Y
-      gpio_put(BIT3_PIN, ((player_1 & 0x0004) == 0) ? 1 : 0); // Y
+      // TODO: actually parse mouse global into RAW gray code.
+      //       May require comparing with last x/y to get direction.
+      //       [0, 1, 3, 2 ... for one direction and 2, 3, 1, 0 ... for other]
+      gpio_put(BIT0_PIN, ((player_1 & USBR_BUTTON_DL) == 0) ? 1 : 0); // X
+      gpio_put(BIT1_PIN, ((player_1 & USBR_BUTTON_DR) == 0) ? 1 : 0); // X
+      gpio_put(BIT2_PIN, ((player_1 & USBR_BUTTON_DU) == 0) ? 1 : 0); // Y
+      gpio_put(BIT3_PIN, ((player_1 & USBR_BUTTON_DD) == 0) ? 1 : 0); // Y
 
-      gpio_put(BIT4_PIN, ((player_1 & 0x0020) == 0) ? 0 : 1); // Left 
-      gpio_put(BIT5_PIN, 0);
-      gpio_put(BIT6_PIN, ((player_1 & 0x0010) == 0) ? 0 : 1); // Right 
+      gpio_put(BIT4_PIN, ((player_1 & USBR_BUTTON_B1) == 0) ? 0 : 1); // Left
+      gpio_put(BIT5_PIN, 0); // N/C
+      gpio_put(BIT6_PIN, ((player_1 & USBR_BUTTON_B2) == 0) ? 0 : 1); // Right
       gpio_put(BIT7_PIN, 1); // Presence
 
       // TODO: handle multiple mice + controllers.
@@ -223,37 +228,37 @@ void __not_in_flash_func(update_output)(void)
   // {
   // }
 
-  if (playersCount < 1)
-  {
-    bytes[0] = 0x00;
-    bytes[1] = 0x00;
-    bytes[2] = 0x00;
-  } else {
-    bytes[0] = 0x01;
-    bytes[1] = players[0].output_buttons & 0x0f;
-    bytes[2] = players[0].output_buttons & 0xf0;
-  }
+  // TODO: parse USBRetro button state to output_word here
+  // if (playersCount < 1)
+  // {
+  //   bytes[0] = 0x00;
+  //   bytes[1] = 0x00;
+  //   bytes[2] = 0x00;
+  // } else {
+  //   bytes[0] = 0x01;
+  //   bytes[1] = players[0].output_buttons & 0x0f;
+  //   bytes[2] = players[0].output_buttons & 0xf0;
+  // }
 
-  bool isMouse = !(players[0].output_buttons & 0x000f);
+  // bool isMouse = !(players[0].output_buttons & 0x0f);
 
-  // mouse x/y states
-  if (isMouse)
-  {
-    // TODO:
-    int8_t mouse_byte = 0b10000000;
+  // // mouse x/y states
+  // if (isMouse)
+  // {
+  //   // TODO:
+  //   int8_t mouse_byte = 0b10000000;
 
-    bytes[0] = mouse_byte;
-    bytes[1] = mouse_byte;
-    bytes[2] = mouse_byte;
-  }
+  //   bytes[0] = mouse_byte;
+  //   bytes[1] = mouse_byte;
+  //   bytes[2] = mouse_byte;
+  // }
 
-  output_word = ((bytes[0] & 0xff))      | // ROW0
-                ((bytes[1] & 0xff) << 8) | // ROW1
-                ((bytes[2] & 0xff) << 16); // ROW2
+  // output_word = ((bytes[0] & 0xff))      | // ROW0
+  //               ((bytes[1] & 0xff) << 8) | // ROW1
+  //               ((bytes[2] & 0xff) << 16); // ROW2
 
   codes_task();
 }
-
 
 //
 // post_globals - accumulate the many intermediate mouse scans (~1ms)
@@ -270,7 +275,7 @@ void __not_in_flash_func(post_globals)(
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0800)) || keys;
+  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
   if (player_index < 0 && buttons_pressed)
   {
     printf("[add player] [%d, %d]\n", dev_addr, instance);

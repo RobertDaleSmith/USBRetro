@@ -267,18 +267,18 @@ void __not_in_flash_func(update_output)(void)
     if (players[0].button_mode != BUTTON_MODE_KB)
     {
       // global buttons
-      gc_report.dpad_up    |= ((byte & 0x0001) == 0) ? 1 : 0; // up
-      gc_report.dpad_right |= ((byte & 0x0002) == 0) ? 1 : 0; // right
-      gc_report.dpad_down  |= ((byte & 0x0004) == 0) ? 1 : 0; // down
-      gc_report.dpad_left  |= ((byte & 0x0008) == 0) ? 1 : 0; // left
-      gc_report.a          |= ((byte & 0x0010) == 0) ? 1 : 0; // b
-      gc_report.b          |= ((byte & 0x0020) == 0) ? 1 : 0; // a
-      gc_report.z          |= ((byte & 0x0040) == 0) ? 1 : 0; // select
-      gc_report.start      |= ((byte & 0x0080) == 0) ? 1 : 0; // start
-      gc_report.x          |= ((byte & 0x01000) == 0) ? 1 : 0; // y
-      gc_report.y          |= ((byte & 0x02000) == 0) ? 1 : 0; // x
-      gc_report.l          |= ((byte & 0x04000) == 0) ? 1 : 0; // l
-      gc_report.r          |= ((byte & 0x08000) == 0) ? 1 : 0; // r
+      gc_report.dpad_up    |= ((byte & USBR_BUTTON_DU) == 0) ? 1 : 0; // up
+      gc_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0; // right
+      gc_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0; // down
+      gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
+      gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
+      gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
+      gc_report.z          |= ((byte & USBR_BUTTON_S1) == 0) ? 1 : 0; // select
+      gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
+      gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
+      gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
+      gc_report.l          |= ((byte & USBR_BUTTON_L1) == 0) ? 1 : 0; // l
+      gc_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
 
       // global dominate axis
       gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x, 128);
@@ -326,7 +326,7 @@ void __not_in_flash_func(post_globals)(
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0800)) || keys;
+  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
   if (player_index < 0 && buttons_pressed)
   {
     printf("[add player] [%d, %d]\n", dev_addr, instance);

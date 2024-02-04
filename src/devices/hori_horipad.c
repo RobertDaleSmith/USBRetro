@@ -54,45 +54,46 @@ void process_hori_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* rep
     bool dpad_right = (input_report.dpad >= 1 && input_report.dpad <= 3);
     bool dpad_down  = (input_report.dpad >= 3 && input_report.dpad <= 5);
     bool dpad_left  = (input_report.dpad >= 5 && input_report.dpad <= 7);
-    bool has_6btns = true;
+
 #ifdef CONFIG_PCE
-    buttons = (((false)           ? 0x00 : 0x20000) |
-               ((false)           ? 0x00 : 0x10000) |
-               ((input_report.l2 || input_report.l1)? 0x00 : 0x8000) |
-               ((input_report.y)  ? 0x00 : 0x4000) |
-               ((input_report.x || input_report.r1) ? 0x00 : 0x2000) |
-               ((input_report.a)  ? 0x00 : 0x1000) |
-               ((has_6btns)       ? 0x00 : 0x0800) |
-               ((input_report.a1) ? 0x00 : 0x0400) |
-               ((false)           ? 0x00 : 0x0200) |
-               ((false)           ? 0x00 : 0x0100) |
-               ((dpad_left)       ? 0x00 : 0x08) |
-               ((dpad_down)       ? 0x00 : 0x04) |
-               ((dpad_right)      ? 0x00 : 0x02) |
-               ((dpad_up)         ? 0x00 : 0x01) |
-               ((input_report.s2) ? 0x00 : 0x80) |
-               ((input_report.s1) ? 0x00 : 0x40) |
-               ((input_report.b)  ? 0x00 : 0x20) |
-               ((input_report.r2) ? 0x00 : 0x10));
+    buttons = (((dpad_up)         ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)       ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)       ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)      ? 0x00 : USBR_BUTTON_DR) |
+               ((input_report.b)  ? 0x00 : USBR_BUTTON_B1) | // II
+               ((input_report.r2) ? 0x00 : USBR_BUTTON_B2) | // I
+               ((input_report.x || input_report.r1) ? 0x00 : USBR_BUTTON_B3) | // IV
+               ((input_report.a)  ? 0x00 : USBR_BUTTON_B4) | // III
+               ((input_report.y)  ? 0x00 : USBR_BUTTON_L1) | // V
+               ((input_report.l2 || input_report.l1)? 0x00 : USBR_BUTTON_R1) | // VI
+               ((0)               ? 0x00 : USBR_BUTTON_L2) |
+               ((0)               ? 0x00 : USBR_BUTTON_R2) |
+               ((input_report.s1) ? 0x00 : USBR_BUTTON_S1) | // Sel
+               ((input_report.s2) ? 0x00 : USBR_BUTTON_S2) | // Run
+               ((0)               ? 0x00 : USBR_BUTTON_L3) |
+               ((0)               ? 0x00 : USBR_BUTTON_R3) |
+               ((input_report.a1) ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/  ? 0x00 : 0x800));
 #else
-    buttons = (((input_report.r3) ? 0x00 : 0x20000) |
-               ((input_report.l3) ? 0x00 : 0x10000) |
-               ((input_report.r1) ? 0x00 : 0x8000) |
-               ((input_report.l1) ? 0x00 : 0x4000) |
-               ((input_report.y)  ? 0x00 : 0x2000) |
-               ((input_report.x)  ? 0x00 : 0x1000) |
-               ((has_6btns)       ? 0x00 : 0x0800) |
-               ((input_report.a1) ? 0x00 : 0x0400) |
-               ((false)           ? 0x00 : 0x0200) |
-               ((false)           ? 0x00 : 0x0100) |
-               ((dpad_left)       ? 0x00 : 0x08) |
-               ((dpad_down)       ? 0x00 : 0x04) |
-               ((dpad_right)      ? 0x00 : 0x02) |
-               ((dpad_up)         ? 0x00 : 0x01) |
-               ((input_report.s2) ? 0x00 : 0x80) |
-               ((input_report.s1 || input_report.r2 || input_report.l2) ? 0x00 : 0x40) |
-               ((input_report.b)  ? 0x00 : 0x20) |
-               ((input_report.a)  ? 0x00 : 0x10));
+    buttons = (((dpad_up)         ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)       ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)       ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)      ? 0x00 : USBR_BUTTON_DR) |
+               ((input_report.b)  ? 0x00 : USBR_BUTTON_B1) |
+               ((input_report.a)  ? 0x00 : USBR_BUTTON_B2) |
+               ((input_report.y)  ? 0x00 : USBR_BUTTON_B3) |
+               ((input_report.x)  ? 0x00 : USBR_BUTTON_B4) |
+               ((input_report.l1) ? 0x00 : USBR_BUTTON_L1) |
+               ((input_report.r1) ? 0x00 : USBR_BUTTON_R1) |
+               ((input_report.l2) ? 0x00 : USBR_BUTTON_L2) |
+               ((input_report.r2) ? 0x00 : USBR_BUTTON_R2) |
+               ((input_report.s1) ? 0x00 : USBR_BUTTON_S1) |
+               ((input_report.s2) ? 0x00 : USBR_BUTTON_S2) |
+               ((input_report.l3) ? 0x00 : USBR_BUTTON_L3) |
+               ((input_report.r3) ? 0x00 : USBR_BUTTON_R3) |
+               ((input_report.a1) ? 0x00 : USBR_BUTTON_A1) |
+               ((input_report.a2) ? 0x00 : USBR_BUTTON_A2) |
+               ((1)/*has_6btns*/  ? 0x00 : 0x800));
 #endif
     // invert vertical axis
     uint8_t axis_x = input_report.axis_x;

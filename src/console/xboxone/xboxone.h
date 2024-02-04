@@ -18,6 +18,9 @@
 #define MCP4728_I2C_ADDR0 0x60
 #define MCP4728_I2C_ADDR1 0x61
 
+// button combos
+#define XBOX_GUIDE_COMBO USBR_BUTTON_S1 | USBR_BUTTON_S2 | USBR_BUTTON_DU
+
 // init gpio
 #ifdef ADAFRUIT_QTPY_RP2040
 

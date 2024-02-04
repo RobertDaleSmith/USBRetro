@@ -59,8 +59,7 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
 
   //------------- button state  -------------//
   uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
-  if ( button_changed_mask & report->buttons)
-  {
+  if (button_changed_mask & report->buttons) {
     TU_LOG1(" %c%c%c%c%c ",
        report->buttons & MOUSE_BUTTON_BACKWARD  ? 'R' : '-',
        report->buttons & MOUSE_BUTTON_FORWARD   ? 'S' : '-',
@@ -75,23 +74,20 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
     previous_middle_button = (report->buttons & MOUSE_BUTTON_MIDDLE);
   }
 
-  if (buttons_swapped)
-  {
+  if (buttons_swapped) {
      buttons = (((0xfff00)) | // no six button controller byte
-                ((0x0000f)) | // no dpad button presses
-                ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x20) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x10));
-  }
-  else
-  {
+                ((0x0000f)) | // no dpad button presses (isMouse)
+                ((report->buttons & MOUSE_BUTTON_RIGHT)   ? 0x00 : USBR_BUTTON_B1) |
+                ((report->buttons & MOUSE_BUTTON_LEFT)    ? 0x00 : USBR_BUTTON_B2) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD) ? 0x00 : USBR_BUTTON_S1) |
+                ((report->buttons & MOUSE_BUTTON_MIDDLE)  ? 0x00 : USBR_BUTTON_S2));
+  } else {
      buttons = (((0xfff00)) |
                 ((0x0000f)) |
-                ((report->buttons & MOUSE_BUTTON_MIDDLE)   ? 0x00 : 0x80) |
-                ((report->buttons & MOUSE_BUTTON_FORWARD ) ? 0x00 : 0x40) |
-                ((report->buttons & MOUSE_BUTTON_LEFT)     ? 0x00 : 0x20) |
-                ((report->buttons & MOUSE_BUTTON_RIGHT)    ? 0x00 : 0x10));
+                ((report->buttons & MOUSE_BUTTON_LEFT)    ? 0x00 : USBR_BUTTON_B1) |
+                ((report->buttons & MOUSE_BUTTON_RIGHT)   ? 0x00 : USBR_BUTTON_B2) |
+                ((report->buttons & MOUSE_BUTTON_FORWARD) ? 0x00 : USBR_BUTTON_S1) |
+                ((report->buttons & MOUSE_BUTTON_MIDDLE)  ? 0x00 : USBR_BUTTON_S2));
   }
 
 #ifdef CONFIG_PCE // mice translation

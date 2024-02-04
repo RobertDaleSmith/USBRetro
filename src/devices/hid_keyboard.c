@@ -243,11 +243,10 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
   uint8_t analog_right_y = 128;
   uint8_t analog_l = 0;
   uint8_t analog_r = 0;
-  bool has_6btns = true;
   bool dpad_left = false, dpad_down = false, dpad_right = false, dpad_up = false;
-  bool btns_run = false, btns_sel = false, btns_one = false, btns_two = false,
-       btns_three = false, btns_four = false, btns_five = false, btns_six = false,
-       btns_home = false;
+  bool btns_run = false, btns_sel = false, btns_b2 = false, btns_b1 = false,
+       btns_b4 = false, btns_b3 = false, btns_l1 = false, btns_r1 = false,
+       btns_a1 = false;
 
   uint32_t hatSwitchKeys = 0x0;
   uint32_t leftStickKeys = 0x0;
@@ -293,16 +292,16 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
       if (report->keycode[i] == HID_KEY_P || report->keycode[i] == HID_KEY_MINUS) btns_sel = true; // Select / Z
 #ifdef CONFIG_PCE
       // more ideal PCE enter button for SuperSD3 Menu
-      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_two = true; // II
-      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_one = true; // I
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_b1 = true; // II
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_b2 = true; // I
 #else
-      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_one = true; // A
-      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_two = true; // B
+      if (report->keycode[i] == HID_KEY_J || report->keycode[i] == HID_KEY_ENTER) btns_b2 = true; // A
+      if (report->keycode[i] == HID_KEY_K || report->keycode[i] == HID_KEY_BACKSPACE) btns_b1 = true; // B
 #endif
-      if (report->keycode[i] == HID_KEY_L) btns_three = true; // X
-      if (report->keycode[i] == HID_KEY_SEMICOLON) btns_four = true; // Y
-      if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_five = true; // L
-      if (report->keycode[i] == HID_KEY_I || report->keycode[i] == HID_KEY_PAGE_DOWN) btns_six = true; // R
+      if (report->keycode[i] == HID_KEY_L) btns_b4 = true; // X
+      if (report->keycode[i] == HID_KEY_SEMICOLON) btns_b3 = true; // Y
+      if (report->keycode[i] == HID_KEY_U || report->keycode[i] == HID_KEY_PAGE_UP) btns_l1 = true; // L
+      if (report->keycode[i] == HID_KEY_I || report->keycode[i] == HID_KEY_PAGE_DOWN) btns_r1 = true; // R
 
 #ifdef CONFIG_NGC
       // light shield
@@ -384,13 +383,13 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
       if (is_ctrl && is_alt && report->keycode[i] == HID_KEY_DELETE)
       {
       #ifdef CONFIG_XB1
-        btns_home = true;
+        btns_a1 = true;
       #elif CONFIG_NGC
         // gc-swiss irg
         btns_sel = true;
         dpad_down = true;
-        btns_two = true;
-        btns_six = true;
+        btns_b1 = true;
+        btns_r1 = true;
       #elif CONFIG_PCE
         // SSDS3 igr
         btns_sel = true;
@@ -435,24 +434,26 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
     dpad_right = hat_switch_x > 128;
   }
 
-  buttons = (((false)      ? 0x00 : 0x20000) | // r3
-             ((false)      ? 0x00 : 0x10000) | // l3
-             ((btns_six)   ? 0x00 : 0x8000) |
-             ((btns_five)  ? 0x00 : 0x4000) |
-             ((btns_four)  ? 0x00 : 0x2000) |
-             ((btns_three) ? 0x00 : 0x1000) |
-             ((has_6btns)  ? 0x00 : 0x0800) |
-             ((btns_home)  ? 0x00 : 0x0400) | // home
-             ((false)      ? 0x00 : 0x0200) | // r2
-             ((false)      ? 0x00 : 0x0100) | // l2
-             ((dpad_left)  ? 0x00 : 0x0008) |
-             ((dpad_down)  ? 0x00 : 0x0004) |
-             ((dpad_right) ? 0x00 : 0x0002) |
-             ((dpad_up)    ? 0x00 : 0x0001) |
-             ((btns_run)   ? 0x00 : 0x0080) |
-             ((btns_sel)   ? 0x00 : 0x0040) |
-             ((btns_two)   ? 0x00 : 0x0020) |
-             ((btns_one)   ? 0x00 : 0x0010));
+  buttons = (((dpad_up)    ? 0x00 : USBR_BUTTON_DU) |
+             ((dpad_down)  ? 0x00 : USBR_BUTTON_DD) |
+             ((dpad_left)  ? 0x00 : USBR_BUTTON_DL) |
+             ((dpad_right) ? 0x00 : USBR_BUTTON_DR) |
+             ((btns_b1)    ? 0x00 : USBR_BUTTON_B1) |
+             ((btns_b2)    ? 0x00 : USBR_BUTTON_B2) |
+             ((btns_b3)    ? 0x00 : USBR_BUTTON_B3) |
+             ((btns_b4)    ? 0x00 : USBR_BUTTON_B4) |
+             ((btns_l1)    ? 0x00 : USBR_BUTTON_L1) |
+             ((btns_r1)    ? 0x00 : USBR_BUTTON_R1) |
+             ((0)          ? 0x00 : USBR_BUTTON_L2) |
+             ((0)          ? 0x00 : USBR_BUTTON_R2) |
+             ((btns_sel)   ? 0x00 : USBR_BUTTON_S1) |
+             ((btns_run)   ? 0x00 : USBR_BUTTON_S2) |
+             ((0)          ? 0x00 : USBR_BUTTON_L3) |
+             ((0)          ? 0x00 : USBR_BUTTON_R3) |
+             ((btns_a1)    ? 0x00 : USBR_BUTTON_A1) |
+             ((1)/*has_6btns*/ ? 0x00 : 0x800));
+
+  // TODO: map L2/R2/L3/R3 buttons
 
   post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r, reportKeys, 0);
 
