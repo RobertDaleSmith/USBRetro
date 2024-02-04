@@ -448,24 +448,25 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
       buttonIV = current.button1;
     }
 
-    buttons = (((current.button12)? 0x00 : 0x20000) | // r3
-               ((current.button11)? 0x00 : 0x10000) | // l3
-               ((buttonVI)        ? 0x00 : 0x8000) |
-               ((buttonV)         ? 0x00 : 0x4000) |
-               ((buttonIV)        ? 0x00 : 0x2000) |
-               ((buttonIII)       ? 0x00 : 0x1000) |
-               ((has_6btns)       ? 0x00 : 0x0800) |
-               ((false)           ? 0x00 : 0x0400) | // home
-               ((buttonVIII)      ? 0x00 : 0x0200) | // r2
-               ((buttonVII)       ? 0x00 : 0x0100) | // l2
-               ((current.left)    ? 0x00 : 0x0008) |
-               ((current.down)    ? 0x00 : 0x0004) |
-               ((current.right)   ? 0x00 : 0x0002) |
-               ((current.up)      ? 0x00 : 0x0001) |
-               ((buttonStart)     ? 0x00 : 0x0080) |
-               ((buttonSelect)    ? 0x00 : 0x0040) |
-               ((current.button2) ? 0x00 : 0x0020) |
-               ((buttonI)         ? 0x00 : 0x0010));
+    buttons = (((current.up)       ? 0x00 : USBR_BUTTON_DU) |
+               ((current.down)     ? 0x00 : USBR_BUTTON_DD) |
+               ((current.left)     ? 0x00 : USBR_BUTTON_DL) |
+               ((current.right)    ? 0x00 : USBR_BUTTON_DR) |
+               ((current.button2)  ? 0x00 : USBR_BUTTON_B1) |
+               ((buttonI)          ? 0x00 : USBR_BUTTON_B2) |
+               ((buttonIV)         ? 0x00 : USBR_BUTTON_B3) |
+               ((buttonIII)        ? 0x00 : USBR_BUTTON_B4) |
+               ((buttonV)          ? 0x00 : USBR_BUTTON_L1) |
+               ((buttonVI)         ? 0x00 : USBR_BUTTON_R1) |
+               ((buttonVII)        ? 0x00 : USBR_BUTTON_L2) |
+               ((buttonVIII)       ? 0x00 : USBR_BUTTON_R2) |
+               ((buttonSelect)     ? 0x00 : USBR_BUTTON_S1) |
+               ((buttonStart)      ? 0x00 : USBR_BUTTON_S2) |
+               ((current.button11) ? 0x00 : USBR_BUTTON_L3) |
+               ((current.button12) ? 0x00 : USBR_BUTTON_R3) |
+               ((0)                ? 0x00 : USBR_BUTTON_A1) | // 13
+               ((0)                ? 0x00 : USBR_BUTTON_A2) | // 14
+               ((has_6btns)        ? 0x00 : 0x800));
 
     // invert vertical axis
     uint8_t axis_x = current.x;

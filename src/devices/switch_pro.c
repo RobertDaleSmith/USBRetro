@@ -156,21 +156,20 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       if (update_report.sl_l) TU_LOG1("sl_l ");
       TU_LOG1("\r\n");
 
-      bool has_6btns = true;
       int threshold = 256;
       bool dpad_up    = update_report.up;
       bool dpad_right = update_report.right;
       bool dpad_down  = update_report.down;
       bool dpad_left  = update_report.left;
-      bool bttn_1 = update_report.a;
-      bool bttn_2 = update_report.b;
-      bool bttn_3 = update_report.x;
-      bool bttn_4 = update_report.y;
-      bool bttn_5 = update_report.l;
-      bool bttn_6 = update_report.r;
-      bool bttn_run = update_report.start;
-      bool bttn_sel = update_report.select || update_report.zl || update_report.zr;
-      bool bttn_home = update_report.home;
+      bool bttn_b1 = update_report.b;
+      bool bttn_b2 = update_report.a;
+      bool bttn_b3 = update_report.y;
+      bool bttn_b4 = update_report.x;
+      bool bttn_l1 = update_report.l;
+      bool bttn_r1 = update_report.r;
+      bool bttn_s1 = update_report.select || update_report.zl || update_report.zr;
+      bool bttn_s2 = update_report.start;
+      bool bttn_a1 = update_report.home;
 
       uint8_t leftX = 0;
       uint8_t leftY = 0;
@@ -184,8 +183,8 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
         dpad_right = update_report.right;
         dpad_down  = update_report.down;
         dpad_left  = update_report.left;
-        bttn_5 = update_report.l;
-        bttn_run = false;
+        bttn_l1 = update_report.l;
+        bttn_s2 = false;
 
         leftX = scale_analog_switch_pro(update_report.left_x + 127);
         leftY = scale_analog_switch_pro(update_report.left_y - 127);
@@ -196,7 +195,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
         dpad_right = false; // (right_stick_x > (2048 + threshold));
         dpad_down  = false; // (right_stick_y < (2048 - threshold));
         dpad_left  = false; // (right_stick_x < (2048 - threshold));
-        bttn_home = false;
+        bttn_a1 = false;
 
         rightX = scale_analog_switch_pro(update_report.right_x);
         rightY = scale_analog_switch_pro(update_report.right_y + 127);
@@ -209,26 +208,24 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
         rightY = scale_analog_switch_pro(update_report.right_y);
       }
 
-      buttons = (
-        ((update_report.rstick) ? 0x00 : 0x20000) |
-        ((update_report.lstick) ? 0x00 : 0x10000) |
-        ((bttn_6)     ? 0x00 : 0x8000) | // VI
-        ((bttn_5)     ? 0x00 : 0x4000) | // V
-        ((bttn_4)     ? 0x00 : 0x2000) | // IV
-        ((bttn_3)     ? 0x00 : 0x1000) | // III
-        ((has_6btns)  ? 0x00 : 0x0800) |
-        ((bttn_home)  ? 0x00 : 0x0400) | // home
-        ((update_report.sr_r) ? 0x00 : 0x0200) | // r2
-        ((update_report.sr_l) ? 0x00 : 0x0100) | // l2
-        ((dpad_left)  ? 0x00 : 0x0008) |
-        ((dpad_down)  ? 0x00 : 0x0004) |
-        ((dpad_right) ? 0x00 : 0x0002) |
-        ((dpad_up)    ? 0x00 : 0x0001) |
-        ((bttn_run)   ? 0x00 : 0x0080) | // Run
-        ((bttn_sel)   ? 0x00 : 0x0040) | // Select
-        ((bttn_2)     ? 0x00 : 0x0020) | // II
-        ((bttn_1)     ? 0x00 : 0x0010)   // I
-      );
+      buttons = (((dpad_up)              ? 0x00 : USBR_BUTTON_DU) |
+                 ((dpad_down)            ? 0x00 : USBR_BUTTON_DD) |
+                 ((dpad_left)            ? 0x00 : USBR_BUTTON_DL) |
+                 ((dpad_right)           ? 0x00 : USBR_BUTTON_DR) |
+                 ((bttn_b1)              ? 0x00 : USBR_BUTTON_B1) |
+                 ((bttn_b2)              ? 0x00 : USBR_BUTTON_B2) |
+                 ((bttn_b3)              ? 0x00 : USBR_BUTTON_B3) |
+                 ((bttn_b4)              ? 0x00 : USBR_BUTTON_B4) |
+                 ((bttn_l1)              ? 0x00 : USBR_BUTTON_L1) |
+                 ((bttn_r1)              ? 0x00 : USBR_BUTTON_R1) |
+                 ((update_report.sr_l)   ? 0x00 : USBR_BUTTON_L2) |
+                 ((update_report.sr_r)   ? 0x00 : USBR_BUTTON_R2) |
+                 ((bttn_s1)              ? 0x00 : USBR_BUTTON_S1) |
+                 ((bttn_s2)              ? 0x00 : USBR_BUTTON_S2) |
+                 ((update_report.lstick) ? 0x00 : USBR_BUTTON_L3) |
+                 ((update_report.rstick) ? 0x00 : USBR_BUTTON_R3) |
+                 ((bttn_a1)              ? 0x00 : USBR_BUTTON_A1) |
+                 ((1)/*has_6btns*/       ? 0x00 : 0x800));
 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait

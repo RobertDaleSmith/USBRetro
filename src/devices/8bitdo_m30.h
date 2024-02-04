@@ -33,7 +33,7 @@ typedef struct TU_ATTR_PACKED
   };
 
   struct {
-    uint8_t dpad   : 4;
+    uint8_t dpad : 4;
     uint8_t cap : 1;
   };
 

@@ -50,26 +50,46 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
     bool dpad_right  = (update_report.axis0_x > 128);
     bool dpad_up  = (update_report.axis0_y < 126);
     bool dpad_down  = (update_report.axis0_y > 128);
-    bool has_6btns = true;
 
-    buttons = (((false)                ? 0x00 : 0x20000) |
-               ((false)                ? 0x00 : 0x10000) |
-               ((update_report.z)      ? 0x00 : 0x8000) | // VI
-               ((update_report.y)      ? 0x00 : 0x4000) | // V
-               ((update_report.x)      ? 0x00 : 0x2000) | // IV
-               ((update_report.a)      ? 0x00 : 0x1000) | // III
-               ((has_6btns)            ? 0x00 : 0x0800) |
-               ((false)                ? 0x00 : 0x0400) | // home
-               ((false)                ? 0x00 : 0x0200) | // r2
-               ((false)                ? 0x00 : 0x0100) | // l2
-               ((dpad_left)            ? 0x00 : 0x0008) |
-               ((dpad_down)            ? 0x00 : 0x0004) |
-               ((dpad_right)           ? 0x00 : 0x0002) |
-               ((dpad_up)              ? 0x00 : 0x0001) |
-               ((update_report.start)  ? 0x00 : 0x0080) | // Run
-               ((update_report.select) ? 0x00 : 0x0040) | // Select
-               ((update_report.b || update_report.l) ? 0x00 : 0x0020) | // II
-               ((update_report.c || update_report.r) ? 0x00 : 0x0010)); // I
+#ifdef CONFIG_PCE
+    buttons = (((dpad_up)              ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)            ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)            ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)           ? 0x00 : USBR_BUTTON_DR) |
+               ((update_report.b || update_report.l) ? 0x00 : USBR_BUTTON_B1) |
+               ((update_report.c || update_report.r) ? 0x00 : USBR_BUTTON_B2) |
+               ((update_report.x)      ? 0x00 : USBR_BUTTON_B3) |
+               ((update_report.a)      ? 0x00 : USBR_BUTTON_B4) |
+               ((update_report.y)      ? 0x00 : USBR_BUTTON_L1) |
+               ((update_report.z)      ? 0x00 : USBR_BUTTON_R1) |
+               ((0)                    ? 0x00 : USBR_BUTTON_L2) |
+               ((0)                    ? 0x00 : USBR_BUTTON_R2) |
+               ((update_report.select) ? 0x00 : USBR_BUTTON_S1) |
+               ((update_report.start)  ? 0x00 : USBR_BUTTON_S2) |
+               ((0)                    ? 0x00 : USBR_BUTTON_L3) |
+               ((0)                    ? 0x00 : USBR_BUTTON_R3) |
+               ((0)                    ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/       ? 0x00 : 0x800));
+#else
+    buttons = (((dpad_up)              ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)            ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)            ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)           ? 0x00 : USBR_BUTTON_DR) |
+               ((update_report.b)      ? 0x00 : USBR_BUTTON_B1) |
+               ((update_report.a)      ? 0x00 : USBR_BUTTON_B2) |
+               ((update_report.y)      ? 0x00 : USBR_BUTTON_B3) |
+               ((update_report.x)      ? 0x00 : USBR_BUTTON_B4) |
+               ((update_report.l)      ? 0x00 : USBR_BUTTON_L1) |
+               ((update_report.r)      ? 0x00 : USBR_BUTTON_R1) |
+               ((update_report.c)      ? 0x00 : USBR_BUTTON_L2) |
+               ((update_report.z)      ? 0x00 : USBR_BUTTON_R2) |
+               ((update_report.select) ? 0x00 : USBR_BUTTON_S1) |
+               ((update_report.start)  ? 0x00 : USBR_BUTTON_S2) |
+               ((0)                    ? 0x00 : USBR_BUTTON_L3) |
+               ((0)                    ? 0x00 : USBR_BUTTON_R3) |
+               ((0)                    ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/       ? 0x00 : 0x800));
+#endif
 
     // invert vertical axis
     uint8_t axis_1x = update_report.axis0_x;

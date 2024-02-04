@@ -108,26 +108,24 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     uint8_t analog_l = p->bLeftTrigger;
     uint8_t analog_r = p->bRightTrigger;
 
-    bool is6btn = true;
-
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) ? 0x00 : 0x20000) |
-               ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB) ? 0x00 : 0x10000) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : 0x8000) |
-               ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 0x00 : 0x4000) |
-               ((p->wButtons & XINPUT_GAMEPAD_X) ? 0x00 : 0x2000) |
-               ((p->wButtons & XINPUT_GAMEPAD_Y) ? 0x00 : 0x1000) |
-               ((is6btn) ? 0x00 : 0x0800) |
-               ((false)  ? 0x00 : 0x0400) | // TODO: parse guide button report
-               ((analog_r > 200) ? 0x00 : 0x0200) | // R2
-               ((analog_l > 200) ? 0x00 : 0x0100) | // L2
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) ? 0x00 : 0x08) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) ? 0x00 : 0x04) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) ? 0x00 : 0x02) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_UP) ? 0x00 : 0x01) |
-               ((p->wButtons & XINPUT_GAMEPAD_START) ? 0x00 : 0x80) |
-               ((p->wButtons & XINPUT_GAMEPAD_BACK) ? 0x00 : 0x40) |
-               ((p->wButtons & XINPUT_GAMEPAD_A) ? 0x00 : 0x20) |
-               ((p->wButtons & XINPUT_GAMEPAD_B) ? 0x00 : 0x10));
+    buttons = (((p->wButtons & XINPUT_GAMEPAD_DPAD_UP)        ? 0x00 : USBR_BUTTON_DU) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN)      ? 0x00 : USBR_BUTTON_DD) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT)      ? 0x00 : USBR_BUTTON_DL) |
+               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT)     ? 0x00 : USBR_BUTTON_DR) |
+               ((p->wButtons & XINPUT_GAMEPAD_A)              ? 0x00 : USBR_BUTTON_B1) |
+               ((p->wButtons & XINPUT_GAMEPAD_B)              ? 0x00 : USBR_BUTTON_B2) |
+               ((p->wButtons & XINPUT_GAMEPAD_X)              ? 0x00 : USBR_BUTTON_B3) |
+               ((p->wButtons & XINPUT_GAMEPAD_Y)              ? 0x00 : USBR_BUTTON_B4) |
+               ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)  ? 0x00 : USBR_BUTTON_L1) |
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : USBR_BUTTON_R1) |
+               ((analog_l > 200)                              ? 0x00 : USBR_BUTTON_L2) |
+               ((analog_r > 200)                              ? 0x00 : USBR_BUTTON_R2) |
+               ((p->wButtons & XINPUT_GAMEPAD_BACK)           ? 0x00 : USBR_BUTTON_S1) |
+               ((p->wButtons & XINPUT_GAMEPAD_START)          ? 0x00 : USBR_BUTTON_S2) |
+               ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB)     ? 0x00 : USBR_BUTTON_L3) |
+               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)    ? 0x00 : USBR_BUTTON_R3) |
+               ((0)/*TODO: parse guide button report*/        ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/                              ? 0x00 : 0x800));
 
     post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0, jsSpinner);
   }

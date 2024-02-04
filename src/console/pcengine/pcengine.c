@@ -210,13 +210,13 @@ void __not_in_flash_func(update_output)(void)
     }
 
     // check for 6-button enable/disable hotkeys
-    if (!(players[i].output_buttons & 0b0000000010000001))
+    if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DU)))
       players[i].button_mode = BUTTON_MODE_6;
-    else if (!(players[i].output_buttons & 0b0000000010000100))
+    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DD)))
       players[i].button_mode = BUTTON_MODE_2;
-    else if (!(players[i].output_buttons & 0b0000000010000010))
+    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DR)))
       players[i].button_mode = BUTTON_MODE_3_SEL;
-    else if (!(players[i].output_buttons & 0b0000000010001000))
+    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DL)))
       players[i].button_mode = BUTTON_MODE_3_RUN;
 
     // Turbo EverDrive Pro hot-key fix
@@ -232,8 +232,8 @@ void __not_in_flash_func(update_output)(void)
       else if(btns == 0x84) hotkey = ~0x84; // RUN + DOWN
     }
 
-    bool has6Btn = !(players[i].output_buttons & 0x0800);
-    bool isMouse = !(players[i].output_buttons & 0x000f);
+    bool has6Btn = !(players[i].output_buttons & 0x800);
+    bool isMouse = !(players[i].output_buttons & 0x0f);
     bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
     bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
     bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
@@ -328,14 +328,12 @@ void __not_in_flash_func(post_globals)(
   uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r,
   uint32_t keys, uint8_t quad_x)
 {
-  bool has6Btn = !(buttons & 0x0800);
-
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
   int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0800)) || keys;
+  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
   if (player_index < 0 && buttons_pressed)
   {
     printf("[add player] [%d, %d]\n", dev_addr, instance);

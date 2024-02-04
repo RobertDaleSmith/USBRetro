@@ -57,26 +57,46 @@ void process_sega_astrocity(uint8_t dev_addr, uint8_t instance, uint8_t const* r
     bool dpad_right = (astro_report.x > 127);
     bool dpad_down  = (astro_report.y > 127);
     bool dpad_left  = (astro_report.x < 127);
-    bool has_6btns = true;
 
-    buttons = (((false)          ? 0x00 : 0x20000) |
-               ((false)          ? 0x00 : 0x10000) |
-               ((astro_report.c) ? 0x00 : 0x8000) | // VI
-               ((astro_report.b) ? 0x00 : 0x4000) | // V
-               ((astro_report.a) ? 0x00 : 0x2000) | // IV
-               ((astro_report.d) ? 0x00 : 0x1000) | // III
-               ((has_6btns)      ? 0x00 : 0x0800) |
-               ((false)          ? 0x00 : 0x0400) | // home
-               ((astro_report.r) ? 0x00 : 0x0200) | // r2
-               ((astro_report.l) ? 0x00 : 0x0100) | // l2
-               ((dpad_left)      ? 0x00 : 0x08) |
-               ((dpad_down)      ? 0x00 : 0x04) |
-               ((dpad_right)     ? 0x00 : 0x02) |
-               ((dpad_up)        ? 0x00 : 0x01) |
-               ((astro_report.start)  ? 0x00 : 0x80) | // RUN
-               ((astro_report.credit) ? 0x00 : 0x40) | // SEL
-               ((astro_report.e) ? 0x00 : 0x20) | // II
-               ((astro_report.f) ? 0x00 : 0x10)); // I
+#ifdef CONFIG_PCE
+    buttons = (((dpad_up)             ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)           ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)           ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)          ? 0x00 : USBR_BUTTON_DR) |
+               ((astro_report.e)      ? 0x00 : USBR_BUTTON_B1) |
+               ((astro_report.f)      ? 0x00 : USBR_BUTTON_B2) |
+               ((astro_report.a)      ? 0x00 : USBR_BUTTON_B3) |
+               ((astro_report.d)      ? 0x00 : USBR_BUTTON_B4) |
+               ((astro_report.b)      ? 0x00 : USBR_BUTTON_L1) |
+               ((astro_report.c)      ? 0x00 : USBR_BUTTON_R1) |
+               ((astro_report.l)      ? 0x00 : USBR_BUTTON_L2) |
+               ((astro_report.r)      ? 0x00 : USBR_BUTTON_R2) |
+               ((astro_report.credit) ? 0x00 : USBR_BUTTON_S1) |
+               ((astro_report.start)  ? 0x00 : USBR_BUTTON_S2) |
+               ((0)                   ? 0x00 : USBR_BUTTON_L3) |
+               ((0)                   ? 0x00 : USBR_BUTTON_R3) |
+               ((0)                   ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/      ? 0x00 : 0x800));
+#else
+    buttons = (((dpad_up)             ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)           ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)           ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)          ? 0x00 : USBR_BUTTON_DR) |
+               ((astro_report.d)      ? 0x00 : USBR_BUTTON_B1) |
+               ((astro_report.e)      ? 0x00 : USBR_BUTTON_B2) |
+               ((astro_report.a)      ? 0x00 : USBR_BUTTON_B3) |
+               ((astro_report.b)      ? 0x00 : USBR_BUTTON_B4) |
+               ((astro_report.c)      ? 0x00 : USBR_BUTTON_L1) |
+               ((astro_report.f)      ? 0x00 : USBR_BUTTON_R1) |
+               ((astro_report.l)      ? 0x00 : USBR_BUTTON_L2) |
+               ((astro_report.r)      ? 0x00 : USBR_BUTTON_R2) |
+               ((astro_report.credit) ? 0x00 : USBR_BUTTON_S1) |
+               ((astro_report.start)  ? 0x00 : USBR_BUTTON_S2) |
+               ((0)                   ? 0x00 : USBR_BUTTON_L3) |
+               ((0)                   ? 0x00 : USBR_BUTTON_R3) |
+               ((0)                   ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/      ? 0x00 : 0x800));
+#endif
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
