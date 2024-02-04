@@ -63,28 +63,25 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
           bool dpad_right = gamecube_report.port[i].right;
           bool dpad_up    = gamecube_report.port[i].up;
           bool dpad_down  = gamecube_report.port[i].down;
-          bool has_6btns  = true;
 
-          buttons = (
-            ((false)                         ? 0x00 : 0x20000) |
-            ((false)                         ? 0x00 : 0x10000) |
-            ((gamecube_report.port[i].r)     ? 0x00 : 0x8000) | // VI
-            ((gamecube_report.port[i].l)     ? 0x00 : 0x4000) | // V
-            ((gamecube_report.port[i].y)     ? 0x00 : 0x2000) | // IV
-            ((gamecube_report.port[i].x)     ? 0x00 : 0x1000) | // III
-            ((has_6btns)                     ? 0x00 : 0x0800) |
-            ((false)                         ? 0x00 : 0x0400) | // home
-            ((false)                         ? 0x00 : 0x0200) | // r2
-            ((false)                         ? 0x00 : 0x0100) | // l2
-            ((dpad_left)                     ? 0x00 : 0x0008) |
-            ((dpad_down)                     ? 0x00 : 0x0004) |
-            ((dpad_right)                    ? 0x00 : 0x0002) |
-            ((dpad_up)                       ? 0x00 : 0x0001) |
-            ((gamecube_report.port[i].start) ? 0x00 : 0x0080) | // Run
-            ((gamecube_report.port[i].z)     ? 0x00 : 0x0040) | // Select
-            ((gamecube_report.port[i].b)     ? 0x00 : 0x0020) | // II
-            ((gamecube_report.port[i].a)     ? 0x00 : 0x0010)   // I
-          );
+          buttons = (((dpad_up)                       ? 0x00 : USBR_BUTTON_DU) |
+                     ((dpad_down)                     ? 0x00 : USBR_BUTTON_DD) |
+                     ((dpad_left)                     ? 0x00 : USBR_BUTTON_DL) |
+                     ((dpad_right)                    ? 0x00 : USBR_BUTTON_DR) |
+                     ((gamecube_report.port[i].b)     ? 0x00 : USBR_BUTTON_B1) |
+                     ((gamecube_report.port[i].a)     ? 0x00 : USBR_BUTTON_B2) |
+                     ((gamecube_report.port[i].y)     ? 0x00 : USBR_BUTTON_B3) |
+                     ((gamecube_report.port[i].x)     ? 0x00 : USBR_BUTTON_B4) |
+                     ((gamecube_report.port[i].l)     ? 0x00 : USBR_BUTTON_L1) |
+                     ((gamecube_report.port[i].r)     ? 0x00 : USBR_BUTTON_R1) |
+                     ((0)                             ? 0x00 : USBR_BUTTON_L2) |
+                     ((0)                             ? 0x00 : USBR_BUTTON_R2) |
+                     ((gamecube_report.port[i].z)     ? 0x00 : USBR_BUTTON_S1) |
+                     ((gamecube_report.port[i].start) ? 0x00 : USBR_BUTTON_S2) |
+                     ((0)                             ? 0x00 : USBR_BUTTON_L3) |
+                     ((0)                             ? 0x00 : USBR_BUTTON_R3) |
+                     ((0)                             ? 0x00 : USBR_BUTTON_A1) |
+                     ((1)/*has_6btns*/                ? 0x00 : 0x800));
 
           uint8_t zl_axis = gamecube_report.port[i].zl;
           zl_axis = zl_axis > 38 ? zl_axis - 38 : 0;
