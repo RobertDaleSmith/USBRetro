@@ -39,6 +39,15 @@
 #define BIT6_PIN    BIT0_PIN + 6
 #define BIT7_PIN    BIT0_PIN + 7
 
+#define LOOPY_BIT0 (1<<0)
+#define LOOPY_BIT1 (1<<1)
+#define LOOPY_BIT2 (1<<2)
+#define LOOPY_BIT3 (1<<3)
+#define LOOPY_BIT4 (1<<4)
+#define LOOPY_BIT5 (1<<5)
+#define LOOPY_BIT6 (1<<6)
+#define LOOPY_BIT7 (1<<7)
+
 PIO pio;
 uint sm1, sm2, sm3; // sm1 = ROW0, sm2 = ROW1, sm3 = ROW2
 
