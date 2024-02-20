@@ -192,17 +192,17 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     switch (itf_protocol)
     {
       case HID_ITF_PROTOCOL_KEYBOARD:
-        TU_LOG2("HID receive boot keyboard report\r\n");
+        TU_LOG1("HID receive boot keyboard report\r\n");
         device_interfaces[CONTROLLER_KEYBOARD]->process(dev_addr, instance, report, len);
       break;
 
       case HID_ITF_PROTOCOL_MOUSE:
-        TU_LOG2("HID receive boot mouse report\r\n");
+        TU_LOG1("HID receive boot mouse report\r\n");
         device_interfaces[CONTROLLER_MOUSE]->process(dev_addr, instance, report, len);
       break;
 
       default:
-        TU_LOG2("HID receive generic report\r\n");
+        TU_LOG1("HID receive generic report\r\n");
         process_generic_report(dev_addr, instance, report, len);
       break;
     }
