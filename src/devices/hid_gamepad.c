@@ -23,6 +23,7 @@ typedef struct TU_ATTR_PACKED
   dinput_usage_t hatLoc;
   dinput_usage_t buttonLoc[MAX_BUTTONS]; // assuming a maximum of 12 buttons
   uint8_t buttonCnt;
+  uint8_t type;
 } dinput_instance_t;
 
 // Cached device report properties on mount
@@ -94,12 +95,32 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
     if (USB_GetHIDReportItemInfoWithReportId(report, item))
     {
       if (HID_DEBUG) TU_LOG1("PAGE: %d ", item->Attributes.Usage.Page);
+      hid_devices[dev_addr].instances[instance].type = HID_GAMEPAD;
+
       switch (item->Attributes.Usage.Page)
       {
         case HID_USAGE_PAGE_DESKTOP:
         {
           switch (item->Attributes.Usage.Usage)
           {
+          case HID_USAGE_DESKTOP_WHEEL:
+          {
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_WHEEL ");
+            hid_devices[dev_addr].instances[instance].type = HID_MOUSE;
+            break;
+          }
+          case HID_USAGE_DESKTOP_MOUSE:
+          {
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_MOUSE ");
+            hid_devices[dev_addr].instances[instance].type = HID_MOUSE;
+            break;
+          }
+          case HID_USAGE_DESKTOP_KEYBOARD:
+          {
+            if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_KEYBOARD ");
+            hid_devices[dev_addr].instances[instance].type = HID_KEYBOARD;
+            break;
+          }
           case HID_USAGE_DESKTOP_X: // Left Analog X
           {
             if (HID_DEBUG) TU_LOG1(" HID_USAGE_DESKTOP_X ");
@@ -225,7 +246,9 @@ bool parse_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   info = NULL;
 
   // assume it is d-input device if buttons exist on report
-  if (hid_devices[dev_addr].instances[instance].buttonCnt > 0) {
+  if (hid_devices[dev_addr].instances[instance].buttonCnt > 0 &&
+     hid_devices[dev_addr].instances[instance].type == HID_GAMEPAD
+  ) {
     return true;  
   }
 
@@ -247,10 +270,12 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
   // {
   //   hid_devices[dev_addr].instances[instance].reportID = CurrentItem->ReportID;
   // }
+
+  TU_LOG1("ITEM_PAGE: 0x%x", CurrentItem->Attributes.Usage.Page);
+  TU_LOG1(" USAGE: 0x%x\n", CurrentItem->Attributes.Usage.Usage);
   switch (CurrentItem->Attributes.Usage.Page)
   {
     case HID_USAGE_PAGE_DESKTOP:
-      // TU_LOG1("HID_USAGE: 0x%x\n", CurrentItem->Attributes.Usage.Usage);
       switch (CurrentItem->Attributes.Usage.Usage)
       {
         case HID_USAGE_DESKTOP_X:
@@ -264,6 +289,9 @@ bool CALLBACK_HIDParser_FilterHIDReportItem(uint8_t dev_addr, uint8_t instance, 
         case HID_USAGE_DESKTOP_DPAD_DOWN:
         case HID_USAGE_DESKTOP_DPAD_LEFT:
         case HID_USAGE_DESKTOP_DPAD_RIGHT:
+        case HID_USAGE_DESKTOP_WHEEL:
+        case HID_USAGE_DESKTOP_MOUSE:
+        case HID_USAGE_DESKTOP_KEYBOARD:
           return true;
       }
       return false;

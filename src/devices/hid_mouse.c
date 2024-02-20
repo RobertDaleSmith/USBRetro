@@ -79,6 +79,7 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
                 ((0x0000f)) | // no dpad button presses (isMouse)
                 ((report->buttons & MOUSE_BUTTON_RIGHT)   ? 0x00 : USBR_BUTTON_B1) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)    ? 0x00 : USBR_BUTTON_B2) |
+                ((report->buttons & MOUSE_BUTTON_BACKWARD)? 0x00 : USBR_BUTTON_B3) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD) ? 0x00 : USBR_BUTTON_S1) |
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)  ? 0x00 : USBR_BUTTON_S2));
   } else {
@@ -86,6 +87,7 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
                 ((0x0000f)) |
                 ((report->buttons & MOUSE_BUTTON_LEFT)    ? 0x00 : USBR_BUTTON_B1) |
                 ((report->buttons & MOUSE_BUTTON_RIGHT)   ? 0x00 : USBR_BUTTON_B2) |
+                ((report->buttons & MOUSE_BUTTON_BACKWARD)? 0x00 : USBR_BUTTON_B3) |
                 ((report->buttons & MOUSE_BUTTON_FORWARD) ? 0x00 : USBR_BUTTON_S1) |
                 ((report->buttons & MOUSE_BUTTON_MIDDLE)  ? 0x00 : USBR_BUTTON_S2));
   }
