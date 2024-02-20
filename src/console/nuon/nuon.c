@@ -532,6 +532,17 @@ void __not_in_flash_func(post_mouse_globals)(
   if (player_index >= 0)
   {
     players[player_index].global_buttons = buttons;
+
+    // Swap B2 and S2
+    if (!(buttons & USBR_BUTTON_B2)) {
+      players[player_index].global_buttons |= USBR_BUTTON_B2;
+      players[player_index].global_buttons &= ~USBR_BUTTON_S2;
+    }
+    if (!(buttons & USBR_BUTTON_S2)) {
+      players[player_index].global_buttons |= USBR_BUTTON_S2;
+      players[player_index].global_buttons &= ~USBR_BUTTON_B2;
+    }
+
     players[player_index].output_buttons = map_nuon_buttons(players[player_index].global_buttons & players[player_index].altern_buttons);
     players[player_index].output_analog_1x = 128;
     players[player_index].output_analog_1y = 128;
