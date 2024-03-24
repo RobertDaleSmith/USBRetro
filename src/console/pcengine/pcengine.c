@@ -3,6 +3,10 @@
 #include "pcengine.h"
 #include "hardware/clocks.h"
 
+#if CFG_TUSB_DEBUG >= 1
+#include "hardware/uart.h"
+#endif
+
 // Definition of global variables
 uint32_t output_analog_1x = 0;
 uint32_t output_analog_1y = 0;
@@ -48,6 +52,15 @@ static const int64_t reset_period = 600; // at 600us, reset the scan exclude fla
 // init for pcengine communication
 void pce_init()
 {
+  #if CFG_TUSB_DEBUG >= 1
+  // Initialize chosen UART
+  uart_init(UART_ID, BAUD_RATE);
+
+  // Set the GPIO function for the UART pins
+  gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+  gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+  #endif
+
   // use turbo button feature with PCE
   turbo_init();
 
