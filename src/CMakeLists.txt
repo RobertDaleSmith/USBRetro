@@ -151,7 +151,7 @@ set(COMMON_LIBRARIES
     hardware_pio
     tinyusb_host
     tinyusb_board
-    xinput_host_app_driver
+    xinput_host
 )
 
 target_link_libraries(usbretro_pce PRIVATE # FOR PCE
