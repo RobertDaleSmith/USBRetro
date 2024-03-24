@@ -357,6 +357,11 @@ void __not_in_flash_func(post_globals)(
 
   if (player_index >= 0)
   {
+    // guide button mapping to igr
+    if (!(buttons & (USBR_BUTTON_A1))) {
+      buttons ^= (USBR_BUTTON_S2 | USBR_BUTTON_S1);
+    }
+
     // map analog to dpad movement here
     uint8_t dpad_offset = 32;
     if (analog_1x)
