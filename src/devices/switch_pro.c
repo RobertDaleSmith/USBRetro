@@ -293,7 +293,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
   //      https://github.com/felis/USB_Host_Shield_2.0/
   //      https://github.com/nicman23/dkms-hid-nintendo/
   //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
-  if (switch_devices[dev_addr].instances[instance].conn_ack)
+  if (1/*switch_devices[dev_addr].instances[instance].conn_ack*/) // disable check for improved 3rd party switch mode controllers
   {
     // set the faster baud rate
     // if (!switch_devices[dev_addr].instances[instance].baud) {
