@@ -34,100 +34,108 @@ uint8_t byteScaleAnalog(int16_t xbox_val);
 // USB X-input
 //--------------------------------------------------------------------+
 #if CFG_TUH_XINPUT
-void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
-{
-  xinputh_interface_t *xid_itf = (xinputh_interface_t *)report;
-  xinput_gamepad_t *p = &xid_itf->pad;
-  const char* type_str;
-  switch (xid_itf->type)
-  {
-    case 1: type_str = "Xbox One";          break;
-    case 2: type_str = "Xbox 360 Wireless"; break;
-    case 3: type_str = "Xbox 360 Wired";    break;
-    case 4: type_str = "Xbox OG";           break;
-    default: type_str = "Unknown";
-  }
+usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count){
+    *driver_count = 1;
+    return &usbh_xinput_driver;
+}
 
-  if (xid_itf->connected && xid_itf->new_pad_data)
+void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
+{
+  const xinput_gamepad_t *p = &xid_itf->pad;
+  const char* type_str;
+
+  if (xid_itf->last_xfer_result == XFER_RESULT_SUCCESS)
   {
-    TU_LOG1("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
-           dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
+    switch (xid_itf->type)
+    {
+      case 1: type_str = "Xbox One";          break;
+      case 2: type_str = "Xbox 360 Wireless"; break;
+      case 3: type_str = "Xbox 360 Wired";    break;
+      case 4: type_str = "Xbox OG";           break;
+      default: type_str = "Unknown";
+    }
+
+    if (xid_itf->connected && xid_itf->new_pad_data)
+    {
+      TU_LOG1("[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",
+        dev_addr, instance, type_str, p->wButtons, p->bLeftTrigger, p->bRightTrigger, p->sThumbLX, p->sThumbLY, p->sThumbRX, p->sThumbRY);
 
 #ifdef CONFIG_NUON
-    float max_thresh = 32768;
-    float left1X = (128 * (p->sThumbLX / max_thresh)) + ((p->sThumbLX >= 0) ? 127 : 128);
-    float left1Y = (128 * (p->sThumbLY / max_thresh)) + ((p->sThumbLY >= 0) ? 127 : 128);
-    float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
-    float left2Y = (128 * (p->sThumbRY / max_thresh)) + ((p->sThumbRY >= 0) ? 127 : 128);
+      float max_thresh = 32768;
+      float left1X = (128 * (p->sThumbLX / max_thresh)) + ((p->sThumbLX >= 0) ? 127 : 128);
+      float left1Y = (128 * (p->sThumbLY / max_thresh)) + ((p->sThumbLY >= 0) ? 127 : 128);
+      float left2X = (128 * (p->sThumbRX / max_thresh)) + ((p->sThumbRX >= 0) ? 127 : 128);
+      float left2Y = (128 * (p->sThumbRY / max_thresh)) + ((p->sThumbRY >= 0) ? 127 : 128);
 
-    if (p->sThumbLX == 0) left1X = 127;
-    if (p->sThumbLY == 0) left1Y = 127;
-    if (p->sThumbRX == 0) left2X = 127;
-    if (p->sThumbRY == 0) left2Y = 127;
+      if (p->sThumbLX == 0) left1X = 127;
+      if (p->sThumbLY == 0) left1Y = 127;
+      if (p->sThumbRX == 0) left2X = 127;
+      if (p->sThumbRY == 0) left2Y = 127;
 
-    // shift axis values for nuon
-    uint8_t analog_1x = left1X+1;
-    uint8_t analog_1y = left1Y+1;
-    uint8_t analog_2x = left2X+1;
-    uint8_t analog_2y = left2Y+1;
-    if (analog_1x == 0) analog_1x = 255;
-    if (analog_1y == 0) analog_1y = 255;
-    if (analog_2x == 0) analog_2x = 255;
-    if (analog_2y == 0) analog_2y = 255;
+      // shift axis values for nuon
+      uint8_t analog_1x = left1X+1;
+      uint8_t analog_1y = left1Y+1;
+      uint8_t analog_2x = left2X+1;
+      uint8_t analog_2y = left2Y+1;
+      if (analog_1x == 0) analog_1x = 255;
+      if (analog_1y == 0) analog_1y = 255;
+      if (analog_2x == 0) analog_2x = 255;
+      if (analog_2y == 0) analog_2y = 255;
 
-    // calc right thumb stick angle for simulated spinner
-    if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
-      int16_t angle = 0;
-      angle = calcAngle(analog_2x-128, analog_2y-128)+179; // 0-359 (360deg)
-      // TU_LOG1("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
+      // calc right thumb stick angle for simulated spinner
+      if (analog_2x < 64 || analog_2x > 192 || analog_2y < 64 || analog_2y > 192) {
+        int16_t angle = 0;
+        angle = calcAngle(analog_2x-128, analog_2y-128)+179; // 0-359 (360deg)
+        // TU_LOG1("x: %d y: %d angle: %d \r\n", analog_2x-128, analog_2y-128, angle+180);
 
-      // get directional difference delta
-      int16_t delta = 0;
-      if (angle >= lastAngle) delta = angle - lastAngle;
-      else delta = (-1) * (lastAngle - angle);
+        // get directional difference delta
+        int16_t delta = 0;
+        if (angle >= lastAngle) delta = angle - lastAngle;
+        else delta = (-1) * (lastAngle - angle);
 
-      // check max/min delta value
-      if (delta > 16) delta = 16;
-      if (delta < -16) delta = -16;
+        // check max/min delta value
+        if (delta > 16) delta = 16;
+        if (delta < -16) delta = -16;
 
-      // inc global spinner value by delta
-      jsSpinner -= delta;
+        // inc global spinner value by delta
+        jsSpinner -= delta;
 
-      // check max/min spinner value
-      if (jsSpinner > 255) jsSpinner -= 255;
-      if (jsSpinner < 0) jsSpinner = 256 - (-1 * jsSpinner);
+        // check max/min spinner value
+        if (jsSpinner > 255) jsSpinner -= 255;
+        if (jsSpinner < 0) jsSpinner = 256 - (-1 * jsSpinner);
 
-      lastAngle = angle;
-    }
+        lastAngle = angle;
+      }
 #else
-    uint8_t analog_1x = byteScaleAnalog(p->sThumbLX);
-    uint8_t analog_1y = byteScaleAnalog(p->sThumbLY);
-    uint8_t analog_2x = byteScaleAnalog(p->sThumbRX);
-    uint8_t analog_2y = byteScaleAnalog(p->sThumbRY);
+      uint8_t analog_1x = byteScaleAnalog(p->sThumbLX);
+      uint8_t analog_1y = byteScaleAnalog(p->sThumbLY);
+      uint8_t analog_2x = byteScaleAnalog(p->sThumbRX);
+      uint8_t analog_2y = byteScaleAnalog(p->sThumbRY);
 #endif
-    uint8_t analog_l = p->bLeftTrigger;
-    uint8_t analog_r = p->bRightTrigger;
+      uint8_t analog_l = p->bLeftTrigger;
+      uint8_t analog_r = p->bRightTrigger;
 
-    buttons = (((p->wButtons & XINPUT_GAMEPAD_DPAD_UP)        ? 0x00 : USBR_BUTTON_DU) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN)      ? 0x00 : USBR_BUTTON_DD) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT)      ? 0x00 : USBR_BUTTON_DL) |
-               ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT)     ? 0x00 : USBR_BUTTON_DR) |
-               ((p->wButtons & XINPUT_GAMEPAD_A)              ? 0x00 : USBR_BUTTON_B1) |
-               ((p->wButtons & XINPUT_GAMEPAD_B)              ? 0x00 : USBR_BUTTON_B2) |
-               ((p->wButtons & XINPUT_GAMEPAD_X)              ? 0x00 : USBR_BUTTON_B3) |
-               ((p->wButtons & XINPUT_GAMEPAD_Y)              ? 0x00 : USBR_BUTTON_B4) |
-               ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)  ? 0x00 : USBR_BUTTON_L1) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : USBR_BUTTON_R1) |
-               ((analog_l > 200)                              ? 0x00 : USBR_BUTTON_L2) |
-               ((analog_r > 200)                              ? 0x00 : USBR_BUTTON_R2) |
-               ((p->wButtons & XINPUT_GAMEPAD_BACK)           ? 0x00 : USBR_BUTTON_S1) |
-               ((p->wButtons & XINPUT_GAMEPAD_START)          ? 0x00 : USBR_BUTTON_S2) |
-               ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB)     ? 0x00 : USBR_BUTTON_L3) |
-               ((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)    ? 0x00 : USBR_BUTTON_R3) |
-               ((0)/*TODO: parse guide button report*/        ? 0x00 : USBR_BUTTON_A1) |
-               ((1)/*has_6btns*/                              ? 0x00 : 0x800));
+      buttons = (((p->wButtons & XINPUT_GAMEPAD_DPAD_UP)       ? 0x00 : USBR_BUTTON_DU) |
+                ((p->wButtons & XINPUT_GAMEPAD_DPAD_DOWN)      ? 0x00 : USBR_BUTTON_DD) |
+                ((p->wButtons & XINPUT_GAMEPAD_DPAD_LEFT)      ? 0x00 : USBR_BUTTON_DL) |
+                ((p->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT)     ? 0x00 : USBR_BUTTON_DR) |
+                ((p->wButtons & XINPUT_GAMEPAD_A)              ? 0x00 : USBR_BUTTON_B1) |
+                ((p->wButtons & XINPUT_GAMEPAD_B)              ? 0x00 : USBR_BUTTON_B2) |
+                ((p->wButtons & XINPUT_GAMEPAD_X)              ? 0x00 : USBR_BUTTON_B3) |
+                ((p->wButtons & XINPUT_GAMEPAD_Y)              ? 0x00 : USBR_BUTTON_B4) |
+                ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)  ? 0x00 : USBR_BUTTON_L1) |
+                ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 0x00 : USBR_BUTTON_R1) |
+                ((analog_l > 200)                              ? 0x00 : USBR_BUTTON_L2) |
+                ((analog_r > 200)                              ? 0x00 : USBR_BUTTON_R2) |
+                ((p->wButtons & XINPUT_GAMEPAD_BACK)           ? 0x00 : USBR_BUTTON_S1) |
+                ((p->wButtons & XINPUT_GAMEPAD_START)          ? 0x00 : USBR_BUTTON_S2) |
+                ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB)     ? 0x00 : USBR_BUTTON_L3) |
+                ((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)    ? 0x00 : USBR_BUTTON_R3) |
+                ((p->wButtons & XINPUT_GAMEPAD_GUIDE)          ? 0x00 : USBR_BUTTON_A1) |
+                ((1)/*has_6btns*/                              ? 0x00 : 0x800));
 
-    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0, jsSpinner);
+      post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r, 0, jsSpinner);
+    }
   }
   tuh_xinput_receive_report(dev_addr, instance);
 }
