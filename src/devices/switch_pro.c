@@ -13,7 +13,9 @@ typedef struct TU_ATTR_PACKED
   bool handshake_ack;
   bool usb_enable;
   bool usb_enable_ack;
-  bool home_led;
+  bool home_led_set;
+  bool full_report_enabled;
+  bool imu_enabled;
   bool command_ack;
   uint8_t rumble;
   uint8_t player_led_set;
@@ -77,8 +79,10 @@ void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
   switch_devices[dev_addr].instances[instance].handshake_ack = false;
   switch_devices[dev_addr].instances[instance].usb_enable = false;
   switch_devices[dev_addr].instances[instance].usb_enable_ack = false;
-  switch_devices[dev_addr].instances[instance].home_led = false;
-  switch_devices[dev_addr].instances[instance].command_ack = false;
+  switch_devices[dev_addr].instances[instance].home_led_set = false;
+  switch_devices[dev_addr].instances[instance].command_ack = true;
+  switch_devices[dev_addr].instances[instance].full_report_enabled = false;
+  switch_devices[dev_addr].instances[instance].imu_enabled = false;
   switch_devices[dev_addr].instances[instance].rumble = 0;
   switch_devices[dev_addr].instances[instance].player_led_set = 0xff;
 
@@ -233,6 +237,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
 
       prev_report[dev_addr-1][instance] = update_report;
+
     }
   }
   else // process input reports for events and command acknowledgments
@@ -258,30 +263,20 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
     else if (state_report.buf[0] == 0x81 && state_report.buf[1] == 0x92) { // command ack
       switch_devices[dev_addr].instances[instance].command_ack = true;
     }
+    else if (state_report.buf[0] == 0x21) {
+      switch_devices[dev_addr].instances[instance].command_ack = true;
+    }
 
     TU_LOG1("SWITCH[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, state_report.data.report_id);
 
     uint32_t length = sizeof(state_report.buf) / sizeof(state_report.buf[0]);
     print_report_switch_pro(&state_report, length);
   }
-}
 
-// sends commands to switch pro to init/set led/rumble
-bool send_command_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t *data, uint8_t len)
-{
-  uint8_t buf[8 + len];
-  buf[0] = 0x80; // PROCON_REPORT_SEND_USB
-  buf[1] = 0x92; // PROCON_USB_DO_CMD
-  buf[2] = 0x00;
-  buf[3] = 0x31;
-  buf[4] = 0x00;
-  buf[5] = 0x00;
-  buf[6] = 0x00;
-  buf[7] = 0x00;
-
-  memcpy(buf + 8, data, len);
-
-  tuh_hid_send_report(dev_addr, instance, buf[0], &(buf[0])+1, sizeof(buf) - 1);
+  if (update_report.report_id == 0x81)
+  {
+    tuh_hid_receive_report(dev_addr, instance);
+  }
 }
 
 // process usb hid output reports
@@ -293,70 +288,117 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
   //      https://github.com/felis/USB_Host_Shield_2.0/
   //      https://github.com/nicman23/dkms-hid-nintendo/
   //      https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/USB-HID-Notes.md
-  if (1/*switch_devices[dev_addr].instances[instance].conn_ack*/) // disable check for improved 3rd party switch mode controllers
+
+  if (true/*switch_devices[dev_addr].instances[instance].conn_ack*/) // bug fix for 3rd-party ctrls?
   {
     // set the faster baud rate
     // if (!switch_devices[dev_addr].instances[instance].baud) {
-    //   switch_devices[dev_addr].instances[instance].baud = true;
+    //   TU_LOG1("SWITCH[%d|%d]: CMD_HID, USB_BAUD\r\n", dev_addr, instance);
 
-    //   TU_LOG1("SWITCH[%d|%d]: Baud\r\n", dev_addr, instance);
-    //   uint8_t buf2[1] = { 0x03 /* PROCON_USB_BAUD */ };
-    //   tuh_hid_send_report(dev_addr, instance, 0x80, buf2, sizeof(buf2));
+    //   uint8_t baud_command[2] = {CMD_HID, SUBCMD_USB_BAUD};
+
+    //   switch_devices[dev_addr].instances[instance].baud = 
+    //    tuh_hid_send_report(dev_addr, instance, 0, baud_command, sizeof(baud_command));
 
     // // wait for baud ask and then send init handshake
-    // } else
-    if (!switch_devices[dev_addr].instances[instance].handshake/* && switch_devices[dev_addr].instances[instance].baud_ack*/) {
-      switch_devices[dev_addr].instances[instance].handshake = true;
+    // } else if (!switch_devices[dev_addr].instances[instance].handshake && switch_devices[dev_addr].instances[instance].baud_ack) {
+    if (!switch_devices[dev_addr].instances[instance].handshake) {
+      TU_LOG1("SWITCH[%d|%d]: CMD_HID, HANDSHAKE\r\n", dev_addr, instance);
 
-      TU_LOG1("SWITCH[%d|%d]: Handshake\r\n", dev_addr, instance);
-      uint8_t buf1[1] = { 0x02 /* PROCON_USB_HANDSHAKE */ };
-      tuh_hid_send_report(dev_addr, instance, 0x80, buf1, sizeof(buf1));
+      uint8_t handshake_command[2] = {CMD_HID, SUBCMD_HANDSHAKE};
+
+      switch_devices[dev_addr].instances[instance].handshake =
+        tuh_hid_send_report(dev_addr, instance, 0, handshake_command, sizeof(handshake_command));
+
+      tuh_hid_receive_report(dev_addr, instance);
 
     // wait for handshake ack and then send USB enable mode
     } else if (!switch_devices[dev_addr].instances[instance].usb_enable && switch_devices[dev_addr].instances[instance].handshake_ack) {
-      switch_devices[dev_addr].instances[instance].usb_enable = true;
+      TU_LOG1("SWITCH[%d|%d]: CMD_HID, DISABLE_TIMEOUT\r\n", dev_addr, instance);
 
-      TU_LOG1("SWITCH[%d|%d]: Enable USB\r\n", dev_addr, instance);
-      uint8_t buf3[1] = { 0x04 /* PROCON_USB_ENABLE */ };
-      tuh_hid_send_report(dev_addr, instance, 0x80, buf3, sizeof(buf3));
+      uint8_t disable_timeout_cmd[2] = {CMD_HID, SUBCMD_DISABLE_TIMEOUT};
+
+      switch_devices[dev_addr].instances[instance].usb_enable =
+        tuh_hid_send_report(dev_addr, instance, 0, disable_timeout_cmd, sizeof(disable_timeout_cmd));
+
+      sleep_ms(100);
+      tuh_hid_receive_report(dev_addr, instance);
 
     // wait for usb enabled acknowledgment
-    } else if (switch_devices[dev_addr].instances[instance].usb_enable_ack) {
-      // SWITCH SUB-COMMANDS
-      //
-      // Based on: https://github.com/Dan611/hid-procon
-      //           https://github.com/nicman23/dkms-hid-nintendo
-      //
-      uint8_t data[14] = { 0 };
-      data[0x00] = 0x01; // Report ID - PROCON_CMD_AND_RUMBLE
+    } else if (switch_devices[dev_addr].instances[instance].usb_enable) {
 
-      if (!switch_devices[dev_addr].instances[instance].home_led) {
-        switch_devices[dev_addr].instances[instance].home_led = true;
+      uint8_t report[14] = { 0 };
+      uint8_t report_size = 10;
+
+      report[0x00] = CMD_RUMBLE_ONLY; // COMMAND
+       // Lowest 4-bit is a sequence number, which needs to be increased for every report
+
+      if (!switch_devices[dev_addr].instances[instance].home_led_set) {
+        TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED_HOME \r\n", dev_addr, instance);
+        
+        report_size = 14;
+
+        report[0x01] = output_sequence_counter++;
+        report[0x00] = CMD_AND_RUMBLE;   // COMMAND
+        report[0x0A + 0] = CMD_LED_HOME; // SUB_COMMAND
+        
+        // SUB_COMMAND ARGS
+        report[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
+        report[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
+        report[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
 
         // It is possible set up to 15 mini cycles, but we simply just set the LED constantly on after momentary off.
         // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x38-set-home-light
-        data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
 
-        data[0x0A + 0] = 0x38; // PROCON_CMD_LED_HOME
-        data[0x0A + 1] = (0 /* Number of cycles */ << 4) | (true ? 0xF : 0) /* Global mini cycle duration */;
-        data[0x0A + 2] = (0x1 /* LED start intensity */ << 4) | 0x0 /* Number of full cycles */;
-        data[0x0A + 3] = (0x0 /* Mini Cycle 1 LED intensity */ << 4) | 0x1 /* Mini Cycle 2 LED intensity */;
+        switch_devices[dev_addr].instances[instance].home_led_set = true;
+        tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
+        sleep_ms(100);
 
-        send_command_switch_pro(dev_addr, instance, data, 10 + 4);
+      } else if (!switch_devices[dev_addr].instances[instance].full_report_enabled) {
+        TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_MODE, FULL_REPORT_MODE \r\n", dev_addr, instance);
 
-      } else if (switch_devices[dev_addr].instances[instance].command_ack) {
-        player_index = find_player_index(dev_addr, switch_devices[dev_addr].instance_count == 1 ? instance : switch_devices[dev_addr].instance_root);
+        report_size = 14;
 
-        if (switch_devices[dev_addr].instances[instance].player_led_set != player_index || is_fun)
-        {
-          switch_devices[dev_addr].instances[instance].player_led_set = player_index;
+        report[0x01] = output_sequence_counter++;
+        report[0x00] = CMD_AND_RUMBLE;              // COMMAND
+        report[0x0A + 0] = CMD_MODE;                // SUB_COMMAND
+        report[0x0A + 1] = SUBCMD_FULL_REPORT_MODE; // SUB_COMMAND ARGS
 
-          // See: https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering/blob/master/bluetooth_hid_subcommands_notes.md#subcommand-0x30-set-player-lights
-          data[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
+        switch_devices[dev_addr].instances[instance].full_report_enabled = true;
+        tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
+        sleep_ms(100);
 
-          data[0x0A + 0] = 0x30; // PROCON_CMD_LED
+      // } else if (!switch_devices[dev_addr].instances[instance].imu_enabled) {
+      //   TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_GYRO, 1 \r\n", dev_addr, instance);
 
-          // led player indicator
+      //   report_size = 12;
+
+      //   report[0x00] = CMD_AND_RUMBLE; // COMMAND
+      //   report[0x0A + 0] = CMD_GYRO;   // SUB_COMMAND
+      //   report[0x0A + 1] = 1 ? 1 : 0;  // SUB_COMMAND ARGS
+
+      //   switch_devices[dev_addr].instances[instance].imu_enabled = true;
+      //   tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
+      //   sleep_ms(100);
+
+      // } else if (switch_devices[dev_addr].instances[instance].imu_enabled) {
+      } else if (switch_devices[dev_addr].instances[instance].full_report_enabled) {
+        uint8_t instance_count = switch_devices[dev_addr].instance_count;
+        uint8_t instance_index = instance_count == 1 ? instance : switch_devices[dev_addr].instance_root;
+        player_index = find_player_index(dev_addr, instance_index);
+
+        if (is_fun || (player_index >= 0 &&
+          switch_devices[dev_addr].instances[instance].player_led_set != player_index)
+        ) {
+          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, player_index+1);
+
+          report_size = 12;
+
+          report[0x01] = output_sequence_counter++;
+          report[0x00] = CMD_AND_RUMBLE; // COMMAND
+          report[0x0A + 0] = CMD_LED;    // SUB_COMMAND
+
+          // SUB_COMMAND ARGS
           switch (player_index+1)
           {
           case 1:
@@ -364,75 +406,62 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
           case 3:
           case 4:
           case 5:
-            data[0x0A + 1] = PLAYER_LEDS[player_index+1];
+            report[0x0A + 1] = PLAYER_LEDS[player_index+1];
             break;
 
-          default: // unassigned
-            // turn all leds on
-            data[0x0A + 1] = 0x0f;
+          default: // unassigned - turn all leds on
+            // 
+            report[0x0A + 1] = 0x0f;
             break;
           }
 
           // fun
           if (player_index+1 && is_fun) {
-            data[0x0A + 1] = (fun_inc & 0b00001111);
+            report[0x0A + 1] = (fun_inc & 0b00001111);
           }
 
-          switch_devices[dev_addr].instances[instance].command_ack = false;
-          send_command_switch_pro(dev_addr, instance, data, 10 + 2);
+          switch_devices[dev_addr].instances[instance].player_led_set = player_index;
+
+          tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
         else if (switch_devices[dev_addr].instances[instance].rumble != rumble)
         {
-          switch_devices[dev_addr].instances[instance].rumble = rumble;
+          TU_LOG1("SWITCH[%d|%d]: CMD_RUMBLE_ONLY, %d\r\n", dev_addr, instance, rumble);
 
-          uint8_t buf[10] = { 0 };
-          buf[0x00] = 0x10; // Report ID - PROCON_CMD_RUMBLE_ONLY
-          buf[0x01] = output_sequence_counter++; // Lowest 4-bit is a sequence number, which needs to be increased for every report
+          report_size = 10;
           
-          // // Snippet values from https://github.com/DanielOgorchock/linux/blob/7811b8f1f00ee9f195b035951749c57498105d52/drivers/hid/hid-nintendo.c#L197
-          // // joycon_rumble_frequencies.freq = { 0x2000, 0x28,   95 }
-          // uint16_t freq_data_high_high = 0x2000;
-          // uint8_t freq_data_low_low = 0x28;
-          // // joycon_rumble_amplitudes.amp = { 0x78, 0x005e,  422 }
-          // uint8_t amp_data_high = 0x78;
-          // uint16_t amp_data_low = 0x005e;
-          // TU_LOG1("0x%x 0x%x 0x%x 0x%x\n\n", (freq_data_high_high >> 8) & 0xFF, (freq_data_high_high & 0xFF) + amp_data_high, freq_data_low_low + ((amp_data_low >> 8) & 0xFF), amp_data_low & 0xFF);
-
+          report[0x01] = output_sequence_counter++;
+          report[0x00] = CMD_RUMBLE_ONLY; // COMMAND
+          
           if (rumble) {
             // Left rumble ON data
-            buf[0x02 + 0] = 0x20;
-            buf[0x02 + 1] = 0x78;
-            buf[0x02 + 2] = 0x28;
-            buf[0x02 + 3] = 0x5e;
-            // buf[0x02 + 0] = (freq_data_high_high >> 8) & 0xFF;
-            // buf[0x02 + 1] = (freq_data_high_high & 0xFF) + amp_data_high;
-            // buf[0x02 + 2] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
-            // buf[0x02 + 3] = amp_data_low & 0xFF;
+            report[0x02 + 0] = 0x20;
+            report[0x02 + 1] = 0x78;
+            report[0x02 + 2] = 0x28;
+            report[0x02 + 3] = 0x5e;
 
             // Right rumble ON data
-            buf[0x02 + 4] = 0x20;
-            buf[0x02 + 5] = 0x78;
-            buf[0x02 + 6] = 0x28;
-            buf[0x02 + 7] = 0x5e;
-            // buf[0x02 + 4] = (freq_data_high_high >> 8) & 0xFF;
-            // buf[0x02 + 5] = (freq_data_high_high & 0xFF) + amp_data_high;
-            // buf[0x02 + 6] = freq_data_low_low + ((amp_data_low >> 8) & 0xFF);
-            // buf[0x02 + 7] = amp_data_low & 0xFF;
+            report[0x02 + 4] = 0x20;
+            report[0x02 + 5] = 0x78;
+            report[0x02 + 6] = 0x28;
+            report[0x02 + 7] = 0x5e;
           } else {
             // Left rumble OFF data
-            buf[0x02 + 0] = 0x00;
-            buf[0x02 + 1] = 0x01;
-            buf[0x02 + 2] = 0x40;
-            buf[0x02 + 3] = 0x40;
+            report[0x02 + 0] = 0x00;
+            report[0x02 + 1] = 0x01;
+            report[0x02 + 2] = 0x40;
+            report[0x02 + 3] = 0x40;
 
             // Right rumble OFF data
-            buf[0x02 + 4] = 0x00;
-            buf[0x02 + 5] = 0x01;
-            buf[0x02 + 6] = 0x40;
-            buf[0x02 + 7] = 0x40;
+            report[0x02 + 4] = 0x00;
+            report[0x02 + 5] = 0x01;
+            report[0x02 + 6] = 0x40;
+            report[0x02 + 7] = 0x40;
           }
-          switch_devices[dev_addr].instances[instance].command_ack = false;
-          send_command_switch_pro(dev_addr, instance, buf, 10);
+
+          switch_devices[dev_addr].instances[instance].rumble = rumble;
+
+          tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
       }
     }
@@ -458,6 +487,7 @@ static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
 {
   TU_LOG1("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
 
+  switch_devices[dev_addr].instances[instance].command_ack = true;
   if ((++switch_devices[dev_addr].instance_count) == 1) {
     switch_devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
   }

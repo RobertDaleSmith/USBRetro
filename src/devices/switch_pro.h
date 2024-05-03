@@ -6,16 +6,22 @@
 #include "device_utils.h"
 #include "tusb.h"
 
-// Switch Pro Output Commands
-#define PROCON_REPORT_SEND_USB 0x80
-#define PROCON_USB_HANDSHAKE   0x02
-#define PROCON_USB_BAUD        0x03
-#define PROCON_USB_ENABLE      0x04
-#define PROCON_USB_DO_CMD      0x92
-#define PROCON_CMD_AND_RUMBLE  0x01
-#define PROCON_CMD_MODE        0x03
-#define PROCON_CMD_LED_HOME    0x38
-#define PROCON_ARG_INPUT_FULL  0x30
+// commands
+#define CMD_HID 0x80
+#define SUBCMD_HANDSHAKE 0x02
+#define SUBCMD_USB_BAUD 0x03
+#define SUBCMD_DISABLE_TIMEOUT 0x04
+
+// out report commands
+#define CMD_RUMBLE_ONLY 0x10
+#define CMD_AND_RUMBLE 0x01
+
+// out report subcommands
+#define CMD_LED 0x30
+#define CMD_LED_HOME 0x38
+#define CMD_GYRO 0x40
+#define CMD_MODE 0x03
+#define SUBCMD_FULL_REPORT_MODE 0x30
 
 extern DeviceInterface switch_pro_interface;
 
