@@ -27,6 +27,7 @@ typedef struct TU_ATTR_PACKED
   switch_instance_t instances[CFG_TUH_HID];
   uint8_t instance_count;
   uint8_t instance_root;
+  bool is_pro;
 } switch_device_t;
 
 static switch_device_t switch_devices[MAX_DEVICES] = { 0 };
@@ -85,6 +86,7 @@ void unmount_switch_pro(uint8_t dev_addr, uint8_t instance)
   switch_devices[dev_addr].instances[instance].imu_enabled = false;
   switch_devices[dev_addr].instances[instance].rumble = 0;
   switch_devices[dev_addr].instances[instance].player_led_set = 0xff;
+  switch_devices[dev_addr].is_pro = false;
 
   if (switch_devices[dev_addr].instance_count > 1) {
     switch_devices[dev_addr].instance_count--;
@@ -180,36 +182,36 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       uint8_t rightX = 0;
       uint8_t rightY = 0;
 
-      bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
-      bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
-      if (is_left_joycon) {
-        dpad_up    = update_report.up;
-        dpad_right = update_report.right;
-        dpad_down  = update_report.down;
-        dpad_left  = update_report.left;
-        bttn_l1 = update_report.l;
-        bttn_s2 = false;
-
-        leftX = scale_analog_switch_pro(update_report.left_x + 127);
-        leftY = scale_analog_switch_pro(update_report.left_y - 127);
-      }
-      else if (is_right_joycon)
-      {
-        dpad_up    = false; // (right_stick_y > (2048 + threshold));
-        dpad_right = false; // (right_stick_x > (2048 + threshold));
-        dpad_down  = false; // (right_stick_y < (2048 - threshold));
-        dpad_left  = false; // (right_stick_x < (2048 - threshold));
-        bttn_a1 = false;
-
-        rightX = scale_analog_switch_pro(update_report.right_x);
-        rightY = scale_analog_switch_pro(update_report.right_y + 127);
-      }
-      else
-      {
+      if (switch_devices[dev_addr].is_pro) {
         leftX = scale_analog_switch_pro(update_report.left_x);
         leftY = scale_analog_switch_pro(update_report.left_y);
         rightX = scale_analog_switch_pro(update_report.right_x);
         rightY = scale_analog_switch_pro(update_report.right_y);
+      } else {
+        bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
+        bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
+        if (is_left_joycon) {
+          dpad_up    = update_report.up;
+          dpad_right = update_report.right;
+          dpad_down  = update_report.down;
+          dpad_left  = update_report.left;
+          bttn_l1 = update_report.l;
+          bttn_s2 = false;
+
+          leftX = scale_analog_switch_pro(update_report.left_x + 127);
+          leftY = scale_analog_switch_pro(update_report.left_y - 127);
+        }
+        else if (is_right_joycon)
+        {
+          dpad_up    = false; // (right_stick_y > (2048 + threshold));
+          dpad_right = false; // (right_stick_x > (2048 + threshold));
+          dpad_down  = false; // (right_stick_y < (2048 - threshold));
+          dpad_left  = false; // (right_stick_x < (2048 - threshold));
+          bttn_a1 = false;
+
+          rightX = scale_analog_switch_pro(update_report.right_x);
+          rightY = scale_analog_switch_pro(update_report.right_y + 127);
+        }
       }
 
       buttons = (((dpad_up)              ? 0x00 : USBR_BUTTON_DU) |
@@ -491,6 +493,10 @@ static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
   if ((++switch_devices[dev_addr].instance_count) == 1) {
     switch_devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
   }
+
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
+  if (pid == 0x2009) switch_devices[dev_addr].is_pro = true;
 }
 
 DeviceInterface switch_pro_interface = {
