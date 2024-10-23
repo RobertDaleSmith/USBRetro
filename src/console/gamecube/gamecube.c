@@ -273,7 +273,7 @@ void __not_in_flash_func(update_output)(void)
       gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
       gc_report.a          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // CROSS
       gc_report.b          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // SQUARE
-      gc_report.b          |= ((byte & USBR_BUTTON_L1) == 0) ? 1 : 0; // L1
+      // gc_report.b          |= ((byte & USBR_BUTTON_L1) == 0) ? 1 : 0; // L1
       gc_report.x          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // CIRCLE
       gc_report.y          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // TRIANGLE
       gc_report.z          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // R1
@@ -287,13 +287,16 @@ void __not_in_flash_func(update_output)(void)
       gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
       gc_report.r_analog   = furthest_from_center(gc_report.r_analog, players[i].output_analog_r, 0);
 
-      if (gc_report.l_analog > 20) {
-        gc_report.l_analog = 255;
+      if (gc_report.l_analog > 250) {
+        // gc_report.l_analog = 255;
         gc_report.l |= 1;
       }
       if (gc_report.r_analog > 20) {
         gc_report.r_analog = 255;
         gc_report.r |= 1;
+      }
+      if (((byte & USBR_BUTTON_L1) == 0)) {
+        gc_report.stick_y = 1;
       }
     }
     else
@@ -384,7 +387,7 @@ void __not_in_flash_func(post_globals)(
     // }
     // else if (analog_l > 250)
     // {
-    //   players[player_index].output_buttons &= ~0x4000;
+    //   players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     // }
 
     // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);

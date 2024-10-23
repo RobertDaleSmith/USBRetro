@@ -189,8 +189,8 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 // process usb hid output reports
 void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble) {
   ds5_feedback_t ds5_fb = {0};
-  // int32_t perc_threshold_l = -1;
-  // int32_t perc_threshold_r = -1;
+  int32_t perc_threshold_l = -1;
+  int32_t perc_threshold_r = -1;
 
   // set flags for trigger_r, trigger_l, lightbar, and player_led
   ds5_fb.flags |= (1 << 0 | 1 << 1); // haptics
@@ -198,40 +198,40 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   ds5_fb.flags |= (1 << 12); // player_led
 #ifdef CONFIG_NGC
   // gamecube simulated triggers
-  // ds5_fb.flags |= (1 << 2); // trigger_r
-  // ds5_fb.flags |= (1 << 3); // trigger_l
+  ds5_fb.flags |= (1 << 2); // trigger_r
+  ds5_fb.flags |= (1 << 3); // trigger_l
 
-  // if (GC_TRIGGER_THRESHOLD > perc_threshold_l) {
-  //   perc_threshold_l = GC_TRIGGER_THRESHOLD;
-  // }
+  if (GC_TRIGGER_THRESHOLD > perc_threshold_l) {
+    perc_threshold_l = GC_TRIGGER_THRESHOLD;
+  }
 
-  // if (GC_TRIGGER_THRESHOLD > perc_threshold_r) {
-  //   perc_threshold_r = GC_TRIGGER_THRESHOLD;
-  // }
+  if (GC_TRIGGER_THRESHOLD > perc_threshold_r) {
+    perc_threshold_r = GC_TRIGGER_THRESHOLD;
+  }
 
   // gamecube simulated analog/digital click
-  // uint8_t l2_start_resistance_value = (perc_threshold_l * 255) / 100;
-  // uint8_t r2_start_resistance_value = (perc_threshold_r * 255) / 100;
+  uint8_t l2_start_resistance_value = (perc_threshold_l * 255) / 100;
+  uint8_t r2_start_resistance_value = (perc_threshold_r * 255) / 100;
 
-  // uint8_t l2_trigger_start_resistance = (uint8_t)(0x94 * (l2_start_resistance_value / 255.0));
-  // uint8_t l2_trigger_effect_force =
-  //   (uint8_t)((0xb4 - l2_trigger_start_resistance) * (l2_start_resistance_value / 255.0) + l2_trigger_start_resistance);
+  uint8_t l2_trigger_start_resistance = (uint8_t)(0x94 * (l2_start_resistance_value / 255.0));
+  uint8_t l2_trigger_effect_force =
+    (uint8_t)((0xb4 - l2_trigger_start_resistance) * (l2_start_resistance_value / 255.0) + l2_trigger_start_resistance);
 
-  // uint8_t r2_trigger_start_resistance = (uint8_t)(0x94 * (r2_start_resistance_value / 255.0));
-  // uint8_t r2_trigger_effect_force =
-  //   (uint8_t)((0xb4 - r2_trigger_start_resistance) * (r2_start_resistance_value / 255.0) + r2_trigger_start_resistance);
+  uint8_t r2_trigger_start_resistance = (uint8_t)(0x94 * (r2_start_resistance_value / 255.0));
+  uint8_t r2_trigger_effect_force =
+    (uint8_t)((0xb4 - r2_trigger_start_resistance) * (r2_start_resistance_value / 255.0) + r2_trigger_start_resistance);
 
   // gamecube trigger left click
-  // ds5_fb.trigger_l.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
-  // ds5_fb.trigger_l.start_resistance = l2_trigger_start_resistance;
-  // ds5_fb.trigger_l.effect_force = l2_trigger_effect_force;
-  // ds5_fb.trigger_l.range_force = 0xff;
+  ds5_fb.trigger_l.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
+  ds5_fb.trigger_l.start_resistance = l2_trigger_start_resistance;
+  ds5_fb.trigger_l.effect_force = l2_trigger_effect_force;
+  ds5_fb.trigger_l.range_force = 0xff;
 
   // gamecube trigger right click
-  // ds5_fb.trigger_r.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
-  // ds5_fb.trigger_r.start_resistance = r2_trigger_start_resistance;
-  // ds5_fb.trigger_r.effect_force = r2_trigger_effect_force;
-  // ds5_fb.trigger_r.range_force = 0xff;
+  ds5_fb.trigger_r.motor_mode = perc_threshold_r > -1 ? 0x02 : 0x00; // Set type
+  ds5_fb.trigger_r.start_resistance = r2_trigger_start_resistance;
+  ds5_fb.trigger_r.effect_force = r2_trigger_effect_force;
+  ds5_fb.trigger_r.range_force = 0xff;
 
   switch (player_index+1)
   {
