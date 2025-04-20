@@ -15,7 +15,7 @@ pico_sdk_init()
 
 set(FAMILY rp2040)
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/tusb_xinput xinput_host)
+#add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/tusb_xinput xinput_host)
 
 add_executable(usbretro_pce) # For the usbretro_pce target
 add_executable(usbretro_ngc) # For the usbretro_ngc target
@@ -90,7 +90,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/switch_pro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_registry.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
@@ -156,7 +156,7 @@ set(COMMON_LIBRARIES
     hardware_pio
     tinyusb_host
     tinyusb_board
-    xinput_host
+    #xinput_host
 )
 
 target_link_libraries(usbretro_pce PRIVATE # FOR PCE

@@ -1,7 +1,7 @@
 // hid_keyboard.c
 #include "hid_keyboard.h"
 #include "globals.h"
-#include "bsp/board_api.h"
+#include "pico/time.h"
 
 #ifdef CONFIG_NGC
 #define KB_ANALOG_MID 28
@@ -513,7 +513,7 @@ void task_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, uin
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
-  uint32_t current_time_ms = board_millis();
+  uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms)
   {
     start_ms = current_time_ms;

@@ -1,7 +1,7 @@
 // switch_pro.c
 #include "switch_pro.h"
 #include "globals.h"
-#include "bsp/board_api.h"
+#include "pico/time.h"
 
 // Switch instance state
 typedef struct TU_ATTR_PACKED
@@ -476,7 +476,7 @@ void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
-  uint32_t current_time_ms = board_millis();
+  uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms)
   {
     start_ms = current_time_ms;
