@@ -23,6 +23,11 @@ add_executable(usbretro_xb1) # For the usbretro_xb1 target
 add_executable(usbretro_nuon) # For the usbretro_nuon target
 add_executable(usbretro_loopy) # For the usbretro_loopy target
 
+if (PICO_BOARD STREQUAL "pico")
+    message(STATUS "PICO_BOARD is '${PICO_BOARD}', applying RPI_PICO_BUILD definition for usbretro_pce.")
+    target_compile_definitions(usbretro_pce PRIVATE RPI_PICO_BUILD=1)
+endif()
+
 target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
 target_compile_definitions(usbretro_xb1 PRIVATE CONFIG_XB1=1)
