@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.12)
 include(pico_sdk_import.cmake)
 
 project(usbretro C CXX ASM)
+add_compile_options(-fcommon)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3") # Set optimization level to O3
