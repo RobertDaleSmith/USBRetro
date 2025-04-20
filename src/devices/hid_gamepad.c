@@ -1,5 +1,4 @@
 // hid_gamepad.c
-#include "bsp/board_api.h"
 #include "hid_gamepad.h"
 #include "hid_parser.h"
 #include "globals.h"
