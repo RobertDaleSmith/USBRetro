@@ -32,7 +32,7 @@
 
 extern void hid_app_init(void);
 extern void hid_app_task(uint8_t rumble, uint8_t leds);
-//extern void xinput_task(uint8_t rumble);
+extern void xinput_task(uint8_t rumble);
 
 extern void neopixel_init(void);
 extern void neopixel_task(int pat);
@@ -61,7 +61,7 @@ static void __not_in_flash_func(process_signals)(void)
     neopixel_task(playersCount);
 
     // xinput rumble task
-    //xinput_task(gc_rumble);
+    xinput_task(gc_rumble);
 
 #if CFG_TUH_HID
     // hid_device rumble/led task
