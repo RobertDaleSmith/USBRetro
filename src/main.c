@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "bsp/board_api.h"
 #include "tusb.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
