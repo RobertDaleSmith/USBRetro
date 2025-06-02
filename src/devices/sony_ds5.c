@@ -114,16 +114,16 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                  ((ds5_report.circle)   ? 0x00 : USBR_BUTTON_B2) |
                  ((ds5_report.square)   ? 0x00 : USBR_BUTTON_B3) |
                  ((ds5_report.triangle) ? 0x00 : USBR_BUTTON_B4) |
-                 ((ds5_report.l1)       ? 0x00 : USBR_BUTTON_L1) |
-                 ((ds5_report.r1)       ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds5_report.l1)       ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds5_report.r1)       ? 0x00 : USBR_BUTTON_R2) |
                  ((ds5_report.l2)       ? 0x00 : USBR_BUTTON_L2) |
-                 ((ds5_report.r2)       ? 0x00 : USBR_BUTTON_R2) |
-                 ((ds5_report.share)    ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds5_report.r2)       ? 0x00 : USBR_BUTTON_S1) |
+                 ((ds5_report.share)    ? 0x00 : USBR_BUTTON_S2) |
                  ((ds5_report.option)   ? 0x00 : USBR_BUTTON_S2) |
                  ((ds5_report.l3)       ? 0x00 : USBR_BUTTON_L3) |
                  ((ds5_report.r3)       ? 0x00 : USBR_BUTTON_R3) |
-                 ((ds5_report.ps)       ? 0x00 : USBR_BUTTON_A1) |
-                 ((ds5_report.tpad)     ? 0x00 : USBR_BUTTON_A2) |
+                 ((ds5_report.ps)       ? 0x00 : USBR_BUTTON_S2) |
+                 ((ds5_report.tpad)     ? 0x00 : USBR_BUTTON_S2) |
                  ((1)/*has_6btns*/      ? 0x00 : 0x800));
 
 #ifdef CONFIG_NUON
