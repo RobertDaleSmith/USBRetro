@@ -22,6 +22,7 @@ bool diff_report_pokken(hori_pokken_report_t const* rpt1, hori_pokken_report_t c
 
 // process usb hid input reports
 void process_hori_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static hori_pokken_report_t prev_report[5][5];
 
@@ -29,6 +30,7 @@ void process_hori_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
   memcpy(&update_report, report, sizeof(update_report));
 
   if (diff_report_pokken(&prev_report[dev_addr-1][instance], &update_report)) {
+    uint32_t buttons;
     TU_LOG1("(x, y, z, rz) = (%u, %u %u, %u)\r\n", update_report.x_axis, update_report.y_axis, update_report.z_axis, update_report.rz_axis);
     TU_LOG1("DPad = %d ", update_report.dpad);
     if (update_report.y) TU_LOG1("Y ");

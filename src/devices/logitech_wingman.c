@@ -31,6 +31,7 @@ bool diff_report_logitech_wingman(logitech_wingman_report_t const* rpt1, logitec
 
 // process usb hid input reports
 void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static logitech_wingman_report_t prev_report[5] = { 0 };
 

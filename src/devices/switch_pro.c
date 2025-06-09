@@ -117,6 +117,7 @@ void print_report_switch_pro(switch_pro_report_01_t* report, uint32_t length)
 // process usb hid input reports
 void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
+  uint32_t buttons;
   // previous report used to compare for changes
   static switch_pro_report_t prev_report[5][5];
 

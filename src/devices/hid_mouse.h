@@ -15,7 +15,6 @@ extern DeviceInterface hid_mouse_interface;
 // Uncomment the following line if you desire button-swap when middle button is clicd:
 // #define MID_BUTTON_SWAPPABLE  true
 
-uint32_t buttons;
 extern int16_t spinner;
 uint8_t local_x;
 uint8_t local_y;

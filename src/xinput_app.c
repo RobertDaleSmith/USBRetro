@@ -41,6 +41,7 @@ usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count){
 
 void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
 {
+  uint32_t buttons;
   const xinput_gamepad_t *p = &xid_itf->pad;
   const char* type_str;
 

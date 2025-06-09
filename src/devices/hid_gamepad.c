@@ -320,6 +320,7 @@ uint8_t scale_analog_hid_gamepad(uint16_t value, uint32_t max_value)
 // process generic usb hid input reports (from parsed HID descriptor byteIndexes & bitMasks)
 void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
+  uint32_t buttons = 0;
   static dinput_gamepad_t previous[5][5];
   dinput_gamepad_t current = {0};
   current.value = 0;

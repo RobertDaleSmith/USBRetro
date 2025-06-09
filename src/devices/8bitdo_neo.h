@@ -15,6 +15,4 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_neo_report_t;
 
-uint32_t buttons;
-
 #endif

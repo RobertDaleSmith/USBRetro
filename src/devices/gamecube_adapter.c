@@ -25,13 +25,15 @@ bool diff_report_gamecube_adapter(gamecube_adapter_report_t const* rpt1, gamecub
 
 // process usb hid input reports
 void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static gamecube_adapter_report_t prev_report[5][4];
 
   gamecube_adapter_report_t gamecube_report;
   memcpy(&gamecube_report, report, sizeof(gamecube_report));
 
-  if (gamecube_report.report_id == 0x21) { // GameCube Controller Report
+  if (gamecube_report.report_id == 0x21) {
+    uint32_t buttons; // GameCube Controller Report
     for(int i = 0; i < 4; i++) {
       if (gamecube_report.port[i].connected) {
         if (diff_report_gamecube_adapter(&prev_report[dev_addr-1][instance + i], &gamecube_report, i)) {

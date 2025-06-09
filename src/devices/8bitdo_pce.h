@@ -31,6 +31,4 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_pce_report_t;
 
-uint32_t buttons;
-
 #endif
