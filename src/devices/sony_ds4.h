@@ -112,7 +112,5 @@ typedef struct TU_ATTR_PACKED {
 } sony_ds4_output_report_t;
 
 extern int16_t spinner;
-uint16_t tpadLastPos;
-bool tpadDragging;
 
 #endif

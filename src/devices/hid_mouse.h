@@ -16,7 +16,5 @@ extern DeviceInterface hid_mouse_interface;
 // #define MID_BUTTON_SWAPPABLE  true
 
 extern int16_t spinner;
-uint8_t local_x;
-uint8_t local_y;
 
 #endif

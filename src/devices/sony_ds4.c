@@ -3,6 +3,9 @@
 #include "globals.h"
 #include "pico/time.h"
 
+static uint16_t tpadLastPos;
+static bool tpadDragging;
+
 // DualSense instance state
 typedef struct TU_ATTR_PACKED
 {
