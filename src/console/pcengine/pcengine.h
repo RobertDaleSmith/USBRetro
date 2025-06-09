@@ -40,14 +40,14 @@
 #define BUTTON_MODE_3_RUN 0x03
 
 // Declaration of global variables
-uint64_t cpu_frequency;
-uint64_t timer_threshold;
-uint64_t timer_threshold_a;
-uint64_t timer_threshold_b;
-uint64_t turbo_frequency;
+extern uint64_t cpu_frequency;
+extern uint64_t timer_threshold;
+extern uint64_t timer_threshold_a;
+extern uint64_t timer_threshold_b;
+extern uint64_t turbo_frequency;
 
-PIO pio;
-uint sm1, sm2, sm3; // sm1 = plex; sm2 = clock, sm3 = select
+extern PIO pio;
+extern uint sm1, sm2, sm3; // sm1 = plex; sm2 = clock, sm3 = select
 
 // Function declarations
 void pce_init(void);

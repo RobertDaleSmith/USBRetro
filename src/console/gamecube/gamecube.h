@@ -33,7 +33,7 @@
 #define BUTTON_MODE_KB 0x05
 
 // Global variables
-PIO pio;
+extern PIO pio;
 
 // Function declarations
 void ngc_init(void);

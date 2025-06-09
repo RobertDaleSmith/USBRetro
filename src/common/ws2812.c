@@ -23,8 +23,8 @@
 
 extern bool is_fun;
 
-PIO pio;
-uint sm;
+static PIO pio;
+static uint sm;
 
 static absolute_time_t init_time;
 static absolute_time_t current_time;

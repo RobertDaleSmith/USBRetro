@@ -16,6 +16,10 @@
 #include "pico/multicore.h"
 #include "globals.h"
 
+bool update_pending = false;
+uint8_t gc_rumble = 0;
+uint8_t gc_kb_led = 0;
+
 // include console specific handling
 #ifdef CONFIG_NGC
 #include "console/gamecube/gamecube.h"

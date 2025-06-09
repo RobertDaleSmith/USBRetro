@@ -38,16 +38,11 @@
 // TODO: add A2 and make button values uniform
 
 // handles state of multi-player inputs
-bool update_pending;
+extern bool update_pending;
 
 // GameCube rumble and keyboard LED states
-uint8_t gc_rumble;
-uint8_t gc_kb_led;
-
-// konami code easter egg
-bool is_fun;
-unsigned char fun_inc;
-unsigned char fun_player;
+extern uint8_t gc_rumble;
+extern uint8_t gc_kb_led;
 
 // common console response for controller data
 void __not_in_flash_func(post_globals)(

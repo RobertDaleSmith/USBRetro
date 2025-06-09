@@ -2,6 +2,9 @@
 #include "hid_mouse.h"
 #include "globals.h"
 
+static uint8_t local_x;
+static uint8_t local_y;
+
 // Button swap functionality
 // -------------------------
 #ifdef MID_BUTTON_SWAPPABLE

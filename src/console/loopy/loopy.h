@@ -48,8 +48,8 @@
 #define LOOPY_BIT6 (1<<6)
 #define LOOPY_BIT7 (1<<7)
 
-PIO pio;
-uint sm1, sm2, sm3; // sm1 = ROW0, sm2 = ROW1, sm3 = ROW2
+extern PIO pio;
+extern uint sm1, sm2, sm3; // sm1 = ROW0, sm2 = ROW1, sm3 = ROW2
 
 // Function declarations
 void loopy_init(void);

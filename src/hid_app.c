@@ -25,7 +25,6 @@ typedef struct TU_ATTR_PACKED
 
 static device_t devices[MAX_DEVICES] = { 0 };
 int16_t spinner = 0;
-uint32_t buttons;
 
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
