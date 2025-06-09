@@ -8,6 +8,4 @@
 
 extern DeviceInterface hid_keyboard_interface;
 
-uint32_t buttons;
-
 #endif

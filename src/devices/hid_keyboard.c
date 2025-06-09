@@ -234,6 +234,7 @@ static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8
 // process usb hid input reports
 void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid_kb_report, uint16_t len)
 {
+  uint32_t buttons;
   hid_keyboard_report_t const* report = (hid_keyboard_report_t const*)hid_kb_report;
   static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
 

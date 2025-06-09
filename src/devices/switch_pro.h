@@ -76,6 +76,4 @@ typedef union
   uint8_t buf[sizeof(switch_pro_report_t)];
 } switch_pro_report_01_t;
 
-uint32_t buttons;
-
 #endif

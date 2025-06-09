@@ -52,6 +52,4 @@ typedef struct TU_ATTR_PACKED
 
 } triple_adapter_v2_report_t;
 
-uint32_t buttons;
-
 #endif

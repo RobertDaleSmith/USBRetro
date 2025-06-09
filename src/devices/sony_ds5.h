@@ -100,7 +100,6 @@ typedef struct {
     }; // @ 44-46
 } ds5_feedback_t;
 
-uint32_t buttons;
 extern int16_t spinner;
 uint16_t tpadLastPos;
 bool tpadDragging;

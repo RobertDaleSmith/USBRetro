@@ -111,7 +111,6 @@ typedef struct TU_ATTR_PACKED {
   uint8_t other[9];
 } sony_ds4_output_report_t;
 
-uint32_t buttons;
 extern int16_t spinner;
 uint16_t tpadLastPos;
 bool tpadDragging;

@@ -41,6 +41,4 @@ typedef struct TU_ATTR_PACKED
 
 } bitdo_m30_report_t;
 
-uint32_t buttons;
-
 #endif
