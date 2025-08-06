@@ -109,16 +109,16 @@ If you run into any issues, then please submit a bug report on the issues tab of
 | B2          | I             | C-Down      | A           | B           |
 | B3          | IV (turbo II) | B           | Y           | X           |
 | B4          | III (turbo I) | C-Left      | X           | Y           |
-| L1          | VI            | L           | L           | LB          |
-| R1          | V             | R           | R           | RB          |
+| L1          | VI            | L           | light shield| LB          |
+| R1          | V             | R           | Z           | RB          |
 | L2          |               | C-Up        | L (switch Z)| LT          |
 | R2          |               | C-Right     | R (switch Z)| RT          |
-| S1          | Select        | Nuon        | Z           | Back        |
+| S1          | Select        | Nuon        |             | Back        |
 | S2          | Run           | Start       | Start       | Start       |
 | L3          |               |             |             | LS          |
 | R3          |               |             |             | RS          |
 | A1          |               |             |             | Guide       |
-| A2          |               | Nuon        | Z           |             |
+| A2          |               | Nuon        |             |             |
 
 ## Compiling
 ### Setup

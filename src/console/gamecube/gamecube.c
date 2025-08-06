@@ -273,12 +273,12 @@ void __not_in_flash_func(update_output)(void)
       gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
       gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
       gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
-      gc_report.z          |= ((byte & USBR_BUTTON_S1) == 0) ? 1 : 0; // select
+      gc_report.z          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
       gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
       gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
       gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
-      gc_report.l          |= ((byte & USBR_BUTTON_L1) == 0) ? 1 : 0; // l
-      gc_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
+      gc_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // l
+      gc_report.r          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // r
 
       // global dominate axis
       gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x, 128);
@@ -287,6 +287,11 @@ void __not_in_flash_func(update_output)(void)
       gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
       gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
       gc_report.r_analog   = furthest_from_center(gc_report.r_analog, players[i].output_analog_r, 0);
+
+      // L1 to 1% left analog
+      if ((byte & USBR_BUTTON_L1) == 0 && gc_report.l_analog < 1) {
+        gc_report.l_analog = 1;
+      }
     }
     else
     {
@@ -360,23 +365,19 @@ void __not_in_flash_func(post_globals)(
     players[player_index].keypress[1] = (keys >> 8) & 0xff;
     players[player_index].keypress[2] = (keys >> 16) & 0xff;
 
+    // ignore digital L2/R2 to fire only when digital reaches threshold
+    players[player_index].output_buttons |= USBR_BUTTON_L2;
+    players[player_index].output_buttons |= USBR_BUTTON_R2;
+
     // full analog and digital L/R press always happen together
-    if (!((players[player_index].output_buttons) & 0x8000))
+    if (analog_r > GC_DIGITAL_TRIGGER_THRESHOLD)
     {
-      players[player_index].output_analog_r = 255;
-    }
-    else if (analog_r > 250)
-    {
-      players[player_index].output_buttons &= ~0x8000;
+      players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }
 
-    if (!((players[player_index].output_buttons) & 0x4000))
+    if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)
     {
-      players[player_index].output_analog_l = 255;
-    }
-    else if (analog_l > 250)
-    {
-      players[player_index].output_buttons &= ~0x4000;
+      players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     }
 
     // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
