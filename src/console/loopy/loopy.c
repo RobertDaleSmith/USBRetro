@@ -6,6 +6,9 @@
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 
+PIO pio;
+uint sm1, sm2, sm3;
+
 uint32_t output_word = 0;
 
 // init for casio loopy communication

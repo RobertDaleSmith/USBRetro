@@ -16,13 +16,22 @@
 #undef MAX_PLAYERS
 #define MAX_PLAYERS 5               // PCE supports up to 5 players
 
-// ADAFRUIT_KB2040                  // build for Adafruit KB2040 board
+// Defaults to ADAFRUIT_KB2040, build for Adafruit KB2040 board
 #define DATAIN_PIN  18
 #define CLKIN_PIN   DATAIN_PIN + 1  // Note - in pins must be a consecutive 'in' group
-#define OUTD0_PIN   26              // Note - out pins must be a consecutive 'out' group
-#define OUTD1_PIN   27
-#define OUTD2_PIN   28
-#define OUTD3_PIN   29
+
+#ifdef RPI_PICO_BUILD
+  #define OUTD0_PIN   4
+  #define OUTD1_PIN   5
+  #define OUTD2_PIN   6
+  #define OUTD3_PIN   7
+#else
+  // Default configuration
+  #define OUTD0_PIN   26 // Note - out pins must be a consecutive 'out' group
+  #define OUTD1_PIN   27
+  #define OUTD2_PIN   28
+  #define OUTD3_PIN   29
+#endif
 
 // PCE button modes
 #define BUTTON_MODE_2 0x00
@@ -31,14 +40,14 @@
 #define BUTTON_MODE_3_RUN 0x03
 
 // Declaration of global variables
-uint64_t cpu_frequency;
-uint64_t timer_threshold;
-uint64_t timer_threshold_a;
-uint64_t timer_threshold_b;
-uint64_t turbo_frequency;
+extern uint64_t cpu_frequency;
+extern uint64_t timer_threshold;
+extern uint64_t timer_threshold_a;
+extern uint64_t timer_threshold_b;
+extern uint64_t turbo_frequency;
 
-PIO pio;
-uint sm1, sm2, sm3; // sm1 = plex; sm2 = clock, sm3 = select
+extern PIO pio;
+extern uint sm1, sm2, sm3; // sm1 = plex; sm2 = clock, sm3 = select
 
 // Function declarations
 void pce_init(void);

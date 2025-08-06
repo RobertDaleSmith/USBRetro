@@ -1,7 +1,7 @@
 // gamecube_adapter.c
 #include "gamecube_adapter.h"
 #include "globals.h"
-#include "bsp/board_api.h"
+#include "pico/time.h"
 
 // check if device is GameCube Adapter for WiiU/Switch
 static inline bool is_gamecube_adapter(uint16_t vid, uint16_t pid) {
@@ -25,13 +25,15 @@ bool diff_report_gamecube_adapter(gamecube_adapter_report_t const* rpt1, gamecub
 
 // process usb hid input reports
 void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static gamecube_adapter_report_t prev_report[5][4];
 
   gamecube_adapter_report_t gamecube_report;
   memcpy(&gamecube_report, report, sizeof(gamecube_report));
 
-  if (gamecube_report.report_id == 0x21) { // GameCube Controller Report
+  if (gamecube_report.report_id == 0x21) {
+    uint32_t buttons; // GameCube Controller Report
     for(int i = 0; i < 4; i++) {
       if (gamecube_report.port[i].connected) {
         if (diff_report_gamecube_adapter(&prev_report[dev_addr-1][instance + i], &gamecube_report, i)) {
@@ -131,7 +133,7 @@ void task_gamecube_adapter(uint8_t dev_addr, uint8_t instance, int player_index,
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
-  uint32_t current_time_ms = board_millis();
+  uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
     output_gamecube_adapter(dev_addr, instance, player_index, rumble);

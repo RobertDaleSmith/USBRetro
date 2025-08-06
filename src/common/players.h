@@ -47,11 +47,11 @@ typedef struct TU_ATTR_PACKED
 } Player_t;
 
 // Declaration of global variables
-Player_t players[MAX_PLAYERS];
-int playersCount;
+extern Player_t players[MAX_PLAYERS];
+extern int playersCount;
 
 // used to set the LED patterns on PS3/Switch controllers
-const uint8_t PLAYER_LEDS[11];
+extern const uint8_t PLAYER_LEDS[11];
 
 // Function declarations
 int __not_in_flash_func(find_player_index)(int dev_addr, int instance);

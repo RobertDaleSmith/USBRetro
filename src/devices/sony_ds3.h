@@ -81,6 +81,4 @@ typedef union
   uint8_t buf[49];
 } sony_ds3_output_report_01_t;
 
-uint32_t buttons;
-
 #endif

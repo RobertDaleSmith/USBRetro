@@ -25,7 +25,6 @@ typedef struct TU_ATTR_PACKED
 
 static device_t devices[MAX_DEVICES] = { 0 };
 int16_t spinner = 0;
-uint32_t buttons;
 
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
@@ -36,6 +35,7 @@ void hid_app_init()
 
 void hid_app_task(uint8_t rumble, uint8_t leds)
 {
+  uint32_t buttons;
   if (is_fun) {
     fun_inc++;
     if (!fun_inc) fun_player = ++fun_player%0x20;

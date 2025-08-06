@@ -14,11 +14,11 @@
 #endif
 
 // Declaration of global variables
-uint32_t code_buffer[CODE_LENGTH];
-uint32_t konami_code[CODE_LENGTH];
-bool is_fun;
-unsigned char fun_inc;
-unsigned char fun_player;
+extern uint32_t code_buffer[CODE_LENGTH];
+extern uint32_t konami_code[CODE_LENGTH];
+extern bool is_fun;
+extern unsigned char fun_inc;
+extern unsigned char fun_player;
 
 // Function declarations
 void codes_task(void);

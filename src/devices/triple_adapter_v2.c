@@ -40,6 +40,7 @@ bool diff_report_triple_adapter_v2(triple_adapter_v2_report_t const* rpt1, tripl
 
 // process usb hid input reports
 void process_triple_adapter_v2(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static triple_adapter_v2_report_t prev_report[5][5];
 

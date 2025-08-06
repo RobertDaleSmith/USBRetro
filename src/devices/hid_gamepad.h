@@ -55,6 +55,4 @@ typedef union
 
 extern DeviceInterface hid_gamepad_interface;
 
-uint32_t buttons;
-
 #endif

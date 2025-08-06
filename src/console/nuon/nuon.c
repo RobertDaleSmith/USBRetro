@@ -2,6 +2,10 @@
 
 #include "nuon.h"
 
+PIO pio;
+uint sm1, sm2;
+int crc_lut[256]; // crc look up table
+
 // Definition of global variables
 uint32_t output_buttons_0 = 0;
 uint32_t output_analog_1x = 0;

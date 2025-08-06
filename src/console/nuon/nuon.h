@@ -63,10 +63,10 @@
 #define KONAMI_CODE {NUON_BUTTON_UP, NUON_BUTTON_UP, NUON_BUTTON_DOWN, NUON_BUTTON_DOWN, NUON_BUTTON_LEFT, NUON_BUTTON_RIGHT, NUON_BUTTON_LEFT, NUON_BUTTON_RIGHT, NUON_BUTTON_B, NUON_BUTTON_A}
 
 // Declaration of global variables
-PIO pio;
-uint sm1, sm2; // sm1 = send; sm2 = read
+extern PIO pio;
+extern uint sm1, sm2; // sm1 = send; sm2 = read
 
-static int crc_lut[256]; // crc look up table
+extern int crc_lut[256]; // crc look up table
 // queue_t packet_queue;
 
 // Function declarations

@@ -24,6 +24,7 @@ bool diff_report_pokken(dragonrise_report_t const* rpt1, dragonrise_report_t con
 
 // process usb hid input reports
 void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  uint32_t buttons;
   // previous report used to compare for changes
   static dragonrise_report_t prev_report[5][5];
 
@@ -32,6 +33,7 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
   if ( dragonrise_diff_report(&prev_report[dev_addr-1][instance], &update_report) )
   {
+    uint32_t buttons;
     TU_LOG1("(x1, y1, x2, y2) = (%u, %u, %u, %u)\r\n", update_report.axis0_x, update_report.axis0_y, update_report.axis1_x, update_report.axis1_y);
     // Y,X,L,R extra button data may or may not be used by similiar generic controller variants
     if (update_report.y) TU_LOG1("Y ");

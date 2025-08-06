@@ -32,6 +32,4 @@ typedef struct TU_ATTR_PACKED
 
 } dragonrise_report_t;
 
-uint32_t buttons;
-
 #endif

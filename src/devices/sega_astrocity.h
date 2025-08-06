@@ -36,6 +36,4 @@ typedef struct TU_ATTR_PACKED
 
 } sega_astrocity_report_t;
 
-uint32_t buttons;
-
 #endif

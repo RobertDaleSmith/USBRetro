@@ -2,6 +2,9 @@
 #include "hid_mouse.h"
 #include "globals.h"
 
+static uint8_t local_x;
+static uint8_t local_y;
+
 // Button swap functionality
 // -------------------------
 #ifdef MID_BUTTON_SWAPPABLE
@@ -52,6 +55,7 @@ void cursor_movement(int8_t x, int8_t y, int8_t wheel, uint8_t spinner)
 
 // process usb hid input reports
 void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_report, uint16_t len) {
+  uint32_t buttons;
   hid_mouse_report_t const* report = (hid_mouse_report_t const*)mouse_report;
   static hid_mouse_report_t prev_report = { 0 };
 

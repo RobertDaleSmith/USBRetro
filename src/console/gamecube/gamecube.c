@@ -10,6 +10,7 @@
 // Declaration of global variables
 GamecubeConsole gc;
 gc_report_t gc_report;
+PIO pio;
 
 extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
@@ -17,8 +18,6 @@ extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *re
 extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
 
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
-uint8_t gc_rumble = 0;
-uint8_t gc_kb_led = 0;
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 

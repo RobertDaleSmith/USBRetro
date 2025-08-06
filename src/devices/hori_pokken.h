@@ -37,6 +37,4 @@ typedef struct TU_ATTR_PACKED
 
 } hori_pokken_report_t;
 
-uint32_t buttons;
-
 #endif

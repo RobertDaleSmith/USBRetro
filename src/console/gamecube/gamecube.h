@@ -36,7 +36,7 @@
 #define GC_DIGITAL_TRIGGER_THRESHOLD 230
 
 // Global variables
-PIO pio;
+extern PIO pio;
 
 // Function declarations
 void ngc_init(void);

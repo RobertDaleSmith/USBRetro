@@ -7,6 +7,15 @@
 #include "hardware/uart.h"
 #endif
 
+uint64_t cpu_frequency;
+uint64_t timer_threshold;
+uint64_t timer_threshold_a;
+uint64_t timer_threshold_b;
+uint64_t turbo_frequency;
+
+PIO pio;
+uint sm1, sm2, sm3;
+
 // Definition of global variables
 uint32_t output_analog_1x = 0;
 uint32_t output_analog_1y = 0;

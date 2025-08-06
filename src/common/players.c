@@ -4,6 +4,7 @@
 #include "globals.h"
 
 // Definition of global variables
+Player_t players[MAX_PLAYERS];
 int playersCount = 0;
 
 // Used to set the LEDs on the controllers

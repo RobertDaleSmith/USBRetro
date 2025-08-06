@@ -46,6 +46,4 @@ typedef struct TU_ATTR_PACKED
 
 } gamecube_adapter_report_t;
 
-uint32_t buttons;
-
 #endif
