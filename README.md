@@ -107,10 +107,10 @@ If you run into any issues, then please submit a bug report on the issues tab of
 | ----------- | ------------- | ----------- | ----------- | ----------- |
 | B1          | II            | A           | B           | A           |
 | B2          | I             | C-Down      | A           | B           |
-| B3          | IV (turbo II) | B           | Y           | X           |
+| B3          | IV (turbo II) | B           | Z           | X           |
 | B4          | III (turbo I) | C-Left      | X           | Y           |
-| L1          | VI            | L           | light shield| LB          |
-| R1          | V             | R           | Z           | RB          |
+| L1          | VI            | L           | L analog 43 | LB          |
+| R1          | V             | R           | X           | RB          |
 | L2          |               | C-Up        | L (switch Z)| LT          |
 | R2          |               | C-Right     | R (switch Z)| RT          |
 | S1          | Select        | Nuon        |             | Back        |
