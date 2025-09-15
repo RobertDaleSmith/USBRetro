@@ -21,6 +21,7 @@ uint8_t gc_rumble = 0;
 uint8_t gc_kb_led = 0;
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
+StickSens = 0.65;
 
 // init hid key to gc key lookup table
 void gc_kb_key_lookup_init()
@@ -273,16 +274,16 @@ void __not_in_flash_func(update_output)(void)
       gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
       gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
       gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
-      gc_report.z          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
+      gc_report.y          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
       gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
       gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
-      gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
+      gc_report.z          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
       gc_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // l
       gc_report.r          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // r
 
       // global dominate axis
-      gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x, 128);
-      gc_report.stick_y    = furthest_from_center(gc_report.stick_y, players[i].output_analog_1y, 128);
+      gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x*StickSens, 128);
+      gc_report.stick_y    = furthest_from_center(gc_report.stick_y, players[i].output_analog_1y*StickSens, 128);
       gc_report.cstick_x   = furthest_from_center(gc_report.cstick_x, players[i].output_analog_2x, 128);
       gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
       gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
