@@ -10,7 +10,7 @@
 // Declaration of global variables
 GamecubeConsole gc;
 gc_report_t gc_report;
-PIO pio;
+PIO pio = pio0;
 
 extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
@@ -116,6 +116,10 @@ void ngc_init()
 {
   // over clock CPU for correct timing with GC
   set_sys_clock_khz(130000, true);
+
+  // Configure custom UART pins (12=TX, 13=RX)
+  gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+  gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
 
   // corrects UART serial output after overclock
   stdio_init_all();
