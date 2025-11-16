@@ -84,9 +84,11 @@ static void __not_in_flash_func(process_signals)(void)
 
 int main(void)
 {
+  stdio_init_all();
+
   printf("\nUSB_RETRO::");
 
-  board_init();
+  // board_init() removed in latest pico-sdk/TinyUSB
 
 #ifndef CONFIG_LOOPY
   // pause briefly for stability before starting activity

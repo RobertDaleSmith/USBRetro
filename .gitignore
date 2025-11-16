@@ -4,3 +4,6 @@
 *.swp
 .vscode
 src/build
+.DS_Store
+releases/
+src/build/

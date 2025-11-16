@@ -1,0 +1,194 @@
+# USBRetro Top-Level Makefile
+# Builds firmware for all product variants
+
+# Default target
+.DEFAULT_GOAL := help
+
+# Ensure PICO_TOOLCHAIN_PATH is set
+ifndef PICO_TOOLCHAIN_PATH
+    TOOLCHAIN_PATH := /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+    ifneq ($(wildcard $(TOOLCHAIN_PATH)),)
+        export PICO_TOOLCHAIN_PATH := $(TOOLCHAIN_PATH)
+    else
+        $(error PICO_TOOLCHAIN_PATH not set and default not found at $(TOOLCHAIN_PATH))
+    endif
+endif
+
+# Ensure PICO_SDK_PATH is set
+ifndef PICO_SDK_PATH
+    SDK_PATH := $(HOME)/git/pico-sdk
+    ifneq ($(wildcard $(SDK_PATH)),)
+        export PICO_SDK_PATH := $(SDK_PATH)
+    else
+        $(error PICO_SDK_PATH not set and $(SDK_PATH) not found)
+    endif
+endif
+
+# Board-specific build scripts
+BOARD_SCRIPT_pico := build_rpi_pico.sh
+BOARD_SCRIPT_kb2040 := build_ada_kb2040.sh
+BOARD_SCRIPT_qtpy := build_ada_qtpy.sh
+
+# Console targets
+CONSOLE_pce := usbretro_pce
+CONSOLE_ngc := usbretro_ngc
+CONSOLE_xb1 := usbretro_xb1
+CONSOLE_nuon := usbretro_nuon
+CONSOLE_loopy := usbretro_loopy
+
+# Product definitions: PRODUCT_name = board console output_name
+PRODUCT_usb2pce := kb2040 pce USB2PCE
+PRODUCT_gcusb := kb2040 ngc GCUSB
+PRODUCT_nuonusb := kb2040 nuon NUON-USB
+PRODUCT_xboxadapter := qtpy xb1 Xbox-Adapter
+
+# All products
+PRODUCTS := usb2pce gcusb nuonusb xboxadapter
+
+# Release directory
+RELEASE_DIR := releases
+
+# ANSI color codes
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+BLUE := \033[0;34m
+NC := \033[0m
+
+# Help target
+.PHONY: help
+help:
+	@echo ""
+	@echo "$(BLUE)USBRetro Firmware Build System$(NC)"
+	@echo "$(BLUE)==============================$(NC)"
+	@echo ""
+	@echo "$(GREEN)Product Targets:$(NC)"
+	@echo "  make usb2pce       - Build USB2PCE (KB2040 + PCEngine)"
+	@echo "  make gcusb         - Build GCUSB (KB2040 + GameCube)"
+	@echo "  make nuonusb       - Build NUON USB (KB2040 + Nuon)"
+	@echo "  make xboxadapter   - Build Xbox Adapter (QT Py + Xbox One)"
+	@echo ""
+	@echo "$(GREEN)Convenience Targets:$(NC)"
+	@echo "  make all           - Build all products"
+	@echo "  make clean         - Clean build directory"
+	@echo "  make releases      - Build all products for release"
+	@echo ""
+	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
+	@echo "  make pce           - Build PCEngine firmware"
+	@echo "  make ngc           - Build GameCube firmware"
+	@echo "  make xb1           - Build Xbox One firmware"
+	@echo "  make nuon          - Build Nuon firmware"
+	@echo "  make loopy         - Build Loopy firmware"
+	@echo ""
+	@echo "$(GREEN)Environment:$(NC)"
+	@echo "  PICO_SDK_PATH:       $(PICO_SDK_PATH)"
+	@echo "  PICO_TOOLCHAIN_PATH: $(PICO_TOOLCHAIN_PATH)"
+	@echo ""
+
+# Generic product build function
+define build_product
+	@echo "$(YELLOW)Building $1...$(NC)"
+	@echo "  Board:   $(word 1,$(PRODUCT_$1))"
+	@echo "  Console: $(word 2,$(PRODUCT_$1))"
+	@cd src && rm -rf build
+	@cd src && sh $(BOARD_SCRIPT_$(word 1,$(PRODUCT_$1)))
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_$(word 2,$(PRODUCT_$1))) -j4
+	@mkdir -p $(RELEASE_DIR)
+	@cp src/build/$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2 \
+	    $(RELEASE_DIR)/$(word 3,$(PRODUCT_$1))_$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2
+	@echo "$(GREEN)✓ $1 built successfully$(NC)"
+	@echo "  Output: $(RELEASE_DIR)/$(word 3,$(PRODUCT_$1))_$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2"
+	@echo ""
+endef
+
+# Product-specific targets
+.PHONY: usb2pce
+usb2pce:
+	$(call build_product,usb2pce)
+
+.PHONY: gcusb
+gcusb:
+	$(call build_product,gcusb)
+
+.PHONY: nuonusb
+nuonusb:
+	$(call build_product,nuonusb)
+
+.PHONY: xboxadapter
+xboxadapter:
+	$(call build_product,xboxadapter)
+
+# Console-only targets (defaults to KB2040)
+.PHONY: pce
+pce:
+	@echo "$(YELLOW)Building PCEngine (KB2040)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_pce) -j4
+	@echo "$(GREEN)✓ PCEngine built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_pce).uf2"
+	@echo ""
+
+.PHONY: ngc
+ngc:
+	@echo "$(YELLOW)Building GameCube (KB2040)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_ngc) -j4
+	@echo "$(GREEN)✓ GameCube built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_ngc).uf2"
+	@echo ""
+
+.PHONY: xb1
+xb1:
+	@echo "$(YELLOW)Building Xbox One (QT Py)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_qtpy)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_xb1) -j4
+	@echo "$(GREEN)✓ Xbox One built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_xb1).uf2"
+	@echo ""
+
+.PHONY: nuon
+nuon:
+	@echo "$(YELLOW)Building Nuon (KB2040)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_nuon) -j4
+	@echo "$(GREEN)✓ Nuon built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_nuon).uf2"
+	@echo ""
+
+.PHONY: loopy
+loopy:
+	@echo "$(YELLOW)Building Loopy (KB2040)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_loopy) -j4
+	@echo "$(GREEN)✓ Loopy built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_loopy).uf2"
+	@echo ""
+
+# Build all products
+.PHONY: all
+all: $(PRODUCTS)
+	@echo "$(BLUE)==============================$(NC)"
+	@echo "$(GREEN)All products built!$(NC)"
+	@echo "$(BLUE)==============================$(NC)"
+	@ls -lh $(RELEASE_DIR)/*.uf2
+	@echo ""
+
+# Alias for all
+.PHONY: releases
+releases: all
+
+# Clean target
+.PHONY: clean
+clean:
+	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
+	@rm -rf src/build
+	@rm -rf $(RELEASE_DIR)
+	@echo "$(GREEN)✓ Clean complete$(NC)"
+	@echo ""
+
+# Show current configuration
+.PHONY: config
+config:
+	@echo "$(BLUE)Current Configuration:$(NC)"
+	@echo "  PICO_SDK_PATH:       $(PICO_SDK_PATH)"
+	@echo "  PICO_TOOLCHAIN_PATH: $(PICO_TOOLCHAIN_PATH)"
+	@echo ""
