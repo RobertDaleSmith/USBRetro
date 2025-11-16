@@ -3,7 +3,7 @@ name: Build USBRetro
 on:
   push:
     branches:
-      - master
+      - main
       - build-matrix
 
 jobs:
