@@ -134,34 +134,21 @@ brew install --cask gcc-arm-embedded
 # Install required tools
 brew install cmake git
 
-# Set toolchain path
+# Set toolchain path (optional - Makefile will use default location)
 export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
 ```
 
-#### 2.) Setup Pico SDK
-```bash
-cd ~/git
-git clone https://github.com/raspberrypi/pico-sdk.git
-cd pico-sdk
-git submodule update --init lib/tinyusb
-
-# Update TinyUSB to 0.19.0 for full controller compatibility
-cd lib/tinyusb
-git checkout 0.19.0
-cd ../..
-
-# Set SDK path (add to ~/.zshrc for persistence)
-export PICO_SDK_PATH=~/git/pico-sdk
-```
-
-#### 3.) Clone USBRetro and Submodules
+#### 2.) Clone and Initialize USBRetro
 ```bash
 cd ~/git
 git clone https://github.com/RobertDaleSmith/usbretro.git
 cd usbretro
-git submodule init
-git submodule update
+
+# Initialize all submodules (including pico-sdk with TinyUSB 0.19.0)
+make init
 ```
+
+That's it! The project is now self-contained with pico-sdk 2.2.0 and TinyUSB 0.19.0 as submodules.
 
 ### Linux/Debian Setup
 
@@ -174,29 +161,17 @@ sudo apt update
 sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi git
 ```
 
-#### 2.) Setup Pico SDK
-```bash
-cd ~/git
-git clone https://github.com/raspberrypi/pico-sdk.git
-cd pico-sdk
-git submodule update --init lib/tinyusb
-
-# Update TinyUSB to 0.19.0 for full controller compatibility
-cd lib/tinyusb
-git checkout 0.19.0
-cd ../..
-
-export PICO_SDK_PATH=~/git/pico-sdk
-```
-
-#### 3.) Clone USBRetro
+#### 2.) Clone and Initialize USBRetro
 ```bash
 cd ~/git
 git clone https://github.com/RobertDaleSmith/usbretro.git
 cd usbretro
-git submodule init
-git submodule update
+
+# Initialize all submodules (including pico-sdk with TinyUSB 0.19.0)
+make init
 ```
+
+That's it! The project is now self-contained with pico-sdk 2.2.0 and TinyUSB 0.19.0 as submodules.
 
 </details>
 
@@ -204,14 +179,14 @@ git submodule update
 
 #### Quick Build (Product Shortcuts)
 ```bash
+# Build all products (recommended)
+make build         # or 'make all'
+
 # Build specific products
 make usb2pce       # USB2PCE (KB2040 + PCEngine)
 make gcusb         # GCUSB (KB2040 + GameCube)
 make nuonusb       # NUON USB (KB2040 + Nuon)
 make xboxadapter   # Xbox Adapter (QT Py + Xbox One)
-
-# Build all products for release
-make all
 
 # Clean build artifacts
 make clean

@@ -8,3 +8,6 @@
 [submodule "pico-sdk"]
 	path = pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk.git
+[submodule "src/lib/pico-sdk"]
+	path = src/lib/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git

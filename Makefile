@@ -16,7 +16,7 @@ endif
 
 # Use local pico-sdk submodule by default
 ifndef PICO_SDK_PATH
-    export PICO_SDK_PATH := $(CURDIR)/pico-sdk
+    export PICO_SDK_PATH := $(CURDIR)/src/lib/pico-sdk
 endif
 
 # Board-specific build scripts
@@ -96,10 +96,10 @@ init:
 	@echo "$(YELLOW)Initializing submodules...$(NC)"
 	@git submodule update --init --recursive
 	@echo "$(YELLOW)Checking out pico-sdk 2.2.0...$(NC)"
-	@cd pico-sdk && git checkout 2.2.0
+	@cd src/lib/pico-sdk && git checkout 2.2.0
 	@echo "$(YELLOW)Initializing TinyUSB 0.19.0...$(NC)"
-	@cd pico-sdk && git submodule update --init lib/tinyusb
-	@cd pico-sdk/lib/tinyusb && git checkout 0.19.0
+	@cd src/lib/pico-sdk && git submodule update --init lib/tinyusb
+	@cd src/lib/pico-sdk/lib/tinyusb && git checkout 0.19.0
 	@echo "$(GREEN)✓ Initialization complete!$(NC)"
 	@echo "$(GREEN)  You can now run 'make build' or 'make all'$(NC)"
 	@echo ""
