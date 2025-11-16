@@ -6,11 +6,18 @@
 
 # Ensure PICO_TOOLCHAIN_PATH is set
 ifndef PICO_TOOLCHAIN_PATH
-    TOOLCHAIN_PATH := /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
-    ifneq ($(wildcard $(TOOLCHAIN_PATH)),)
-        export PICO_TOOLCHAIN_PATH := $(TOOLCHAIN_PATH)
+    # Try macOS default location
+    TOOLCHAIN_PATH_MACOS := /Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+    # Try Linux/CI location (toolchain in PATH)
+    TOOLCHAIN_IN_PATH := $(shell which arm-none-eabi-gcc 2>/dev/null)
+
+    ifneq ($(wildcard $(TOOLCHAIN_PATH_MACOS)),)
+        export PICO_TOOLCHAIN_PATH := $(TOOLCHAIN_PATH_MACOS)
+    else ifneq ($(TOOLCHAIN_IN_PATH),)
+        # Toolchain is in PATH (Linux/Docker/CI) - pico-sdk will find it automatically
+        export PICO_TOOLCHAIN_PATH :=
     else
-        $(error PICO_TOOLCHAIN_PATH not set and default not found at $(TOOLCHAIN_PATH))
+        $(error PICO_TOOLCHAIN_PATH not set and toolchain not found in PATH or at $(TOOLCHAIN_PATH_MACOS))
     endif
 endif
 
