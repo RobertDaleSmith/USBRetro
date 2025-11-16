@@ -64,6 +64,11 @@ Output: `releases/USB2PCE_usbretro_pce.uf2` (ready to flash!)
    git clone https://github.com/raspberrypi/pico-sdk.git
    cd pico-sdk
    git submodule update --init lib/tinyusb
+
+   # Update TinyUSB to 0.19.0 for full controller compatibility
+   cd lib/tinyusb
+   git checkout 0.19.0
+   cd ../..
    ```
 
 #### Optional Tools
@@ -88,6 +93,11 @@ cd ~/git
 git clone https://github.com/raspberrypi/pico-sdk.git
 cd pico-sdk
 git submodule update --init lib/tinyusb
+
+# Update TinyUSB to 0.19.0 for full controller compatibility
+cd lib/tinyusb
+git checkout 0.19.0
+cd ../..
 ```
 
 ### Windows
