@@ -139,6 +139,9 @@ jobs:
               make usb2pce gcusb nuonusb
             "
 
+          # Fix permissions (Docker creates files as root)
+          sudo chown -R $(id -u):$(id -g) releases/
+
       - name: Prepare firmware artifacts
         run: |
           VERSION="${{ needs.check-version-tag.outputs.version }}"
