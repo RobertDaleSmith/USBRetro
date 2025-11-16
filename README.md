@@ -121,63 +121,114 @@ If you run into any issues, then please submit a bug report on the issues tab of
 | A2          |               | Nuon        | Z           |             |
 
 ## Compiling
-### Setup
-#### 1.) Raspberry Pi Pico SDK
-First, clone the [pico-sdk](https://github.com/raspberrypi/pico-sdk) repo to your local dev environment. Then point the `PICO_SDK_PATH` environment variable to it.
-```cmd
+
+> 📖 **For detailed build instructions, troubleshooting, and advanced topics, see [BUILD.md](BUILD.md)**
+
+### macOS Setup
+
+#### 1.) Install ARM Toolchain
+```bash
+# Install official ARM toolchain
+brew install --cask gcc-arm-embedded
+
+# Install required tools
+brew install cmake git
+
+# Set toolchain path
+export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+```
+
+#### 2.) Setup Pico SDK
+```bash
 cd ~/git
 git clone https://github.com/raspberrypi/pico-sdk.git
+cd pico-sdk
+git submodule update --init lib/tinyusb
 
-cd ~/git/pico-sdk
-git submodule init
-git submodule update
-
+# Set SDK path (add to ~/.zshrc for persistence)
 export PICO_SDK_PATH=~/git/pico-sdk
 ```
 
-#### 2.) TinyUSB
-Then the TinyUSB library within pico-sdk should be on the latest `master` branch. Change to that directory and checkout `master` if not already on it.
-```cmd
-cd ~/git/pico-sdk/lib/tinyusb
-git checkout master
-```
-
 #### 3.) Clone USBRetro and Submodules
-Once you have cloned this repo to your local environment. The external submodule dependencies must be initialized and updated.
-```cmd
+```bash
 cd ~/git
 git clone https://github.com/RobertDaleSmith/usbretro.git
-
-cd ~/git/usbretro
+cd usbretro
 git submodule init
 git submodule update
 ```
 
-#### 4.) RP2040 Board Setup
-Finally, run the specific microcontroller build script to create a `src/build` directory.
-```cmd
-cd ~/git/usbretro/src
-sh build_ada_kb2040.sh
+### Linux/Debian Setup
+
+<details>
+<summary>Click to expand Linux setup instructions</summary>
+
+#### 1.) Install Toolchain
+```bash
+sudo apt update
+sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi git
 ```
+
+#### 2.) Setup Pico SDK
+```bash
+cd ~/git
+git clone https://github.com/raspberrypi/pico-sdk.git
+cd pico-sdk
+git submodule update --init lib/tinyusb
+export PICO_SDK_PATH=~/git/pico-sdk
+```
+
+#### 3.) Clone USBRetro
+```bash
+cd ~/git
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro
+git submodule init
+git submodule update
+```
+
+</details>
 
 ### Build Firmwares
-#### Build All
-To build all the various console specific firmwares:
 
-```cmd
-cd ~/git/usbretro/src/build
-cmake ..
-make
+#### Quick Build (Product Shortcuts)
+```bash
+# Build specific products
+make usb2pce       # USB2PCE (KB2040 + PCEngine)
+make gcusb         # GCUSB (KB2040 + GameCube)
+make nuonusb       # NUON USB (KB2040 + Nuon)
+make xboxadapter   # Xbox Adapter (QT Py + Xbox One)
+
+# Build all products for release
+make all
+
+# Clean build artifacts
+make clean
 ```
 
-#### Build Individual
-If you ever want to build firmware for only a single output console, then you can use `make usbretro_[console]`.
-```cmd
-make usbretro_pce
-make usbretro_ngc
-make usbretro_nuon
-make usbretro_xb1
+Output files are created in `releases/` directory with product names.
+
+#### Build by Console (defaults to KB2040)
+```bash
+make pce      # PCEngine/TurboGrafx-16
+make ngc      # GameCube/Wii
+make xb1      # Xbox One (uses QT Py)
+make nuon     # Nuon DVD Players
+make loopy    # Casio Loopy
 ```
+
+#### Advanced: Custom Board + Console Combinations
+```bash
+./build_firmware.sh <board> <console>
+
+# Examples:
+./build_firmware.sh kb2040 pce     # KB2040 + PCEngine
+./build_firmware.sh qtpy xb1       # QT Py + Xbox One
+./build_firmware.sh pico ngc       # Raspberry Pi Pico + GameCube
+```
+
+Available boards: `pico`, `kb2040`, `qtpy`
+Available consoles: `pce`, `ngc`, `xb1`, `nuon`, `loopy`
 
 ## Discord Server
 
