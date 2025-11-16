@@ -15,8 +15,10 @@ jobs:
         board: [rpi_pico, ada_qtpy, ada_kb2040]
 
     steps:
-      - name: Checkout code
+      - name: Checkout code with submodules
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Build Docker image and compile for all consoles
         run: docker build -t usbretro .

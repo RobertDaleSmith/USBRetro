@@ -17,16 +17,13 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /root/workspace/USBRetro
-WORKDIR /root/workspace
-
-RUN git clone https://github.com/raspberrypi/pico-sdk.git
-ENV PICO_SDK_PATH=/root/workspace/pico-sdk
-WORKDIR /root/workspace/pico-sdk
-RUN git submodule update --init lib/tinyusb
-
 WORKDIR /root/workspace/USBRetro
+
+# Copy project with submodules (pico-sdk already initialized by host)
 COPY . .
-RUN git submodule update --init
+
+# Set pico-sdk path to local submodule
+ENV PICO_SDK_PATH=/root/workspace/USBRetro/src/lib/pico-sdk
 
 WORKDIR /root/workspace/USBRetro/src
 
