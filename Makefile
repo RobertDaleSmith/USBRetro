@@ -72,6 +72,13 @@ help:
 	@echo "  make clean         - Clean build directory"
 	@echo "  make releases      - Build all products for release"
 	@echo ""
+	@echo "$(GREEN)Flash Targets:$(NC)"
+	@echo "  make flash         - Flash most recently built firmware"
+	@echo "  make flash-usb2pce - Flash USB2PCE firmware"
+	@echo "  make flash-gcusb   - Flash GCUSB firmware"
+	@echo "  make flash-nuonusb - Flash NUON USB firmware"
+	@echo "  make flash-xboxadapter - Flash Xbox Adapter firmware"
+	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
 	@echo "  make pce           - Build PCEngine firmware"
 	@echo "  make ngc           - Build GameCube firmware"
@@ -175,6 +182,62 @@ all: $(PRODUCTS)
 # Alias for all
 .PHONY: releases
 releases: all
+
+# Flash target - flashes most recently built firmware
+.PHONY: flash
+flash:
+	@if [ ! -d "/Volumes/RPI-RP2" ]; then \
+		echo "$(YELLOW)⚠ RPI-RP2 drive not found at /Volumes/RPI-RP2$(NC)"; \
+		echo "$(YELLOW)  Please put device in bootloader mode:$(NC)"; \
+		echo "$(YELLOW)  - USB2PCE/GCUSB: Hold BOOT button while plugging in USB-C$(NC)"; \
+		echo "$(YELLOW)  - Or unplug all USB devices and plug in USB-C$(NC)"; \
+		exit 1; \
+	fi
+	@LATEST_UF2=$$(ls -t $(RELEASE_DIR)/*.uf2 2>/dev/null | head -1); \
+	if [ -z "$$LATEST_UF2" ]; then \
+		echo "$(YELLOW)⚠ No UF2 files found in $(RELEASE_DIR)$(NC)"; \
+		echo "$(YELLOW)  Run 'make usb2pce' or another build target first$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(YELLOW)Flashing $$(basename $$LATEST_UF2)...$(NC)"; \
+	cp "$$LATEST_UF2" /Volumes/RPI-RP2/ && \
+	echo "$(GREEN)✓ Firmware flashed successfully!$(NC)" && \
+	echo "$(GREEN)  Device will reboot automatically$(NC)"
+
+# Flash specific products
+.PHONY: flash-usb2pce
+flash-usb2pce:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_usb2pce))_$(CONSOLE_$(word 2,$(PRODUCT_usb2pce))).uf2
+
+.PHONY: flash-gcusb
+flash-gcusb:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_gcusb))_$(CONSOLE_$(word 2,$(PRODUCT_gcusb))).uf2
+
+.PHONY: flash-nuonusb
+flash-nuonusb:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_nuonusb))_$(CONSOLE_$(word 2,$(PRODUCT_nuonusb))).uf2
+
+.PHONY: flash-xboxadapter
+flash-xboxadapter:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_xboxadapter))_$(CONSOLE_$(word 2,$(PRODUCT_xboxadapter))).uf2
+
+# Internal flash helper
+.PHONY: _flash
+_flash:
+	@if [ ! -d "/Volumes/RPI-RP2" ]; then \
+		echo "$(YELLOW)⚠ RPI-RP2 drive not found at /Volumes/RPI-RP2$(NC)"; \
+		echo "$(YELLOW)  Please put device in bootloader mode$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(FLASH_FILE)" ]; then \
+		echo "$(YELLOW)⚠ File not found: $(FLASH_FILE)$(NC)"; \
+		echo "$(YELLOW)  Build the firmware first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Flashing $$(basename $(FLASH_FILE))...$(NC)"
+	@cp "$(FLASH_FILE)" /Volumes/RPI-RP2/
+	@echo "$(GREEN)✓ Firmware flashed successfully!$(NC)"
+	@echo "$(GREEN)  Device will reboot automatically$(NC)"
 
 # Clean target
 .PHONY: clean
