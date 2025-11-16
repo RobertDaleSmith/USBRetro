@@ -5,30 +5,130 @@
   <img src="https://img.shields.io/github/license/RobertDaleSmith/USBRetro" />
   <img src="https://img.shields.io/github/actions/workflow/status/RobertDaleSmith/USBRetro/.github/workflows/build.yml" />
 </p>
-<p align="justify">USBRetro is an open source controller adapter firmware for converting USB controllers, keyboards, and mice to various retro consoles' native controller protocols.</p>
 
-### Update Instructions
+**Use modern USB controllers on retro consoles.** USBRetro converts USB controllers, keyboards, and mice to native controller protocols for PCEngine, GameCube, Nuon, Xbox One, and more.
 
-**USB-2-PCE** [controlleradapter.com/products/usb-2-pce](https://controlleradapter.com/products/usb-2-pce)<br>
-**NUON USB** [controlleradapter.com/products/nuon-usb](https://controlleradapter.com/products/nuon-usb)
+---
 
-1. Download the latest release usbretro_[console].uf2 file.
-2. Disconnected adapter from the console and all connected USB devices.
-3. While holding the boot(+) button, connect the USB-C port to a computer.
-4. A virual drive called RPI-RP2 will appear, drag-n-drop the UF2 update file onto the drive.
-5. The virtual drive will automatically unmount when the update is completed. 🚀
+## 🚀 Quick Start (Developers)
 
-**GC USB** [controlleradapter.com/products/gc-usb](https://controlleradapter.com/products/gc-usb)
+**Build firmware in 3 commands:**
 
-1. Download the latest release usbretro_ngc.uf2 file.
-2. Disconnected adapter from the console and all connected USB devices.
-3. Connect the USB-C port to a computer.
-4. A virual drive called RPI-RP2 will appear, drag-n-drop the UF2 update file onto the drive.
-5. The virtual drive will automatically unmount and remount when the update is completed. 🚀
+```bash
+# 1. Install ARM toolchain (macOS)
+brew install --cask gcc-arm-embedded cmake git
 
-## Compatibility
+# 2. Clone and initialize
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro && make init
 
-### USB Host Input
+# 3. Build firmware
+make build
+```
+
+Firmware files appear in `releases/` directory. Flash with `make flash`.
+
+<details>
+<summary><b>Linux/Debian Setup</b></summary>
+
+```bash
+# Install toolchain
+sudo apt update
+sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi git
+
+# Clone and build
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro && make init && make build
+```
+</details>
+
+<details>
+<summary><b>Windows Setup</b></summary>
+
+**Option 1: WSL2 (Recommended)**
+```bash
+# In WSL2 Ubuntu terminal
+sudo apt update
+sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi git make
+
+# Clone and build
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro && make init && make build
+```
+
+**Option 2: Native Windows**
+1. Download and install [ARM GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (14.2.rel1 or later)
+2. Install [CMake](https://cmake.org/download/) and [Git](https://git-scm.com/download/win)
+3. Install [Make for Windows](https://gnuwin32.sourceforge.net/packages/make.htm) or use Git Bash
+4. Add toolchain to PATH: `C:\Program Files\Arm GNU Toolchain\14.2.rel1\bin`
+5. Set environment variable: `PICO_TOOLCHAIN_PATH=C:\Program Files\Arm GNU Toolchain\14.2.rel1`
+6. Clone and build:
+```bash
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro
+make init
+make build
+```
+
+**Option 3: Docker Desktop**
+```bash
+# Build using Docker
+git clone https://github.com/RobertDaleSmith/usbretro.git
+cd usbretro
+docker build -t usbretro .
+```
+</details>
+
+<details>
+<summary><b>Build Commands Reference</b></summary>
+
+```bash
+make init          # Initialize submodules (run once)
+make build         # Build all products
+make clean         # Clean build artifacts
+make flash         # Flash latest firmware
+
+# Build specific products
+make usb2pce       # USB2PCE (KB2040 + PCEngine)
+make gcusb         # GCUSB (KB2040 + GameCube)
+make nuonusb       # NUON USB (KB2040 + Nuon)
+make xboxadapter   # Xbox Adapter (QT Py + Xbox One)
+
+# Build by console (defaults to KB2040)
+make pce           # PCEngine/TurboGrafx-16
+make ngc           # GameCube/Wii
+make nuon          # Nuon DVD Players
+make xb1           # Xbox One
+make loopy         # Casio Loopy
+```
+
+See [BUILD.md](BUILD.md) for advanced build options and troubleshooting.
+</details>
+
+---
+
+## 🎮 Supported Hardware
+
+### USB Controllers (Input)
+- ✅ Xbox Controllers (OG/360/One/Series X|S)
+- ✅ PlayStation Controllers (Classic/DS3/DS4/DualSense)
+- ✅ Nintendo Switch Pro Controller & Joy-Cons
+- ✅ 8BitDo Controllers (PCEngine 2.4g, M30, Wireless Adapters)
+- ✅ Generic HID Gamepads & Joysticks
+- ✅ USB Keyboards & Mice
+- ✅ USB Hubs (up to 5 devices)
+
+### Retro Consoles (Output)
+- ✅ **PCEngine/TurboGrafx-16** - Multitap (1-5 players), 2/3/6-button, Mouse
+- ✅ **GameCube/Wii** - Standard controller with rumble, Keyboard mode, Copilot (4 controllers → 1)
+- ✅ **Nuon DVD Players** - Standard controller, Spinner (Tempest 3000)
+- ✅ **Xbox One S** - USB host mod (button/analog passthrough)
+- 🚧 **Casio Loopy** - Experimental
+
+<details>
+<summary><b>Detailed Compatibility List</b></summary>
+
+#### USB Input Devices
 - [x] USB Hubs (up to 5 devices)
 - [x] USB HID Keyboards/Mice (maps to controller)
 - [x] X-input Controllers (Xbox OG/360/One/SeriesX|S)
@@ -46,45 +146,58 @@
 - [x] Hori Pokken and Horipad controllers
 - [x] DragonRise Generic USB controllers
 
-### Retro Console Output
+#### Retro Console Outputs
 - [x] PCEngine/TurboGrafx-16
     - [x] Multitap (1-5 players)
     - [x] PCEngine Mouse
-    - [x] 2-button Controller
-    - [x] 3-button Controller
-    - [x] 6-button Controller
+    - [x] 2/3/6-button Controller
 - [x] Nuon DVD Players
-    - [x] Standard controller output
-    - [x] Spinner controller output for Tempest 3000
+    - [x] Standard controller
+    - [x] Spinner controller (Tempest 3000)
 - [x] GameCube/Wii
     - [x] Standard Controller (with rumble)
     - [x] GameCube Keyboard (scroll lock to enable)
-    - [x] Copilot (combine up to 4 controllers into one)
+    - [x] Copilot (combine up to 4 controllers)
 - [x] Xbox One S (USB host controller mod)
-    - [x] Full button and analog value passthrough
+    - [x] Full button/analog passthrough
     - [ ] Rumble passthrough
-- [ ] CD-i
-    - [ ] 2-player Splitter
-    - [ ] Standard Controller
-    - [ ] CD-i Mouse Output
-- [ ] 3DO
-    - [ ] Daisy-chaining (1-8 controllers)
-    - [ ] 3DO Mouse Output
-    - [ ] 3DO Arcade Start/Coin (Orbatak/Shootout at Old Tucson)
-- [ ] Sega Dreamcast
-    - [ ] Standard Controller
-    - [ ] Dreamcast Keyboard
-    - [ ] Virtual VMU/Rumble Pack
-- [ ] Any retro console or computer..
+- [ ] CD-i (planned)
+- [ ] 3DO (planned)
+- [ ] Sega Dreamcast (planned)
+</details>
 
-## Bugs and Feature Requests
+---
 
-If you run into any issues, then please submit a bug report on the issues tab of this repo. If you would like to see support for specific USB controllers or think of something I missed, then you are welcome to open a feature request under the issues tab. Don't be shy. 👂
+## 📥 For Users: Updating Firmware
 
-## Button Mapping
+### Pre-Built Hardware
+
+Purchase ready-to-use adapters at [controlleradapter.com](https://controlleradapter.com):
+- [USB-2-PCE](https://controlleradapter.com/products/usb-2-pce) - PCEngine/TurboGrafx-16
+- [GC USB](https://controlleradapter.com/products/gc-usb) - GameCube/Wii
+- [NUON USB](https://controlleradapter.com/products/nuon-usb) - Nuon DVD Players
+
+### Flashing Instructions
+
+**USB-2-PCE / NUON USB:**
+1. Download the latest `.uf2` file from [Releases](https://github.com/RobertDaleSmith/USBRetro/releases)
+2. Disconnect adapter from console and all USB devices
+3. Hold BOOT button while connecting USB-C to computer
+4. Drag `.uf2` file to `RPI-RP2` drive
+5. Drive will auto-eject when complete 🚀
+
+**GC USB:**
+1. Download the latest `usbretro_ngc.uf2` file
+2. Disconnect adapter from console and all USB devices
+3. Connect USB-C to computer (no BOOT button needed)
+4. Drag `.uf2` file to `RPI-RP2` drive
+5. Drive will auto-eject when complete 🚀
+
+---
+
+## 🎯 Button Mappings
 
 ### Input Map
-
 | USBRetro    | X-input     | Switch      | PlayStation | DirectInput |
 | ----------- | ----------- | ----------- | ----------- | ----------- |
 | B1          | A           | B           | Cross       | 2           |
@@ -120,110 +233,26 @@ If you run into any issues, then please submit a bug report on the issues tab of
 | A1          |               |             |             | Guide       |
 | A2          |               | Nuon        | Z           |             |
 
-## Compiling
+---
 
-> 📖 **For detailed build instructions, troubleshooting, and advanced topics, see [BUILD.md](BUILD.md)**
+## 🤝 Community & Support
 
-### macOS Setup
+- **Discord**: Join our community at [discord.usbretro.com](https://discord.usbretro.com/)
+- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/RobertDaleSmith/USBRetro/issues)
+- **Documentation**: See [BUILD.md](BUILD.md) for detailed build instructions
 
-#### 1.) Install ARM Toolchain
-```bash
-# Install official ARM toolchain
-brew install --cask gcc-arm-embedded
+---
 
-# Install required tools
-brew install cmake git
+## 🙏 Acknowledgements
 
-# Set toolchain path (optional - Makefile will use default location)
-export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
-```
+- [Ha Thach](https://github.com/hathach/) - [TinyUSB library](https://github.com/hathach/tinyusb)
+- [David Shadoff](https://github.com/dshadoff) - [PCEMouse](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/PCEMouse) foundation
+- [Ryzee119](https://github.com/Ryzee119) - [tusb_xinput](https://github.com/Ryzee119/tusb_xinput/) library
+- [SelvinPL](https://github.com/SelvinPL/) - [lufa-hid-parser](https://gist.github.com/SelvinPL/99fd9af4566e759b6553e912b6a163f9) example
+- [JonnyHaystack](https://github.com/JonnyHaystack/) - [joybus-pio](https://github.com/JonnyHaystack/joybus-pio) library
 
-#### 2.) Clone and Initialize USBRetro
-```bash
-cd ~/git
-git clone https://github.com/RobertDaleSmith/usbretro.git
-cd usbretro
+---
 
-# Initialize all submodules (including pico-sdk with TinyUSB 0.19.0)
-make init
-```
+## 📄 License
 
-That's it! The project is now self-contained with pico-sdk 2.2.0 and TinyUSB 0.19.0 as submodules.
-
-### Linux/Debian Setup
-
-<details>
-<summary>Click to expand Linux setup instructions</summary>
-
-#### 1.) Install Toolchain
-```bash
-sudo apt update
-sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi git
-```
-
-#### 2.) Clone and Initialize USBRetro
-```bash
-cd ~/git
-git clone https://github.com/RobertDaleSmith/usbretro.git
-cd usbretro
-
-# Initialize all submodules (including pico-sdk with TinyUSB 0.19.0)
-make init
-```
-
-That's it! The project is now self-contained with pico-sdk 2.2.0 and TinyUSB 0.19.0 as submodules.
-
-</details>
-
-### Build Firmwares
-
-#### Quick Build (Product Shortcuts)
-```bash
-# Build all products (recommended)
-make build         # or 'make all'
-
-# Build specific products
-make usb2pce       # USB2PCE (KB2040 + PCEngine)
-make gcusb         # GCUSB (KB2040 + GameCube)
-make nuonusb       # NUON USB (KB2040 + Nuon)
-make xboxadapter   # Xbox Adapter (QT Py + Xbox One)
-
-# Clean build artifacts
-make clean
-```
-
-Output files are created in `releases/` directory with product names.
-
-#### Build by Console (defaults to KB2040)
-```bash
-make pce      # PCEngine/TurboGrafx-16
-make ngc      # GameCube/Wii
-make xb1      # Xbox One (uses QT Py)
-make nuon     # Nuon DVD Players
-make loopy    # Casio Loopy
-```
-
-#### Advanced: Custom Board + Console Combinations
-```bash
-./build_firmware.sh <board> <console>
-
-# Examples:
-./build_firmware.sh kb2040 pce     # KB2040 + PCEngine
-./build_firmware.sh qtpy xb1       # QT Py + Xbox One
-./build_firmware.sh pico ngc       # Raspberry Pi Pico + GameCube
-```
-
-Available boards: `pico`, `kb2040`, `qtpy`
-Available consoles: `pce`, `ngc`, `xb1`, `nuon`, `loopy`
-
-## Discord Server
-
-Join 👉 [discord.usbretro.com](https://discord.usbretro.com/)
-
-## Acknowledgements
-
-- [Ha Thach](https://github.com/hathach/)'s excellent [TinyUSB library](https://github.com/hathach/tinyusb) and controller example
-- [David Shadoff](https://github.com/dshadoff) for building [PCEMouse](https://github.com/dshadoff/PC_Engine_RP2040_Projects/tree/main/PCEMouse) which laid the foundation
-- [Ryzee119](https://github.com/Ryzee119) for the wonderful [tusb_xinput](https://github.com/Ryzee119/tusb_xinput/) library for X-input support
-- [SelvinPL](https://github.com/SelvinPL/) for the robust [lufa-hid-parser](https://gist.github.com/SelvinPL/99fd9af4566e759b6553e912b6a163f9) example for generic HID gamepad support
-- [JonnyHaystack](https://github.com/JonnyHaystack/) for the awesome [joybus-pio](https://github.com/JonnyHaystack/joybus-pio) for GameCube controller output
+Licensed under the MIT License - see [LICENSE](LICENSE) for details.
