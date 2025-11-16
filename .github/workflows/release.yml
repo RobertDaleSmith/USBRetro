@@ -109,26 +109,11 @@ jobs:
             echo "✅ Version v${VERSION} does not have a release - will build & release"
           fi
 
-  # Build product firmware
+  # Build all products in single job (shared build environment)
   build-products:
     needs: [check-version-tag]
     if: always() && needs.check-version-tag.outputs.has_release == 'false'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        product:
-          - name: usb2pce
-            display_name: "USB2PCE"
-            console: pce
-            description: "USB to PCEngine/TurboGrafx-16 Adapter (KB2040)"
-          - name: gcusb
-            display_name: "GCUSB"
-            console: ngc
-            description: "USB to GameCube/Wii Adapter (KB2040)"
-          - name: nuonusb
-            display_name: "NUONUSB"
-            console: nuon
-            description: "USB to Nuon Adapter (KB2040)"
 
     steps:
       - name: Checkout code with submodules
@@ -137,40 +122,41 @@ jobs:
           submodules: recursive
           ref: main
 
-      - name: Build Docker image
+      - name: Build Docker image (once for all products)
         run: docker build -t usbretro .
 
-      - name: Build ${{ matrix.product.display_name }}
+      - name: Build all products
         run: |
           VERSION="${{ needs.check-version-tag.outputs.version }}"
-          echo "Building ${{ matrix.product.display_name }} v${VERSION}..."
+          echo "Building all products v${VERSION}..."
 
-          # Run build inside Docker container
+          # Run build inside Docker container - build all products at once
           docker run --rm \
             -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
             -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
             usbretro /bin/bash -c "
               cd /root/workspace/USBRetro &&
-              make ${{ matrix.product.name }}
+              make usb2pce gcusb nuonusb
             "
 
-      - name: Prepare firmware artifact
+      - name: Prepare firmware artifacts
         run: |
           VERSION="${{ needs.check-version-tag.outputs.version }}"
           mkdir -p artifacts
 
-          # Copy and rename firmware file
-          cp releases/${{ matrix.product.display_name }}_usbretro_${{ matrix.product.console }}.uf2 \
-             artifacts/${{ matrix.product.display_name }}_v${VERSION}.uf2
+          # Rename all firmware files with version
+          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/USB2PCE_v${VERSION}.uf2
+          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/GCUSB_v${VERSION}.uf2
+          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/NUONUSB_v${VERSION}.uf2
 
-          echo "✅ ${{ matrix.product.display_name }} firmware created"
+          echo "✅ All firmware files created:"
           ls -lh artifacts/
 
-      - name: Upload firmware artifact
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.product.name }}
-          path: artifacts/${{ matrix.product.display_name }}_*.uf2
+          name: usbretro-products
+          path: artifacts/*.uf2
           retention-days: 90
 
   # Create GitHub Release
