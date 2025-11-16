@@ -5,3 +5,6 @@
 	path = src/lib/joybus-pio
 	url = https://github.com/RobertDaleSmith/joybus-pio.git
 	branch = c
+[submodule "pico-sdk"]
+	path = pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git

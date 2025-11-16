@@ -14,14 +14,9 @@ ifndef PICO_TOOLCHAIN_PATH
     endif
 endif
 
-# Ensure PICO_SDK_PATH is set
+# Use local pico-sdk submodule by default
 ifndef PICO_SDK_PATH
-    SDK_PATH := $(HOME)/git/pico-sdk
-    ifneq ($(wildcard $(SDK_PATH)),)
-        export PICO_SDK_PATH := $(SDK_PATH)
-    else
-        $(error PICO_SDK_PATH not set and $(SDK_PATH) not found)
-    endif
+    export PICO_SDK_PATH := $(CURDIR)/pico-sdk
 endif
 
 # Board-specific build scripts
@@ -61,6 +56,10 @@ help:
 	@echo "$(BLUE)USBRetro Firmware Build System$(NC)"
 	@echo "$(BLUE)==============================$(NC)"
 	@echo ""
+	@echo "$(GREEN)Quick Start:$(NC)"
+	@echo "  make init          - Initialize submodules (run once after clone)"
+	@echo "  make build         - Build all products (alias for 'make all')"
+	@echo ""
 	@echo "$(GREEN)Product Targets:$(NC)"
 	@echo "  make usb2pce       - Build USB2PCE (KB2040 + PCEngine)"
 	@echo "  make gcusb         - Build GCUSB (KB2040 + GameCube)"
@@ -90,6 +89,24 @@ help:
 	@echo "  PICO_SDK_PATH:       $(PICO_SDK_PATH)"
 	@echo "  PICO_TOOLCHAIN_PATH: $(PICO_TOOLCHAIN_PATH)"
 	@echo ""
+
+# Initialize submodules (run once after cloning)
+.PHONY: init
+init:
+	@echo "$(YELLOW)Initializing submodules...$(NC)"
+	@git submodule update --init --recursive
+	@echo "$(YELLOW)Checking out pico-sdk 2.2.0...$(NC)"
+	@cd pico-sdk && git checkout 2.2.0
+	@echo "$(YELLOW)Initializing TinyUSB 0.19.0...$(NC)"
+	@cd pico-sdk && git submodule update --init lib/tinyusb
+	@cd pico-sdk/lib/tinyusb && git checkout 0.19.0
+	@echo "$(GREEN)✓ Initialization complete!$(NC)"
+	@echo "$(GREEN)  You can now run 'make build' or 'make all'$(NC)"
+	@echo ""
+
+# Alias for all
+.PHONY: build
+build: all
 
 # Generic product build function
 define build_product
