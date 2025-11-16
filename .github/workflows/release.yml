@@ -1,0 +1,286 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'VERSION'
+  workflow_dispatch:
+    inputs:
+      bump_version:
+        description: 'Bump version and create release'
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+
+jobs:
+  # Bump version if requested (only for workflow_dispatch)
+  bump-version:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version_bumped: ${{ steps.bump.outputs.bumped }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        id: bump
+        run: |
+          CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse version (assuming semver X.Y.Z)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          case "${{ github.event.inputs.bump_version }}" in
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "$NEW_VERSION" > VERSION
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "bumped=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push version bump
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Bump version to ${{ steps.bump.outputs.new_version }}"
+          file_pattern: VERSION
+          commit_user_name: ${{ github.actor }}
+          commit_user_email: ${{ github.actor }}@users.noreply.github.com
+          commit_author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+
+  # Check if VERSION has a release tag
+  check-version-tag:
+    needs: [bump-version]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      has_release: ${{ steps.check.outputs.has_release }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Read VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Current VERSION: ${VERSION}"
+
+      - name: Check if version tag exists
+        id: check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "has_release=true" >> $GITHUB_OUTPUT
+            echo "⏭️  Version v${VERSION} already has a release"
+          else
+            echo "has_release=false" >> $GITHUB_OUTPUT
+            echo "✅ Version v${VERSION} does not have a release - will build & release"
+          fi
+
+  # Build product firmware
+  build-products:
+    needs: [check-version-tag]
+    if: always() && needs.check-version-tag.outputs.has_release == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        product:
+          - name: usb2pce
+            display_name: "USB2PCE"
+            console: pce
+            description: "USB to PCEngine/TurboGrafx-16 Adapter (KB2040)"
+          - name: gcusb
+            display_name: "GCUSB"
+            console: ngc
+            description: "USB to GameCube/Wii Adapter (KB2040)"
+          - name: nuonusb
+            display_name: "NUONUSB"
+            console: nuon
+            description: "USB to Nuon Adapter (KB2040)"
+
+    steps:
+      - name: Checkout code with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: main
+
+      - name: Build Docker image
+        run: docker build -t usbretro .
+
+      - name: Build ${{ matrix.product.display_name }}
+        run: |
+          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          echo "Building ${{ matrix.product.display_name }} v${VERSION}..."
+
+          # Run build inside Docker container
+          docker run --rm \
+            -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
+            -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
+            usbretro /bin/bash -c "
+              cd /root/workspace/USBRetro &&
+              make ${{ matrix.product.name }}
+            "
+
+      - name: Prepare firmware artifact
+        run: |
+          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          mkdir -p artifacts
+
+          # Copy and rename firmware file
+          cp releases/${{ matrix.product.display_name }}_usbretro_${{ matrix.product.console }}.uf2 \
+             artifacts/${{ matrix.product.display_name }}_v${VERSION}.uf2
+
+          echo "✅ ${{ matrix.product.display_name }} firmware created"
+          ls -lh artifacts/
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.product.name }}
+          path: artifacts/${{ matrix.product.display_name }}_*.uf2
+          retention-days: 90
+
+  # Create GitHub Release
+  create-release:
+    needs: [build-products, check-version-tag]
+    if: always() && needs.check-version-tag.outputs.has_release == 'false' && needs.build-products.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release package
+        run: |
+          mkdir -p release
+          VERSION="${{ needs.check-version-tag.outputs.version }}"
+
+          echo "📦 Collecting firmware files for v${VERSION} release:"
+
+          # Copy all firmware files from artifacts
+          find artifacts -type f -name "*.uf2" -exec cp {} release/ \;
+
+          echo ""
+          echo "✅ Release package contents:"
+          ls -lh release/
+
+          # Create checksums
+          cd release
+          sha256sum * > checksums.txt
+          echo ""
+          echo "🔐 Checksums:"
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-version-tag.outputs.version }}
+          name: USBRetro v${{ needs.check-version-tag.outputs.version }}
+          body: |
+            ## USBRetro Firmware v${{ needs.check-version-tag.outputs.version }}
+
+            ### 📦 Products
+
+            **USB2PCE** - USB to PCEngine/TurboGrafx-16 Adapter
+            - File: `USB2PCE_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - Board: Adafruit KB2040
+            - Features: Multitap support (1-5 players), 2/3/6-button controllers, PCEngine Mouse
+
+            **GCUSB** - USB to GameCube/Wii Adapter
+            - File: `GCUSB_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - Board: Adafruit KB2040
+            - Features: Rumble support, GameCube Keyboard mode, Copilot (4 controllers → 1)
+
+            **NUONUSB** - USB to Nuon Adapter
+            - File: `NUONUSB_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - Board: Adafruit KB2040
+            - Features: Standard controller, Spinner mode (Tempest 3000)
+
+            ### 🔧 Installation
+
+            **USB2PCE / NUONUSB:**
+            1. Disconnect adapter from console and all USB devices
+            2. Hold BOOT button while connecting USB-C to computer
+            3. Drag & drop `.uf2` file to `RPI-RP2` drive
+            4. Drive will auto-eject when complete
+
+            **GCUSB:**
+            1. Disconnect adapter from console and all USB devices
+            2. Connect USB-C to computer (no BOOT button needed)
+            3. Drag & drop `.uf2` file to `RPI-RP2` drive
+            4. Drive will auto-eject when complete
+
+            ### 🎮 Supported Controllers
+
+            - Xbox Controllers (OG/360/One/Series X|S)
+            - PlayStation Controllers (Classic/DS3/DS4/DualSense)
+            - Nintendo Switch Pro & Joy-Cons
+            - 8BitDo Controllers
+            - Generic USB HID Gamepads
+            - USB Keyboards & Mice
+
+            ### 🔐 Checksums
+            See `checksums.txt` for SHA256 verification.
+
+            ### 📖 Documentation
+            - [GitHub Repository](https://github.com/RobertDaleSmith/USBRetro)
+            - [Discord Community](https://discord.usbretro.com)
+          files: |
+            release/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          echo "### ✅ Release v${VERSION} Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Products:** USB2PCE, GCUSB, NUONUSB" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Release contents:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          ls -lh release/ >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
