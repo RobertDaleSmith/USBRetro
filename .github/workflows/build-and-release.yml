@@ -222,26 +222,7 @@ jobs:
           tag_name: v${{ needs.check-version-tag.outputs.version }}
           name: USBRetro v${{ needs.check-version-tag.outputs.version }}
           body: |
-            ## USBRetro Firmware v${{ needs.check-version-tag.outputs.version }}
-
-            ### 📦 Products
-
-            **USB2PCE** - USB to PCEngine/TurboGrafx-16 Adapter
-            - File: `USB2PCE_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
-            - Board: Adafruit KB2040
-            - Features: Multitap support (1-5 players), 2/3/6-button controllers, PCEngine Mouse
-
-            **GCUSB** - USB to GameCube/Wii Adapter
-            - File: `GCUSB_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
-            - Board: Adafruit KB2040
-            - Features: Rumble support, GameCube Keyboard mode, Copilot (4 controllers → 1)
-
-            **NUONUSB** - USB to Nuon Adapter
-            - File: `NUONUSB_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
-            - Board: Adafruit KB2040
-            - Features: Standard controller, Spinner mode (Tempest 3000)
-
-            ### 🔧 Installation
+            ## Installation
 
             **USB2PCE / NUONUSB:**
             1. Disconnect adapter from console and all USB devices
@@ -254,22 +235,6 @@ jobs:
             2. Connect USB-C to computer (no BOOT button needed)
             3. Drag & drop `.uf2` file to `RPI-RP2` drive
             4. Drive will auto-eject when complete
-
-            ### 🎮 Supported Controllers
-
-            - Xbox Controllers (OG/360/One/Series X|S)
-            - PlayStation Controllers (Classic/DS3/DS4/DualSense)
-            - Nintendo Switch Pro & Joy-Cons
-            - 8BitDo Controllers
-            - Generic USB HID Gamepads
-            - USB Keyboards & Mice
-
-            ### 🔐 Checksums
-            See `checksums.txt` for SHA256 verification.
-
-            ### 📖 Documentation
-            - [GitHub Repository](https://github.com/RobertDaleSmith/USBRetro)
-            - [Discord Community](https://discord.usbretro.com)
           files: |
             release/*
           draft: false
