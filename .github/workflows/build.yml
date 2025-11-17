@@ -10,24 +10,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        board: [rpi_pico, ada_qtpy, ada_kb2040]
-
     steps:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build Docker image and compile for all consoles
+      - name: Build Docker image (once for all products)
         run: docker build -t usbretro .
 
-      - name: Compile for target board ${{ matrix.board }}
-        run: docker run --rm -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build usbretro /bin/bash -c "sh build_${{ matrix.board }}.sh && cd build && cmake .. && make"
+      - name: Build all products
+        run: |
+          echo "Building all products..."
+
+          # Run build inside Docker container - build all products at once
+          docker run --rm \
+            -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
+            -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
+            usbretro /bin/bash -c "
+              cd /root/workspace/USBRetro &&
+              make usb2pce gcusb nuonusb
+            "
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: all_console_firmwares_${{ matrix.board }}
-          path: ${{ github.workspace }}/src/build/*.uf2
+          name: usbretro-firmware
+          path: ${{ github.workspace }}/releases/*.uf2
