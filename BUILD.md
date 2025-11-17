@@ -220,32 +220,22 @@ make clean    # Remove build artifacts and releases
 make help     # Display all available targets
 ```
 
-### Method 2: Build Script (Flexible)
+### Console-Only Builds
 
-Use `build_firmware.sh` for custom board+console combinations.
-
-#### Product Shortcuts
+Build for specific consoles (defaults to KB2040 board):
 
 ```bash
-./build_firmware.sh usb2pce       # USB2PCE
-./build_firmware.sh gcusb         # GCUSB
-./build_firmware.sh nuonusb       # NUON USB
-./build_firmware.sh xboxadapter   # Xbox Adapter
-```
-
-#### Custom Combinations
-
-```bash
-./build_firmware.sh <board> <console>
-
-# Examples:
-./build_firmware.sh kb2040 pce    # KB2040 + PCEngine
-./build_firmware.sh qtpy xb1      # QT Py + Xbox One
-./build_firmware.sh pico ngc      # Raspberry Pi Pico + GameCube
+make pce      # PCEngine/TurboGrafx-16
+make ngc      # GameCube/Wii
+make xb1      # Xbox One (uses QT Py)
+make nuon     # Nuon DVD Players
+make loopy    # Casio Loopy
 ```
 
 **Available Boards**: `pico`, `kb2040`, `qtpy`
 **Available Consoles**: `pce`, `ngc`, `xb1`, `nuon`, `loopy`
+
+See `Makefile` for the complete build matrix and board-specific configurations.
 
 **Output**:
 - `src/build/usbretro_<console>.uf2`
@@ -504,7 +494,7 @@ To add support for a new RP2040 board:
 
 4. Test build:
    ```bash
-   ./build_firmware.sh <boardname> pce
+   make pce  # or make usb2pce for KB2040 + PCEngine
    ```
 
 ### PIO Program Development
@@ -662,7 +652,7 @@ make usbretro_pce -j$(nproc)
 - ✅ Fixed `board_init()` → `stdio_init_all()` for latest SDK
 - ✅ Fixed `xinputh_init()` return type for TinyUSB 0.18+
 - ✅ Added `releases/` directory with product-named outputs
-- ✅ Created `build_firmware.sh` for flexible builds
+- ✅ Makefile provides flexible build targets for all products and consoles
 - ✅ Added comprehensive BUILD.md documentation
 
 ### Previous Versions

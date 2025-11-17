@@ -50,16 +50,9 @@ make nuon     # Nuon DVD Players
 make loopy    # Casio Loopy
 ```
 
-### Advanced: Custom Board + Console Combinations
+### Build by Board (Console Targets)
 
-```bash
-./build_firmware.sh <board> <console>
-
-# Examples:
-./build_firmware.sh kb2040 pce     # KB2040 + PCEngine
-./build_firmware.sh qtpy xb1       # QT Py + Xbox One
-./build_firmware.sh pico ngc       # Raspberry Pi Pico + GameCube
-```
+The Makefile automatically handles board selection based on the product/console target. See `Makefile` for the complete build matrix and board-specific configurations.
 
 Available boards: `pico`, `kb2040`, `qtpy`
 Available consoles: `pce`, `ngc`, `xb1`, `nuon`, `loopy`
