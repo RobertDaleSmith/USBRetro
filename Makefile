@@ -39,6 +39,7 @@ export PICO_TINYUSB_PATH := $(CURDIR)/src/lib/tinyusb
 BOARD_SCRIPT_pico := build_rpi_pico.sh
 BOARD_SCRIPT_kb2040 := build_ada_kb2040.sh
 BOARD_SCRIPT_qtpy := build_ada_qtpy.sh
+BOARD_SCRIPT_rp2040zero := build_waveshare_rp2040_zero.sh
 
 # Console targets
 CONSOLE_pce := usbretro_pce
@@ -171,6 +172,15 @@ pce:
 ngc:
 	@echo "$(YELLOW)Building GameCube (KB2040)...$(NC)"
 	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_ngc) -j4
+	@echo "$(GREEN)✓ GameCube built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_ngc).uf2"
+	@echo ""
+
+.PHONY: ngc_rp2040zero
+ngc_rp2040zero:
+	@echo "$(YELLOW)Building GameCube (RP2040-Zero)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_rp2040zero)
 	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_ngc) -j4
 	@echo "$(GREEN)✓ GameCube built successfully$(NC)"
 	@echo "  Output: src/build/$(CONSOLE_ngc).uf2"
