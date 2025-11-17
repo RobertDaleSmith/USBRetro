@@ -225,8 +225,8 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
                  ((bttn_b4)              ? 0x00 : USBR_BUTTON_B4) |
                  ((bttn_l1)              ? 0x00 : USBR_BUTTON_L1) |
                  ((bttn_r1)              ? 0x00 : USBR_BUTTON_R1) |
-                 ((update_report.sr_l)   ? 0x00 : USBR_BUTTON_L2) |
-                 ((update_report.sr_r)   ? 0x00 : USBR_BUTTON_R2) |
+                 ((update_report.sr_l || update_report.zl) ? 0x00 : USBR_BUTTON_L2) |
+                 ((update_report.sr_r || update_report.zr) ? 0x00 : USBR_BUTTON_R2) |
                  ((bttn_s1)              ? 0x00 : USBR_BUTTON_S1) |
                  ((bttn_s2)              ? 0x00 : USBR_BUTTON_S2) |
                  ((update_report.lstick) ? 0x00 : USBR_BUTTON_L3) |
