@@ -312,12 +312,6 @@ void __not_in_flash_func(update_output)(void)
       gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
       gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
       gc_report.r_analog   = furthest_from_center(gc_report.r_analog, players[i].output_analog_r, 0);
-
-      // Custom: L2 button sets lightshield (L analog = 43)
-      if ((byte & USBR_BUTTON_L2) == 0)
-      {
-        gc_report.l_analog = 43;
-      }
     }
     else
     {
