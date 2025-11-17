@@ -22,6 +22,9 @@ WORKDIR /root/workspace/USBRetro
 # Copy project with submodules (pico-sdk already initialized by host)
 COPY . .
 
+# Initialize submodules and pin versions (pico-sdk 2.2.0, TinyUSB 0.19.0)
+RUN make init
+
 # Set pico-sdk path to local submodule
 ENV PICO_SDK_PATH=/root/workspace/USBRetro/src/lib/pico-sdk
 
