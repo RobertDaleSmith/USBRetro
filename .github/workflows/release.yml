@@ -3,8 +3,6 @@ name: Release
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'VERSION'
   workflow_dispatch:
     inputs:
       bump_version:

@@ -32,6 +32,9 @@ jobs:
               make usb2pce gcusb nuonusb
             "
 
+          # Fix permissions (Docker creates files as root)
+          sudo chown -R $(id -u):$(id -g) releases/
+
       - name: Rename firmware with commit hash
         run: |
           COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
