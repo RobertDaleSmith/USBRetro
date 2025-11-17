@@ -21,6 +21,20 @@ uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 
+// Custom left stick scaling for eggzact123 (60% sensitivity)
+static const float LStick = 0.60f;
+
+// Helper function to scale analog values relative to center (128)
+static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
+{
+  int16_t rel = (int16_t)val - (int16_t)center;
+  int16_t scaled = (int16_t)(rel * scale);
+  int16_t result = scaled + (int16_t)center;
+  if (result < 0) result = 0;
+  if (result > 255) result = 255;
+  return (uint8_t)result;
+}
+
 // init hid key to gc key lookup table
 void gc_kb_key_lookup_init()
 {
@@ -270,26 +284,40 @@ void __not_in_flash_func(update_output)(void)
     if (players[0].button_mode != BUTTON_MODE_KB)
     {
       // global buttons
-      gc_report.dpad_up    |= ((byte & USBR_BUTTON_DU) == 0) ? 1 : 0; // up
+      // Custom mapping: LB also acts as D-Pad Up
+      gc_report.dpad_up    |= (((byte & USBR_BUTTON_DU) == 0) || ((byte & USBR_BUTTON_L1) == 0)) ? 1 : 0;
       gc_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0; // right
       gc_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0; // down
       gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
       gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
       gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
-      gc_report.z          |= ((byte & USBR_BUTTON_S1) == 0) ? 1 : 0; // select
+      // Custom mapping: RB → Z (swapped from original R mapping)
+      gc_report.z          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
       gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
       gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
       gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
-      gc_report.l          |= ((byte & USBR_BUTTON_L1) == 0) ? 1 : 0; // l
-      gc_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // r
+      // Custom mapping: L2 → L button (digital), RT → R (swapped from original RB mapping)
+      gc_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // lt
+      gc_report.r          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
 
       // global dominate axis
-      gc_report.stick_x    = furthest_from_center(gc_report.stick_x, players[i].output_analog_1x, 128);
-      gc_report.stick_y    = furthest_from_center(gc_report.stick_y, players[i].output_analog_1y, 128);
+      // Custom: Apply 60% scaling to left stick for reduced sensitivity
+      gc_report.stick_x    = furthest_from_center(gc_report.stick_x,
+                                                   scale_toward_center(players[i].output_analog_1x, LStick, 128),
+                                                   128);
+      gc_report.stick_y    = furthest_from_center(gc_report.stick_y,
+                                                   scale_toward_center(players[i].output_analog_1y, LStick, 128),
+                                                   128);
       gc_report.cstick_x   = furthest_from_center(gc_report.cstick_x, players[i].output_analog_2x, 128);
       gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
       gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
       gc_report.r_analog   = furthest_from_center(gc_report.r_analog, players[i].output_analog_r, 0);
+
+      // Custom: L2 button sets lightshield (L analog = 43)
+      if ((byte & USBR_BUTTON_L2) == 0)
+      {
+        gc_report.l_analog = 43;
+      }
     }
     else
     {
@@ -351,10 +379,11 @@ void __not_in_flash_func(post_globals)(
     }
 
     // cache analog and button values to player object
-    if (analog_1x) players[player_index].output_analog_1x = analog_1x;
-    if (analog_1y) players[player_index].output_analog_1y = analog_1y;
-    if (analog_2x) players[player_index].output_analog_2x = analog_2x;
-    if (analog_2y) players[player_index].output_analog_2y = analog_2y;
+    // Custom: Always assign analog values (don't skip zeros)
+    players[player_index].output_analog_1x = analog_1x;
+    players[player_index].output_analog_1y = analog_1y;
+    players[player_index].output_analog_2x = analog_2x;
+    players[player_index].output_analog_2y = analog_2y;
     players[player_index].output_analog_l = analog_l;
     players[player_index].output_analog_r = analog_r;
     players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
@@ -363,23 +392,19 @@ void __not_in_flash_func(post_globals)(
     players[player_index].keypress[1] = (keys >> 8) & 0xff;
     players[player_index].keypress[2] = (keys >> 16) & 0xff;
 
-    // full analog and digital L/R press always happen together
-    if (!((players[player_index].output_buttons) & 0x8000))
+    // Custom trigger logic: Set L2/R2 as "pressed" by default, clear when analog exceeds threshold
+    // This allows the button mapping to work correctly with the swapped Z/R layout
+    players[player_index].output_buttons |= USBR_BUTTON_L2;
+    players[player_index].output_buttons |= USBR_BUTTON_R2;
+
+    if (analog_r > GC_DIGITAL_TRIGGER_THRESHOLD)
     {
-      players[player_index].output_analog_r = 255;
-    }
-    else if (analog_r > 250)
-    {
-      players[player_index].output_buttons &= ~0x8000;
+      players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }
 
-    if (!((players[player_index].output_buttons) & 0x4000))
+    if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)
     {
-      players[player_index].output_analog_l = 255;
-    }
-    else if (analog_l > 250)
-    {
-      players[player_index].output_buttons &= ~0x4000;
+      players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     }
 
     // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
