@@ -70,6 +70,10 @@ jobs:
 
   # Build Docker image once (shared by all matrix jobs)
   build-docker:
+    needs: [bump-version]
+    if: |
+      always() &&
+      (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
     runs-on: ubuntu-latest
 
     steps:
@@ -195,10 +199,14 @@ jobs:
             echo "✅ Version v${VERSION} does not have a release - will create one"
           fi
 
-  # Create GitHub Release (only if version doesn't have release tag)
+  # Create GitHub Release (only on manual trigger if version doesn't have release tag)
   create-release:
     needs: [check-version-tag, build]
-    if: always() && needs.check-version-tag.outputs.has_release == 'false' && needs.build.result == 'success'
+    if: |
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      needs.check-version-tag.outputs.has_release == 'false' &&
+      needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
