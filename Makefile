@@ -41,7 +41,7 @@ CONSOLE_loopy := usbretro_loopy
 # Product definitions: PRODUCT_name = board console output_name
 PRODUCT_usb2pce := kb2040 pce USB2PCE
 PRODUCT_gcusb := kb2040 ngc GCUSB
-PRODUCT_nuonusb := kb2040 nuon NUON-USB
+PRODUCT_nuonusb := kb2040 nuon NUONUSB
 PRODUCT_xboxadapter := qtpy xb1 Xbox-Adapter
 
 # All products
