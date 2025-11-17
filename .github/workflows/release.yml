@@ -150,7 +150,7 @@ jobs:
           # Rename all firmware files with version
           mv releases/USB2PCE_usbretro_pce.uf2 artifacts/USB2PCE_v${VERSION}.uf2
           mv releases/GCUSB_usbretro_ngc.uf2 artifacts/GCUSB_v${VERSION}.uf2
-          mv releases/NUON-USB_usbretro_nuon.uf2 artifacts/NUONUSB_v${VERSION}.uf2
+          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/NUONUSB_v${VERSION}.uf2
 
           echo "✅ All firmware files created:"
           ls -lh artifacts/
