@@ -20,8 +20,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build Docker image
-        run: docker build -t usbretro .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image with caching
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: usbretro:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Compile for target board ${{ matrix.board }}
         run: |
@@ -29,7 +38,7 @@ jobs:
 
           docker run --rm \
             -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build \
-            usbretro /bin/bash -c "
+            usbretro:latest /bin/bash -c "
               cd /root/workspace/USBRetro/src &&
               sh build_${{ matrix.board }}.sh &&
               cd build &&
