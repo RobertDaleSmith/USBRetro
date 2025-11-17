@@ -1,6 +1,6 @@
 # USBRetro
 
-<p align="center"><img src="static/PNGs/USBRetro_Outline.png" width="300"/></p>
+<p align="center"><img src="resources/images/USBRetro_Outline.png" width="300"/></p>
 <p align="center">
   <img src="https://img.shields.io/github/license/RobertDaleSmith/USBRetro" />
   <img src="https://img.shields.io/github/actions/workflow/status/RobertDaleSmith/USBRetro/.github/workflows/build.yml" />
