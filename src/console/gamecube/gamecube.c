@@ -393,15 +393,16 @@ void __not_in_flash_func(post_globals)(
     players[player_index].keypress[2] = (keys >> 16) & 0xff;
 
     // Custom trigger logic: Set L2/R2 as "pressed" by default, clear when analog exceeds threshold
-    // This allows the button mapping to work correctly with the swapped Z/R layout
     players[player_index].output_buttons |= USBR_BUTTON_L2;
     players[player_index].output_buttons |= USBR_BUTTON_R2;
 
-    if (analog_r > GC_DIGITAL_TRIGGER_THRESHOLD)
+    // RT (R2) triggers Z on ANY press (>10 to avoid noise)
+    if (analog_r > 10)
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }
 
+    // LT (L2) triggers L digital at high threshold for proper analog control
     if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_L2;
