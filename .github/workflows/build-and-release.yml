@@ -19,18 +19,19 @@ on:
 jobs:
   # Bump version if requested (only for workflow_dispatch)
   bump-version:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
       - name: Checkout repository
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Bump version
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         id: bump
         run: |
           CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
@@ -60,6 +61,7 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit and push version bump
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Bump version to ${{ steps.bump.outputs.new_version }}"
@@ -71,9 +73,6 @@ jobs:
   # Build Docker image once (shared by all matrix jobs)
   build-docker:
     needs: [bump-version]
-    if: |
-      always() &&
-      (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
     runs-on: ubuntu-latest
 
     steps:
