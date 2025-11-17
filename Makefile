@@ -24,6 +24,12 @@ endif
 # Use local pico-sdk submodule by default
 ifndef PICO_SDK_PATH
     export PICO_SDK_PATH := $(CURDIR)/src/lib/pico-sdk
+else
+    # If PICO_SDK_PATH is set but doesn't exist, use submodule instead
+    ifeq ($(wildcard $(PICO_SDK_PATH)),)
+        $(warning PICO_SDK_PATH is set to '$(PICO_SDK_PATH)' but directory not found, using submodule instead)
+        override PICO_SDK_PATH := $(CURDIR)/src/lib/pico-sdk
+    endif
 endif
 
 # Board-specific build scripts
@@ -75,7 +81,8 @@ help:
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
 	@echo "  make all           - Build all products"
-	@echo "  make clean         - Clean build directory"
+	@echo "  make clean         - Clean build artifacts"
+	@echo "  make fullclean     - Reset to fresh clone state (removes all untracked files)"
 	@echo "  make releases      - Build all products for release"
 	@echo ""
 	@echo "$(GREEN)Flash Targets:$(NC)"
@@ -270,6 +277,19 @@ clean:
 	@rm -rf src/build
 	@rm -rf $(RELEASE_DIR)
 	@echo "$(GREEN)✓ Clean complete$(NC)"
+	@echo ""
+
+# Full clean - reset to fresh clone state
+.PHONY: fullclean
+fullclean:
+	@echo "$(YELLOW)⚠️  Full clean - resetting to fresh clone state...$(NC)"
+	@echo "$(YELLOW)  This will remove all untracked files and deinitialize submodules!$(NC)"
+	@rm -rf src/build
+	@rm -rf $(RELEASE_DIR)
+	@git clean -fdx
+	@git submodule deinit -f --all
+	@echo "$(GREEN)✓ Full clean complete - repository reset to fresh clone state$(NC)"
+	@echo "$(GREEN)  Run 'make init' to initialize submodules and start building$(NC)"
 	@echo ""
 
 # Show current configuration
