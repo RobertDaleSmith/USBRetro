@@ -17,20 +17,22 @@ on:
           - major
 
 jobs:
-  # Bump version if requested (only for workflow_dispatch)
-  bump-version:
+  # Check version and optionally bump it
+  check-version:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
 
     steps:
       - name: Checkout repository
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Bump version
+      - name: Bump version (if requested)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         id: bump
         run: |
@@ -58,7 +60,6 @@ jobs:
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "New version: $NEW_VERSION"
           echo "$NEW_VERSION" > VERSION
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit and push version bump
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
@@ -70,9 +71,39 @@ jobs:
           commit_user_email: ${{ github.actor }}@users.noreply.github.com
           commit_author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
 
+      - name: Read VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Current VERSION: ${VERSION}"
+
+      - name: Check if should create release
+        id: check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Check if version tag exists
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "⏭️  Version v${VERSION} already has a release"
+            SHOULD_RELEASE=false
+          else
+            echo "✅ Version v${VERSION} does not have a release"
+            SHOULD_RELEASE=true
+          fi
+
+          # Only release on manual trigger AND version doesn't have tag
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "$SHOULD_RELEASE" == "true" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "🚀 Will create release for v${VERSION}"
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping release"
+          fi
+
   # Build Docker image once (shared by all matrix jobs)
   build-docker:
-    needs: [bump-version]
+    needs: [check-version]
     runs-on: ubuntu-latest
 
     steps:
@@ -162,50 +193,10 @@ jobs:
           name: usbretro_${{ env.COMMIT_HASH }}_${{ matrix.board }}
           path: artifacts/*.uf2
 
-  # Check if VERSION has a release tag (only if build succeeded)
-  check-version-tag:
-    needs: [build]
-    if: needs.build.result == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      has_release: ${{ steps.check.outputs.has_release }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: main
-
-      - name: Read VERSION file
-        id: version
-        run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "📦 Current VERSION: ${VERSION}"
-
-      - name: Check if version tag exists
-        id: check
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "has_release=true" >> $GITHUB_OUTPUT
-            echo "⏭️  Version v${VERSION} already has a release"
-          else
-            echo "has_release=false" >> $GITHUB_OUTPUT
-            echo "✅ Version v${VERSION} does not have a release - will create one"
-          fi
-
-  # Create GitHub Release (only on manual trigger if version doesn't have release tag)
+  # Create GitHub Release (only if check-version says we should)
   create-release:
-    needs: [check-version-tag, build]
-    if: |
-      always() &&
-      github.event_name == 'workflow_dispatch' &&
-      needs.check-version-tag.outputs.has_release == 'false' &&
-      needs.build.result == 'success'
+    needs: [check-version, build]
+    if: needs.check-version.outputs.should_release == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -223,7 +214,7 @@ jobs:
       - name: Prepare release package
         run: |
           mkdir -p release
-          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          VERSION="${{ needs.check-version.outputs.version }}"
           COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
 
           echo "📦 Preparing v${VERSION} release from kb2040 builds:"
@@ -247,8 +238,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.check-version-tag.outputs.version }}
-          name: USBRetro v${{ needs.check-version-tag.outputs.version }}
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: USBRetro v${{ needs.check-version.outputs.version }}
           body: |
             ## Installation
 
@@ -272,7 +263,7 @@ jobs:
 
       - name: Release Summary
         run: |
-          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          VERSION="${{ needs.check-version.outputs.version }}"
           echo "### ✅ Release v${VERSION} Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
