@@ -10,47 +10,57 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        board: [rpi_pico, ada_qtpy, ada_kb2040]
+
     steps:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build Docker image (once for all products)
+      - name: Build Docker image
         run: docker build -t usbretro .
 
-      - name: Build all products
+      - name: Compile for target board ${{ matrix.board }}
         run: |
-          echo "Building all products..."
+          echo "Building all consoles for ${{ matrix.board }}..."
 
-          # Run build inside Docker container - build all products at once
           docker run --rm \
-            -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
-            -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
+            -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build \
             usbretro /bin/bash -c "
-              cd /root/workspace/USBRetro &&
-              make usb2pce gcusb nuonusb
+              cd /root/workspace/USBRetro/src &&
+              sh build_${{ matrix.board }}.sh &&
+              cd build &&
+              cmake .. &&
+              make -j4
             "
 
           # Fix permissions (Docker creates files as root)
-          sudo chown -R $(id -u):$(id -g) releases/
+          sudo chown -R $(id -u):$(id -g) src/build/
 
-      - name: Rename firmware with commit hash
+      - name: Rename firmware with commit hash and board
         run: |
           COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           mkdir -p artifacts
 
-          # Rename firmware files to include commit hash
-          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/usbretro_${COMMIT_HASH}_pce.uf2
-          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/usbretro_${COMMIT_HASH}_ngc.uf2
-          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/usbretro_${COMMIT_HASH}_nuon.uf2
+          # Rename all .uf2 files to include hash, console, and board
+          for file in src/build/*.uf2; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file" .uf2)
+              # Extract console name from filename (e.g., usbretro_pce -> pce)
+              console=$(echo "$filename" | sed 's/usbretro_//')
+              mv "$file" "artifacts/usbretro_${COMMIT_HASH}_${console}_${{ matrix.board }}.uf2"
+            fi
+          done
 
-          echo "Renamed firmware files with commit hash ${COMMIT_HASH}:"
+          echo "Renamed firmware files for ${{ matrix.board }}:"
           ls -lh artifacts/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: usbretro_${{ env.COMMIT_HASH }}
+          name: usbretro_${{ env.COMMIT_HASH }}_${{ matrix.board }}
           path: artifacts/*.uf2
