@@ -32,8 +32,22 @@ jobs:
               make usb2pce gcusb nuonusb
             "
 
+      - name: Rename firmware with commit hash
+        run: |
+          COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          mkdir -p artifacts
+
+          # Rename firmware files to include commit hash
+          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/usbretro_${COMMIT_HASH}_pce.uf2
+          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/usbretro_${COMMIT_HASH}_ngc.uf2
+          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/usbretro_${COMMIT_HASH}_nuon.uf2
+
+          echo "Renamed firmware files with commit hash ${COMMIT_HASH}:"
+          ls -lh artifacts/
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: usbretro-firmware
-          path: ${{ github.workspace }}/releases/*.uf2
+          name: usbretro_${{ env.COMMIT_HASH }}
+          path: artifacts/*.uf2
