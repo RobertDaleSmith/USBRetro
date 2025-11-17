@@ -291,14 +291,14 @@ void __not_in_flash_func(update_output)(void)
       gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
       gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
       gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
-      // Custom mapping: RB → Z (swapped from original R mapping)
-      gc_report.z          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
+      // Custom mapping: RT → Z (moved from Select), RB → R (keep original)
+      gc_report.z          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
       gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
       gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
       gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
-      // Custom mapping: L2 → L button (digital), RT → R (swapped from original RB mapping)
+      // Custom mapping: L2 → L button (digital), RB → R (original mapping)
       gc_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // lt
-      gc_report.r          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
+      gc_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
 
       // global dominate axis
       // Custom: Apply 60% scaling to left stick for reduced sensitivity
