@@ -68,45 +68,9 @@ jobs:
           commit_user_email: ${{ github.actor }}@users.noreply.github.com
           commit_author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
 
-  # Check if VERSION has a release tag
-  check-version-tag:
-    needs: [bump-version]
-    if: always()
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      has_release: ${{ steps.check.outputs.has_release }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: main
-
-      - name: Read VERSION file
-        id: version
-        run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "📦 Current VERSION: ${VERSION}"
-
-      - name: Check if version tag exists
-        id: check
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "has_release=true" >> $GITHUB_OUTPUT
-            echo "⏭️  Version v${VERSION} already has a release"
-          else
-            echo "has_release=false" >> $GITHUB_OUTPUT
-            echo "✅ Version v${VERSION} does not have a release - will create one"
-          fi
-
   # Build all products (matrix: 3 boards)
   build:
-    needs: [check-version-tag]
+    needs: [bump-version]
     if: always()
     runs-on: ubuntu-latest
 
@@ -173,6 +137,42 @@ jobs:
         with:
           name: usbretro_${{ env.COMMIT_HASH }}_${{ matrix.board }}
           path: artifacts/*.uf2
+
+  # Check if VERSION has a release tag (only if build succeeded)
+  check-version-tag:
+    needs: [bump-version, build]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      has_release: ${{ steps.check.outputs.has_release }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Read VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Current VERSION: ${VERSION}"
+
+      - name: Check if version tag exists
+        id: check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "has_release=true" >> $GITHUB_OUTPUT
+            echo "⏭️  Version v${VERSION} already has a release"
+          else
+            echo "has_release=false" >> $GITHUB_OUTPUT
+            echo "✅ Version v${VERSION} does not have a release - will create one"
+          fi
 
   # Create GitHub Release (only if version doesn't have release tag)
   create-release:
