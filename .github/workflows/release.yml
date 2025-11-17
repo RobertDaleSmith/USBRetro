@@ -120,8 +120,17 @@ jobs:
           submodules: recursive
           ref: main
 
-      - name: Build Docker image (once for all products)
-        run: docker build -t usbretro .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image with caching
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: usbretro:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build all products
         run: |
@@ -132,7 +141,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
             -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
-            usbretro /bin/bash -c "
+            usbretro:latest /bin/bash -c "
               cd /root/workspace/USBRetro &&
               make usb2pce gcusb nuonusb
             "
