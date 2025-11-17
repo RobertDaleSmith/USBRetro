@@ -1,4 +1,4 @@
-name: Build USBRetro
+name: Build
 
 on:
   push:
