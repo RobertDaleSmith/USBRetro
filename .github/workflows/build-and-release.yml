@@ -70,8 +70,6 @@ jobs:
 
   # Build Docker image once (shared by all matrix jobs)
   build-docker:
-    needs: [bump-version]
-    if: always()
     runs-on: ubuntu-latest
 
     steps:
@@ -163,8 +161,8 @@ jobs:
 
   # Check if VERSION has a release tag (only if build succeeded)
   check-version-tag:
-    needs: [bump-version, build]
-    if: always() && needs.build.result == 'success'
+    needs: [build]
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
