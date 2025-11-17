@@ -32,6 +32,9 @@
 #define BUTTON_MODE_4  0x04
 #define BUTTON_MODE_KB 0x05
 
+// Custom trigger threshold for eggzact123
+#define GC_DIGITAL_TRIGGER_THRESHOLD 250
+
 // Global variables
 extern PIO pio;
 
