@@ -88,10 +88,10 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: usbretro:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=cacheonly
 
   # Build all products (matrix: 3 boards)
   build:
