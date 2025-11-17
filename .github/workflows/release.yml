@@ -148,9 +148,9 @@ jobs:
           mkdir -p artifacts
 
           # Rename all firmware files with version
-          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/USB2PCE_v${VERSION}.uf2
-          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/GCUSB_v${VERSION}.uf2
-          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/NUONUSB_v${VERSION}.uf2
+          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/USB2PCE_usbretro_v${VERSION}.uf2
+          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/GCUSB_usbretro_v${VERSION}.uf2
+          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/NUONUSB_usbretro_v${VERSION}.uf2
 
           echo "✅ All firmware files created:"
           ls -lh artifacts/
@@ -211,17 +211,17 @@ jobs:
             ### 📦 Products
 
             **USB2PCE** - USB to PCEngine/TurboGrafx-16 Adapter
-            - File: `USB2PCE_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - File: `USB2PCE_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
             - Board: Adafruit KB2040
             - Features: Multitap support (1-5 players), 2/3/6-button controllers, PCEngine Mouse
 
             **GCUSB** - USB to GameCube/Wii Adapter
-            - File: `GCUSB_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - File: `GCUSB_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
             - Board: Adafruit KB2040
             - Features: Rumble support, GameCube Keyboard mode, Copilot (4 controllers → 1)
 
             **NUONUSB** - USB to Nuon Adapter
-            - File: `NUONUSB_v${{ needs.check-version-tag.outputs.version }}.uf2`
+            - File: `NUONUSB_usbretro_v${{ needs.check-version-tag.outputs.version }}.uf2`
             - Board: Adafruit KB2040
             - Features: Standard controller, Spinner mode (Tempest 3000)
 
