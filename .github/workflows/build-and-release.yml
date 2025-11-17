@@ -1,8 +1,8 @@
-name: Release
+name: Build & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, build-matrix]
   workflow_dispatch:
     inputs:
       bump_version:
@@ -23,8 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      version_bumped: ${{ steps.bump.outputs.bumped }}
 
     steps:
       - name: Checkout repository
@@ -60,7 +58,6 @@ jobs:
           echo "New version: $NEW_VERSION"
           echo "$NEW_VERSION" > VERSION
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "bumped=true" >> $GITHUB_OUTPUT
 
       - name: Commit and push version bump
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -104,21 +101,24 @@ jobs:
             echo "⏭️  Version v${VERSION} already has a release"
           else
             echo "has_release=false" >> $GITHUB_OUTPUT
-            echo "✅ Version v${VERSION} does not have a release - will build & release"
+            echo "✅ Version v${VERSION} does not have a release - will create one"
           fi
 
-  # Build all products in single job (shared build environment)
-  build-products:
+  # Build all products (matrix: 3 boards)
+  build:
     needs: [check-version-tag]
-    if: always() && needs.check-version-tag.outputs.has_release == 'false'
+    if: always()
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        board: [rpi_pico, ada_qtpy, ada_kb2040]
 
     steps:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          ref: main
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -132,47 +132,52 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build all products
+      - name: Compile for target board ${{ matrix.board }}
         run: |
-          VERSION="${{ needs.check-version-tag.outputs.version }}"
-          echo "Building all products v${VERSION}..."
+          echo "Building all consoles for ${{ matrix.board }}..."
 
-          # Run build inside Docker container - build all products at once
           docker run --rm \
-            -v ${{ github.workspace }}/releases:/root/workspace/USBRetro/releases \
-            -v ${{ github.workspace }}/src:/root/workspace/USBRetro/src \
+            -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build \
             usbretro:latest /bin/bash -c "
-              cd /root/workspace/USBRetro &&
-              make usb2pce gcusb nuonusb
+              cd /root/workspace/USBRetro/src &&
+              sh build_${{ matrix.board }}.sh &&
+              cd build &&
+              cmake .. &&
+              make -j4
             "
 
           # Fix permissions (Docker creates files as root)
-          sudo chown -R $(id -u):$(id -g) releases/
+          sudo chown -R $(id -u):$(id -g) src/build/
 
-      - name: Prepare firmware artifacts
+      - name: Rename firmware with commit hash and board
         run: |
-          VERSION="${{ needs.check-version-tag.outputs.version }}"
+          COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           mkdir -p artifacts
 
-          # Rename all firmware files with version
-          mv releases/USB2PCE_usbretro_pce.uf2 artifacts/USB2PCE_usbretro_v${VERSION}.uf2
-          mv releases/GCUSB_usbretro_ngc.uf2 artifacts/GCUSB_usbretro_v${VERSION}.uf2
-          mv releases/NUONUSB_usbretro_nuon.uf2 artifacts/NUONUSB_usbretro_v${VERSION}.uf2
+          # Rename all .uf2 files to include hash, console, and board
+          for file in src/build/*.uf2; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file" .uf2)
+              # Extract console name from filename (e.g., usbretro_pce -> pce)
+              console=$(echo "$filename" | sed 's/usbretro_//')
+              mv "$file" "artifacts/usbretro_${COMMIT_HASH}_${console}_${{ matrix.board }}.uf2"
+            fi
+          done
 
-          echo "✅ All firmware files created:"
+          echo "Renamed firmware files for ${{ matrix.board }}:"
           ls -lh artifacts/
 
-      - name: Upload firmware artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: usbretro-products
+          name: usbretro_${{ env.COMMIT_HASH }}_${{ matrix.board }}
           path: artifacts/*.uf2
-          retention-days: 90
 
-  # Create GitHub Release
+  # Create GitHub Release (only if version doesn't have release tag)
   create-release:
-    needs: [build-products, check-version-tag]
-    if: always() && needs.check-version-tag.outputs.has_release == 'false' && needs.build-products.result == 'success'
+    needs: [check-version-tag, build]
+    if: always() && needs.check-version-tag.outputs.has_release == 'false' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,20 +186,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download kb2040 artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: usbretro_*_ada_kb2040
           path: artifacts
 
       - name: Prepare release package
         run: |
           mkdir -p release
           VERSION="${{ needs.check-version-tag.outputs.version }}"
+          COMMIT_HASH=$(echo ${{ github.sha }} | cut -c1-6)
 
-          echo "📦 Collecting firmware files for v${VERSION} release:"
+          echo "📦 Preparing v${VERSION} release from kb2040 builds:"
 
-          # Copy all firmware files from artifacts
-          find artifacts -type f -name "*.uf2" -exec cp {} release/ \;
+          # Find and rename the 3 product firmware files
+          find artifacts -name "*_pce_ada_kb2040.uf2" -exec cp {} release/USB2PCE_usbretro_v${VERSION}.uf2 \;
+          find artifacts -name "*_ngc_ada_kb2040.uf2" -exec cp {} release/GCUSB_usbretro_v${VERSION}.uf2 \;
+          find artifacts -name "*_nuon_ada_kb2040.uf2" -exec cp {} release/NUONUSB_usbretro_v${VERSION}.uf2 \;
 
           echo ""
           echo "✅ Release package contents:"
