@@ -70,6 +70,8 @@ jobs:
 
   # Build Docker image once (shared by all matrix jobs)
   build-docker:
+    needs: [bump-version]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
