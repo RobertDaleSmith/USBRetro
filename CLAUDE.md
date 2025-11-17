@@ -72,23 +72,15 @@ brew install --cask gcc-arm-embedded
 export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
 ```
 
-2. Setup Pico SDK:
-```bash
-cd ~/git
-git clone https://github.com/raspberrypi/pico-sdk.git
-cd pico-sdk
-git submodule update --init lib/tinyusb
-export PICO_SDK_PATH=~/git/pico-sdk
-```
-
-3. Clone USBRetro and initialize submodules:
+2. Clone USBRetro and initialize submodules:
 ```bash
 cd ~/git
 git clone https://github.com/RobertDaleSmith/usbretro.git
 cd usbretro
-git submodule init
-git submodule update
+make init  # Initializes pico-sdk 2.2.0 and TinyUSB 0.19.0
 ```
+
+**Note:** TinyUSB is now a top-level submodule (not nested in pico-sdk) to keep pico-sdk clean. The Makefile automatically sets `PICO_TINYUSB_PATH` to point to the external TinyUSB.
 
 ### Rebuilding After Code Changes
 
