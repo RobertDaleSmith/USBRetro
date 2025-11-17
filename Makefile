@@ -32,6 +32,9 @@ else
     endif
 endif
 
+# Use external TinyUSB (keeps pico-sdk clean)
+export PICO_TINYUSB_PATH := $(CURDIR)/src/lib/tinyusb
+
 # Board-specific build scripts
 BOARD_SCRIPT_pico := build_rpi_pico.sh
 BOARD_SCRIPT_kb2040 := build_ada_kb2040.sh
@@ -111,9 +114,8 @@ init:
 	@git submodule update --init --recursive
 	@echo "$(YELLOW)Checking out pico-sdk 2.2.0...$(NC)"
 	@cd src/lib/pico-sdk && git checkout 2.2.0
-	@echo "$(YELLOW)Initializing TinyUSB 0.19.0...$(NC)"
-	@cd src/lib/pico-sdk && git submodule update --init lib/tinyusb
-	@cd src/lib/pico-sdk/lib/tinyusb && git fetch --tags && git checkout 0.19.0
+	@echo "$(YELLOW)Checking out TinyUSB 0.19.0...$(NC)"
+	@cd src/lib/tinyusb && git fetch --tags && git checkout 0.19.0
 	@echo "$(GREEN)✓ Initialization complete!$(NC)"
 	@echo "$(GREEN)  You can now run 'make build' or 'make all'$(NC)"
 	@echo ""

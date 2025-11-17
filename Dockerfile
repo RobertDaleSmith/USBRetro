@@ -28,6 +28,9 @@ RUN make init
 # Set pico-sdk path to local submodule
 ENV PICO_SDK_PATH=/root/workspace/USBRetro/src/lib/pico-sdk
 
+# Use external TinyUSB (keeps pico-sdk clean)
+ENV PICO_TINYUSB_PATH=/root/workspace/USBRetro/src/lib/tinyusb
+
 WORKDIR /root/workspace/USBRetro/src
 
 CMD ["/bin/bash"]
