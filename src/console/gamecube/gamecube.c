@@ -392,20 +392,25 @@ void __not_in_flash_func(post_globals)(
     players[player_index].keypress[1] = (keys >> 8) & 0xff;
     players[player_index].keypress[2] = (keys >> 16) & 0xff;
 
-    // Custom trigger logic: Set L2/R2 as "pressed" by default, clear when analog exceeds threshold
-    players[player_index].output_buttons |= USBR_BUTTON_L2;
-    players[player_index].output_buttons |= USBR_BUTTON_R2;
+    // Custom trigger logic: Check analog ONLY if button not already pressed digitally
+    // This supports both digital buttons (Switch) and analog triggers (Xbox/PS)
 
-    // RT (R2) triggers Z on ANY press (>10 to avoid noise)
-    if (analog_r > 10)
+    // RT (R2): Digital press OR analog >10 triggers Z
+    if ((players[player_index].output_buttons & USBR_BUTTON_R2) != 0)  // Not pressed digitally
     {
-      players[player_index].output_buttons &= ~USBR_BUTTON_R2;
+      if (analog_r > 10)  // Check analog (instant response)
+      {
+        players[player_index].output_buttons &= ~USBR_BUTTON_R2;
+      }
     }
 
-    // LT (L2) triggers L digital at high threshold for proper analog control
-    if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)
+    // LT (L2): Digital press OR analog >250 triggers L
+    if ((players[player_index].output_buttons & USBR_BUTTON_L2) != 0)  // Not pressed digitally
     {
-      players[player_index].output_buttons &= ~USBR_BUTTON_L2;
+      if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)  // Check analog (high threshold)
+      {
+        players[player_index].output_buttons &= ~USBR_BUTTON_L2;
+      }
     }
 
     // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
