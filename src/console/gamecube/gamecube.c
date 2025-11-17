@@ -236,13 +236,16 @@ void __not_in_flash_func(update_output)(void)
 {
   static bool kbModeButtonHeld = false;
 
+  // Build report locally to avoid Core 1 reading partial updates
+  gc_report_t new_report;
+
   if (players[0].button_mode == BUTTON_MODE_KB)
   {
-    gc_report = default_gc_kb_report;
+    new_report = default_gc_kb_report;
   }
   else
   {
-    gc_report = default_gc_report;
+    new_report = default_gc_report;
   }
 
   unsigned short int i;
@@ -260,7 +263,7 @@ void __not_in_flash_func(update_output)(void)
           players[0].button_mode = BUTTON_MODE_KB; // global
           players[i].button_mode = BUTTON_MODE_KB;
           GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
-          gc_report = default_gc_kb_report;
+          new_report = default_gc_kb_report;
           // players[i].gc_report = default_gc_kb_report;
           gc_kb_led = 0x4;
         }
@@ -269,7 +272,7 @@ void __not_in_flash_func(update_output)(void)
           players[0].button_mode = BUTTON_MODE_3; // global
           players[i].button_mode = BUTTON_MODE_3;
           GamecubeConsole_SetMode(&gc, GamecubeMode_3);
-          gc_report = default_gc_report;
+          new_report = default_gc_report;
           // players[i].gc_report = default_gc_report;
           gc_kb_led = 0;
         }
@@ -285,53 +288,56 @@ void __not_in_flash_func(update_output)(void)
     {
       // global buttons
       // Custom mapping: LB also acts as D-Pad Up
-      gc_report.dpad_up    |= (((byte & USBR_BUTTON_DU) == 0) || ((byte & USBR_BUTTON_L1) == 0)) ? 1 : 0;
-      gc_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0; // right
-      gc_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0; // down
-      gc_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
-      gc_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
-      gc_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
+      new_report.dpad_up    |= (((byte & USBR_BUTTON_DU) == 0) || ((byte & USBR_BUTTON_L1) == 0)) ? 1 : 0;
+      new_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0; // right
+      new_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0; // down
+      new_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
+      new_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
+      new_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
       // Custom mapping: RT → Z (moved from Select), RB → R (keep original)
-      gc_report.z          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
-      gc_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
-      gc_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
-      gc_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
+      new_report.z          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
+      new_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
+      new_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
+      new_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
       // Custom mapping: L2 → L button (digital), RB → R (original mapping)
-      gc_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // lt
-      gc_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
+      new_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // lt
+      new_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
 
       // global dominate axis
       // Custom: Apply 60% scaling to left stick for reduced sensitivity
-      gc_report.stick_x    = furthest_from_center(gc_report.stick_x,
+      new_report.stick_x    = furthest_from_center(new_report.stick_x,
                                                    scale_toward_center(players[i].output_analog_1x, LStick, 128),
                                                    128);
-      gc_report.stick_y    = furthest_from_center(gc_report.stick_y,
+      new_report.stick_y    = furthest_from_center(new_report.stick_y,
                                                    scale_toward_center(players[i].output_analog_1y, LStick, 128),
                                                    128);
-      gc_report.cstick_x   = furthest_from_center(gc_report.cstick_x, players[i].output_analog_2x, 128);
-      gc_report.cstick_y   = furthest_from_center(gc_report.cstick_y, players[i].output_analog_2y, 128);
-      gc_report.l_analog   = furthest_from_center(gc_report.l_analog, players[i].output_analog_l, 0);
+      new_report.cstick_x   = furthest_from_center(new_report.cstick_x, players[i].output_analog_2x, 128);
+      new_report.cstick_y   = furthest_from_center(new_report.cstick_y, players[i].output_analog_2y, 128);
+      new_report.l_analog   = furthest_from_center(new_report.l_analog, players[i].output_analog_l, 0);
 
       // Custom: RB (R1) digital button sends R analog at 100% (255)
       // RT (R2) analog does NOT affect R analog (only controls Z digital)
       if ((byte & USBR_BUTTON_R1) == 0)
       {
-        gc_report.r_analog = 255;
+        new_report.r_analog = 255;
       }
     }
     else
     {
-      gc_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
-      gc_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
-      gc_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
-      gc_report.keyboard.checksum = gc_report.keyboard.keypress[0] ^
-                                    gc_report.keyboard.keypress[1] ^
-                                    gc_report.keyboard.keypress[2] ^ gc_kb_counter;
-      gc_report.keyboard.counter = gc_kb_counter;
+      new_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
+      new_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
+      new_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
+      new_report.keyboard.checksum = new_report.keyboard.keypress[0] ^
+                                    new_report.keyboard.keypress[1] ^
+                                    new_report.keyboard.keypress[2] ^ gc_kb_counter;
+      new_report.keyboard.counter = gc_kb_counter;
     }
   }
 
   codes_task();
+
+  // Atomically update global report (prevents Core 1 from seeing partial updates)
+  gc_report = new_report;
 
   update_pending = true;
 }
