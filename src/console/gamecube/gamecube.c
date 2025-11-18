@@ -267,16 +267,16 @@ static inline uint32_t gc_urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
 // Blink LED to indicate profile number (profile 0 = 1 blink, profile 1 = 2 blinks, etc.)
 static void blink_profile_indicator(uint8_t profile_index)
 {
-  const uint32_t BLINK_ON_TIME_MS = 200;   // LED on duration
-  const uint32_t BLINK_OFF_TIME_MS = 200;  // LED off duration between blinks
-  const uint32_t PAUSE_AFTER_MS = 500;     // Pause after all blinks
+  const uint32_t BLINK_ON_TIME_MS = 300;   // LED on duration (longer for visibility)
+  const uint32_t BLINK_OFF_TIME_MS = 400;  // LED off duration between blinks (longer to count)
+  const uint32_t PAUSE_AFTER_MS = 1000;    // Pause after all blinks before resuming
 
   // Blink count = profile index + 1 (so profile 0 blinks once, profile 1 blinks twice, etc.)
   uint8_t blink_count = profile_index + 1;
 
-  // Purple color for profile indication (matches GameCube theme)
-  uint32_t led_color = gc_urgb_u32(0x80, 0x00, 0x80);  // Purple
-  uint32_t led_off = gc_urgb_u32(0x00, 0x00, 0x00);    // Off
+  // Bright white for clear visibility
+  uint32_t led_color = gc_urgb_u32(0xFF, 0xFF, 0xFF);  // Bright white
+  uint32_t led_off = gc_urgb_u32(0x00, 0x00, 0x00);    // Completely off
 
   for (uint8_t i = 0; i < blink_count; i++)
   {
@@ -284,28 +284,26 @@ static void blink_profile_indicator(uint8_t profile_index)
     gc_put_pixel(led_color);
     sleep_ms(BLINK_ON_TIME_MS);
 
-    // LED off
+    // LED completely off
     gc_put_pixel(led_off);
-
-    // Only add delay between blinks, not after the last one
-    if (i < blink_count - 1)
-    {
-      sleep_ms(BLINK_OFF_TIME_MS);
-    }
+    sleep_ms(BLINK_OFF_TIME_MS);  // Always wait after turning off
   }
 
   // Final pause before resuming normal LED operation
   sleep_ms(PAUSE_AFTER_MS);
 }
 
-// Cycle to next profile (wraps around to 0 after last profile)
-static void cycle_profile(void)
+// Switch to a specific profile with visual and haptic feedback
+static void switch_to_profile(uint8_t new_profile_index)
 {
-  active_profile_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
+  active_profile_index = new_profile_index;
   active_profile = &profiles[active_profile_index];
 
   // Blink LED to indicate which profile was selected
   blink_profile_indicator(active_profile_index);
+
+  // TODO: Send rumble pulses (N pulses for profile N)
+  // Requires rumble support implementation
 
   // TODO: Save active_profile_index to flash for persistence across reboots
   // For now, profile resets to default on power cycle
@@ -313,57 +311,79 @@ static void cycle_profile(void)
   printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
 }
 
-// Check for profile switching button combo: SELECT + START + L1 + R1
+// Check for profile switching: SELECT + D-pad Up/Down
 static void check_profile_switch_combo(void)
 {
   static uint32_t combo_hold_start = 0;
-  static bool combo_triggered = false;
-  static bool waiting_for_release = false;  // Must fully release before next trigger
-  const uint32_t COMBO_HOLD_TIME_MS = 2000; // Hold for 2 seconds
+  static bool last_dpad_up_pressed = false;
+  static bool last_dpad_down_pressed = false;
+  const uint32_t COMBO_HOLD_TIME_MS = 2000; // Hold for 2 seconds initially
+  const uint32_t REPEAT_DELAY_MS = 300;     // Delay between repeated presses while holding
 
   if (playersCount == 0) return; // No controllers connected
 
-  // Check if combo is held (SELECT + START + L1 + R1)
-  uint32_t combo_buttons = USBR_BUTTON_S1 | USBR_BUTTON_S2 | USBR_BUTTON_L1 | USBR_BUTTON_R1;
-  bool combo_held = ((players[0].output_buttons & combo_buttons) == 0);
+  uint32_t buttons = players[0].output_buttons;
 
-  // If waiting for release, ignore all input until buttons are fully released
-  if (waiting_for_release)
+  // Check if Select is held
+  bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
+  bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
+  bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
+
+  if (!select_held)
   {
-    if (!combo_held)
-    {
-      // Buttons released - ready for next trigger
-      waiting_for_release = false;
-      combo_triggered = false;
-      combo_hold_start = 0;
-    }
-    // Ignore button holds while waiting for release
+    // Select not held - reset state
+    combo_hold_start = 0;
+    last_dpad_up_pressed = false;
+    last_dpad_down_pressed = false;
     return;
   }
 
-  if (combo_held)
+  // Select is held - check for D-pad presses
+  uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
+  // D-pad Up - cycle forward
+  if (dpad_up_pressed && !last_dpad_up_pressed)
   {
-    if (combo_hold_start == 0)
+    // New press detected
+    if (combo_hold_start == 0 || (current_time - combo_hold_start) >= COMBO_HOLD_TIME_MS)
     {
-      // Start timing
-      combo_hold_start = to_ms_since_boot(get_absolute_time());
+      // First press or held long enough - cycle forward
+      uint8_t new_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
+      switch_to_profile(new_index);
+      combo_hold_start = current_time;
     }
-    else if (!combo_triggered)
-    {
-      // Check if held long enough
-      uint32_t hold_duration = to_ms_since_boot(get_absolute_time()) - combo_hold_start;
-      if (hold_duration >= COMBO_HOLD_TIME_MS)
-      {
-        cycle_profile();
-        combo_triggered = true; // Prevent multiple triggers during this hold
-        waiting_for_release = true;  // Require full release before next trigger
-      }
-    }
+    last_dpad_up_pressed = true;
   }
-  else
+  else if (!dpad_up_pressed)
   {
-    // Combo not held - reset timer (but keep waiting_for_release state)
-    combo_hold_start = 0;
+    last_dpad_up_pressed = false;
+  }
+
+  // D-pad Down - cycle backward
+  if (dpad_down_pressed && !last_dpad_down_pressed)
+  {
+    // New press detected
+    if (combo_hold_start == 0 || (current_time - combo_hold_start) >= COMBO_HOLD_TIME_MS)
+    {
+      // First press or held long enough - cycle backward
+      uint8_t new_index = (active_profile_index == 0) ? (GC_PROFILE_COUNT - 1) : (active_profile_index - 1);
+      switch_to_profile(new_index);
+      combo_hold_start = current_time;
+    }
+    last_dpad_down_pressed = true;
+  }
+  else if (!dpad_down_pressed)
+  {
+    last_dpad_down_pressed = false;
+  }
+
+  // Allow repeat after delay
+  if ((dpad_up_pressed || dpad_down_pressed) && combo_hold_start != 0)
+  {
+    if ((current_time - combo_hold_start) >= REPEAT_DELAY_MS)
+    {
+      combo_hold_start = 0; // Reset to allow next press
+    }
   }
 }
 
