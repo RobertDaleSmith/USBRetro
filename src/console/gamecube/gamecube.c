@@ -399,25 +399,30 @@ void __not_in_flash_func(post_globals)(
     players[player_index].keypress[1] = (keys >> 8) & 0xff;
     players[player_index].keypress[2] = (keys >> 16) & 0xff;
 
-    // Custom trigger logic: Check analog ONLY if button not already pressed digitally
-    // This supports both digital buttons (Switch) and analog triggers (Xbox/PS)
+    // GameCube-specific trigger logic:
+    // Modern USB controllers send both digital L2/R2 bits (set at ~1-5% threshold by firmware)
+    // AND analog trigger values (0-255). We want to use our own threshold, not the controller's.
+    //
+    // For analog controllers (DualSense, Xbox): Use our threshold, ignore controller's digital bit
+    // For digital-only controllers (Switch Pro, PS3): Fall back to digital button when analog == 0
 
-    // RT (R2): Digital press OR analog >10 triggers Z
-    if ((players[player_index].output_buttons & USBR_BUTTON_R2) != 0)  // Not pressed digitally
+    // Save original digital button state before we override
+    bool original_l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
+    bool original_r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
+
+    // Force L2/R2 to "not pressed" initially
+    players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
+
+    // LT (L2): Use analog threshold (250) if analog present, otherwise use digital button
+    if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD || (analog_l == 0 && original_l2_pressed))
     {
-      if (analog_r > 10)  // Check analog (instant response)
-      {
-        players[player_index].output_buttons &= ~USBR_BUTTON_R2;
-      }
+      players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     }
 
-    // LT (L2): Digital press OR analog >250 triggers L
-    if ((players[player_index].output_buttons & USBR_BUTTON_L2) != 0)  // Not pressed digitally
+    // RT (R2): Use analog threshold (10 = instant) if analog present, otherwise use digital button
+    if (analog_r > 10 || (analog_r == 0 && original_r2_pressed))
     {
-      if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD)  // Check analog (high threshold)
-      {
-        players[player_index].output_buttons &= ~USBR_BUTTON_L2;
-      }
+      players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }
 
     // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
