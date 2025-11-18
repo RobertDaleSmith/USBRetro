@@ -21,8 +21,9 @@ uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 
-// Custom left stick scaling for eggzact123 (60% sensitivity)
-static const float LStick = 0.60f;
+// Left stick sensitivity scaling (1.0 = 100% = no scaling, 0.6 = 60% = reduced sensitivity)
+// Change this value to reduce stick sensitivity for finer control (useful for racing games)
+static const float LStick = 1.0f;  // Default: 100% (no scaling)
 
 // Helper function to scale analog values relative to center (128)
 static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
