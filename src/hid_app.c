@@ -137,8 +137,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
   if (dev_type == CONTROLLER_UNKNOWN)
   {
+    // Safe on ARM Cortex-M0+: suppress alignment warning for packed struct access
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    tuh_hid_report_info_t* report_info_ptr = devices[dev_addr].instances[instance].report_info;
     devices[dev_addr].instances[instance].report_count =
-      tuh_hid_parse_report_descriptor(devices[dev_addr].instances[instance].report_info, MAX_REPORTS, desc_report, desc_len);
+      tuh_hid_parse_report_descriptor(report_info_ptr, MAX_REPORTS, desc_report, desc_len);
+    #pragma GCC diagnostic pop
     printf("HID has %u reports \r\n", devices[dev_addr].instances[instance].report_count);
   }
 
@@ -229,7 +234,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
   (void) dev_addr;
 
   uint8_t const rpt_count = devices[dev_addr].instances[instance].report_count;
+  // Safe on ARM Cortex-M0+: suppress alignment warning for packed struct access
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Waddress-of-packed-member"
   tuh_hid_report_info_t* rpt_info_arr = devices[dev_addr].instances[instance].report_info;
+  #pragma GCC diagnostic pop
   tuh_hid_report_info_t* rpt_info = NULL;
 
   if ( rpt_count == 1 && rpt_info_arr[0].report_id == 0)
