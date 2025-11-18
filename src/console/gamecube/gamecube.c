@@ -274,8 +274,8 @@ static void blink_profile_indicator(uint8_t profile_index)
   // Blink count = profile index + 1 (so profile 0 blinks once, profile 1 blinks twice, etc.)
   uint8_t blink_count = profile_index + 1;
 
-  // Bright white for clear visibility
-  uint32_t led_color = gc_urgb_u32(0xFF, 0xFF, 0xFF);  // Bright white
+  // Use existing connection status purple color for consistency
+  uint32_t led_color = gc_urgb_u32(0x80, 0x20, 0x80);  // Purple (matches connection status)
   uint32_t led_off = gc_urgb_u32(0x00, 0x00, 0x00);    // Completely off
 
   for (uint8_t i = 0; i < blink_count; i++)
@@ -314,77 +314,70 @@ static void switch_to_profile(uint8_t new_profile_index)
 // Check for profile switching: SELECT + D-pad Up/Down
 static void check_profile_switch_combo(void)
 {
-  static uint32_t combo_hold_start = 0;
-  static bool last_dpad_up_pressed = false;
-  static bool last_dpad_down_pressed = false;
-  const uint32_t COMBO_HOLD_TIME_MS = 2000; // Hold for 2 seconds initially
-  const uint32_t REPEAT_DELAY_MS = 300;     // Delay between repeated presses while holding
+  static uint32_t select_hold_start = 0;   // When Select was first pressed
+  static bool select_was_held = false;
+  static bool dpad_up_was_pressed = false;
+  static bool dpad_down_was_pressed = false;
+  static bool initial_trigger_done = false; // Has first 2-second trigger happened?
+  const uint32_t INITIAL_HOLD_TIME_MS = 2000; // Must hold 2 seconds for first trigger
 
   if (playersCount == 0) return; // No controllers connected
 
   uint32_t buttons = players[0].output_buttons;
-
-  // Check if Select is held
   bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
   bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
   bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
 
+  // Select released - reset everything
   if (!select_held)
   {
-    // Select not held - reset state
-    combo_hold_start = 0;
-    last_dpad_up_pressed = false;
-    last_dpad_down_pressed = false;
+    select_hold_start = 0;
+    select_was_held = false;
+    dpad_up_was_pressed = false;
+    dpad_down_was_pressed = false;
+    initial_trigger_done = false;
     return;
   }
 
-  // Select is held - check for D-pad presses
+  // Select is held
+  if (!select_was_held)
+  {
+    // Select just pressed - start timer
+    select_hold_start = to_ms_since_boot(get_absolute_time());
+    select_was_held = true;
+  }
+
   uint32_t current_time = to_ms_since_boot(get_absolute_time());
+  uint32_t select_hold_duration = current_time - select_hold_start;
 
-  // D-pad Up - cycle forward
-  if (dpad_up_pressed && !last_dpad_up_pressed)
+  // Check if initial 2-second hold period has elapsed
+  bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
+
+  if (!can_trigger)
   {
-    // New press detected
-    if (combo_hold_start == 0 || (current_time - combo_hold_start) >= COMBO_HOLD_TIME_MS)
-    {
-      // First press or held long enough - cycle forward
-      uint8_t new_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
-      switch_to_profile(new_index);
-      combo_hold_start = current_time;
-    }
-    last_dpad_up_pressed = true;
-  }
-  else if (!dpad_up_pressed)
-  {
-    last_dpad_up_pressed = false;
+    // Still waiting for initial 2-second hold - don't trigger yet
+    return;
   }
 
-  // D-pad Down - cycle backward
-  if (dpad_down_pressed && !last_dpad_down_pressed)
-  {
-    // New press detected
-    if (combo_hold_start == 0 || (current_time - combo_hold_start) >= COMBO_HOLD_TIME_MS)
-    {
-      // First press or held long enough - cycle backward
-      uint8_t new_index = (active_profile_index == 0) ? (GC_PROFILE_COUNT - 1) : (active_profile_index - 1);
-      switch_to_profile(new_index);
-      combo_hold_start = current_time;
-    }
-    last_dpad_down_pressed = true;
-  }
-  else if (!dpad_down_pressed)
-  {
-    last_dpad_down_pressed = false;
-  }
+  // Can trigger - check for D-pad edge detection (rising edge = just pressed)
 
-  // Allow repeat after delay
-  if ((dpad_up_pressed || dpad_down_pressed) && combo_hold_start != 0)
+  // D-pad Up - cycle forward on rising edge
+  if (dpad_up_pressed && !dpad_up_was_pressed)
   {
-    if ((current_time - combo_hold_start) >= REPEAT_DELAY_MS)
-    {
-      combo_hold_start = 0; // Reset to allow next press
-    }
+    uint8_t new_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
+    switch_to_profile(new_index);
+    initial_trigger_done = true; // Mark that first trigger happened
   }
+  dpad_up_was_pressed = dpad_up_pressed;
+
+  // D-pad Down - cycle backward on rising edge
+  if (dpad_down_pressed && !dpad_down_was_pressed)
+  {
+    uint8_t new_index = (active_profile_index == 0) ? (GC_PROFILE_COUNT - 1) : (active_profile_index - 1);
+    switch_to_profile(new_index);
+    initial_trigger_done = true; // Mark that first trigger happened
+  }
+  dpad_down_was_pressed = dpad_down_pressed;
 }
 
 // Helper function to apply a button mapping to the report
