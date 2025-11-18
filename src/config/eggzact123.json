@@ -1,0 +1,18 @@
+{
+  "profile_name": "eggzact123",
+  "description": "Custom mapping: RB→R(digital+analog), RT→Z(instant), LB→D-pad Up, LT→L(threshold)",
+  "button_mapping": {
+    "L1": "dpad_up",
+    "R1": "r_digital_and_analog",
+    "L2": "l_digital_threshold",
+    "R2": "z_instant"
+  },
+  "thresholds": {
+    "l2_digital": 250,
+    "r2_digital": 10
+  },
+  "stick_sensitivity": {
+    "left": 1.0,
+    "right": 1.0
+  }
+}

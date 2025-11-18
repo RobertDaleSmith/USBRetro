@@ -1,0 +1,18 @@
+{
+  "profile_name": "default",
+  "description": "Standard mapping: RB→Z, LT→L(threshold+analog), RT→R(threshold+analog)",
+  "button_mapping": {
+    "L1": "none",
+    "R1": "z",
+    "L2": "l_digital_threshold_and_analog",
+    "R2": "r_digital_threshold_and_analog"
+  },
+  "thresholds": {
+    "l2_digital": 250,
+    "r2_digital": 250
+  },
+  "stick_sensitivity": {
+    "left": 1.0,
+    "right": 1.0
+  }
+}
