@@ -1,6 +1,7 @@
 // gamecube.c
 
 #include "gamecube.h"
+#include "gamecube_config.h"
 #include "joybus.pio.h"
 #include "GamecubeConsole.h"
 #include "pico/bootrom.h"
@@ -11,6 +12,23 @@
 GamecubeConsole gc;
 gc_report_t gc_report;
 PIO pio = pio0;
+
+// ============================================================================
+// PROFILE SYSTEM
+// ============================================================================
+
+// All available profiles (stored in flash, const = read-only)
+static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
+    GC_PROFILE_DEFAULT,      // Profile 0
+    GC_PROFILE_EGGZACT123,   // Profile 1
+    GC_PROFILE_CUSTOM,       // Profile 2
+};
+
+// Active profile pointer (4 bytes of RAM, points to flash data)
+static const gc_profile_t* active_profile = &profiles[GC_DEFAULT_PROFILE_INDEX];
+
+// Current profile index (for cycling through profiles)
+static uint8_t active_profile_index = GC_DEFAULT_PROFILE_INDEX;
 
 extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
@@ -229,11 +247,176 @@ void __not_in_flash_func(core1_entry)(void)
   }
 }
 
+// ============================================================================
+// PROFILE SWITCHING
+// ============================================================================
+
+// LED helper functions (accessing PIO directly to avoid static inline issues)
+static PIO led_pio = pio0;
+static uint led_sm = 0;  // State machine for WS2812
+
+static inline void gc_put_pixel(uint32_t pixel_grb) {
+    pio_sm_put(led_pio, led_sm, pixel_grb << 8u);
+}
+
+static inline uint32_t gc_urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
+    return ((uint32_t) (r) << 8) | ((uint32_t) (g) << 16) | (uint32_t) (b);
+}
+
+// Blink LED to indicate profile number (profile 0 = 1 blink, profile 1 = 2 blinks, etc.)
+static void blink_profile_indicator(uint8_t profile_index)
+{
+  const uint32_t BLINK_ON_TIME_MS = 200;   // LED on duration
+  const uint32_t BLINK_OFF_TIME_MS = 200;  // LED off duration between blinks
+  const uint32_t PAUSE_AFTER_MS = 500;     // Pause after all blinks
+
+  // Blink count = profile index + 1 (so profile 0 blinks once, profile 1 blinks twice, etc.)
+  uint8_t blink_count = profile_index + 1;
+
+  // Purple color for profile indication (matches GameCube theme)
+  uint32_t led_color = gc_urgb_u32(0x80, 0x00, 0x80);  // Purple
+  uint32_t led_off = gc_urgb_u32(0x00, 0x00, 0x00);    // Off
+
+  for (uint8_t i = 0; i < blink_count; i++)
+  {
+    // LED on
+    gc_put_pixel(led_color);
+    sleep_ms(BLINK_ON_TIME_MS);
+
+    // LED off
+    gc_put_pixel(led_off);
+
+    // Only add delay between blinks, not after the last one
+    if (i < blink_count - 1)
+    {
+      sleep_ms(BLINK_OFF_TIME_MS);
+    }
+  }
+
+  // Final pause before resuming normal LED operation
+  sleep_ms(PAUSE_AFTER_MS);
+}
+
+// Cycle to next profile (wraps around to 0 after last profile)
+static void cycle_profile(void)
+{
+  active_profile_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
+  active_profile = &profiles[active_profile_index];
+
+  // Blink LED to indicate which profile was selected
+  blink_profile_indicator(active_profile_index);
+
+  // TODO: Save active_profile_index to flash for persistence across reboots
+  // For now, profile resets to default on power cycle
+
+  printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
+}
+
+// Check for profile switching button combo: SELECT + START + L1 + R1
+static void check_profile_switch_combo(void)
+{
+  static uint32_t combo_hold_start = 0;
+  static bool combo_triggered = false;
+  const uint32_t COMBO_HOLD_TIME_MS = 2000; // Hold for 2 seconds
+
+  if (playersCount == 0) return; // No controllers connected
+
+  // Check if combo is held (SELECT + START + L1 + R1)
+  uint32_t combo_buttons = USBR_BUTTON_S1 | USBR_BUTTON_S2 | USBR_BUTTON_L1 | USBR_BUTTON_R1;
+  bool combo_held = ((players[0].output_buttons & combo_buttons) == 0);
+
+  if (combo_held)
+  {
+    if (combo_hold_start == 0)
+    {
+      // Start timing
+      combo_hold_start = to_ms_since_boot(get_absolute_time());
+    }
+    else if (!combo_triggered)
+    {
+      // Check if held long enough
+      uint32_t hold_duration = to_ms_since_boot(get_absolute_time()) - combo_hold_start;
+      if (hold_duration >= COMBO_HOLD_TIME_MS)
+      {
+        cycle_profile();
+        combo_triggered = true; // Prevent multiple triggers
+      }
+    }
+  }
+  else
+  {
+    // Reset when combo released
+    combo_hold_start = 0;
+    combo_triggered = false;
+  }
+}
+
+// Helper function to apply a button mapping to the report
+static inline void apply_button_mapping(gc_report_t* report, gc_button_output_t action, bool pressed)
+{
+  if (!pressed) return; // Button not pressed, nothing to do
+
+  switch (action)
+  {
+    case GC_BTN_A:
+      report->a = 1;
+      break;
+    case GC_BTN_B:
+      report->b = 1;
+      break;
+    case GC_BTN_X:
+      report->x = 1;
+      break;
+    case GC_BTN_Y:
+      report->y = 1;
+      break;
+    case GC_BTN_Z:
+      report->z = 1;
+      break;
+    case GC_BTN_START:
+      report->start = 1;
+      break;
+    case GC_BTN_DPAD_UP:
+      report->dpad_up = 1;
+      break;
+    case GC_BTN_DPAD_DOWN:
+      report->dpad_down = 1;
+      break;
+    case GC_BTN_DPAD_LEFT:
+      report->dpad_left = 1;
+      break;
+    case GC_BTN_DPAD_RIGHT:
+      report->dpad_right = 1;
+      break;
+    case GC_BTN_L:
+      report->l = 1;
+      break;
+    case GC_BTN_R:
+      report->r = 1;
+      break;
+    case GC_BTN_L_FULL:
+      report->l = 1;
+      report->l_analog = 255;
+      break;
+    case GC_BTN_R_FULL:
+      report->r = 1;
+      report->r_analog = 255;
+      break;
+    case GC_BTN_NONE:
+    default:
+      // No action
+      break;
+  }
+}
+
 //
 // update_output - updates gc_report output data for output to GameCube
 void __not_in_flash_func(update_output)(void)
 {
   static bool kbModeButtonHeld = false;
+
+  // Check for profile switching combo
+  check_profile_switch_combo();
 
   // Build report locally to avoid Core 1 reading partial updates
   gc_report_t new_report;
@@ -285,41 +468,88 @@ void __not_in_flash_func(update_output)(void)
 
     if (players[0].button_mode != BUTTON_MODE_KB)
     {
-      // global buttons
-      // Custom mapping: LB also acts as D-Pad Up
-      new_report.dpad_up    |= (((byte & USBR_BUTTON_DU) == 0) || ((byte & USBR_BUTTON_L1) == 0)) ? 1 : 0;
-      new_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0; // right
-      new_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0; // down
-      new_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0; // left
-      new_report.a          |= ((byte & USBR_BUTTON_B2) == 0) ? 1 : 0; // b
-      new_report.b          |= ((byte & USBR_BUTTON_B1) == 0) ? 1 : 0; // a
-      // Custom mapping: RT → Z (moved from Select), RB → R (keep original)
-      new_report.z          |= ((byte & USBR_BUTTON_R2) == 0) ? 1 : 0; // rt
-      new_report.start      |= ((byte & USBR_BUTTON_S2) == 0) ? 1 : 0; // start
-      new_report.x          |= ((byte & USBR_BUTTON_B4) == 0) ? 1 : 0; // y
-      new_report.y          |= ((byte & USBR_BUTTON_B3) == 0) ? 1 : 0; // x
-      // Custom mapping: L2 → L button (digital), RB → R (original mapping)
-      new_report.l          |= ((byte & USBR_BUTTON_L2) == 0) ? 1 : 0; // lt
-      new_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
+      // ======================================================================
+      // PROFILE-BASED BUTTON MAPPING
+      // All USBRetro buttons are mapped according to active_profile
+      // ======================================================================
 
-      // global dominate axis
-      // Apply stick sensitivity scaling (configured in gamecube.h)
+      // D-pad (always mapped directly)
+      new_report.dpad_up    |= ((byte & USBR_BUTTON_DU) == 0) ? 1 : 0;
+      new_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0;
+      new_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0;
+      new_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0;
+
+      // Face buttons (B1-B4) - profile configurable
+      apply_button_mapping(&new_report, active_profile->b1_button, (byte & USBR_BUTTON_B1) == 0);
+      apply_button_mapping(&new_report, active_profile->b2_button, (byte & USBR_BUTTON_B2) == 0);
+      apply_button_mapping(&new_report, active_profile->b3_button, (byte & USBR_BUTTON_B3) == 0);
+      apply_button_mapping(&new_report, active_profile->b4_button, (byte & USBR_BUTTON_B4) == 0);
+
+      // Shoulder buttons (L1/R1) - profile configurable
+      apply_button_mapping(&new_report, active_profile->l1_button, (byte & USBR_BUTTON_L1) == 0);
+      apply_button_mapping(&new_report, active_profile->r1_button, (byte & USBR_BUTTON_R1) == 0);
+
+      // System buttons (S1/S2) - profile configurable
+      apply_button_mapping(&new_report, active_profile->s1_button, (byte & USBR_BUTTON_S1) == 0);
+      apply_button_mapping(&new_report, active_profile->s2_button, (byte & USBR_BUTTON_S2) == 0);
+
+      // Stick buttons (L3/R3) - profile configurable
+      apply_button_mapping(&new_report, active_profile->l3_button, (byte & USBR_BUTTON_L3) == 0);
+      apply_button_mapping(&new_report, active_profile->r3_button, (byte & USBR_BUTTON_R3) == 0);
+
+      // Auxiliary buttons (A1/A2) - profile configurable
+      apply_button_mapping(&new_report, active_profile->a1_button, (byte & USBR_BUTTON_A1) == 0);
+      apply_button_mapping(&new_report, active_profile->a2_button, (byte & USBR_BUTTON_A2) == 0);
+
+      // Trigger behavior (L2/R2) - profile configurable
+      bool l2_pressed = ((byte & USBR_BUTTON_L2) == 0);
+      bool r2_pressed = ((byte & USBR_BUTTON_R2) == 0);
+
+      switch (active_profile->l2_behavior)
+      {
+        case GC_TRIGGER_L_THRESHOLD:
+          if (l2_pressed) new_report.l = 1;
+          break;
+        case GC_TRIGGER_L_FULL:
+          if (l2_pressed) { new_report.l = 1; new_report.l_analog = 255; }
+          break;
+        case GC_TRIGGER_Z_INSTANT:
+          if (l2_pressed) new_report.z = 1;
+          break;
+        default:
+          break;
+      }
+
+      switch (active_profile->r2_behavior)
+      {
+        case GC_TRIGGER_R_THRESHOLD:
+          if (r2_pressed) new_report.r = 1;
+          break;
+        case GC_TRIGGER_R_FULL:
+          if (r2_pressed) { new_report.r = 1; new_report.r_analog = 255; }
+          break;
+        case GC_TRIGGER_Z_INSTANT:
+          if (r2_pressed) new_report.z = 1;
+          break;
+        default:
+          break;
+      }
+
+      // Analog sticks with profile-based sensitivity
       new_report.stick_x    = furthest_from_center(new_report.stick_x,
-                                                   scale_toward_center(players[i].output_analog_1x, GC_LEFT_STICK_SENSITIVITY, 128),
+                                                   scale_toward_center(players[i].output_analog_1x, active_profile->left_stick_sensitivity, 128),
                                                    128);
       new_report.stick_y    = furthest_from_center(new_report.stick_y,
-                                                   scale_toward_center(players[i].output_analog_1y, GC_LEFT_STICK_SENSITIVITY, 128),
+                                                   scale_toward_center(players[i].output_analog_1y, active_profile->left_stick_sensitivity, 128),
                                                    128);
-      new_report.cstick_x   = furthest_from_center(new_report.cstick_x, players[i].output_analog_2x, 128);
-      new_report.cstick_y   = furthest_from_center(new_report.cstick_y, players[i].output_analog_2y, 128);
+      new_report.cstick_x   = furthest_from_center(new_report.cstick_x,
+                                                   scale_toward_center(players[i].output_analog_2x, active_profile->right_stick_sensitivity, 128),
+                                                   128);
+      new_report.cstick_y   = furthest_from_center(new_report.cstick_y,
+                                                   scale_toward_center(players[i].output_analog_2y, active_profile->right_stick_sensitivity, 128),
+                                                   128);
       new_report.l_analog   = furthest_from_center(new_report.l_analog, players[i].output_analog_l, 0);
-
-      // Custom: RB (R1) digital button sends R analog at 100% (255)
-      // RT (R2) analog does NOT affect R analog (only controls Z digital)
-      if ((byte & USBR_BUTTON_R1) == 0)
-      {
-        new_report.r_analog = 255;
-      }
+      new_report.r_analog   = furthest_from_center(new_report.r_analog, players[i].output_analog_r, 0);
     }
     else
     {
@@ -411,14 +641,14 @@ void __not_in_flash_func(post_globals)(
     // Force L2/R2 to "not pressed" initially
     players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
 
-    // LT (L2): Use analog threshold if analog present, otherwise use digital button
-    if (analog_l > GC_L2_DIGITAL_THRESHOLD || (analog_l == 0 && original_l2_pressed))
+    // LT (L2): Use profile-based threshold if analog present, otherwise use digital button
+    if (analog_l > active_profile->l2_threshold || (analog_l == 0 && original_l2_pressed))
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     }
 
-    // RT (R2): Use analog threshold if analog present, otherwise use digital button
-    if (analog_r > GC_R2_DIGITAL_THRESHOLD || (analog_r == 0 && original_r2_pressed))
+    // RT (R2): Use profile-based threshold if analog present, otherwise use digital button
+    if (analog_r > active_profile->r2_threshold || (analog_r == 0 && original_r2_pressed))
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }
