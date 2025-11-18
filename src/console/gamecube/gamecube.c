@@ -21,9 +21,7 @@ uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 
-// Left stick sensitivity scaling (1.0 = 100% = no scaling, 0.6 = 60% = reduced sensitivity)
-// Change this value to reduce stick sensitivity for finer control (useful for racing games)
-static const float LStick = 1.0f;  // Default: 100% (no scaling)
+// Left stick sensitivity is now configured in gamecube.h via GC_LEFT_STICK_SENSITIVITY
 
 // Helper function to scale analog values relative to center (128)
 static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
@@ -305,12 +303,12 @@ void __not_in_flash_func(update_output)(void)
       new_report.r          |= ((byte & USBR_BUTTON_R1) == 0) ? 1 : 0; // rb
 
       // global dominate axis
-      // Custom: Apply 60% scaling to left stick for reduced sensitivity
+      // Apply stick sensitivity scaling (configured in gamecube.h)
       new_report.stick_x    = furthest_from_center(new_report.stick_x,
-                                                   scale_toward_center(players[i].output_analog_1x, LStick, 128),
+                                                   scale_toward_center(players[i].output_analog_1x, GC_LEFT_STICK_SENSITIVITY, 128),
                                                    128);
       new_report.stick_y    = furthest_from_center(new_report.stick_y,
-                                                   scale_toward_center(players[i].output_analog_1y, LStick, 128),
+                                                   scale_toward_center(players[i].output_analog_1y, GC_LEFT_STICK_SENSITIVITY, 128),
                                                    128);
       new_report.cstick_x   = furthest_from_center(new_report.cstick_x, players[i].output_analog_2x, 128);
       new_report.cstick_y   = furthest_from_center(new_report.cstick_y, players[i].output_analog_2y, 128);
@@ -413,14 +411,14 @@ void __not_in_flash_func(post_globals)(
     // Force L2/R2 to "not pressed" initially
     players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
 
-    // LT (L2): Use analog threshold (250) if analog present, otherwise use digital button
-    if (analog_l > GC_DIGITAL_TRIGGER_THRESHOLD || (analog_l == 0 && original_l2_pressed))
+    // LT (L2): Use analog threshold if analog present, otherwise use digital button
+    if (analog_l > GC_L2_DIGITAL_THRESHOLD || (analog_l == 0 && original_l2_pressed))
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_L2;
     }
 
-    // RT (R2): Use analog threshold (10 = instant) if analog present, otherwise use digital button
-    if (analog_r > 10 || (analog_r == 0 && original_r2_pressed))
+    // RT (R2): Use analog threshold if analog present, otherwise use digital button
+    if (analog_r > GC_R2_DIGITAL_THRESHOLD || (analog_r == 0 && original_r2_pressed))
     {
       players[player_index].output_buttons &= ~USBR_BUTTON_R2;
     }

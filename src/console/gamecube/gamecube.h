@@ -32,8 +32,21 @@
 #define BUTTON_MODE_4  0x04
 #define BUTTON_MODE_KB 0x05
 
-// Custom trigger threshold for eggzact123
-#define GC_DIGITAL_TRIGGER_THRESHOLD 250
+// ============================================================================
+// GAMECUBE CONFIGURATION
+// ============================================================================
+// Edit these values to customize button mapping, thresholds, and sensitivity
+
+// Trigger thresholds (0-255)
+#define GC_L2_DIGITAL_THRESHOLD 250  // LT threshold for L digital button (250 = ~98%)
+#define GC_R2_DIGITAL_THRESHOLD 10   // RT threshold for Z button (10 = instant)
+
+// Stick sensitivity (1.0 = 100%, 0.6 = 60% reduced sensitivity)
+#define GC_LEFT_STICK_SENSITIVITY 1.0f   // Left stick scaling
+#define GC_RIGHT_STICK_SENSITIVITY 1.0f  // Right stick (C-stick) scaling
+
+// Backward compatibility
+#define GC_DIGITAL_TRIGGER_THRESHOLD GC_L2_DIGITAL_THRESHOLD
 
 // Global variables
 extern PIO pio;
