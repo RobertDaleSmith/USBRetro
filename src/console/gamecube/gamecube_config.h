@@ -42,6 +42,7 @@ typedef enum {
     GC_BTN_R,                   // R digital only
     GC_BTN_L_FULL,              // L digital + L analog forced to 255
     GC_BTN_R_FULL,              // R digital + R analog forced to 255
+    GC_BTN_L_LIGHT,             // L analog forced to 1 (light shield for SSBM)
 
 } gc_button_output_t;
 
@@ -114,10 +115,10 @@ typedef struct {
 // 4. Increment GC_PROFILE_COUNT
 
 // ----------------------------------------------------------------------------
-// Profile 0: Default - Standard GameCube mapping
+// Profile 0: default - Standard GameCube mapping
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_DEFAULT { \
-    .name = "Default", \
+    .name = "default", \
     .description = "Standard mapping matching GameCube layout", \
     \
     /* Thresholds */ \
@@ -156,11 +157,11 @@ typedef struct {
 }
 
 // ----------------------------------------------------------------------------
-// Profile 1: eggzact123 - Mario Kart drift mapping
+// Profile 1: mkwii - Mario Kart Wii drift mapping
 // ----------------------------------------------------------------------------
-#define GC_PROFILE_EGGZACT123 { \
-    .name = "eggzact123", \
-    .description = "Mario Kart drift: RB→R(full), RT→Z(instant), LB→D-pad Up", \
+#define GC_PROFILE_MKWII { \
+    .name = "mkwii", \
+    .description = "Mario Kart Wii drift: RB→R(full), RT→Z(instant), LB→D-pad Up", \
     \
     /* Thresholds */ \
     .l2_threshold = 250, \
@@ -198,11 +199,11 @@ typedef struct {
 }
 
 // ----------------------------------------------------------------------------
-// Profile 2: Custom - Template for your own mapping
+// Profile 2: snes - Original SNES controller mapping
 // ----------------------------------------------------------------------------
-#define GC_PROFILE_CUSTOM { \
-    .name = "Custom", \
-    .description = "Template for creating your own mapping", \
+#define GC_PROFILE_SNES { \
+    .name = "snes", \
+    .description = "Original SNES mapping: Select→Z, LB/RB→L/R(full)", \
     \
     /* Thresholds */ \
     .l2_threshold = 250, \
@@ -213,36 +214,78 @@ typedef struct {
     .right_stick_sensitivity = 1.0f, \
     \
     /* Face buttons (B1-B4) */ \
-    .b1_button = GC_BTN_B, \
-    .b2_button = GC_BTN_A, \
-    .b3_button = GC_BTN_Y, \
-    .b4_button = GC_BTN_X, \
+    .b1_button = GC_BTN_B,          /* B1 → B */ \
+    .b2_button = GC_BTN_A,          /* B2 → A */ \
+    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
+    .b4_button = GC_BTN_X,          /* B4 → X */ \
     \
     /* Shoulder buttons (L1/R1) */ \
-    .l1_button = GC_BTN_NONE, \
-    .r1_button = GC_BTN_Z, \
+    .l1_button = GC_BTN_L_FULL,     /* L1 → L digital + L analog at 255 */ \
+    .r1_button = GC_BTN_R_FULL,     /* R1 → R digital + R analog at 255 */ \
     \
     /* System buttons (S1/S2) */ \
-    .s1_button = GC_BTN_NONE, \
-    .s2_button = GC_BTN_START, \
+    .s1_button = GC_BTN_Z,          /* S1 (Select) → Z */ \
+    .s2_button = GC_BTN_START,      /* S2 (Start) → Start */ \
     \
     /* Stick buttons (L3/R3) */ \
-    .l3_button = GC_BTN_NONE, \
-    .r3_button = GC_BTN_NONE, \
+    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
+    .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
     \
     /* Auxiliary buttons (A1/A2) */ \
-    .a1_button = GC_BTN_NONE, \
-    .a2_button = GC_BTN_NONE, \
+    .a1_button = GC_BTN_NONE,       /* A1 (Home) → nothing */ \
+    .a2_button = GC_BTN_NONE,       /* A2 (Capture) → nothing */ \
     \
     /* Trigger behavior */ \
-    .l2_behavior = GC_TRIGGER_L_THRESHOLD, \
-    .r2_behavior = GC_TRIGGER_R_THRESHOLD, \
+    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at threshold + analog */ \
+    .r2_behavior = GC_TRIGGER_R_THRESHOLD,  /* RT → R button at threshold + analog */ \
+}
+
+// ----------------------------------------------------------------------------
+// Profile 3: ssbm - Super Smash Bros Melee competitive mapping
+// ----------------------------------------------------------------------------
+#define GC_PROFILE_SSBM { \
+    .name = "ssbm", \
+    .description = "SSBM: LB→Light Shield(1%), RB→Z, 90% trigger threshold, 60% stick", \
+    \
+    /* Thresholds */ \
+    .l2_threshold = 230,        /* 90% trigger threshold */ \
+    .r2_threshold = 230,        /* 90% trigger threshold */ \
+    \
+    /* Stick sensitivity (60% for Melee precision) */ \
+    .left_stick_sensitivity = 0.60f, \
+    .right_stick_sensitivity = 1.0f, \
+    \
+    /* Face buttons (B1-B4) */ \
+    .b1_button = GC_BTN_B,          /* B1 → B */ \
+    .b2_button = GC_BTN_A,          /* B2 → A */ \
+    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
+    .b4_button = GC_BTN_X,          /* B4 → X */ \
+    \
+    /* Shoulder buttons (L1/R1) */ \
+    .l1_button = GC_BTN_L_LIGHT,    /* L1 → L analog at 1% (instant light shield) */ \
+    .r1_button = GC_BTN_Z,          /* R1 → Z */ \
+    \
+    /* System buttons (S1/S2) */ \
+    .s1_button = GC_BTN_NONE,       /* S1 (Select) → nothing */ \
+    .s2_button = GC_BTN_START,      /* S2 (Start) → Start */ \
+    \
+    /* Stick buttons (L3/R3) */ \
+    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
+    .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
+    \
+    /* Auxiliary buttons (A1/A2) */ \
+    .a1_button = GC_BTN_NONE,       /* A1 (Home) → nothing */ \
+    .a2_button = GC_BTN_NONE,       /* A2 (Capture) → nothing */ \
+    \
+    /* Trigger behavior */ \
+    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at 90% + analog */ \
+    .r2_behavior = GC_TRIGGER_R_THRESHOLD,  /* RT → R button at 90% + analog */ \
 }
 
 // Total number of profiles (update when adding new profiles)
-#define GC_PROFILE_COUNT 3
+#define GC_PROFILE_COUNT 4
 
-// Default profile index (0 = Default, 1 = eggzact123, 2 = Custom)
+// Default profile index (0 = default, 1 = mkwii, 2 = snes, 3 = ssbm)
 #define GC_DEFAULT_PROFILE_INDEX 0
 
 #endif // GAMECUBE_CONFIG_H

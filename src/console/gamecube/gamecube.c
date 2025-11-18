@@ -20,8 +20,9 @@ PIO pio = pio0;
 // All available profiles (stored in flash, const = read-only)
 static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
     GC_PROFILE_DEFAULT,      // Profile 0
-    GC_PROFILE_EGGZACT123,   // Profile 1
-    GC_PROFILE_CUSTOM,       // Profile 2
+    GC_PROFILE_MKWII,        // Profile 1
+    GC_PROFILE_SNES,         // Profile 2
+    GC_PROFILE_SSBM,         // Profile 3
 };
 
 // Active profile pointer (4 bytes of RAM, points to flash data)
@@ -317,6 +318,7 @@ static void check_profile_switch_combo(void)
 {
   static uint32_t combo_hold_start = 0;
   static bool combo_triggered = false;
+  static bool waiting_for_release = false;  // Must fully release before next trigger
   const uint32_t COMBO_HOLD_TIME_MS = 2000; // Hold for 2 seconds
 
   if (playersCount == 0) return; // No controllers connected
@@ -324,6 +326,20 @@ static void check_profile_switch_combo(void)
   // Check if combo is held (SELECT + START + L1 + R1)
   uint32_t combo_buttons = USBR_BUTTON_S1 | USBR_BUTTON_S2 | USBR_BUTTON_L1 | USBR_BUTTON_R1;
   bool combo_held = ((players[0].output_buttons & combo_buttons) == 0);
+
+  // If waiting for release, ignore all input until buttons are fully released
+  if (waiting_for_release)
+  {
+    if (!combo_held)
+    {
+      // Buttons released - ready for next trigger
+      waiting_for_release = false;
+      combo_triggered = false;
+      combo_hold_start = 0;
+    }
+    // Ignore button holds while waiting for release
+    return;
+  }
 
   if (combo_held)
   {
@@ -339,15 +355,15 @@ static void check_profile_switch_combo(void)
       if (hold_duration >= COMBO_HOLD_TIME_MS)
       {
         cycle_profile();
-        combo_triggered = true; // Prevent multiple triggers
+        combo_triggered = true; // Prevent multiple triggers during this hold
+        waiting_for_release = true;  // Require full release before next trigger
       }
     }
   }
   else
   {
-    // Reset when combo released
+    // Combo not held - reset timer (but keep waiting_for_release state)
     combo_hold_start = 0;
-    combo_triggered = false;
   }
 }
 
@@ -401,6 +417,12 @@ static inline void apply_button_mapping(gc_report_t* report, gc_button_output_t 
     case GC_BTN_R_FULL:
       report->r = 1;
       report->r_analog = 255;
+      break;
+    case GC_BTN_L_LIGHT:
+      // Light shield for SSBM - L analog at 1% (no digital)
+      if (report->l_analog < 1) {
+        report->l_analog = 1;
+      }
       break;
     case GC_BTN_NONE:
     default:
