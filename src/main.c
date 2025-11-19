@@ -40,6 +40,11 @@ extern void xinput_task(uint8_t rumble);
 extern void neopixel_init(void);
 extern void neopixel_task(int pat);
 
+extern void profile_indicator_init(void);
+extern void profile_indicator_task(void);
+extern uint8_t profile_indicator_get_rumble(void);
+extern uint8_t profile_indicator_get_player_led(uint8_t player_count);
+
 extern void players_init(void);
 
 /*------------- MAIN -------------*/
@@ -63,12 +68,21 @@ static void __not_in_flash_func(process_signals)(void)
     // neopixel task
     neopixel_task(playersCount);
 
+    // profile indicator task (rumble and player LED patterns)
+    profile_indicator_task();
+
+    // Combine GameCube console rumble with profile indicator rumble
+    uint8_t combined_rumble = gc_rumble | profile_indicator_get_rumble();
+
+    // Get player LED value (combines keyboard mode LED with profile indicator)
+    uint8_t player_led = profile_indicator_get_player_led(playersCount) | gc_kb_led;
+
     // xinput rumble task
-    xinput_task(gc_rumble);
+    xinput_task(combined_rumble);
 
 #if CFG_TUH_HID
     // hid_device rumble/led task
-    hid_app_task(gc_rumble, gc_kb_led);
+    hid_app_task(combined_rumble, player_led);
 
 #endif
 #ifdef CONFIG_PCE
@@ -100,6 +114,8 @@ int main(void)
   tusb_init(); // init tinyusb for usb host input
 
   neopixel_init(); // init multi-color status led
+
+  profile_indicator_init(); // init profile indicator (rumble and player LED)
 
   players_init(); // init multi-player management
 

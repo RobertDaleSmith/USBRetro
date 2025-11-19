@@ -20,9 +20,9 @@ PIO pio = pio0;
 // All available profiles (stored in flash, const = read-only)
 static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
     GC_PROFILE_DEFAULT,      // Profile 0
-    GC_PROFILE_MKWII,        // Profile 1
-    GC_PROFILE_SNES,         // Profile 2
-    GC_PROFILE_SSBM,         // Profile 3
+    GC_PROFILE_SNES,         // Profile 1
+    GC_PROFILE_SSBM,         // Profile 2
+    GC_PROFILE_MKWII,        // Profile 3
 };
 
 // Active profile pointer (4 bytes of RAM, points to flash data)
@@ -36,6 +36,9 @@ extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
 extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
 extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
 extern void neopixel_indicate_profile(uint8_t profile_index);
+extern bool neopixel_is_indicating(void);
+extern void profile_indicator_trigger(uint8_t profile_index, uint8_t player_count);
+extern bool profile_indicator_is_active(void);
 
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
@@ -259,11 +262,9 @@ static void switch_to_profile(uint8_t new_profile_index)
   active_profile_index = new_profile_index;
   active_profile = &profiles[active_profile_index];
 
-  // Trigger LED blinking in neopixel_task to indicate which profile was selected
-  neopixel_indicate_profile(active_profile_index);
-
-  // TODO: Send rumble pulses (N pulses for profile N)
-  // Requires rumble support implementation
+  // Trigger visual and haptic feedback to indicate which profile was selected
+  neopixel_indicate_profile(active_profile_index);  // NeoPixel LED blinking
+  profile_indicator_trigger(active_profile_index, playersCount);  // Rumble and player LED
 
   // TODO: Save active_profile_index to flash for persistence across reboots
   // For now, profile resets to default on power cycle
@@ -320,6 +321,12 @@ static void check_profile_switch_combo(void)
   }
 
   // Can trigger - check for D-pad edge detection (rising edge = just pressed)
+  // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
+  if (neopixel_is_indicating() || profile_indicator_is_active())
+  {
+    // Still showing feedback from previous switch - wait for it to finish
+    return;
+  }
 
   // D-pad Up - cycle forward on rising edge
   if (dpad_up_pressed && !dpad_up_was_pressed)
@@ -616,6 +623,18 @@ void __not_in_flash_func(post_globals)(
     players[player_index].output_analog_2y = analog_2y;
     players[player_index].output_analog_l = analog_l;
     players[player_index].output_analog_r = analog_r;
+
+    // For digital-only triggers: convert button press to full analog value
+    // If controller doesn't send analog data (analog == 0) but digital button is pressed,
+    // treat it as full analog press (255). This allows digital-only controllers like
+    // Switch Pro and PS3 to send proper analog trigger data to GameCube.
+    if (analog_l == 0 && (buttons & USBR_BUTTON_L2) == 0) {
+      players[player_index].output_analog_l = 255;
+    }
+    if (analog_r == 0 && (buttons & USBR_BUTTON_R2) == 0) {
+      players[player_index].output_analog_r = 255;
+    }
+
     players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
     players[player_index].keypress[0] = (keys) & 0xff;

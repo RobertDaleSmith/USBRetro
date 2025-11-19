@@ -115,7 +115,7 @@ typedef struct {
 // 4. Increment GC_PROFILE_COUNT
 
 // ----------------------------------------------------------------------------
-// Profile 0: default - Standard GameCube mapping
+// Profile: default - Standard GameCube mapping
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_DEFAULT { \
     .name = "default", \
@@ -157,49 +157,7 @@ typedef struct {
 }
 
 // ----------------------------------------------------------------------------
-// Profile 1: mkwii - Mario Kart Wii drift mapping
-// ----------------------------------------------------------------------------
-#define GC_PROFILE_MKWII { \
-    .name = "mkwii", \
-    .description = "Mario Kart Wii drift: RB→R(full), RT→Z(instant), LB→D-pad Up", \
-    \
-    /* Thresholds */ \
-    .l2_threshold = 250, \
-    .r2_threshold = 10,             /* Very sensitive RT for instant Z */ \
-    \
-    /* Stick sensitivity */ \
-    .left_stick_sensitivity = 1.0f, \
-    .right_stick_sensitivity = 1.0f, \
-    \
-    /* Face buttons (B1-B4) */ \
-    .b1_button = GC_BTN_B,          /* B1 → B */ \
-    .b2_button = GC_BTN_A,          /* B2 → A */ \
-    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
-    .b4_button = GC_BTN_X,          /* B4 → X */ \
-    \
-    /* Shoulder buttons (L1/R1) */ \
-    .l1_button = GC_BTN_DPAD_UP,    /* L1 → D-pad Up */ \
-    .r1_button = GC_BTN_R_FULL,     /* R1 → R digital + R analog at 255 */ \
-    \
-    /* System buttons (S1/S2) */ \
-    .s1_button = GC_BTN_NONE,       /* S1 → nothing */ \
-    .s2_button = GC_BTN_START,      /* S2 → Start */ \
-    \
-    /* Stick buttons (L3/R3) */ \
-    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
-    .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
-    \
-    /* Auxiliary buttons (A1/A2) */ \
-    .a1_button = GC_BTN_NONE,       /* A1 → nothing */ \
-    .a2_button = GC_BTN_NONE,       /* A2 → nothing */ \
-    \
-    /* Trigger behavior */ \
-    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at threshold + analog */ \
-    .r2_behavior = GC_TRIGGER_Z_INSTANT,    /* RT → Z button (instant) */ \
-}
-
-// ----------------------------------------------------------------------------
-// Profile 2: snes - Original SNES controller mapping
+// Profile: snes - Original SNES controller mapping
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_SNES { \
     .name = "snes", \
@@ -241,7 +199,7 @@ typedef struct {
 }
 
 // ----------------------------------------------------------------------------
-// Profile 3: ssbm - Super Smash Bros Melee competitive mapping
+// Profile: ssbm - Super Smash Bros Melee competitive mapping
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_SSBM { \
     .name = "ssbm", \
@@ -280,6 +238,48 @@ typedef struct {
     /* Trigger behavior */ \
     .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at 90% + analog */ \
     .r2_behavior = GC_TRIGGER_R_THRESHOLD,  /* RT → R button at 90% + analog */ \
+}
+
+// ----------------------------------------------------------------------------
+// Profile: mkwii - Mario Kart Wii drift mapping
+// ----------------------------------------------------------------------------
+#define GC_PROFILE_MKWII { \
+    .name = "mkwii", \
+    .description = "Mario Kart Wii drift: RB→R(full), RT→Z(instant), LB→D-pad Up", \
+    \
+    /* Thresholds */ \
+    .l2_threshold = 250, \
+    .r2_threshold = 10,             /* Very sensitive RT for instant Z */ \
+    \
+    /* Stick sensitivity */ \
+    .left_stick_sensitivity = 1.0f, \
+    .right_stick_sensitivity = 1.0f, \
+    \
+    /* Face buttons (B1-B4) */ \
+    .b1_button = GC_BTN_B,          /* B1 → B */ \
+    .b2_button = GC_BTN_A,          /* B2 → A */ \
+    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
+    .b4_button = GC_BTN_X,          /* B4 → X */ \
+    \
+    /* Shoulder buttons (L1/R1) */ \
+    .l1_button = GC_BTN_DPAD_UP,    /* L1 → D-pad Up */ \
+    .r1_button = GC_BTN_R_FULL,     /* R1 → R digital + R analog at 255 */ \
+    \
+    /* System buttons (S1/S2) */ \
+    .s1_button = GC_BTN_NONE,       /* S1 → nothing */ \
+    .s2_button = GC_BTN_START,      /* S2 → Start */ \
+    \
+    /* Stick buttons (L3/R3) */ \
+    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
+    .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
+    \
+    /* Auxiliary buttons (A1/A2) */ \
+    .a1_button = GC_BTN_NONE,       /* A1 → nothing */ \
+    .a2_button = GC_BTN_NONE,       /* A2 → nothing */ \
+    \
+    /* Trigger behavior */ \
+    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at threshold + analog */ \
+    .r2_behavior = GC_TRIGGER_Z_INSTANT,    /* RT → Z button (instant) */ \
 }
 
 // Total number of profiles (update when adding new profiles)

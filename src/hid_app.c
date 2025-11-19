@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "devices/device_utils.h"
 #include "devices/device_registry.h"
+#include "common/profile_indicator.h"
 
 // #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
@@ -56,7 +57,11 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
       case CONTROLLER_GAMECUBE: // send GameCube WiiU/Switch Adapter rumble
       case CONTROLLER_KEYBOARD: // send Keyboard LEDs
       case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
-        device_interfaces[ctrl_type]->task(dev_addr, instance, player_index, rumble, leds);
+        {
+          // Override player_index during profile indication for all controllers
+          int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
+          device_interfaces[ctrl_type]->task(dev_addr, instance, display_player_index, rumble, leds);
+        }
         break;
       default:
         break;
