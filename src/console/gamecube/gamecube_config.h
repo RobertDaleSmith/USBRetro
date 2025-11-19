@@ -282,8 +282,50 @@ typedef struct {
     .r2_behavior = GC_TRIGGER_Z_INSTANT,    /* RT → Z button (instant) */ \
 }
 
+// ----------------------------------------------------------------------------
+// Profile: fighting - Fighting game mapping (L1→C-Up, right stick disabled)
+// ----------------------------------------------------------------------------
+#define GC_PROFILE_FIGHTING { \
+    .name = "fighting", \
+    .description = "Fighting game: L1→C-Up, right stick disabled for in-game config", \
+    \
+    /* Thresholds */ \
+    .l2_threshold = 250, \
+    .r2_threshold = 250, \
+    \
+    /* Stick sensitivity */ \
+    .left_stick_sensitivity = 1.0f, \
+    .right_stick_sensitivity = 0.0f,  /* Right stick disabled */ \
+    \
+    /* Face buttons (B1-B4) */ \
+    .b1_button = GC_BTN_B,          /* B1 → B */ \
+    .b2_button = GC_BTN_A,          /* B2 → A */ \
+    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
+    .b4_button = GC_BTN_X,          /* B4 → X */ \
+    \
+    /* Shoulder buttons (L1/R1) */ \
+    .l1_button = GC_BTN_C_UP,       /* L1 → C-stick Up */ \
+    .r1_button = GC_BTN_Z,          /* R1 → Z */ \
+    \
+    /* System buttons (S1/S2) */ \
+    .s1_button = GC_BTN_NONE,       /* S1 → nothing */ \
+    .s2_button = GC_BTN_START,      /* S2 → Start */ \
+    \
+    /* Stick buttons (L3/R3) */ \
+    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
+    .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
+    \
+    /* Auxiliary buttons (A1/A2) */ \
+    .a1_button = GC_BTN_NONE,       /* A1 → nothing */ \
+    .a2_button = GC_BTN_NONE,       /* A2 → nothing */ \
+    \
+    /* Trigger behavior */ \
+    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at threshold + analog */ \
+    .r2_behavior = GC_TRIGGER_R_THRESHOLD,  /* RT → R button at threshold + analog */ \
+}
+
 // Total number of profiles (update when adding new profiles)
-#define GC_PROFILE_COUNT 4
+#define GC_PROFILE_COUNT 5
 
 // Default profile index (0 = default, 1 = mkwii, 2 = snes, 3 = ssbm)
 #define GC_DEFAULT_PROFILE_INDEX 0
