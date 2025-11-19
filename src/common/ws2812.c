@@ -33,6 +33,25 @@ static const int64_t reset_period = 10000;
 int dir = 1; // direction
 int tic = 0; // ticker
 
+// Profile indicator state machine
+typedef enum {
+    NEOPIXEL_IDLE,         // Normal operation - showing connection status
+    NEOPIXEL_BLINK_ON,     // Profile indicator - LED on
+    NEOPIXEL_BLINK_OFF,    // Profile indicator - LED off
+    NEOPIXEL_BLINK_PAUSE   // Profile indicator - final pause before returning to idle
+} neopixel_state_t;
+
+static volatile neopixel_state_t neopixel_state = NEOPIXEL_IDLE;
+static volatile uint8_t profile_to_indicate = 0;
+static volatile uint8_t blinks_remaining = 0;
+static volatile int stored_pattern = 0;  // Store player count for color matching
+static absolute_time_t state_change_time;
+
+// Timing constants for profile indicator (in microseconds for precision)
+// We count OFF blinks, so OFF time is longer and more noticeable
+#define BLINK_OFF_TIME_US 400000  // 400ms LED off (this is what we count)
+#define BLINK_ON_TIME_US 200000   // 200ms LED on (brief flash between OFF blinks)
+
 static inline void put_pixel(uint32_t pixel_grb) {
     pio_sm_put(pio, sm, pixel_grb << 8u);
 }
@@ -280,12 +299,72 @@ void neopixel_init()
     put_pixel(urgb_u32(0x40, 0x20, 0x00)); // init color value (holds color on auto sel boot)
 }
 
+// Trigger profile indicator blinking (called from console code)
+void neopixel_indicate_profile(uint8_t profile_index)
+{
+    // Only trigger if currently idle
+    if (neopixel_state == NEOPIXEL_IDLE) {
+        profile_to_indicate = profile_index;
+        blinks_remaining = profile_index + 1;  // Profile 0 = 1 OFF blink, etc.
+        neopixel_state = NEOPIXEL_BLINK_OFF;   // Start by turning OFF
+        state_change_time = get_absolute_time();
+    }
+}
+
 void neopixel_task(int pat)
 {
+    current_time = get_absolute_time();
+
+    // Handle profile indicator state machine
+    if (neopixel_state != NEOPIXEL_IDLE) {
+        int64_t time_in_state = absolute_time_diff_us(state_change_time, current_time);
+
+        switch (neopixel_state) {
+            case NEOPIXEL_BLINK_OFF:
+                // Turn LED off (this is what we count)
+                put_pixel(urgb_u32(0x00, 0x00, 0x00));
+                if (time_in_state >= BLINK_OFF_TIME_US) {
+                    blinks_remaining--;
+                    if (blinks_remaining > 0) {
+                        // More OFF blinks needed, briefly turn ON between them
+                        neopixel_state = NEOPIXEL_BLINK_ON;
+                    } else {
+                        // All OFF blinks done, return to normal solid purple
+                        neopixel_state = NEOPIXEL_IDLE;
+                        init_time = current_time;  // Reset pattern timing
+                    }
+                    state_change_time = current_time;
+                }
+                break;
+
+            case NEOPIXEL_BLINK_ON:
+                // Show LED using the same color as connection status (based on stored player count)
+                // Call the appropriate pattern to match connection status color
+                pattern_table[stored_pattern].pat(NUM_PIXELS, tic);
+                if (time_in_state >= BLINK_ON_TIME_US) {
+                    // Back to OFF for the next blink
+                    neopixel_state = NEOPIXEL_BLINK_OFF;
+                    state_change_time = current_time;
+                }
+                break;
+
+            case NEOPIXEL_BLINK_PAUSE:
+                // Not used anymore, but keep for safety
+                neopixel_state = NEOPIXEL_IDLE;
+                break;
+
+            default:
+                neopixel_state = NEOPIXEL_IDLE;
+                break;
+        }
+        return;  // Don't run normal patterns while indicating profile
+    }
+
+    // Normal operation - show connection status patterns
+    // Store pattern for profile indicator to use
     if (pat > 5) pat = 5;
     if (pat && is_fun) pat = 6;
-
-    current_time = get_absolute_time();
+    stored_pattern = pat;
 
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {
         pattern_table[pat].pat(NUM_PIXELS, tic);
