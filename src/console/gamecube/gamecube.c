@@ -35,6 +35,7 @@ extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, in
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
 extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
 extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
+extern void neopixel_indicate_profile(uint8_t profile_index);
 
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
@@ -252,55 +253,14 @@ void __not_in_flash_func(core1_entry)(void)
 // PROFILE SWITCHING
 // ============================================================================
 
-// LED helper functions (accessing PIO directly to avoid static inline issues)
-static PIO led_pio = pio0;
-static uint led_sm = 0;  // State machine for WS2812
-
-static inline void gc_put_pixel(uint32_t pixel_grb) {
-    pio_sm_put(led_pio, led_sm, pixel_grb << 8u);
-}
-
-static inline uint32_t gc_urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
-    return ((uint32_t) (r) << 8) | ((uint32_t) (g) << 16) | (uint32_t) (b);
-}
-
-// Blink LED to indicate profile number (profile 0 = 1 blink, profile 1 = 2 blinks, etc.)
-static void blink_profile_indicator(uint8_t profile_index)
-{
-  const uint32_t BLINK_ON_TIME_MS = 300;   // LED on duration (longer for visibility)
-  const uint32_t BLINK_OFF_TIME_MS = 400;  // LED off duration between blinks (longer to count)
-  const uint32_t PAUSE_AFTER_MS = 1000;    // Pause after all blinks before resuming
-
-  // Blink count = profile index + 1 (so profile 0 blinks once, profile 1 blinks twice, etc.)
-  uint8_t blink_count = profile_index + 1;
-
-  // Use existing connection status purple color for consistency
-  uint32_t led_color = gc_urgb_u32(0x80, 0x20, 0x80);  // Purple (matches connection status)
-  uint32_t led_off = gc_urgb_u32(0x00, 0x00, 0x00);    // Completely off
-
-  for (uint8_t i = 0; i < blink_count; i++)
-  {
-    // LED on
-    gc_put_pixel(led_color);
-    sleep_ms(BLINK_ON_TIME_MS);
-
-    // LED completely off
-    gc_put_pixel(led_off);
-    sleep_ms(BLINK_OFF_TIME_MS);  // Always wait after turning off
-  }
-
-  // Final pause before resuming normal LED operation
-  sleep_ms(PAUSE_AFTER_MS);
-}
-
 // Switch to a specific profile with visual and haptic feedback
 static void switch_to_profile(uint8_t new_profile_index)
 {
   active_profile_index = new_profile_index;
   active_profile = &profiles[active_profile_index];
 
-  // Blink LED to indicate which profile was selected
-  blink_profile_indicator(active_profile_index);
+  // Trigger LED blinking in neopixel_task to indicate which profile was selected
+  neopixel_indicate_profile(active_profile_index);
 
   // TODO: Send rumble pulses (N pulses for profile N)
   // Requires rumble support implementation
