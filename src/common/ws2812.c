@@ -33,7 +33,7 @@ static const int64_t reset_period = 10000;
 int dir = 1; // direction
 int tic = 0; // ticker
 
-// Profile indicator state machine
+// NeoPixel profile indicator state machine
 typedef enum {
     NEOPIXEL_IDLE,         // Normal operation - showing connection status
     NEOPIXEL_BLINK_ON,     // Profile indicator - LED on
@@ -47,10 +47,10 @@ static volatile uint8_t blinks_remaining = 0;
 static volatile int stored_pattern = 0;  // Store player count for color matching
 static absolute_time_t state_change_time;
 
-// Timing constants for profile indicator (in microseconds for precision)
+// Timing constants for NeoPixel profile indicator (in microseconds for precision)
 // We count OFF blinks, so OFF time is longer and more noticeable
-#define BLINK_OFF_TIME_US 400000  // 400ms LED off (this is what we count)
-#define BLINK_ON_TIME_US 200000   // 200ms LED on (brief flash between OFF blinks)
+#define BLINK_OFF_TIME_US 200000  // 200ms LED off (this is what we count)
+#define BLINK_ON_TIME_US 100000   // 100ms LED on (brief flash between OFF blinks)
 
 static inline void put_pixel(uint32_t pixel_grb) {
     pio_sm_put(pio, sm, pixel_grb << 8u);
@@ -299,7 +299,7 @@ void neopixel_init()
     put_pixel(urgb_u32(0x40, 0x20, 0x00)); // init color value (holds color on auto sel boot)
 }
 
-// Trigger profile indicator blinking (called from console code)
+// Trigger NeoPixel LED profile indicator blinking (called from console code)
 void neopixel_indicate_profile(uint8_t profile_index)
 {
     // Only trigger if currently idle
@@ -309,6 +309,12 @@ void neopixel_indicate_profile(uint8_t profile_index)
         neopixel_state = NEOPIXEL_BLINK_OFF;   // Start by turning OFF
         state_change_time = get_absolute_time();
     }
+}
+
+// Check if NeoPixel profile indicator is currently active
+bool neopixel_is_indicating(void)
+{
+    return neopixel_state != NEOPIXEL_IDLE;
 }
 
 void neopixel_task(int pat)
@@ -357,7 +363,11 @@ void neopixel_task(int pat)
                 neopixel_state = NEOPIXEL_IDLE;
                 break;
         }
-        return;  // Don't run normal patterns while indicating profile
+    }
+
+    // Don't run normal NeoPixel LED patterns while indicating profile
+    if (neopixel_state != NEOPIXEL_IDLE) {
+        return;
     }
 
     // Normal operation - show connection status patterns

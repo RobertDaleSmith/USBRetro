@@ -70,6 +70,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/codes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/players.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_keyboard.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_mouse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
