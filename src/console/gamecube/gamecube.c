@@ -23,6 +23,7 @@ static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
     GC_PROFILE_SNES,         // Profile 1
     GC_PROFILE_SSBM,         // Profile 2
     GC_PROFILE_MKWII,        // Profile 3
+    GC_PROFILE_FIGHTING,     // Profile 4
 };
 
 // Active profile pointer (4 bytes of RAM, points to flash data)
