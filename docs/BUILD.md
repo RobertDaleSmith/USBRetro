@@ -19,14 +19,15 @@ Complete guide for building USBRetro firmware on macOS, Linux, and Windows.
 **For macOS users who just want to build:**
 
 ```bash
-# Install tools (one-time)
+# 1. Install ARM toolchain (one-time)
 brew install --cask gcc-arm-embedded cmake git
 
-# Set environment (add to ~/.zshrc for persistence)
-export PICO_SDK_PATH=~/git/pico-sdk
-export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+# 2. Clone and initialize submodules
+git clone https://github.com/RobertDaleSmith/USBRetro.git
+cd USBRetro
+make init          # Installs pico-sdk and TinyUSB as submodules
 
-# Build a product
+# 3. Build a product
 make usb2pce       # or: gcusb, nuonusb, xboxadapter
 ```
 
@@ -48,7 +49,7 @@ Output: `releases/USB2PCE_usbretro_pce.uf2` (ready to flash!)
    - Current tested version: 14.2.rel1
    - **⚠️ Do NOT use** `brew install arm-none-eabi-gcc` (missing newlib/nosys.specs)
 
-2. **CMake** (4.0+ recommended)
+2. **CMake** (3.13+ required)
    ```bash
    brew install cmake
    ```
@@ -58,18 +59,7 @@ Output: `releases/USB2PCE_usbretro_pce.uf2` (ready to flash!)
    brew install git
    ```
 
-4. **Pico SDK** (2.2.0+)
-   ```bash
-   cd ~/git
-   git clone https://github.com/raspberrypi/pico-sdk.git
-   cd pico-sdk
-   git submodule update --init lib/tinyusb
-
-   # Update TinyUSB to 0.19.0 for full controller compatibility
-   cd lib/tinyusb
-   git checkout 0.19.0
-   cd ../..
-   ```
+**Note**: Pico SDK and TinyUSB are included as submodules - no separate installation needed! Just run `make init` after cloning.
 
 #### Optional Tools
 
@@ -86,19 +76,7 @@ sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi \
                  build-essential git python3
 ```
 
-#### Pico SDK
-
-```bash
-cd ~/git
-git clone https://github.com/raspberrypi/pico-sdk.git
-cd pico-sdk
-git submodule update --init lib/tinyusb
-
-# Update TinyUSB to 0.19.0 for full controller compatibility
-cd lib/tinyusb
-git checkout 0.19.0
-cd ../..
-```
+**Note**: Pico SDK and TinyUSB are included as submodules - no separate installation needed! Just run `make init` after cloning.
 
 ### Windows
 
@@ -110,61 +88,58 @@ Use WSL2 with Ubuntu and follow Linux instructions above.
 
 1. Download and install [Raspberry Pi Pico Windows Installer](https://github.com/raspberrypi/pico-setup-windows/releases)
    - Includes: ARM toolchain, CMake, Python, VS Code
-   - Installs to: `C:\Program Files\Raspberry Pi\Pico SDK v2.x`
 
-2. Clone Pico SDK:
+2. Clone USBRetro and initialize:
    ```powershell
-   cd C:\Users\<username>\pico
-   git clone https://github.com/raspberrypi/pico-sdk.git
-   cd pico-sdk
-   git submodule update --init lib/tinyusb
+   git clone https://github.com/RobertDaleSmith/USBRetro.git
+   cd USBRetro
+   make init
    ```
+
+**Note**: Pico SDK and TinyUSB are included as submodules - no separate installation needed!
 
 ---
 
 ## Environment Setup
 
-### macOS/Linux Environment Variables
-
-Add these to your shell profile (`~/.zshrc` on macOS, `~/.bashrc` on Linux):
+### Clone and Initialize
 
 ```bash
-# Pico SDK path
-export PICO_SDK_PATH=~/git/pico-sdk
-
-# ARM Toolchain (macOS)
-export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
-
-# ARM Toolchain (Linux) - usually auto-detected, but can set:
-# export PICO_TOOLCHAIN_PATH=/usr
-
-# Apply changes
-source ~/.zshrc  # or ~/.bashrc on Linux
+git clone https://github.com/RobertDaleSmith/USBRetro.git
+cd USBRetro
+make init  # Initializes pico-sdk and TinyUSB submodules
 ```
+
+The `make init` command:
+- Initializes all git submodules recursively
+- Checks out pico-sdk 2.2.0
+- Checks out TinyUSB 0.19.0
+
+**No need to set `PICO_SDK_PATH`** - the Makefile automatically uses the submodule at `src/lib/pico-sdk`.
+
+### Optional: ARM Toolchain Path (macOS only)
+
+If the ARM toolchain isn't auto-detected, add to `~/.zshrc`:
+
+```bash
+export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+source ~/.zshrc
+```
+
+Linux users: toolchain is usually auto-detected from `/usr/bin`.
 
 ### Verify Setup
 
 ```bash
-# Check SDK
-echo $PICO_SDK_PATH
-ls $PICO_SDK_PATH/lib/tinyusb
-
 # Check toolchain
-echo $PICO_TOOLCHAIN_PATH
-arm-none-eabi-gcc --version
+arm-none-eabi-gcc --version  # Should show 14.2.1 or similar
 
 # Check cmake
 cmake --version  # Should be 3.13+
-```
 
-### Clone USBRetro
-
-```bash
-cd ~/git
-git clone https://github.com/RobertDaleSmith/USBRetro.git
-cd USBRetro
-git submodule init
-git submodule update
+# Check submodules initialized
+ls src/lib/pico-sdk/src/boards
+ls src/lib/tinyusb/src/host
 ```
 
 ---
@@ -635,7 +610,7 @@ make usbretro_pce -j$(nproc)
 
 ## Getting Help
 
-- **Documentation**: See [README.md](README.md), [CLAUDE.md](CLAUDE.md)
+- **Documentation**: See [README.md](../README.md), [CLAUDE.md](../CLAUDE.md)
 - **Issues**: https://github.com/RobertDaleSmith/USBRetro/issues
 - **Discord**: https://discord.usbretro.com/
 - **SDK Docs**: https://www.raspberrypi.com/documentation/pico-sdk/
