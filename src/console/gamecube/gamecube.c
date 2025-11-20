@@ -474,7 +474,7 @@ void __not_in_flash_func(update_output)(void)
   for (i = 0; i < playersCount; ++i)
   {
     // base controller buttons
-    int16_t byte = (players[i].output_buttons & 0xffff);
+    int32_t byte = (players[i].output_buttons & 0x3ffff);
     bool kbModeButtonPress = players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14;
     if (kbModeButtonPress)
     {
