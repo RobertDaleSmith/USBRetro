@@ -21,7 +21,9 @@ uint8_t gc_rumble = 0;
 uint8_t gc_kb_led = 0;
 
 // include console specific handling
-#ifdef CONFIG_NGC
+#ifdef CONFIG_3DO
+#include "console/3do/3do.h"
+#elif CONFIG_NGC
 #include "console/gamecube/gamecube.h"
 #elif CONFIG_LOOPY
 #include "console/loopy/loopy.h"
@@ -94,7 +96,11 @@ static void __not_in_flash_func(process_signals)(void)
     hid_app_task(combined_rumble, player_led);
 
 #endif
-#ifdef CONFIG_PCE
+#ifdef CONFIG_3DO
+    // 3DO protocol task
+    _3do_task();
+
+#elif CONFIG_PCE
     // detection of when a PCE scan is no longer in process (reset period)
     pce_task();
 
@@ -128,7 +134,10 @@ int main(void)
 
   players_init(); // init multi-player management
 
-#ifdef CONFIG_NGC
+#ifdef CONFIG_3DO
+  printf("3DO");
+  _3do_init();
+#elif CONFIG_NGC
   printf("GAMECUBE");
   ngc_init();
 #elif CONFIG_LOOPY

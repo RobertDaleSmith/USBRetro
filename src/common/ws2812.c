@@ -236,6 +236,14 @@ const struct {
     pattern pat;
     const char *name;
 } pattern_table[] = {
+#ifdef CONFIG_3DO
+        {pattern_reds,   "Reds"},      // 0 controllers
+        {pattern_red,     "Red"},        // 1 controller
+        {pattern_green,   "Green"},      // 2 controllers
+        {pattern_blue,    "Blue"},       // 3 controllers
+        {pattern_purple,  "Purple"},     // 4 controllers
+        {pattern_yellow,  "Yellow"},     // 5 controllers
+#else
 #ifdef CONFIG_XB1
         {pattern_greens,  "Greens"},     // 0 controllers
         {pattern_green,   "Green"},      // 1 controller
@@ -274,6 +282,7 @@ const struct {
         {pattern_green,   "Green"},      // 3 controllers
         {pattern_purple,  "Purple"},     // 4 controllers
         {pattern_yellow,  "Yellow"},     // 5 controllers
+#endif
 #endif
 #endif
 #endif

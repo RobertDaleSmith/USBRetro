@@ -42,6 +42,7 @@ BOARD_SCRIPT_qtpy := build_ada_qtpy.sh
 BOARD_SCRIPT_rp2040zero := build_waveshare_rp2040_zero.sh
 
 # Console targets
+CONSOLE_3do := usbretro_3do
 CONSOLE_pce := usbretro_pce
 CONSOLE_ngc := usbretro_ngc
 CONSOLE_xb1 := usbretro_xb1
@@ -49,13 +50,14 @@ CONSOLE_nuon := usbretro_nuon
 CONSOLE_loopy := usbretro_loopy
 
 # Product definitions: PRODUCT_name = board console output_name
+PRODUCT_3dousb := rp2040zero 3do 3DOUSB
 PRODUCT_usb2pce := kb2040 pce USB2PCE
 PRODUCT_gcusb := kb2040 ngc GCUSB
 PRODUCT_nuonusb := kb2040 nuon NUONUSB
 PRODUCT_xboxadapter := qtpy xb1 Xbox-Adapter
 
 # All products
-PRODUCTS := usb2pce gcusb nuonusb xboxadapter
+PRODUCTS := 3dousb usb2pce gcusb nuonusb xboxadapter
 
 # Release directory
 RELEASE_DIR := releases
@@ -78,6 +80,7 @@ help:
 	@echo "  make build         - Build all products (alias for 'make all')"
 	@echo ""
 	@echo "$(GREEN)Product Targets:$(NC)"
+	@echo "  make 3dousb        - Build 3DO USB (Waveshare RP2040 Zero + 3DO)"
 	@echo "  make usb2pce       - Build USB2PCE (KB2040 + PCEngine)"
 	@echo "  make gcusb         - Build GCUSB (KB2040 + GameCube)"
 	@echo "  make nuonusb       - Build NUON USB (KB2040 + Nuon)"
@@ -91,12 +94,14 @@ help:
 	@echo ""
 	@echo "$(GREEN)Flash Targets:$(NC)"
 	@echo "  make flash         - Flash most recently built firmware"
+	@echo "  make flash-3dousb  - Flash 3DO USB firmware"
 	@echo "  make flash-usb2pce - Flash USB2PCE firmware"
 	@echo "  make flash-gcusb   - Flash GCUSB firmware"
 	@echo "  make flash-nuonusb - Flash NUON USB firmware"
 	@echo "  make flash-xboxadapter - Flash Xbox Adapter firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
+	@echo "  make 3do           - Build 3DO firmware"
 	@echo "  make pce           - Build PCEngine firmware"
 	@echo "  make ngc           - Build GameCube firmware"
 	@echo "  make xb1           - Build Xbox One firmware"
@@ -142,6 +147,10 @@ define build_product
 endef
 
 # Product-specific targets
+.PHONY: 3dousb
+3dousb:
+	$(call build_product,3dousb)
+
 .PHONY: usb2pce
 usb2pce:
 	$(call build_product,usb2pce)
@@ -159,6 +168,15 @@ xboxadapter:
 	$(call build_product,xboxadapter)
 
 # Console-only targets (defaults to KB2040)
+.PHONY: 3do
+3do:
+	@echo "$(YELLOW)Building 3DO (KB2040)...$(NC)"
+	@cd src && rm -rf build && sh $(BOARD_SCRIPT_kb2040)
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_3do) -j4
+	@echo "$(GREEN)✓ 3DO built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_3do).uf2"
+	@echo ""
+
 .PHONY: pce
 pce:
 	@echo "$(YELLOW)Building PCEngine (KB2040)...$(NC)"
@@ -263,6 +281,10 @@ flash-nuonusb:
 .PHONY: flash-xboxadapter
 flash-xboxadapter:
 	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_xboxadapter))_$(CONSOLE_$(word 2,$(PRODUCT_xboxadapter))).uf2
+
+.PHONY: flash-3dousb
+flash-3dousb:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_3dousb))_$(CONSOLE_$(word 2,$(PRODUCT_3dousb))).uf2
 
 # Internal flash helper
 .PHONY: _flash

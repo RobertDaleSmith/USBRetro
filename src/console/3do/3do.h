@@ -1,0 +1,144 @@
+// 3do.h
+// 3DO Console Protocol Header
+// Based on USBTo3DO by FCare (https://github.com/FCare/USBTo3DO)
+// Integrated into USBRetro multi-console architecture
+
+#ifndef THREEDOH
+#define THREEDOH
+
+#include <stdint.h>
+
+#include "tusb.h"
+#include "hardware/pio.h"
+#include "globals.h"
+
+// Define constants
+#undef MAX_PLAYERS
+#define MAX_PLAYERS 9               // 3DO supports up to 9 controllers
+
+// GPIO Pin definitions (from USBTo3DO)
+// These match the Waveshare RP2040 Zero pinout
+#define CLK_PIN 2           // Clock input from 3DO console
+#define DATA_OUT_PIN 3      // Data output to 3DO console
+#define DATA_IN_PIN 4       // Data input from next controller (daisy chain)
+#define CS_CTRL_PIN 5       // Chip Select / Control signal
+
+// Include PIO headers AFTER pin definitions
+#include "sampling.pio.h"
+#include "output.pio.h"
+
+// 3DO Report Structures
+
+// 3DO Joypad Report (2 bytes / 16 bits)
+// Standard gamepad with digital buttons
+typedef struct {
+  // LSB byte
+  uint16_t A : 1;       // A button (primary action)
+  uint16_t left : 1;    // D-pad left
+  uint16_t right : 1;   // D-pad right
+  uint16_t up : 1;      // D-pad up
+  uint16_t down : 1;    // D-pad down
+  uint16_t id: 3;       // Device ID (0b100 = standard pad)
+
+  // MSB byte
+  uint16_t tail : 2;    // Tail bits (0b00)
+  uint16_t L : 1;       // L button (left shoulder)
+  uint16_t R : 1;       // R button (right shoulder)
+  uint16_t X : 1;       // X button
+  uint16_t P : 1;       // P button (Play/Pause)
+  uint16_t C : 1;       // C button
+  uint16_t B : 1;       // B button
+} __attribute__((packed)) _3do_joypad_report;
+
+// 3DO Joystick Report (9 bytes / 72 bits)
+// Flight stick with analog axes and digital buttons
+typedef struct {
+  uint8_t id_0;         // ID byte 0 (0x01)
+  uint8_t id_1;         // ID byte 1 (0x7B)
+  uint8_t id_2;         // ID byte 2 (0x08)
+
+  uint8_t analog1;      // Analog axis 1 (X axis)
+  uint8_t analog2;      // Analog axis 2 (Y axis)
+  uint8_t analog3;      // Analog axis 3 (Z axis / twist)
+  uint8_t analog4;      // Analog axis 4 (throttle)
+
+  uint8_t left  : 1;    // D-pad left
+  uint8_t right : 1;    // D-pad right
+  uint8_t down  : 1;    // D-pad down
+  uint8_t up    : 1;    // D-pad up
+  uint8_t C     : 1;    // C button
+  uint8_t B     : 1;    // B button
+  uint8_t A     : 1;    // A button
+  uint8_t FIRE  : 1;    // FIRE button (trigger)
+
+  uint8_t tail  : 4;    // Tail bits (0x0)
+  uint8_t R     : 1;    // R button (right shoulder)
+  uint8_t L     : 1;    // L button (left shoulder)
+  uint8_t X     : 1;    // X button
+  uint8_t P     : 1;    // P button (Play/Pause)
+} __attribute__((packed)) _3do_joystick_report;
+
+// 3DO Mouse Report (4 bytes / 32 bits)
+// Mouse with relative motion and buttons
+typedef struct {
+  uint8_t id;           // Device ID (0x49)
+
+  uint8_t dy_up     : 4;  // Y delta upper nibble
+  uint8_t shift     : 1;  // Shift button
+  uint8_t right     : 1;  // Right mouse button
+  uint8_t middle    : 1;  // Middle mouse button
+  uint8_t left      : 1;  // Left mouse button
+
+  uint8_t dx_up     : 2;  // X delta upper 2 bits
+  uint8_t dy_low    : 6;  // Y delta lower 6 bits
+
+  uint8_t dx_low;         // X delta lower 8 bits
+} __attribute__((packed)) _3do_mouse_report;
+
+// Controller type enumeration
+typedef enum {
+  CONTROLLER_NONE = 0,
+  CONTROLLER_JOYPAD,
+  CONTROLLER_JOYSTICK,
+  CONTROLLER_MOUSE,
+} controller_type_3do;
+
+// Declaration of global variables
+extern PIO pio;
+extern uint sm_sampling, sm_output;
+
+// Report buffers
+extern uint8_t current_reports[MAX_PLAYERS][9];  // Max 9 bytes per report (joystick)
+extern uint8_t report_sizes[MAX_PLAYERS];
+extern volatile bool device_attached[MAX_PLAYERS];
+extern uint8_t controller_buffer[201];           // DMA output buffer
+
+// Function declarations
+void _3do_init(void);
+void _3do_task(void);
+void setup_3do_dma_output(void);
+void setup_3do_dma_input(void);
+void on_pio0_irq(void);
+
+void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(update_3do_report)(uint8_t player_index);
+
+void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
+  uint32_t buttons, uint8_t analog_1x, uint8_t analog_1y,
+  uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l,
+  uint8_t analog_r, uint32_t keys, uint8_t quad_x);
+
+void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance,
+  uint16_t buttons, uint8_t delta_x, uint8_t delta_y, uint8_t quad_x);
+
+// Report constructor functions
+_3do_joypad_report new_3do_joypad_report(void);
+_3do_joystick_report new_3do_joystick_report(void);
+_3do_mouse_report new_3do_mouse_report(void);
+
+// Report update functions
+void update_3do_joypad(_3do_joypad_report report, uint8_t instance);
+void update_3do_joystick(_3do_joystick_report report, uint8_t instance);
+void update_3do_mouse(_3do_mouse_report report, uint8_t instance);
+
+#endif // THREEDOH
