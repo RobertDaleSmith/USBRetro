@@ -23,18 +23,19 @@ While the basic PCEngine controller protocol is documented in the community, thi
 - RP2040 PIO state machine architecture
 - Dual-core coordination for timing-critical output
 
+### ✅ [GameCube Joybus Protocol](GAMECUBE_JOYBUS.md)
+**Status**: Complete
+**Implemented**: 2022-2025
+**Significance**: Reverse-engineered keyboard protocol + comprehensive profile system
+
+While the basic joybus protocol is documented, this reference provides:
+- **Reverse-engineered GameCube keyboard protocol** (0x54 command, keycode mappings, checksum algorithm)
+- Sophisticated profile system with flash persistence (SSBM, MKWii, Fighting, SNES configs)
+- Joybus PIO timing implementation (130MHz overclocking requirement)
+- Advanced trigger logic for different controller types
+- Dual-core coordination for timing-critical output
+
 ## Planned Documentation
-
-### 🚧 GameCube Joybus Protocol
-**Status**: Planned
-**Implementation**: Uses external [joybus-pio](https://github.com/JonnyHaystack/joybus-pio) library
-
-While the GameCube joybus protocol is well-documented in the community, a USBRetro-specific guide covering:
-- PIO implementation details
-- Dual-core architecture considerations
-- Rumble feedback
-- Profile system integration
-- 130MHz overclocking requirements
 
 ### 🚧 Xbox One I2C Protocol
 **Status**: Planned
