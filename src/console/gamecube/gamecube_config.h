@@ -253,7 +253,7 @@ typedef struct {
     .s2_button = GC_BTN_START,      /* S2 (Start) → Start */ \
     \
     /* Stick buttons (L3/R3) */ \
-    .l3_button = GC_BTN_NONE,       /* L3 → nothing */ \
+    .l3_button = GC_BTN_A,          /* L3 → A (for testing) */ \
     .r3_button = GC_BTN_NONE,       /* R3 → nothing */ \
     \
     /* Auxiliary buttons (A1/A2) */ \

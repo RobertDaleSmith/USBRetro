@@ -6,6 +6,7 @@
 #include "GamecubeConsole.h"
 #include "pico/bootrom.h"
 #include "pico/stdlib.h"
+#include "pico/flash.h"
 #include "tusb.h"
 #include "common/flash_settings.h"
 
@@ -235,6 +236,9 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center)
 // core1_entry - inner-loop for the second core
 void __not_in_flash_func(core1_entry)(void)
 {
+  // Initialize Core 1 for safe flash writes (required for flash_safe_execute)
+  flash_safe_execute_core_init();
+
   while (1)
   {
     // Wait for GameCube console to poll controller

@@ -4,6 +4,8 @@
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#include "pico/multicore.h"
+#include "pico/flash.h"
 #include <string.h>
 
 // Flash memory layout
@@ -52,6 +54,18 @@ void flash_settings_save(const flash_settings_t* settings)
     last_change_time = get_absolute_time();
 }
 
+// Flash write function executed in RAM (safe from XIP conflicts)
+static void __no_inline_not_in_flash_func(flash_write_worker)(void* param)
+{
+    flash_settings_t* write_settings = (flash_settings_t*)param;
+
+    // Erase the settings sector (4KB)
+    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+
+    // Write settings (must be 256-byte aligned)
+    flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t*)write_settings, FLASH_PAGE_SIZE);
+}
+
 // Force immediate save (bypasses debouncing - use sparingly)
 void flash_settings_save_now(const flash_settings_t* settings)
 {
@@ -59,16 +73,13 @@ void flash_settings_save_now(const flash_settings_t* settings)
     memcpy(&write_settings, settings, sizeof(flash_settings_t));
     write_settings.magic = SETTINGS_MAGIC;
 
-    // CRITICAL SECTION: Disable interrupts during flash write
-    // This will cause a brief hiccup in GameCube joybus communication (~100ms)
-    // but is necessary to prevent flash corruption
+    // CRITICAL SECTION: Pause Core 1 and disable interrupts during flash write
+    // This safely handles dual-core flash writes without crashing Core 1
+    // Core 1 (GameCube joybus) will pause briefly (~100ms) during the write
     uint32_t ints = save_and_disable_interrupts();
 
-    // Erase the settings sector (4KB)
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-
-    // Write settings (must be 256-byte aligned)
-    flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t*)&write_settings, FLASH_PAGE_SIZE);
+    // Execute flash write with Core 1 safely paused
+    flash_safe_execute(flash_write_worker, &write_settings, UINT32_MAX);
 
     restore_interrupts(ints);
 
