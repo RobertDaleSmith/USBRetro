@@ -51,7 +51,7 @@ Complete list of supported USB input devices and RP2040 boards.
 
 **USB Adapters:**
 - Wireless USB Adapter (Grey/Red) ✅
-- Wireless USB Adapter 2 (Black/Red) - Untested
+- Wireless USB Adapter 2 (Black/Red) ✅
 
 **Features:**
 - Full button support
