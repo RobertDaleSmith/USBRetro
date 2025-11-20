@@ -337,15 +337,20 @@ USBRetro/
 ├── Makefile                      # Top-level build system
 ├── Dockerfile                    # Docker build environment
 ├── .github/workflows/build.yml  # CI/CD pipeline
-├── images/                       # Project images
 ├── docs/                         # Documentation
+│   ├── images/                  # Project images
 │   ├── BUILD.md                 # Developer build guide
 │   ├── INSTALLATION.md          # User flashing guide
 │   ├── HARDWARE.md              # Hardware compatibility
-│   └── consoles/                # Console-specific docs
-│       ├── GAMECUBE.md
+│   ├── consoles/                # Console-specific docs
+│   │   ├── GAMECUBE.md
+│   │   ├── PCENGINE.md
+│   │   ├── NUON.md
+│   │   └── XBOXONE.md
+│   └── protocols/               # Protocol documentation
+│       ├── README.md
+│       ├── NUON_POLYFACE.md
 │       ├── PCENGINE.md
-│       ├── NUON.md
-│       └── XBOXONE.md
+│       └── GAMECUBE_JOYBUS.md
 └── README.md                     # Project overview
 ```
