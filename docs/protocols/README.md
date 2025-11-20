@@ -11,6 +11,18 @@ This directory contains comprehensive technical documentation of the retro conso
 
 The Nuon Polyface controller protocol was previously completely undocumented. This represents months of hardware analysis, SDK research, and iterative testing.
 
+### ✅ [PCEngine / TurboGrafx-16 Protocol](PCENGINE.md)
+**Status**: Complete
+**Implemented**: 2022-2023
+**Significance**: Comprehensive multitap and mouse implementation reference
+
+While the basic PCEngine controller protocol is documented in the community, this reference provides detailed coverage of:
+- Multitap scanning mechanism (5-player support)
+- Mouse delta accumulation strategy
+- 6-button and 3-button mode implementations
+- RP2040 PIO state machine architecture
+- Dual-core coordination for timing-critical output
+
 ## Planned Documentation
 
 ### 🚧 GameCube Joybus Protocol
@@ -23,17 +35,6 @@ While the GameCube joybus protocol is well-documented in the community, a USBRet
 - Rumble feedback
 - Profile system integration
 - 130MHz overclocking requirements
-
-### 🚧 PCEngine Controller Protocol
-**Status**: Planned
-**Implementation**: `src/console/pcengine/`
-
-Documentation of the PCEngine/TurboGrafx-16 controller protocol:
-- Multitap scanning sequence
-- 2/3/6-button detection
-- Mouse protocol
-- PIO state machine design (`plex.pio`, `clock.pio`, `select.pio`)
-- Timing requirements for reliable multitap operation
 
 ### 🚧 Xbox One I2C Protocol
 **Status**: Planned
