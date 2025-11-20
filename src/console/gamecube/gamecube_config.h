@@ -60,6 +60,9 @@ typedef enum {
     GC_TRIGGER_L_FULL,              // L digital + L analog forced to 255
     GC_TRIGGER_R_FULL,              // R digital + R analog forced to 255
     GC_TRIGGER_Z_INSTANT,           // Z button (uses trigger threshold)
+    GC_TRIGGER_L_CUSTOM,            // L digital at threshold + custom L analog value (uses l2_analog_value)
+    GC_TRIGGER_R_CUSTOM,            // R digital at threshold + custom R analog value (uses r2_analog_value)
+    GC_TRIGGER_LR_BOTH,             // Both L and R digital at threshold (for SSBM quit combo)
 } gc_trigger_behavior_t;
 
 // ============================================================================
@@ -73,6 +76,10 @@ typedef struct {
     // Trigger thresholds (0-255)
     uint8_t l2_threshold;       // LT analog threshold for digital action
     uint8_t r2_threshold;       // RT analog threshold for digital action
+
+    // Custom trigger analog values (for GC_TRIGGER_L/R_CUSTOM behaviors)
+    uint8_t l2_analog_value;    // Custom L analog value (0 = use passthrough)
+    uint8_t r2_analog_value;    // Custom R analog value (0 = use passthrough)
 
     // Stick sensitivity (0.0-1.0, typically 1.0 = 100%)
     float left_stick_sensitivity;
@@ -131,6 +138,10 @@ typedef struct {
     .l2_threshold = 250, \
     .r2_threshold = 250, \
     \
+    /* Custom trigger analog values */ \
+    .l2_analog_value = 0, \
+    .r2_analog_value = 0, \
+    \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
     .right_stick_sensitivity = 1.0f, \
@@ -173,6 +184,10 @@ typedef struct {
     .l2_threshold = 250, \
     .r2_threshold = 250, \
     \
+    /* Custom trigger analog values */ \
+    .l2_analog_value = 0, \
+    .r2_analog_value = 0, \
+    \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
     .right_stick_sensitivity = 1.0f, \
@@ -205,29 +220,33 @@ typedef struct {
 }
 
 // ----------------------------------------------------------------------------
-// Profile: ssbm - Super Smash Bros Melee competitive mapping
+// Profile: ssbm - Super Smash Bros Melee competitive mapping (Yoink1975's config)
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_SSBM { \
     .name = "ssbm", \
-    .description = "SSBM: LB→Light Shield(1%), RB→X, 90% trigger threshold, 60% stick", \
+    .description = "SSBM: LB→Z, LT→Light(43), RT→L+R, RB→X, 85% stick", \
     \
     /* Thresholds */ \
-    .l2_threshold = 230,        /* 90% trigger threshold */ \
-    .r2_threshold = 230,        /* 90% trigger threshold */ \
+    .l2_threshold = 225,        /* LT threshold for L digital (88%) */ \
+    .r2_threshold = 140,        /* RT threshold for L+R digital (55%) */ \
     \
-    /* Stick sensitivity (60% for Melee precision) */ \
-    .left_stick_sensitivity = 0.60f, \
+    /* Custom trigger analog values */ \
+    .l2_analog_value = 43,      /* L analog at 43 (~17% light shield) */ \
+    .r2_analog_value = 0, \
+    \
+    /* Stick sensitivity (85% for Melee precision) */ \
+    .left_stick_sensitivity = 0.85f, \
     .right_stick_sensitivity = 1.0f, \
     \
     /* Face buttons (B1-B4) */ \
     .b1_button = GC_BTN_B,          /* B1 → B */ \
     .b2_button = GC_BTN_A,          /* B2 → A */ \
-    .b3_button = GC_BTN_Y,          /* B3 → Y */ \
-    .b4_button = GC_BTN_X,          /* B4 → X */ \
+    .b3_button = GC_BTN_Y,          /* B3 (X) → Y */ \
+    .b4_button = GC_BTN_X,          /* B4 (Y) → X */ \
     \
     /* Shoulder buttons (L1/R1) */ \
-    .l1_button = GC_BTN_L_LIGHT,    /* L1 → L analog at 1% (instant light shield) */ \
-    .r1_button = GC_BTN_X,          /* R1 → X */ \
+    .l1_button = GC_BTN_Z,          /* L1 (LB) → Z */ \
+    .r1_button = GC_BTN_X,          /* R1 (RB) → X */ \
     \
     /* System buttons (S1/S2) */ \
     .s1_button = GC_BTN_NONE,       /* S1 (Select) → nothing */ \
@@ -242,12 +261,12 @@ typedef struct {
     .a2_button = GC_BTN_NONE,       /* A2 (Capture) → nothing */ \
     \
     /* Trigger behavior */ \
-    .l2_behavior = GC_TRIGGER_L_THRESHOLD,  /* LT → L button at 90% + analog */ \
-    .r2_behavior = GC_TRIGGER_R_THRESHOLD,  /* RT → R button at 90% + analog */ \
+    .l2_behavior = GC_TRIGGER_L_CUSTOM,    /* LT → L digital + custom analog (43) */ \
+    .r2_behavior = GC_TRIGGER_LR_BOTH,     /* RT → L+R both (for quit combo) */ \
 }
 
 // ----------------------------------------------------------------------------
-// Profile: mkwii - Mario Kart Wii drift mapping
+// Profile: mkwii - Mario Kart Wii drift mapping (Eggzact123's config)
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_MKWII { \
     .name = "mkwii", \
@@ -256,6 +275,10 @@ typedef struct {
     /* Thresholds */ \
     .l2_threshold = 250, \
     .r2_threshold = 10,             /* Very sensitive RT for instant Z */ \
+    \
+    /* Custom trigger analog values */ \
+    .l2_analog_value = 0, \
+    .r2_analog_value = 0, \
     \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
@@ -298,6 +321,10 @@ typedef struct {
     /* Thresholds */ \
     .l2_threshold = 250, \
     .r2_threshold = 250, \
+    \
+    /* Custom trigger analog values */ \
+    .l2_analog_value = 0, \
+    .r2_analog_value = 0, \
     \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
