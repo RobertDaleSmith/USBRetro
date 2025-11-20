@@ -71,6 +71,7 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/players.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_keyboard.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_mouse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
@@ -166,6 +167,7 @@ target_link_libraries(usbretro_pce PRIVATE # FOR PCE
 
 target_link_libraries(usbretro_ngc PRIVATE # FOR NGC
     ${COMMON_LIBRARIES}
+    hardware_flash
 )
 
 target_link_libraries(usbretro_xb1 PRIVATE # FOR XB1
