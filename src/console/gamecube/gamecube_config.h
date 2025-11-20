@@ -44,6 +44,12 @@ typedef enum {
     GC_BTN_R_FULL,              // R digital + R analog forced to 255
     GC_BTN_L_LIGHT,             // L analog forced to 1 (light shield for SSBM)
 
+    // C-stick directions (forces C-stick to specific position)
+    GC_BTN_C_UP,                // C-stick forced up (255)
+    GC_BTN_C_DOWN,              // C-stick forced down (0)
+    GC_BTN_C_LEFT,              // C-stick forced left (0)
+    GC_BTN_C_RIGHT,             // C-stick forced right (255)
+
 } gc_button_output_t;
 
 // Trigger analog behavior (for L2/R2)
@@ -203,7 +209,7 @@ typedef struct {
 // ----------------------------------------------------------------------------
 #define GC_PROFILE_SSBM { \
     .name = "ssbm", \
-    .description = "SSBM: LB→Light Shield(1%), RB→Z, 90% trigger threshold, 60% stick", \
+    .description = "SSBM: LB→Light Shield(1%), RB→X, 90% trigger threshold, 60% stick", \
     \
     /* Thresholds */ \
     .l2_threshold = 230,        /* 90% trigger threshold */ \
@@ -221,7 +227,7 @@ typedef struct {
     \
     /* Shoulder buttons (L1/R1) */ \
     .l1_button = GC_BTN_L_LIGHT,    /* L1 → L analog at 1% (instant light shield) */ \
-    .r1_button = GC_BTN_Z,          /* R1 → Z */ \
+    .r1_button = GC_BTN_X,          /* R1 → X */ \
     \
     /* System buttons (S1/S2) */ \
     .s1_button = GC_BTN_NONE,       /* S1 (Select) → nothing */ \

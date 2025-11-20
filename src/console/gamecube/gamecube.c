@@ -7,6 +7,7 @@
 #include "pico/bootrom.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
+#include "common/flash_settings.h"
 
 // Declaration of global variables
 GamecubeConsole gc;
@@ -161,6 +162,24 @@ void ngc_init()
   // corrects UART serial output after overclock
   stdio_init_all();
 
+  // Initialize flash settings system
+  flash_settings_init();
+
+  // Load saved profile from flash (if valid)
+  flash_settings_t settings;
+  if (flash_settings_load(&settings)) {
+    // Valid settings found - restore saved profile
+    if (settings.active_profile_index < GC_PROFILE_COUNT) {
+      active_profile_index = settings.active_profile_index;
+      active_profile = &profiles[active_profile_index];
+      printf("Loaded profile from flash: %s (%s)\n", active_profile->name, active_profile->description);
+    } else {
+      printf("Invalid profile index in flash (%d), using default\n", settings.active_profile_index);
+    }
+  } else {
+    printf("No valid settings in flash, using default profile\n");
+  }
+
   // Ground gpio attatched to sheilding
   gpio_init(SHIELD_PIN_L);
   gpio_set_dir(SHIELD_PIN_L, GPIO_OUT);
@@ -267,8 +286,10 @@ static void switch_to_profile(uint8_t new_profile_index)
   neopixel_indicate_profile(active_profile_index);  // NeoPixel LED blinking
   profile_indicator_trigger(active_profile_index, playersCount);  // Rumble and player LED
 
-  // TODO: Save active_profile_index to flash for persistence across reboots
-  // For now, profile resets to default on power cycle
+  // Save profile selection to flash (debounced - writes after 5 seconds)
+  flash_settings_t settings;
+  settings.active_profile_index = active_profile_index;
+  flash_settings_save(&settings);
 
   printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
 }
@@ -404,6 +425,18 @@ static inline void apply_button_mapping(gc_report_t* report, gc_button_output_t 
       if (report->l_analog < 1) {
         report->l_analog = 1;
       }
+      break;
+    case GC_BTN_C_UP:
+      report->cstick_y = 255;
+      break;
+    case GC_BTN_C_DOWN:
+      report->cstick_y = 0;
+      break;
+    case GC_BTN_C_LEFT:
+      report->cstick_x = 0;
+      break;
+    case GC_BTN_C_RIGHT:
+      report->cstick_x = 255;
       break;
     case GC_BTN_NONE:
     default:

@@ -125,14 +125,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Build all products (matrix: 3 boards)
+  # Build all products (matrix: 4 boards)
   build:
     needs: [build-docker]
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        board: [rpi_pico, ada_qtpy, ada_kb2040]
+        board: [rpi_pico, ada_qtpy, ada_kb2040, waveshare_rp2040_zero]
 
     steps:
       - name: Checkout code with submodules

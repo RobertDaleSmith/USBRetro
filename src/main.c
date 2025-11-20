@@ -47,6 +47,10 @@ extern uint8_t profile_indicator_get_player_led(uint8_t player_count);
 
 extern void players_init(void);
 
+#ifdef CONFIG_NGC
+extern void flash_settings_task(void);
+#endif
+
 /*------------- MAIN -------------*/
 
 // note that "__not_in_flash_func" functions are loaded
@@ -70,6 +74,11 @@ static void __not_in_flash_func(process_signals)(void)
 
     // profile indicator task (rumble and player LED patterns)
     profile_indicator_task();
+
+#ifdef CONFIG_NGC
+    // flash settings task (debounced flash writes for profile persistence)
+    flash_settings_task();
+#endif
 
     // Combine GameCube console rumble with profile indicator rumble
     uint8_t combined_rumble = gc_rumble | profile_indicator_get_rumble();
