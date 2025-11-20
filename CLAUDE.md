@@ -340,5 +340,14 @@ USBRetro/
 ├── res/                          # Resources (images, hardware files)
 │   ├── images/                  # Project images
 │   └── hw/pcengine/             # PCEngine hardware files (EAGLE)
-└── README.md, BUILD.md          # Documentation
+├── docs/                         # Documentation
+│   ├── BUILD.md                 # Developer build guide
+│   ├── INSTALLATION.md          # User flashing guide
+│   ├── HARDWARE.md              # Hardware compatibility
+│   └── consoles/                # Console-specific docs
+│       ├── GAMECUBE.md
+│       ├── PCENGINE.md
+│       ├── NUON.md
+│       └── XBOXONE.md
+└── README.md                     # Project overview
 ```
