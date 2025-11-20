@@ -224,11 +224,11 @@ Complete list of supported USB input devices and RP2040 boards.
 
 ### PCEngine Adapter
 
-See `res/hw/pcengine/` for EAGLE schematics:
-- Controller port pinout
-- RP2040 connections
-- Level shifters (if needed)
-- Power regulation
+**Hardware requirements:**
+- PCEngine controller port (8-pin DIN)
+- RP2040 board (KB2040 recommended)
+- Level shifters (if needed for 3.3V ↔ 5V)
+- Power regulation circuitry
 
 ### GameCube Adapter
 

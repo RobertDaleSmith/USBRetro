@@ -96,8 +96,6 @@ Pin 7: CLR
 Pin 8: GND
 ```
 
-See hardware schematics in `res/hw/pcengine/` for connection details.
-
 ## Multitap Details
 
 PCEngine multitap scanning:
@@ -159,4 +157,3 @@ PCEngine multitap scanning:
 
 - [USB-2-PCE Adapter](https://controlleradapter.com/products/usb-2-pce) - Pre-built hardware
 - [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
-- [Hardware Schematics](../../res/hw/pcengine/) - EAGLE files
