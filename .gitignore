@@ -7,4 +7,4 @@ src/build
 .DS_Store
 releases/
 src/build/
-archive/
+.dev
