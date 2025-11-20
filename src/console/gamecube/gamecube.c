@@ -552,6 +552,13 @@ void __not_in_flash_func(update_output)(void)
         case GC_TRIGGER_Z_INSTANT:
           if (l2_pressed) new_report.z = 1;
           break;
+        case GC_TRIGGER_L_CUSTOM:
+          // Custom L trigger - use profile-defined analog value + digital at threshold
+          if (active_profile->l2_analog_value > 0 && new_report.l_analog < active_profile->l2_analog_value) {
+            new_report.l_analog = active_profile->l2_analog_value;
+          }
+          if (l2_pressed) new_report.l = 1;
+          break;
         default:
           break;
       }
@@ -566,6 +573,20 @@ void __not_in_flash_func(update_output)(void)
           break;
         case GC_TRIGGER_Z_INSTANT:
           if (r2_pressed) new_report.z = 1;
+          break;
+        case GC_TRIGGER_R_CUSTOM:
+          // Custom R trigger - use profile-defined analog value + digital at threshold
+          if (active_profile->r2_analog_value > 0 && new_report.r_analog < active_profile->r2_analog_value) {
+            new_report.r_analog = active_profile->r2_analog_value;
+          }
+          if (r2_pressed) new_report.r = 1;
+          break;
+        case GC_TRIGGER_LR_BOTH:
+          // SSBM quit combo - R2 triggers both L and R digital buttons
+          if (r2_pressed) {
+            new_report.l = 1;
+            new_report.r = 1;
+          }
           break;
         default:
           break;
