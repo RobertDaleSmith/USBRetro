@@ -337,9 +337,7 @@ USBRetro/
 ├── Makefile                      # Top-level build system
 ├── Dockerfile                    # Docker build environment
 ├── .github/workflows/build.yml  # CI/CD pipeline
-├── res/                          # Resources (images, hardware files)
-│   ├── images/                  # Project images
-│   └── hw/pcengine/             # PCEngine hardware files (EAGLE)
+├── images/                       # Project images
 ├── docs/                         # Documentation
 │   ├── BUILD.md                 # Developer build guide
 │   ├── INSTALLATION.md          # User flashing guide
