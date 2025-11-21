@@ -49,6 +49,15 @@ uint8_t report_sizes[MAX_PLAYERS] = {0};
 volatile bool device_attached[MAX_PLAYERS] = {false};
 uint8_t controller_buffer[201];
 
+// Extension controller tracking
+static uint8_t extension_controller_count = 0;
+
+// Get total controller count (USB + extension)
+uint8_t get_total_3do_controller_count(void) {
+  extern uint8_t max_usb_controller;
+  return max_usb_controller + extension_controller_count;
+}
+
 // DMA channels
 typedef enum {
   CHAN_OUTPUT = 0,
@@ -225,6 +234,81 @@ _3do_mouse_report new_3do_mouse_report(void) {
   memset(&report, 0, sizeof(report));
   report.id = 0x49;
   return report;
+}
+
+//-----------------------------------------------------------------------------
+// Extension Controller Detection
+//-----------------------------------------------------------------------------
+
+// Parse extension controller data to count connected controllers
+// Based on 3DO PBUS protocol: https://3dodev.com/documentation/hardware/opera/pbus
+// Returns number of extension controllers detected
+static uint8_t parse_extension_controllers(uint8_t* buffer, size_t buffer_size) {
+  uint8_t count = 0;
+  size_t offset = 0;
+
+  while (offset < buffer_size) {
+    uint8_t byte1 = buffer[offset];
+
+    // Check for end-of-chain: "string of zeros"
+    if (byte1 == 0x00) {
+      // Verify it's actually end (multiple zeros)
+      bool is_end = true;
+      for (size_t i = offset; i < buffer_size && i < offset + 4; i++) {
+        if (buffer[i] != 0x00) {
+          is_end = false;
+          break;
+        }
+      }
+      if (is_end) break;
+    }
+
+    // Check first 4 bits for device ID
+    uint8_t id_nibble = (byte1 >> 4) & 0x0F;
+
+    // Joypad: ID starts with 01, 10, or 11 (first 2 bits != 00)
+    if ((id_nibble & 0b1100) != 0) {
+      // Control Pad: 8 bits (1 byte)
+      count++;
+      offset += 1;
+    }
+    // Flightstick: ID 0x01, 0x7B, length 0x08
+    else if (byte1 == 0x01 && offset + 2 < buffer_size &&
+             buffer[offset + 1] == 0x7B && buffer[offset + 2] == 0x08) {
+      // Flightstick: 3 ID bytes + 4 analog + 2 buttons = 9 bytes total
+      count++;
+      offset += 9;
+    }
+    // Mouse: ID 0x49
+    else if (byte1 == 0x49) {
+      // Mouse: 24 bits = 3 bytes
+      count++;
+      offset += 3;
+    }
+    // Lightgun: ID 0x4D
+    else if (byte1 == 0x4D) {
+      // Lightgun: 32 bits = 4 bytes
+      count++;
+      offset += 4;
+    }
+    // Arcade Buttons: ID 0xC0
+    else if (byte1 == 0xC0) {
+      // Arcade: 16 bits = 2 bytes
+      count++;
+      offset += 2;
+    }
+    else {
+      // Unknown device - skip 1 byte and continue
+      offset += 1;
+    }
+
+    // Safety: PBUS supports max 56 devices, but we cap at MAX_PLAYERS
+    if (count >= MAX_PLAYERS || offset >= buffer_size) {
+      break;
+    }
+  }
+
+  return count;
 }
 
 //-----------------------------------------------------------------------------
@@ -804,8 +888,8 @@ void _3do_task() {
 
   if (now - last_log_time > 5000) {  // Log every 5 seconds
     uint32_t irq_delta = pio_irq_count - last_irq_count;
-    printf("[3DO] IRQs: %lu (+%lu/5s), max_usb=%d, attached=[",
-           pio_irq_count, irq_delta, max_usb_controller);
+    printf("[3DO] IRQs: %lu (+%lu/5s), USB=%d, EXT=%d, attached=[",
+           pio_irq_count, irq_delta, max_usb_controller, extension_controller_count);
     for (int i = 0; i < MAX_PLAYERS; i++) {
       printf("%d", device_attached[i] ? 1 : 0);
     }
@@ -819,6 +903,27 @@ void _3do_task() {
     last_irq_count = pio_irq_count;
   }
   #endif
+
+  // Parse extension controller data to detect connected controllers
+  // Extension data starts after USB controller reports in buffer
+  static uint8_t last_usb_count = 0;
+  if (max_usb_controller != last_usb_count) {
+    last_usb_count = max_usb_controller;
+  }
+
+  // Calculate total size of USB reports sent
+  int total_usb_size = 0;
+  for (int i = 0; i < max_usb_controller; i++) {
+    total_usb_size += report_sizes[i];
+  }
+
+  // Parse extension data (comes after USB reports in buffer)
+  if (total_usb_size < 201) {
+    extension_controller_count = parse_extension_controllers(
+      &controller_buffer[total_usb_size],
+      201 - total_usb_size
+    );
+  }
 
   // Check for profile switching combo
   check_profile_switch_combo();
