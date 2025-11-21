@@ -38,6 +38,7 @@ static inline bool is_switch_pro(uint16_t vid, uint16_t pid)
   return ((vid == 0x057e && (
            pid == 0x2009 || // Nintendo Switch Pro
            pid == 0x200e || // JoyCon Charge Grip
+           pid == 0x2017 || // SNES Controller (NSO)
            pid == 0x2069    // Nintendo Switch Pro 2
   )));
 }
