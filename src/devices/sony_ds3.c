@@ -33,10 +33,6 @@ bool diff_report_ds3(sony_ds3_report_t const* rpt1, sony_ds3_report_t const* rpt
   // x, y, z, rz must different than 2 to be counted
   if (diff_than_n(rpt1->lx, rpt2->lx, 2) || diff_than_n(rpt1->ly, rpt2->ly, 2) ||
       diff_than_n(rpt1->rx, rpt2->rx, 2) || diff_than_n(rpt1->ry, rpt2->ry, 2) ||
-#ifdef CONFIG_NGC
-      diff_than_n(rpt1->pressure[10], rpt2->pressure[10], 2) ||
-      diff_than_n(rpt1->pressure[11], rpt2->pressure[11], 2) ||
-#endif
       diff_than_n(rpt1->pressure[8], rpt2->pressure[8], 2) ||
       diff_than_n(rpt1->pressure[9], rpt2->pressure[9], 2))
   {
@@ -80,8 +76,11 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t analog_1y = 255 - ds3_report.ly;
       uint8_t analog_2x = ds3_report.rx;
       uint8_t analog_2y = 255 - ds3_report.ry;
-      uint8_t analog_l = ds3_report.pressure[8];
-      uint8_t analog_r = ds3_report.pressure[9];
+
+      // Use L2/R2 pressure sensors for analog trigger values
+      // DS3 has digital L2/R2 buttons, but pressure-sensitive sensors
+      uint8_t analog_l = ds3_report.pressure[8];  // L2 pressure
+      uint8_t analog_r = ds3_report.pressure[9];  // R2 pressure
 
       TU_LOG1("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
       TU_LOG1("DPad = ");
@@ -110,21 +109,8 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 
       TU_LOG1("\r\n");
 
-#ifdef CONFIG_NGC
-      // us pressure value of L1/R1 to simulate analog
-      if (ds3_report.pressure[10] > analog_l) {
-        analog_l = ds3_report.pressure[10];
-      }
-      if (ds3_report.pressure[11] > analog_r) {
-        analog_r = ds3_report.pressure[11];
-      }
-      bool button_r1 = false;
-      bool button_l1 = false;
-#else
-      bool button_r1 = ds3_report.r1;
-      bool button_l1 = ds3_report.l1;
-#endif
-
+      // All shoulder buttons passed as digital (platform-agnostic)
+      // Consoles handle analog trigger thresholds in their post_input_event()
       buttons = (((ds3_report.up)       ? 0x00 : USBR_BUTTON_DU) |
                  ((ds3_report.down)     ? 0x00 : USBR_BUTTON_DD) |
                  ((ds3_report.left)     ? 0x00 : USBR_BUTTON_DL) |
@@ -133,8 +119,8 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
                  ((ds3_report.circle)   ? 0x00 : USBR_BUTTON_B2) |
                  ((ds3_report.square)   ? 0x00 : USBR_BUTTON_B3) |
                  ((ds3_report.triangle) ? 0x00 : USBR_BUTTON_B4) |
-                 ((button_l1)           ? 0x00 : USBR_BUTTON_L1) |
-                 ((button_r1)           ? 0x00 : USBR_BUTTON_R1) |
+                 ((ds3_report.l1)       ? 0x00 : USBR_BUTTON_L1) |
+                 ((ds3_report.r1)       ? 0x00 : USBR_BUTTON_R1) |
                  ((ds3_report.l2)       ? 0x00 : USBR_BUTTON_L2) |
                  ((ds3_report.r2)       ? 0x00 : USBR_BUTTON_R2) |
                  ((ds3_report.select)   ? 0x00 : USBR_BUTTON_S1) |
