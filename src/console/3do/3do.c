@@ -406,6 +406,14 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
     report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
+    // If no digital D-pad pressed, use left analog stick (active-low: 0 = pressed)
+    if (report.left == 0 && report.right == 0 && report.up == 0 && report.down == 0) {
+      report.left = (ax < 64) ? 1 : 0;
+      report.right = (ax > 192) ? 1 : 0;
+      report.up = (ay < 64) ? 1 : 0;
+      report.down = (ay > 192) ? 1 : 0;
+    }
+
     update_3do_joystick(report, player_index);
   } else {
     // Send joypad report
@@ -428,12 +436,12 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
     report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
-    // If no digital D-pad pressed, use analog stick (active-low)
-    if (!(buttons & (USBR_BUTTON_DL | USBR_BUTTON_DR | USBR_BUTTON_DU | USBR_BUTTON_DD))) {
-      report.left &= (ax < 64) ? 0 : 1;
-      report.right &= (ax > 192) ? 0 : 1;
-      report.up &= (ay < 64) ? 0 : 1;
-      report.down &= (ay > 192) ? 0 : 1;
+    // If no digital D-pad pressed, use left analog stick (active-low: 0 = pressed)
+    if (report.left == 0 && report.right == 0 && report.up == 0 && report.down == 0) {
+      report.left = (ax < 64) ? 1 : 0;
+      report.right = (ax > 192) ? 1 : 0;
+      report.up = (ay < 64) ? 1 : 0;
+      report.down = (ay > 192) ? 1 : 0;
     }
 
     update_3do_joypad(report, player_index);
