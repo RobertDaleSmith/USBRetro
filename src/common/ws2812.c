@@ -9,6 +9,7 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "ws2812.pio.h"
+#include "led_config.h"
 
 #define NUM_PIXELS 1
 
@@ -53,11 +54,7 @@ static absolute_time_t state_change_time;
 #define BLINK_ON_TIME_US 100000   // 100ms LED on (brief flash between OFF blinks)
 
 static inline void put_pixel(uint32_t pixel_grb) {
-    // Non-blocking write - skip if FIFO full to avoid stalling timing-critical 3DO code
-    if (!pio_sm_is_tx_fifo_full(pio, sm)) {
-        pio_sm_put(pio, sm, pixel_grb << 8u);
-    }
-    // If FIFO full, just skip this update - it's only an LED indicator
+    pio_sm_put(pio, sm, pixel_grb << 8u);
 }
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
@@ -240,57 +237,13 @@ const struct {
     pattern pat;
     const char *name;
 } pattern_table[] = {
-#ifdef CONFIG_3DO
-        {pattern_reds,   "Reds"},      // 0 controllers
-        {pattern_red,     "Red"},        // 1 controller
-        {pattern_green,   "Green"},      // 2 controllers
-        {pattern_blue,    "Blue"},       // 3 controllers
-        {pattern_purple,  "Purple"},     // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#else
-#ifdef CONFIG_XB1
-        {pattern_greens,  "Greens"},     // 0 controllers
-        {pattern_green,   "Green"},      // 1 controller
-        {pattern_blue,    "Blue"},       // 2 controllers
-        {pattern_red,     "Red"},        // 3 controllers
-        {pattern_purple,  "Purple"},     // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#else
-#ifdef CONFIG_NGC
-        {pattern_purples, "Purples"},    // 0 controllers
-        {pattern_purple,  "Purple"},     // 1 controller
-        {pattern_blue,    "Blue"},       // 2 controllers
-        {pattern_red,     "Red"},        // 3 controllers
-        {pattern_green,   "Green"},      // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#else
-#ifdef CONFIG_NUON
-        {pattern_reds,    "Reds"},       // 0 controllers
-        {pattern_red,     "Red"},        // 1 controller
-        {pattern_blue,    "Blue"},       // 2 controllers
-        {pattern_green,   "Green"},      // 3 controllers
-        {pattern_purple,  "Purple"},     // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#else
-#ifdef CONFIG_LOOPY
-        {pattern_pinks,   "Pinks"},      // 0 controllers
-        {pattern_pink,    "Pink"},       // 1 controller
-        {pattern_blue,    "Blue"},       // 2 controllers
-        {pattern_red,     "Red"},        // 3 controllers
-        {pattern_green,   "Green"},      // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#else//CONFIG_PCE
-        {pattern_blues,   "Blues"},      // 0 controllers
-        {pattern_blue,    "Blue"},       // 1 controller
-        {pattern_red,     "Red"},        // 2 controllers
-        {pattern_green,   "Green"},      // 3 controllers
-        {pattern_purple,  "Purple"},     // 4 controllers
-        {pattern_yellow,  "Yellow"},     // 5 controllers
-#endif
-#endif
-#endif
-#endif
-#endif
+        // Console-specific patterns from led_config.h
+        {NEOPIXEL_PATTERN_0, "P0"},      // 0 controllers
+        {NEOPIXEL_PATTERN_1, "P1"},      // 1 controller
+        {NEOPIXEL_PATTERN_2, "P2"},      // 2 controllers
+        {NEOPIXEL_PATTERN_3, "P3"},      // 3 controllers
+        {NEOPIXEL_PATTERN_4, "P4"},      // 4 controllers
+        {NEOPIXEL_PATTERN_5, "P5"},      // 5 controllers
         {pattern_random,  "Random data"},// fun
         {pattern_sparkle, "Sparkles"},
         {pattern_snakes,  "Snakes!"},

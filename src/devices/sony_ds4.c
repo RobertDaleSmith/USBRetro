@@ -2,6 +2,7 @@
 #include "sony_ds4.h"
 #include "globals.h"
 #include "pico/time.h"
+#include "led_config.h"
 
 static uint16_t tpadLastPos;
 static bool tpadDragging;
@@ -201,157 +202,45 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   sony_ds4_output_report_t output_report = {0};
   output_report.set_led = 1;
 
-#ifdef CONFIG_NGC
-  switch (player_index+1) {
-    case 1: // purple
-      output_report.lightbar_red = 20; // purple
-      output_report.lightbar_blue = 40;//
-      break;
+  // Console-specific LED colors from led_config.h
+  switch (player_index+1)
+  {
+  case 1:
+    output_report.lightbar_red = LED_P1_R;
+    output_report.lightbar_green = LED_P1_G;
+    output_report.lightbar_blue = LED_P1_B;
+    break;
 
-    case 2: // blue
-      output_report.lightbar_blue = 64;
-      break;
+  case 2:
+    output_report.lightbar_red = LED_P2_R;
+    output_report.lightbar_green = LED_P2_G;
+    output_report.lightbar_blue = LED_P2_B;
+    break;
 
-    case 3: // red
-      output_report.lightbar_red = 64;
-      break;
+  case 3:
+    output_report.lightbar_red = LED_P3_R;
+    output_report.lightbar_green = LED_P3_G;
+    output_report.lightbar_blue = LED_P3_B;
+    break;
 
-    case 4: // green
-      output_report.lightbar_green = 64;
-      break;
+  case 4:
+    output_report.lightbar_red = LED_P4_R;
+    output_report.lightbar_green = LED_P4_G;
+    output_report.lightbar_blue = LED_P4_B;
+    break;
 
-    case 5: // yellow
-      output_report.lightbar_red = 64;
-      output_report.lightbar_green = 64;
-      break;
+  case 5:
+    output_report.lightbar_red = LED_P5_R;
+    output_report.lightbar_green = LED_P5_G;
+    output_report.lightbar_blue = LED_P5_B;
+    break;
 
-    default: // white
-      output_report.lightbar_blue = 32;
-      output_report.lightbar_green = 32;
-      output_report.lightbar_red = 32;
-      break;
+  default:
+    output_report.lightbar_red = LED_DEFAULT_R;
+    output_report.lightbar_green = LED_DEFAULT_G;
+    output_report.lightbar_blue = LED_DEFAULT_B;
+    break;
   }
-#elif CONFIG_XB1
-  switch (player_index+1) {
-    case 1: // green
-      output_report.lightbar_green = 64;
-      break;
-
-    case 2: // blue
-      output_report.lightbar_blue = 64;
-      break;
-
-    case 3: // red
-      output_report.lightbar_red = 64;
-      break;
-
-    case 4: // purple
-      output_report.lightbar_red = 20; // purple
-      output_report.lightbar_blue = 40;//
-      break;
-
-    case 5: // yellow
-      output_report.lightbar_red = 64;
-      output_report.lightbar_green = 64;
-      break;
-
-    default: // white
-      output_report.lightbar_blue = 32;
-      output_report.lightbar_green = 32;
-      output_report.lightbar_red = 32;
-      break;
-  }
-#elif CONFIG_NUON
-  switch (player_index+1) {
-    case 1: // red
-      output_report.lightbar_red = 64;
-      break;
-
-    case 2: // blue
-      output_report.lightbar_blue = 64;
-      break;
-
-    case 3: // green
-      output_report.lightbar_green = 64;
-      break;
-
-    case 4: // purple
-      output_report.lightbar_red = 20; // purple
-      output_report.lightbar_blue = 40;//
-      break;
-
-    case 5: // yellow
-      output_report.lightbar_red = 64;
-      output_report.lightbar_green = 64;
-      break;
-
-    default: // white
-      output_report.lightbar_blue = 32;
-      output_report.lightbar_green = 32;
-      output_report.lightbar_red = 32;
-      break;
-  }
-#elif CONFIG_PCE
-  switch (player_index+1) {
-    case 1: // blue
-      output_report.lightbar_blue = 64;
-      break;
-
-    case 2: // red
-      output_report.lightbar_red = 64;
-      break;
-
-    case 3: // green
-      output_report.lightbar_green = 64;
-      break;
-
-    case 4: // purple
-      output_report.lightbar_red = 20; // purple
-      output_report.lightbar_blue = 40;//
-      break;
-
-    case 5: // yellow
-      output_report.lightbar_red = 64;
-      output_report.lightbar_green = 64;
-      break;
-
-    default: // white
-      output_report.lightbar_blue = 32;
-      output_report.lightbar_green = 32;
-      output_report.lightbar_red = 32;
-      break;
-  }
-#elif CONFIG_3DO
-  switch (player_index+1) {
-    case 1: // red
-      output_report.lightbar_red = 64;
-      break;
-
-    case 2: // green
-      output_report.lightbar_green = 64;
-      break;
-
-    case 3: // blue
-      output_report.lightbar_blue = 64;
-      break;
-
-    case 4: // yellow
-      output_report.lightbar_red = 64;
-      output_report.lightbar_green = 64;
-      break;
-
-    case 5: // purple
-      output_report.lightbar_red = 20;
-      output_report.lightbar_blue = 40;
-      break;
-
-    default: // white
-      output_report.lightbar_blue = 32;
-      output_report.lightbar_green = 32;
-      output_report.lightbar_red = 32;
-      break;
-  }
-#endif
 
   // fun
   if (player_index+1 && is_fun) {

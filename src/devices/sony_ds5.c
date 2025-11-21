@@ -2,6 +2,7 @@
 #include "sony_ds5.h"
 #include "globals.h"
 #include "pico/time.h"
+#include "led_config.h"
 
 static uint16_t tpadLastPos;
 static bool tpadDragging;
@@ -237,191 +238,54 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   ds5_fb.trigger_r.effect_force = r2_trigger_effect_force;
   ds5_fb.trigger_r.range_force = 0xff;
 
-  switch (player_index+1)
-  {
-  case 1: // purple
-    ds5_fb.player_led = 0b00100;
-    ds5_fb.lightbar_r = 20;
-    ds5_fb.lightbar_b = 40;
-    break;
-
-  case 2: // blue
-    ds5_fb.player_led = 0b01010;
-    ds5_fb.lightbar_b = 64;
-    break;
-
-  case 3: // red
-    ds5_fb.player_led = 0b10101;
-    ds5_fb.lightbar_r = 64;
-    break;
-
-  case 4: // green
-    ds5_fb.player_led = 0b11011;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 5: // yellow
-    ds5_fb.player_led = 0b11111;
-    ds5_fb.lightbar_r = 64;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  default: // white
-    ds5_fb.player_led = 0;
-    ds5_fb.lightbar_b = 32;
-    ds5_fb.lightbar_g = 32;
-    ds5_fb.lightbar_r = 32;
-    break;
-  }
-#elif CONFIG_XB1
-  switch (player_index+1)
-  {
-  case 1: // green
-    ds5_fb.player_led = 0b00100;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 2: // blue
-    ds5_fb.player_led = 0b01010;
-    ds5_fb.lightbar_b = 64;
-    break;
-
-  case 3: // red
-    ds5_fb.player_led = 0b10101;
-    ds5_fb.lightbar_r = 64;
-    break;
-
-  case 4: // purple
-    ds5_fb.player_led = 0b11011;
-    ds5_fb.lightbar_r = 20;
-    ds5_fb.lightbar_b = 40;
-    break;
-
-  case 5: // yellow
-    ds5_fb.player_led = 0b11111;
-    ds5_fb.lightbar_r = 64;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  default: // white
-    ds5_fb.player_led = 0;
-    ds5_fb.lightbar_b = 32;
-    ds5_fb.lightbar_g = 32;
-    ds5_fb.lightbar_r = 32;
-    break;
-  }
-#elif CONFIG_NUON
-  switch (player_index+1)
-  {
-  case 1: // red
-    ds5_fb.player_led = 0b00100;
-    ds5_fb.lightbar_r = 64;
-    break;
-
-  case 2: // blue
-    ds5_fb.player_led = 0b01010;
-    ds5_fb.lightbar_b = 64;
-    break;
-
-  case 3: // green
-    ds5_fb.player_led = 0b10101;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 4: // purple
-    ds5_fb.player_led = 0b11011;
-    ds5_fb.lightbar_r = 20;
-    ds5_fb.lightbar_b = 40;
-    break;
-
-  case 5: // yellow
-    ds5_fb.player_led = 0b11111;
-    ds5_fb.lightbar_r = 64;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  default: // white
-    ds5_fb.player_led = 0;
-    ds5_fb.lightbar_b = 32;
-    ds5_fb.lightbar_g = 32;
-    ds5_fb.lightbar_r = 32;
-    break;
-  }
-#elif CONFIG_PCE
-  switch (player_index+1)
-  {
-  case 1: // blue
-    ds5_fb.player_led = 0b00100;
-    ds5_fb.lightbar_b = 64;
-    break;
-
-  case 2: // red
-    ds5_fb.player_led = 0b01010;
-    ds5_fb.lightbar_r = 64;
-    break;
-
-  case 3: // green
-    ds5_fb.player_led = 0b10101;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 4: // purple
-    ds5_fb.player_led = 0b11011;
-    ds5_fb.lightbar_r = 20;
-    ds5_fb.lightbar_b = 40;
-    break;
-
-  case 5: // yellow
-    ds5_fb.player_led = 0b11111;
-    ds5_fb.lightbar_r = 64;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  default: // white
-    ds5_fb.player_led = 0;
-    ds5_fb.lightbar_b = 32;
-    ds5_fb.lightbar_g = 32;
-    ds5_fb.lightbar_r = 32;
-    break;
-  }
-#elif CONFIG_3DO
-  switch (player_index+1)
-  {
-  case 1: // red
-    ds5_fb.player_led = 0b00100;
-    ds5_fb.lightbar_r = 64;
-    break;
-
-  case 2: // green
-    ds5_fb.player_led = 0b01010;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 3: // blue
-    ds5_fb.player_led = 0b10101;
-    ds5_fb.lightbar_b = 64;
-    break;
-
-  case 4: // yellow
-    ds5_fb.player_led = 0b11011;
-    ds5_fb.lightbar_r = 64;
-    ds5_fb.lightbar_g = 64;
-    break;
-
-  case 5: // purple
-    ds5_fb.player_led = 0b11111;
-    ds5_fb.lightbar_r = 20;
-    ds5_fb.lightbar_b = 40;
-    break;
-
-  default: // white
-    ds5_fb.player_led = 0;
-    ds5_fb.lightbar_b = 32;
-    ds5_fb.lightbar_g = 32;
-    ds5_fb.lightbar_r = 32;
-    break;
-  }
 #endif
+
+  // Console-specific LED colors from led_config.h
+  switch (player_index+1)
+  {
+  case 1:
+    ds5_fb.player_led = LED_P1_PATTERN;
+    ds5_fb.lightbar_r = LED_P1_R;
+    ds5_fb.lightbar_g = LED_P1_G;
+    ds5_fb.lightbar_b = LED_P1_B;
+    break;
+
+  case 2:
+    ds5_fb.player_led = LED_P2_PATTERN;
+    ds5_fb.lightbar_r = LED_P2_R;
+    ds5_fb.lightbar_g = LED_P2_G;
+    ds5_fb.lightbar_b = LED_P2_B;
+    break;
+
+  case 3:
+    ds5_fb.player_led = LED_P3_PATTERN;
+    ds5_fb.lightbar_r = LED_P3_R;
+    ds5_fb.lightbar_g = LED_P3_G;
+    ds5_fb.lightbar_b = LED_P3_B;
+    break;
+
+  case 4:
+    ds5_fb.player_led = LED_P4_PATTERN;
+    ds5_fb.lightbar_r = LED_P4_R;
+    ds5_fb.lightbar_g = LED_P4_G;
+    ds5_fb.lightbar_b = LED_P4_B;
+    break;
+
+  case 5:
+    ds5_fb.player_led = LED_P5_PATTERN;
+    ds5_fb.lightbar_r = LED_P5_R;
+    ds5_fb.lightbar_g = LED_P5_G;
+    ds5_fb.lightbar_b = LED_P5_B;
+    break;
+
+  default:
+    ds5_fb.player_led = LED_DEFAULT_PATTERN;
+    ds5_fb.lightbar_r = LED_DEFAULT_R;
+    ds5_fb.lightbar_g = LED_DEFAULT_G;
+    ds5_fb.lightbar_b = LED_DEFAULT_B;
+    break;
+  }
+
   // fun
   if (player_index+1 && is_fun) {
     ds5_fb.player_led = fun_player;
