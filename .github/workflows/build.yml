@@ -153,7 +153,7 @@ jobs:
 
       - name: Compile for target board ${{ matrix.board }}
         run: |
-          echo "Building all consoles for ${{ matrix.board }}..."
+          echo "Building stable consoles for ${{ matrix.board }}..."
 
           docker run --rm \
             -v ${{ github.workspace }}/src/build:/root/workspace/USBRetro/src/build \
@@ -162,8 +162,12 @@ jobs:
               sh build_${{ matrix.board }}.sh &&
               cd build &&
               cmake .. &&
-              make -j4
+              make usbretro_pce usbretro_ngc usbretro_nuon -j4
             "
+
+          # Experimental consoles (commented out until more mature):
+          # make usbretro_xb1 -j4    # Xbox One adapter
+          # make usbretro_loopy -j4  # Casio Loopy
 
           # Fix permissions (Docker creates files as root)
           sudo chown -R $(id -u):$(id -g) src/build/
