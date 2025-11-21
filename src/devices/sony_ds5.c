@@ -384,6 +384,43 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
     ds5_fb.lightbar_r = 32;
     break;
   }
+#elif CONFIG_3DO
+  switch (player_index+1)
+  {
+  case 1: // red
+    ds5_fb.player_led = 0b00100;
+    ds5_fb.lightbar_r = 64;
+    break;
+
+  case 2: // green
+    ds5_fb.player_led = 0b01010;
+    ds5_fb.lightbar_g = 64;
+    break;
+
+  case 3: // blue
+    ds5_fb.player_led = 0b10101;
+    ds5_fb.lightbar_b = 64;
+    break;
+
+  case 4: // yellow
+    ds5_fb.player_led = 0b11011;
+    ds5_fb.lightbar_r = 64;
+    ds5_fb.lightbar_g = 64;
+    break;
+
+  case 5: // purple
+    ds5_fb.player_led = 0b11111;
+    ds5_fb.lightbar_r = 20;
+    ds5_fb.lightbar_b = 40;
+    break;
+
+  default: // white
+    ds5_fb.player_led = 0;
+    ds5_fb.lightbar_b = 32;
+    ds5_fb.lightbar_g = 32;
+    ds5_fb.lightbar_r = 32;
+    break;
+  }
 #endif
   // fun
   if (player_index+1 && is_fun) {

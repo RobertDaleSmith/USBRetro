@@ -417,10 +417,10 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     report.A = (buttons & USBR_BUTTON_B3) == 0 ? 1 : 0;  // B3 -> A
     report.B = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // B1 -> B
     report.C = (buttons & USBR_BUTTON_B2) == 0 ? 1 : 0;  // B2 -> C
-    report.X = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S1) == 0) ? 1 : 0;  // B4 OR S1 -> X
+    report.X = (buttons & USBR_BUTTON_S1) == 0 ? 1 : 0;  // S1 -> X
     report.L = ((buttons & USBR_BUTTON_L1) == 0 || (buttons & USBR_BUTTON_L2) == 0) ? 1 : 0;  // L1 OR L2 -> L
     report.R = ((buttons & USBR_BUTTON_R1) == 0 || (buttons & USBR_BUTTON_R2) == 0) ? 1 : 0;  // R1 OR R2 -> R
-    report.P = (buttons & USBR_BUTTON_S2) == 0 ? 1 : 0;  // S2 -> P
+    report.P = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S2) == 0) ? 1 : 0;  // B4 OR S2 -> P
 
     // Map D-pad (check == 0 because xinput sends inverted)
     report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
@@ -462,9 +462,9 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
     }
   }
 
-  if (player_index >= MAX_PLAYERS) {
+  if (player_index < 0 || player_index >= MAX_PLAYERS) {
     #if CFG_TUSB_DEBUG >= 1
-    printf("[3DO] WARNING: Player index %d exceeds MAX_PLAYERS %d\n", player_index, MAX_PLAYERS);
+    printf("[3DO] WARNING: Invalid player index %d (valid range: 0-%d)\n", player_index, MAX_PLAYERS-1);
     #endif
     return;
   }
@@ -491,7 +491,12 @@ void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance,
     player_index = add_player(dev_addr, instance);
   }
 
-  if (player_index >= MAX_PLAYERS) return;
+  if (player_index < 0 || player_index >= MAX_PLAYERS) {
+    #if CFG_TUSB_DEBUG >= 1
+    printf("[3DO] WARNING: Invalid mouse player index %d (valid range: 0-%d)\n", player_index, MAX_PLAYERS-1);
+    #endif
+    return;
+  }
 
   // Accumulate deltas (similar to PCEngine mouse handling)
   int8_t dx = (int8_t)delta_x;

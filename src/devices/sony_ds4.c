@@ -321,6 +321,36 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8
       output_report.lightbar_red = 32;
       break;
   }
+#elif CONFIG_3DO
+  switch (player_index+1) {
+    case 1: // red
+      output_report.lightbar_red = 64;
+      break;
+
+    case 2: // green
+      output_report.lightbar_green = 64;
+      break;
+
+    case 3: // blue
+      output_report.lightbar_blue = 64;
+      break;
+
+    case 4: // yellow
+      output_report.lightbar_red = 64;
+      output_report.lightbar_green = 64;
+      break;
+
+    case 5: // purple
+      output_report.lightbar_red = 20;
+      output_report.lightbar_blue = 40;
+      break;
+
+    default: // white
+      output_report.lightbar_blue = 32;
+      output_report.lightbar_green = 32;
+      output_report.lightbar_red = 32;
+      break;
+  }
 #endif
 
   // fun
