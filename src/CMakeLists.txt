@@ -128,27 +128,32 @@ target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine
 )
 
 target_include_directories(usbretro_ngc PUBLIC # FOR NGC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/include
 )
 
 target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone
 )
 
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon
 )
 
 target_include_directories(usbretro_loopy PUBLIC # FOR LOOPY
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/console/loopy
 )
 
 ## SET TARGET LINK LIBS
