@@ -37,7 +37,9 @@ static inline bool is_switch_pro(uint16_t vid, uint16_t pid)
 {
   return ((vid == 0x057e && (
            pid == 0x2009 || // Nintendo Switch Pro
-           pid == 0x200e    // JoyCon Charge Grip
+           pid == 0x200e || // JoyCon Charge Grip
+           pid == 0x2017 || // SNES Controller (NSO)
+           pid == 0x2069    // Nintendo Switch Pro 2
   )));
 }
 
@@ -497,7 +499,7 @@ static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
 
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
-  if (pid == 0x2009) switch_devices[dev_addr].is_pro = true;
+  if (pid == 0x2009 || pid == 0x2069) switch_devices[dev_addr].is_pro = true;
 }
 
 DeviceInterface switch_pro_interface = {
