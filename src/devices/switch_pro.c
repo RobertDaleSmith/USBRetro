@@ -248,6 +248,87 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
 
     }
   }
+  else if (update_report.report_id == 0x09) // Switch 2 Pro Controller Report
+  {
+    switch_pro2_report_t pro2_report;
+    memcpy(&pro2_report, report, sizeof(pro2_report));
+
+    switch_devices[dev_addr].instances[instance].usb_enable_ack = true;
+
+    // Unpack 12-bit analog values (same format as Switch 1)
+    pro2_report.left_x = (pro2_report.left_stick[0] & 0xFF) | ((pro2_report.left_stick[1] & 0x0F) << 8);
+    pro2_report.left_y = ((pro2_report.left_stick[1] & 0xF0) >> 4) | ((pro2_report.left_stick[2] & 0xFF) << 4);
+    pro2_report.right_x = (pro2_report.right_stick[0] & 0xFF) | ((pro2_report.right_stick[1] & 0x0F) << 8);
+    pro2_report.right_y = ((pro2_report.right_stick[1] & 0xF0) >> 4) | ((pro2_report.right_stick[2] & 0xFF) << 4);
+
+    TU_LOG1("SWITCH2[%d|%d]: Report ID = 0x%x\r\n", dev_addr, instance, pro2_report.report_id);
+    TU_LOG1("(lx, ly, rx, ry) = (%u, %u, %u, %u)\r\n", pro2_report.left_x, pro2_report.left_y, pro2_report.right_x, pro2_report.right_y);
+    TU_LOG1("DPad = ");
+
+    if (pro2_report.down) TU_LOG1("Down ");
+    if (pro2_report.up) TU_LOG1("Up ");
+    if (pro2_report.right) TU_LOG1("Right ");
+    if (pro2_report.left ) TU_LOG1("Left ");
+
+    TU_LOG1("; Buttons = ");
+    if (pro2_report.y) TU_LOG1("Y ");
+    if (pro2_report.b) TU_LOG1("B ");
+    if (pro2_report.a) TU_LOG1("A ");
+    if (pro2_report.x) TU_LOG1("X ");
+    if (pro2_report.l) TU_LOG1("L ");
+    if (pro2_report.r) TU_LOG1("R ");
+    if (pro2_report.zl) TU_LOG1("ZL ");
+    if (pro2_report.zr) TU_LOG1("ZR ");
+    if (pro2_report.lstick) TU_LOG1("LStick ");
+    if (pro2_report.rstick) TU_LOG1("RStick ");
+    if (pro2_report.select) TU_LOG1("Select ");
+    if (pro2_report.start) TU_LOG1("Start ");
+    if (pro2_report.home) TU_LOG1("Home ");
+    if (pro2_report.cap) TU_LOG1("Cap ");
+    TU_LOG1("\r\n");
+
+    bool dpad_up    = pro2_report.up;
+    bool dpad_right = pro2_report.right;
+    bool dpad_down  = pro2_report.down;
+    bool dpad_left  = pro2_report.left;
+    bool bttn_b1 = pro2_report.b;
+    bool bttn_b2 = pro2_report.a;
+    bool bttn_b3 = pro2_report.y;
+    bool bttn_b4 = pro2_report.x;
+    bool bttn_l1 = pro2_report.l;
+    bool bttn_r1 = pro2_report.r;
+    bool bttn_s1 = pro2_report.select || pro2_report.zl || pro2_report.zr;
+    bool bttn_s2 = pro2_report.start;
+    bool bttn_a1 = pro2_report.home;
+
+    // Scale analog sticks
+    uint8_t leftX = scale_analog_switch_pro(pro2_report.left_x);
+    uint8_t leftY = scale_analog_switch_pro(pro2_report.left_y);
+    uint8_t rightX = scale_analog_switch_pro(pro2_report.right_x);
+    uint8_t rightY = scale_analog_switch_pro(pro2_report.right_y);
+
+    buttons = (((dpad_up)              ? 0x00 : USBR_BUTTON_DU) |
+               ((dpad_down)            ? 0x00 : USBR_BUTTON_DD) |
+               ((dpad_left)            ? 0x00 : USBR_BUTTON_DL) |
+               ((dpad_right)           ? 0x00 : USBR_BUTTON_DR) |
+               ((bttn_b1)              ? 0x00 : USBR_BUTTON_B1) |
+               ((bttn_b2)              ? 0x00 : USBR_BUTTON_B2) |
+               ((bttn_b3)              ? 0x00 : USBR_BUTTON_B3) |
+               ((bttn_b4)              ? 0x00 : USBR_BUTTON_B4) |
+               ((bttn_l1)              ? 0x00 : USBR_BUTTON_L1) |
+               ((bttn_r1)              ? 0x00 : USBR_BUTTON_R1) |
+               ((pro2_report.zl)       ? 0x00 : USBR_BUTTON_L2) |
+               ((pro2_report.zr)       ? 0x00 : USBR_BUTTON_R2) |
+               ((bttn_s1)              ? 0x00 : USBR_BUTTON_S1) |
+               ((bttn_s2)              ? 0x00 : USBR_BUTTON_S2) |
+               ((pro2_report.lstick)   ? 0x00 : USBR_BUTTON_L3) |
+               ((pro2_report.rstick)   ? 0x00 : USBR_BUTTON_R3) |
+               ((bttn_a1)              ? 0x00 : USBR_BUTTON_A1) |
+               ((1)/*has_6btns*/       ? 0x00 : 0x800));
+
+    bool is_root = instance == switch_devices[dev_addr].instance_root;
+    post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
+  }
   else // process input reports for events and command acknowledgments
   {
     switch_pro_report_01_t state_report;
