@@ -3,6 +3,9 @@
 // Adapted to USBRetro architecture
 
 #include "3do.h"
+#include "3do_config.h"
+#include "flash_settings.h"
+#include "profile_indicator.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
@@ -14,6 +17,26 @@
 #if CFG_TUSB_DEBUG >= 1
 #include "hardware/uart.h"
 #endif
+
+// ============================================================================
+// PROFILE SYSTEM
+// ============================================================================
+
+// All available profiles (stored in flash, const = read-only)
+static const tdo_profile_t profiles[TDO_PROFILE_COUNT] = {
+    TDO_PROFILE_DEFAULT,      // Profile 0
+    TDO_PROFILE_FIGHTING,     // Profile 1
+    TDO_PROFILE_SHOOTER,      // Profile 2
+};
+
+// Active profile pointer (4 bytes of RAM, points to flash data)
+static const tdo_profile_t* active_profile = &profiles[TDO_DEFAULT_PROFILE_INDEX];
+
+// Current profile index (for cycling through profiles)
+static uint8_t active_profile_index = TDO_DEFAULT_PROFILE_INDEX;
+
+extern void neopixel_indicate_profile(uint8_t profile_index);
+extern bool neopixel_is_indicating(void);
 
 // PIO state machines
 PIO pio;
@@ -290,11 +313,478 @@ void _3do_init(void) {
   pio_gpio_init(pio1, DATA_OUT_PIN);
   pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
+  // Load saved profile from flash (if valid)
+  flash_settings_t settings;
+  if (flash_settings_load(&settings)) {
+    // Valid settings found - restore saved profile
+    if (settings.active_profile_index < TDO_PROFILE_COUNT) {
+      active_profile_index = settings.active_profile_index;
+      active_profile = &profiles[active_profile_index];
+      #if CFG_TUSB_DEBUG >= 1
+      printf("Loaded profile from flash: %s\n", active_profile->name);
+      #endif
+    }
+  }
+
   #if CFG_TUSB_DEBUG >= 1
   printf("3DO protocol initialized successfully.\n");
+  printf("Active profile: %s (%s)\n", active_profile->name, active_profile->description);
   #endif
 
   // Note: Core1 is launched by main.c, not here
+}
+
+//-----------------------------------------------------------------------------
+// Profile Switching
+//-----------------------------------------------------------------------------
+
+// Switch to a new profile
+static void switch_to_profile(uint8_t new_index)
+{
+  if (new_index >= TDO_PROFILE_COUNT) return;
+
+  active_profile_index = new_index;
+  active_profile = &profiles[new_index];
+
+  // Trigger NeoPixel LED feedback (OFF blinks = profile number + 1)
+  neopixel_indicate_profile(new_index);
+
+  // Trigger controller LED + rumble feedback
+  profile_indicator_trigger(new_index, playersCount);
+
+  // Save profile selection to flash (debounced - writes after 5 seconds)
+  flash_settings_t settings;
+  settings.active_profile_index = active_profile_index;
+  flash_settings_save(&settings);
+
+  printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
+}
+
+// Check for profile switching: SELECT + D-pad Up/Down
+static void check_profile_switch_combo(void)
+{
+  static uint32_t select_hold_start = 0;   // When Select was first pressed
+  static bool select_was_held = false;
+  static bool dpad_up_was_pressed = false;
+  static bool dpad_down_was_pressed = false;
+  static bool initial_trigger_done = false; // Has first 2-second trigger happened?
+  const uint32_t INITIAL_HOLD_TIME_MS = 2000; // Must hold 2 seconds for first trigger
+
+  if (playersCount == 0) return; // No controllers connected
+
+  uint32_t buttons = players[0].output_buttons;
+  bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
+  bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
+  bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
+
+  // Select released - reset everything
+  if (!select_held)
+  {
+    select_hold_start = 0;
+    select_was_held = false;
+    dpad_up_was_pressed = false;
+    dpad_down_was_pressed = false;
+    initial_trigger_done = false;
+    return;
+  }
+
+  // Select is held
+  if (!select_was_held)
+  {
+    // Select just pressed - start timer
+    select_hold_start = to_ms_since_boot(get_absolute_time());
+    select_was_held = true;
+  }
+
+  uint32_t current_time = to_ms_since_boot(get_absolute_time());
+  uint32_t select_hold_duration = current_time - select_hold_start;
+
+  // Check if initial 2-second hold period has elapsed
+  bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
+
+  if (!can_trigger)
+  {
+    // Still waiting for initial 2-second hold - don't trigger yet
+    return;
+  }
+
+  // Can trigger - check for D-pad edge detection (rising edge = just pressed)
+  // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
+  if (neopixel_is_indicating() || profile_indicator_is_active())
+  {
+    // Still showing feedback from previous switch - wait for it to finish
+    return;
+  }
+
+  // D-pad Up - cycle forward on rising edge
+  if (dpad_up_pressed && !dpad_up_was_pressed)
+  {
+    uint8_t new_index = (active_profile_index + 1) % TDO_PROFILE_COUNT;
+    switch_to_profile(new_index);
+    initial_trigger_done = true; // Mark that first trigger happened
+  }
+  dpad_up_was_pressed = dpad_up_pressed;
+
+  // D-pad Down - cycle backward on rising edge
+  if (dpad_down_pressed && !dpad_down_was_pressed)
+  {
+    uint8_t new_index = (active_profile_index == 0) ? (TDO_PROFILE_COUNT - 1) : (active_profile_index - 1);
+    switch_to_profile(new_index);
+    initial_trigger_done = true; // Mark that first trigger happened
+  }
+  dpad_down_was_pressed = dpad_down_pressed;
+}
+
+//-----------------------------------------------------------------------------
+// Button Mapping Helpers
+//-----------------------------------------------------------------------------
+
+// Apply a joypad button mapping (returns 1 if pressed, 0 if not)
+static inline uint8_t apply_joypad_button(tdo_button_output_t action, uint32_t buttons)
+{
+  bool is_pressed = false;
+
+  switch (action)
+  {
+    case TDO_BTN_A:
+    case TDO_BTN_B:
+    case TDO_BTN_C:
+    case TDO_BTN_X:
+    case TDO_BTN_L:
+    case TDO_BTN_R:
+    case TDO_BTN_P:
+      // Will be handled by caller
+      break;
+    case TDO_BTN_FIRE:
+    case TDO_BTN_NONE:
+    default:
+      break;
+  }
+
+  return is_pressed ? 1 : 0;
+}
+
+// Apply profile button mappings to joypad report
+static inline void apply_joypad_profile(_3do_joypad_report* report, uint32_t buttons)
+{
+  // Check each USBRetro button and apply profile mapping
+  // Active-low: button pressed = bit clear (0), 3DO output: pressed = 0
+
+  // B1
+  bool b1_pressed = (buttons & USBR_BUTTON_B1) == 0;
+  if (b1_pressed) {
+    switch (active_profile->joypad.b1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // B2
+  bool b2_pressed = (buttons & USBR_BUTTON_B2) == 0;
+  if (b2_pressed) {
+    switch (active_profile->joypad.b2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // B3
+  bool b3_pressed = (buttons & USBR_BUTTON_B3) == 0;
+  if (b3_pressed) {
+    switch (active_profile->joypad.b3_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // B4
+  bool b4_pressed = (buttons & USBR_BUTTON_B4) == 0;
+  if (b4_pressed) {
+    switch (active_profile->joypad.b4_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // L1
+  bool l1_pressed = (buttons & USBR_BUTTON_L1) == 0;
+  if (l1_pressed) {
+    switch (active_profile->joypad.l1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // L2
+  bool l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
+  if (l2_pressed) {
+    switch (active_profile->joypad.l2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // R1
+  bool r1_pressed = (buttons & USBR_BUTTON_R1) == 0;
+  if (r1_pressed) {
+    switch (active_profile->joypad.r1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // R2
+  bool r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
+  if (r2_pressed) {
+    switch (active_profile->joypad.r2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // S1
+  bool s1_pressed = (buttons & USBR_BUTTON_S1) == 0;
+  if (s1_pressed) {
+    switch (active_profile->joypad.s1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+
+  // S2
+  bool s2_pressed = (buttons & USBR_BUTTON_S2) == 0;
+  if (s2_pressed) {
+    switch (active_profile->joypad.s2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      default: break;
+    }
+  }
+}
+
+// Apply profile button mappings to joystick report
+static inline void apply_joystick_profile(_3do_joystick_report* report, uint32_t buttons)
+{
+  // Similar to joypad but includes FIRE button
+
+  // B1
+  bool b1_pressed = (buttons & USBR_BUTTON_B1) == 0;
+  if (b1_pressed) {
+    switch (active_profile->joystick.b1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // B2
+  bool b2_pressed = (buttons & USBR_BUTTON_B2) == 0;
+  if (b2_pressed) {
+    switch (active_profile->joystick.b2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // B3
+  bool b3_pressed = (buttons & USBR_BUTTON_B3) == 0;
+  if (b3_pressed) {
+    switch (active_profile->joystick.b3_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // B4
+  bool b4_pressed = (buttons & USBR_BUTTON_B4) == 0;
+  if (b4_pressed) {
+    switch (active_profile->joystick.b4_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // L1
+  bool l1_pressed = (buttons & USBR_BUTTON_L1) == 0;
+  if (l1_pressed) {
+    switch (active_profile->joystick.l1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // L2
+  bool l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
+  if (l2_pressed) {
+    switch (active_profile->joystick.l2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // R1
+  bool r1_pressed = (buttons & USBR_BUTTON_R1) == 0;
+  if (r1_pressed) {
+    switch (active_profile->joystick.r1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // R2
+  bool r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
+  if (r2_pressed) {
+    switch (active_profile->joystick.r2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // S1
+  bool s1_pressed = (buttons & USBR_BUTTON_S1) == 0;
+  if (s1_pressed) {
+    switch (active_profile->joystick.s1_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
+
+  // S2
+  bool s2_pressed = (buttons & USBR_BUTTON_S2) == 0;
+  if (s2_pressed) {
+    switch (active_profile->joystick.s2_button) {
+      case TDO_BTN_A: report->A = 1; break;
+      case TDO_BTN_B: report->B = 1; break;
+      case TDO_BTN_C: report->C = 1; break;
+      case TDO_BTN_X: report->X = 1; break;
+      case TDO_BTN_L: report->L = 1; break;
+      case TDO_BTN_R: report->R = 1; break;
+      case TDO_BTN_P: report->P = 1; break;
+      case TDO_BTN_FIRE: report->FIRE = 1; break;
+      default: break;
+    }
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -326,6 +816,9 @@ void _3do_task() {
     last_irq_count = pio_irq_count;
   }
   #endif
+
+  // Check for profile switching combo
+  check_profile_switch_combo();
 }
 
 //-----------------------------------------------------------------------------
@@ -388,17 +881,8 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     report.analog3 = az;
     report.analog4 = at;
 
-    // Map digital buttons (check == 0 because xinput sends inverted)
-    // 3DO uses active-low: 0 = pressed, 1 = not pressed
-    // Button mapping matches SNES23DO layout
-    report.A = (buttons & USBR_BUTTON_B3) == 0 ? 1 : 0;  // B3 -> A
-    report.B = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // B1 -> B
-    report.C = (buttons & USBR_BUTTON_B2) == 0 ? 1 : 0;  // B2 -> C
-    report.X = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S1) == 0) ? 1 : 0;  // B4 OR S1 -> X
-    report.L = ((buttons & USBR_BUTTON_L1) == 0 || (buttons & USBR_BUTTON_L2) == 0) ? 1 : 0;  // L1 OR L2 -> L
-    report.R = ((buttons & USBR_BUTTON_R1) == 0 || (buttons & USBR_BUTTON_R2) == 0) ? 1 : 0;  // R1 OR R2 -> R
-    report.P = (buttons & USBR_BUTTON_S2) == 0 ? 1 : 0;  // S2 -> P
-    report.FIRE = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // FIRE = B
+    // Apply profile-based button mappings for joystick mode
+    apply_joystick_profile(&report, buttons);
 
     // Map D-pad (check == 0 because xinput sends inverted)
     report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
@@ -419,16 +903,8 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     // Send joypad report
     _3do_joypad_report report = new_3do_joypad_report();
 
-    // Map buttons (check == 0 because xinput sends inverted: bit clear = pressed)
-    // 3DO uses active-low: 0 = pressed, 1 = not pressed
-    // Button mapping matches SNES23DO layout
-    report.A = (buttons & USBR_BUTTON_B3) == 0 ? 1 : 0;  // B3 -> A
-    report.B = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // B1 -> B
-    report.C = (buttons & USBR_BUTTON_B2) == 0 ? 1 : 0;  // B2 -> C
-    report.X = (buttons & USBR_BUTTON_S1) == 0 ? 1 : 0;  // S1 -> X
-    report.L = ((buttons & USBR_BUTTON_L1) == 0 || (buttons & USBR_BUTTON_L2) == 0) ? 1 : 0;  // L1 OR L2 -> L
-    report.R = ((buttons & USBR_BUTTON_R1) == 0 || (buttons & USBR_BUTTON_R2) == 0) ? 1 : 0;  // R1 OR R2 -> R
-    report.P = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S2) == 0) ? 1 : 0;  // B4 OR S2 -> P
+    // Apply profile-based button mappings for joypad mode
+    apply_joypad_profile(&report, buttons);
 
     // Map D-pad (check == 0 because xinput sends inverted)
     report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
