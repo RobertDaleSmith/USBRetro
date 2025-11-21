@@ -12,16 +12,16 @@
 #define LED_P1_B 0
 #define LED_P1_PATTERN 0b00100
 
-// Player 2 - Green
+// Player 2 - Blue
 #define LED_P2_R 0
-#define LED_P2_G 64
-#define LED_P2_B 0
+#define LED_P2_G 0
+#define LED_P2_B 64
 #define LED_P2_PATTERN 0b01010
 
-// Player 3 - Blue
+// Player 3 - Green
 #define LED_P3_R 0
-#define LED_P3_G 0
-#define LED_P3_B 64
+#define LED_P3_G 64
+#define LED_P3_B 0
 #define LED_P3_PATTERN 0b10101
 
 // Player 4 - Yellow

@@ -960,6 +960,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
 
   // Store RAW inverted buttons (like GameCube does)
   players[player_index].global_buttons = buttons;
+  players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
   players[player_index].output_analog_1x = analog_1x;
   players[player_index].output_analog_1y = analog_1y;
   players[player_index].output_analog_2x = analog_2x;
