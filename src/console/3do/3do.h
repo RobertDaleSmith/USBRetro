@@ -23,6 +23,12 @@
 #define DATA_IN_PIN 4       // Data input from next controller (daisy chain)
 #define CS_CTRL_PIN 5       // Chip Select / Control signal
 
+// UART Debug pins (avoid pins 2-5 used by 3DO protocol)
+#define UART_ID uart0
+#define BAUD_RATE 115200
+#define UART_TX_PIN 0       // UART0 TX
+#define UART_RX_PIN 1       // UART0 RX
+
 // Include PIO headers AFTER pin definitions
 #include "sampling.pio.h"
 #include "output.pio.h"

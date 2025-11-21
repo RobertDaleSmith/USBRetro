@@ -53,7 +53,11 @@ static absolute_time_t state_change_time;
 #define BLINK_ON_TIME_US 100000   // 100ms LED on (brief flash between OFF blinks)
 
 static inline void put_pixel(uint32_t pixel_grb) {
-    pio_sm_put(pio, sm, pixel_grb << 8u);
+    // Non-blocking write - skip if FIFO full to avoid stalling timing-critical 3DO code
+    if (!pio_sm_is_tx_fifo_full(pio, sm)) {
+        pio_sm_put(pio, sm, pixel_grb << 8u);
+    }
+    // If FIFO full, just skip this update - it's only an LED indicator
 }
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {

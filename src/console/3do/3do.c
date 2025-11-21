@@ -39,6 +39,7 @@ dma_channel_config dma_config[CHAN_MAX];
 
 uint8_t max_usb_controller = 0;
 volatile bool update_report_flag = false;
+volatile uint32_t pio_irq_count = 0;  // Track PIO IRQ calls (incremented in IRQ, read from task)
 
 // Forward declarations
 static void start_dma_transfer(uint8_t channel, uint8_t *buffer, uint32_t count);
@@ -56,9 +57,9 @@ void setup_3do_dma_output(void) {
   channel_config_set_read_increment(&dma_config[CHAN_OUTPUT], true);
   channel_config_set_write_increment(&dma_config[CHAN_OUTPUT], false);
   channel_config_set_irq_quiet(&dma_config[CHAN_OUTPUT], true);
-  channel_config_set_dreq(&dma_config[CHAN_OUTPUT], DREQ_PIO0_TX0 + sm_output);
+  channel_config_set_dreq(&dma_config[CHAN_OUTPUT], DREQ_PIO1_TX0 + sm_output);
 
-  dma_channel_set_write_addr(dma_channels[CHAN_OUTPUT], &pio0->txf[sm_output], false);
+  dma_channel_set_write_addr(dma_channels[CHAN_OUTPUT], &pio1->txf[sm_output], false);
   dma_channel_set_config(dma_channels[CHAN_OUTPUT], &dma_config[CHAN_OUTPUT], false);
 
   // Set DMA bus priority
@@ -73,9 +74,9 @@ void setup_3do_dma_input(void) {
   channel_config_set_read_increment(&dma_config[CHAN_INPUT], false);
   channel_config_set_write_increment(&dma_config[CHAN_INPUT], true);
   channel_config_set_irq_quiet(&dma_config[CHAN_INPUT], true);
-  channel_config_set_dreq(&dma_config[CHAN_INPUT], DREQ_PIO0_RX0 + sm_output);
+  channel_config_set_dreq(&dma_config[CHAN_INPUT], DREQ_PIO1_RX0 + sm_output);
 
-  dma_channel_set_read_addr(dma_channels[CHAN_INPUT], &pio0->rxf[sm_output], false);
+  dma_channel_set_read_addr(dma_channels[CHAN_INPUT], &pio1->rxf[sm_output], false);
   dma_channel_set_config(dma_channels[CHAN_INPUT], &dma_config[CHAN_INPUT], false);
 
   // Set DMA bus priority
@@ -117,20 +118,24 @@ static void report_done(uint8_t instance) {
 //
 void on_pio0_irq(void) {
   update_report_flag = true;
+  pio_irq_count++;  // Fast counter increment (safe, no timing impact)
+
+  // NOTE: Do NOT printf here! It breaks timing and kills passthrough.
+  // Counter is printed from _3do_task() instead.
 
   // Abort any ongoing DMA transfers
   dma_channel_abort(dma_channels[CHAN_OUTPUT]);
   dma_channel_abort(dma_channels[CHAN_INPUT]);
 
   // Drain PIO FIFOs
-  pio_sm_drain_tx_fifo(pio0, sm_output);
-  while (!pio_sm_is_rx_fifo_empty(pio0, sm_output)) {
-    pio_sm_get(pio0, sm_output);
+  pio_sm_drain_tx_fifo(pio1, sm_output);
+  while (!pio_sm_is_rx_fifo_empty(pio1, sm_output)) {
+    pio_sm_get(pio1, sm_output);
   }
 
   // Restart PIO state machine
-  pio_sm_restart(pio0, sm_output);
-  pio_sm_exec(pio0, sm_output, instr_jmp[sm_output]);
+  pio_sm_restart(pio1, sm_output);
+  pio_sm_exec(pio1, sm_output, instr_jmp[sm_output]);
 
   // Copy all USB controller reports to DMA buffer
   int total_report_size = 0;
@@ -140,16 +145,19 @@ void on_pio0_irq(void) {
     total_report_size += report_sizes[i];
   }
 
+  // NOTE: Do NOT printf here! It breaks timing.
+  // total_report_size can be logged from _3do_task() instead.
+
   // Start DMA transfers
   // OUTPUT: Sends USB controllers + buffered passthrough from previous poll
   start_dma_transfer(CHAN_OUTPUT, &controller_buffer[0], 201);
-  pio_sm_set_enabled(pio0, sm_output, true);
+  pio_sm_set_enabled(pio1, sm_output, true);
   // INPUT: Reads new passthrough data (will be sent on NEXT poll)
   start_dma_transfer(CHAN_INPUT, &controller_buffer[total_report_size], 201 - total_report_size);
 
   // Clear PIO interrupt
-  pio_interrupt_clear(pio0, 0);
-  irq_clear(PIO0_IRQ_0);
+  pio_interrupt_clear(pio1, 0);
+  irq_clear(PIO1_IRQ_0);
 }
 
 //-----------------------------------------------------------------------------
@@ -158,26 +166,38 @@ void on_pio0_irq(void) {
 
 _3do_joypad_report new_3do_joypad_report(void) {
   _3do_joypad_report report;
-  // Note: report is uninitialized, but current_reports[] starts as 0xFF
-  // so buttons default to "not pressed" until explicitly set
+  // Initialize to 0 to ensure clean state for bitfield struct
+  memset(&report, 0, sizeof(report));
   report.id = 0b100;   // Standard gamepad ID
   report.tail = 0b00;  // Tail bits always 0
+  // All buttons default to 1 (not pressed in active-low logic)
+  report.A = 1; report.B = 1; report.C = 1; report.X = 1;
+  report.L = 1; report.R = 1; report.P = 1;
+  report.left = 1; report.right = 1; report.up = 1; report.down = 1;
   return report;
 }
 
 _3do_joystick_report new_3do_joystick_report(void) {
   _3do_joystick_report report;
-  // Note: report is uninitialized, but current_reports[] starts as 0xFF
+  // Initialize to 0 to ensure clean state
+  memset(&report, 0, sizeof(report));
   report.id_0 = 0x01;
   report.id_1 = 0x7B;
   report.id_2 = 0x08;
   report.tail = 0x00;
+  // Initialize analog to center and buttons to not pressed (active-low = 1)
+  report.analog1 = 128; report.analog2 = 128;
+  report.analog3 = 128; report.analog4 = 128;
+  report.A = 1; report.B = 1; report.C = 1; report.X = 1;
+  report.L = 1; report.R = 1; report.P = 1; report.FIRE = 1;
+  report.left = 1; report.right = 1; report.up = 1; report.down = 1;
   return report;
 }
 
 _3do_mouse_report new_3do_mouse_report(void) {
   _3do_mouse_report report;
-  // Note: report is uninitialized, but current_reports[] starts as 0xFF
+  // Initialize to 0 to ensure clean state
+  memset(&report, 0, sizeof(report));
   report.id = 0x49;
   return report;
 }
@@ -233,28 +253,28 @@ void _3do_init(void) {
   memset(current_reports, 0xFF, sizeof(current_reports));
   memset(controller_buffer, 0xFF, sizeof(controller_buffer));
 
-  pio = pio0;
+  // Use PIO1 to isolate 3DO protocol from ws2812 on PIO0
+  pio = pio1;
 
   // Initialize CLK pin as input
   gpio_init(CLK_PIN);
   gpio_set_dir(CLK_PIN, GPIO_IN);
 
   // Set up PIO interrupt
-  pio_set_irq0_source_enabled(pio0, pis_interrupt0, true);
-  irq_set_exclusive_handler(PIO0_IRQ_0, on_pio0_irq);
-  irq_set_enabled(PIO0_IRQ_0, true);
+  pio_set_irq0_source_enabled(pio1, pis_interrupt0, true);
+  irq_set_exclusive_handler(PIO1_IRQ_0, on_pio0_irq);
+  irq_set_enabled(PIO1_IRQ_0, true);
 
   // Load and initialize sampling program (CLK monitor)
-  // Claim an unused state machine instead of hard-coding
-  sm_sampling = pio_claim_unused_sm(pio0, true);
-  uint offset_sampling = pio_add_program(pio0, &sampling_program);
-  sampling_program_init(pio0, sm_sampling, offset_sampling);
+  // Use dynamic claiming to avoid conflicts
+  sm_sampling = pio_claim_unused_sm(pio1, true);
+  uint offset_sampling = pio_add_program(pio1, &sampling_program);
+  sampling_program_init(pio1, sm_sampling, offset_sampling);
 
   // Load and initialize output program (serial data output)
-  // Claim an unused state machine instead of hard-coding
-  sm_output = pio_claim_unused_sm(pio0, true);
-  uint offset_output = pio_add_program(pio0, &output_program);
-  output_program_init(pio0, sm_output, offset_output);
+  sm_output = pio_claim_unused_sm(pio1, true);
+  uint offset_output = pio_add_program(pio1, &output_program);
+  output_program_init(pio1, sm_output, offset_output);
 
   instr_jmp[sm_output] = pio_encode_jmp(offset_output);
 
@@ -263,12 +283,12 @@ void _3do_init(void) {
   setup_3do_dma_input();
 
   // Initialize GPIO pins for PIO
-  pio_gpio_init(pio0, DATA_IN_PIN);
+  pio_gpio_init(pio1, DATA_IN_PIN);
   gpio_pull_up(DATA_IN_PIN);
-  pio_sm_set_consecutive_pindirs(pio0, sm_output, DATA_IN_PIN, 1, false);
+  pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_IN_PIN, 1, false);
 
-  pio_gpio_init(pio0, DATA_OUT_PIN);
-  pio_sm_set_consecutive_pindirs(pio0, sm_output, DATA_OUT_PIN, 1, true);
+  pio_gpio_init(pio1, DATA_OUT_PIN);
+  pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
   #if CFG_TUSB_DEBUG >= 1
   printf("3DO protocol initialized successfully.\n");
@@ -283,8 +303,29 @@ void _3do_init(void) {
 
 // task process for 3DO (called from main loop)
 void _3do_task() {
-  // Periodic tasks if needed
-  // For now, 3DO protocol is handled via interrupt (on_pio0_irq)
+  // Periodic debug logging (safe to printf here, not in IRQ)
+  #if CFG_TUSB_DEBUG >= 1
+  static uint32_t last_log_time = 0;
+  static uint32_t last_irq_count = 0;
+  uint32_t now = to_ms_since_boot(get_absolute_time());
+
+  if (now - last_log_time > 5000) {  // Log every 5 seconds
+    uint32_t irq_delta = pio_irq_count - last_irq_count;
+    printf("[3DO] IRQs: %lu (+%lu/5s), max_usb=%d, attached=[",
+           pio_irq_count, irq_delta, max_usb_controller);
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+      printf("%d", device_attached[i] ? 1 : 0);
+    }
+    printf("], sizes=[");
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+      printf("%d,", report_sizes[i]);
+    }
+    printf("]\n");
+
+    last_log_time = now;
+    last_irq_count = pio_irq_count;
+  }
+  #endif
 }
 
 //-----------------------------------------------------------------------------
@@ -385,12 +426,20 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
     // First button press - register player
     if (buttons != 0) {
       player_index = add_player(dev_addr, instance);
+      #if CFG_TUSB_DEBUG >= 1
+      printf("[3DO] New device: addr=%d inst=%d -> player %d\n", dev_addr, instance, player_index);
+      #endif
     } else {
       return; // No buttons pressed, ignore
     }
   }
 
-  if (player_index >= MAX_PLAYERS) return;
+  if (player_index >= MAX_PLAYERS) {
+    #if CFG_TUSB_DEBUG >= 1
+    printf("[3DO] WARNING: Player index %d exceeds MAX_PLAYERS %d\n", player_index, MAX_PLAYERS);
+    #endif
+    return;
+  }
 
   // Update players[] array
   players[player_index].global_buttons = buttons;
