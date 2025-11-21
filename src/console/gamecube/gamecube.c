@@ -257,17 +257,17 @@ void __not_in_flash_func(core1_entry)(void)
       // decrement outputs from globals
       if (players[i].global_x != 0)
       {
-        players[i].global_x = (players[i].global_x - (players[i].output_analog_1x - 128));
+        players[i].global_x = (players[i].global_x - (players[i].analog[0] - 128));  // ANALOG_X
         // if (players[i].global_x > 128) players[i].global_x = 128;
         // if (players[i].global_x < -128) players[i].global_x = -128;
-        players[i].output_analog_1x = 128;
+        players[i].analog[0] = 128;  // ANALOG_X (Left stick X)
       }
       if (players[i].global_y != 0)
       {
-        players[i].global_y = (players[i].global_y - (players[i].output_analog_1y - 128));
+        players[i].global_y = (players[i].global_y - (players[i].analog[1] - 128));  // ANALOG_Y
         // if (players[i].global_y > 128) players[i].global_y = 128;
         // if (players[i].global_y < -128) players[i].global_y = -128;
-        players[i].output_analog_1y = 128;
+        players[i].analog[1] = 128;  // ANALOG_Y (Left stick Y)
       }
     }
     update_output();
@@ -598,19 +598,19 @@ void __not_in_flash_func(update_output)(void)
 
       // Analog sticks with profile-based sensitivity
       new_report.stick_x    = furthest_from_center(new_report.stick_x,
-                                                   scale_toward_center(players[i].output_analog_1x, active_profile->left_stick_sensitivity, 128),
+                                                   scale_toward_center(players[i].analog[0], active_profile->left_stick_sensitivity, 128),  // ANALOG_X
                                                    128);
       new_report.stick_y    = furthest_from_center(new_report.stick_y,
-                                                   scale_toward_center(players[i].output_analog_1y, active_profile->left_stick_sensitivity, 128),
+                                                   scale_toward_center(players[i].analog[1], active_profile->left_stick_sensitivity, 128),  // ANALOG_Y
                                                    128);
       new_report.cstick_x   = furthest_from_center(new_report.cstick_x,
-                                                   scale_toward_center(players[i].output_analog_2x, active_profile->right_stick_sensitivity, 128),
+                                                   scale_toward_center(players[i].analog[2], active_profile->right_stick_sensitivity, 128),  // ANALOG_Z
                                                    128);
       new_report.cstick_y   = furthest_from_center(new_report.cstick_y,
-                                                   scale_toward_center(players[i].output_analog_2y, active_profile->right_stick_sensitivity, 128),
+                                                   scale_toward_center(players[i].analog[3], active_profile->right_stick_sensitivity, 128),  // ANALOG_RX
                                                    128);
-      new_report.l_analog   = furthest_from_center(new_report.l_analog, players[i].output_analog_l, 0);
-      new_report.r_analog   = furthest_from_center(new_report.r_analog, players[i].output_analog_r, 0);
+      new_report.l_analog   = furthest_from_center(new_report.l_analog, players[i].analog[5], 0);  // ANALOG_RZ
+      new_report.r_analog   = furthest_from_center(new_report.r_analog, players[i].analog[6], 0);  // ANALOG_SLIDER
     }
     else
     {
@@ -633,191 +633,130 @@ void __not_in_flash_func(update_output)(void)
 }
 
 //
-// post_globals - accumulate button and analog values
+// post_input_event - NEW unified input event handler
 //
-void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint32_t buttons,
-  uint8_t analog_1x,
-  uint8_t analog_1y,
-  uint8_t analog_2x,
-  uint8_t analog_2y,
-  uint8_t analog_l,
-  uint8_t analog_r,
-  uint32_t keys,
-  uint8_t quad_x)
+void __not_in_flash_func(post_input_event)(const input_event_t* event)
 {
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
+  if (!event) return;
+
+  // Handle merged instances (e.g., Joy-Con Charging Grip)
+  int8_t instance = event->instance;
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
+  // Find or add player
+  int player_index = find_player_index(event->dev_addr, instance);
 
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    // extra instance buttons to merge with root player
-    if (is_extra)
-    {
-      players[0].altern_buttons = buttons;
-    }
-    else
-    {
-      players[player_index].global_buttons = buttons;
+  if (event->type == INPUT_TYPE_MOUSE) {
+    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    // cache analog and button values to player object
-    // Custom: Always assign analog values (don't skip zeros)
-    players[player_index].output_analog_1x = analog_1x;
-    players[player_index].output_analog_1y = analog_1y;
-    players[player_index].output_analog_2x = analog_2x;
-    players[player_index].output_analog_2y = analog_2y;
-    players[player_index].output_analog_l = analog_l;
-    players[player_index].output_analog_r = analog_r;
+    if (player_index >= 0) {
+      players[player_index].device_type = event->type;
 
-    // For digital-only triggers: convert button press to full analog value
-    // If controller doesn't send analog data (analog == 0) but digital button is pressed,
-    // treat it as full analog press (255). This allows digital-only controllers like
-    // Switch Pro and PS3 to send proper analog trigger data to GameCube.
-    if (analog_l == 0 && (buttons & USBR_BUTTON_L2) == 0) {
-      players[player_index].output_analog_l = 255;
+      // Fixes out of range analog values (1-255)
+      uint8_t delta_x = event->delta_x;
+      uint8_t delta_y = event->delta_y;
+      if (delta_x == 0) delta_x = 1;
+      if (delta_y == 0) delta_y = 1;
+
+      // Accumulate mouse deltas
+      if (delta_x >= 128) {
+        players[player_index].global_x = players[player_index].global_x - (256 - delta_x);
+      } else {
+        players[player_index].global_x = players[player_index].global_x + delta_x;
+      }
+
+      // Clamp and convert global_x to delta_x
+      if (players[player_index].global_x > 127) {
+        delta_x = 0xff;
+      } else if (players[player_index].global_x < -127) {
+        delta_x = 1;
+      } else {
+        delta_x = 128 + players[player_index].global_x;
+      }
+
+      if (delta_y >= 128) {
+        players[player_index].global_y = players[player_index].global_y - (256 - delta_y);
+      } else {
+        players[player_index].global_y = players[player_index].global_y + delta_y;
+      }
+
+      // Clamp and convert global_y to delta_y
+      if (players[player_index].global_y > 127) {
+        delta_y = 0xff;
+      } else if (players[player_index].global_y < -127) {
+        delta_y = 1;
+      } else {
+        delta_y = 128 + players[player_index].global_y;
+      }
+
+      // Cache analog and button values to player object
+      players[player_index].analog[0] = delta_x;
+      players[player_index].analog[1] = delta_y;
+      players[player_index].output_buttons = event->buttons;
+
+      update_output();
     }
-    if (analog_r == 0 && (buttons & USBR_BUTTON_R2) == 0) {
-      players[player_index].output_analog_r = 255;
-    }
-
-    players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-    players[player_index].keypress[0] = (keys) & 0xff;
-    players[player_index].keypress[1] = (keys >> 8) & 0xff;
-    players[player_index].keypress[2] = (keys >> 16) & 0xff;
-
-    // GameCube-specific trigger logic:
-    // Modern USB controllers send both digital L2/R2 bits (set at ~1-5% threshold by firmware)
-    // AND analog trigger values (0-255). We want to use our own threshold, not the controller's.
-    //
-    // For analog controllers (DualSense, Xbox): Use our threshold, ignore controller's digital bit
-    // For digital-only controllers (Switch Pro, PS3): Fall back to digital button when analog == 0
-
-    // Save original digital button state before we override
-    bool original_l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
-    bool original_r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
-
-    // Force L2/R2 to "not pressed" initially
-    players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
-
-    // LT (L2): Use profile-based threshold if analog present, otherwise use digital button
-    if (analog_l > active_profile->l2_threshold || (analog_l == 0 && original_l2_pressed))
-    {
-      players[player_index].output_buttons &= ~USBR_BUTTON_L2;
-    }
-
-    // RT (R2): Use profile-based threshold if analog present, otherwise use digital button
-    if (analog_r > active_profile->r2_threshold || (analog_r == 0 && original_r2_pressed))
-    {
-      players[player_index].output_buttons &= ~USBR_BUTTON_R2;
-    }
-
-    // printf("X1: %d, Y1: %d   ", analog_1x, analog_1y);
-
-    update_output();
-  }
-}
-
-//
-// post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
-//
-void __not_in_flash_func(post_mouse_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint16_t buttons,
-  uint8_t delta_x,
-  uint8_t delta_y,
-  uint8_t quad_x)
-{
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00));
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
-
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    // fixes out of range analog values (1-255)
-    if (delta_x == 0) delta_x = 1;
-    if (delta_y == 0) delta_y = 1;
-
-    if (delta_x >= 128)
-    {
-      players[player_index].global_x = players[player_index].global_x - (256-delta_x);
-    }
-    else
-    {
-      players[player_index].global_x = players[player_index].global_x + delta_x;
+  } else {
+    // Gamepad, keyboard, flightstick, wheel, etc.
+    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    if (players[player_index].global_x > 127)
-    {
-      delta_x = 0xff;
-    }
-    else if (players[player_index].global_x < -127)
-    {
-      delta_x = 1;
-    }
-    else
-    {
-      delta_x = 128 + players[player_index].global_x;
-    }
+    if (player_index >= 0) {
+      players[player_index].device_type = event->type;
 
-    if (delta_y >= 128)
-    {
+      // Extra instance buttons to merge with root player
+      if (is_extra) {
+        players[0].altern_buttons = event->buttons;
+      } else {
+        players[player_index].global_buttons = event->buttons;
+      }
 
-      players[player_index].global_y = players[player_index].global_y - (256-delta_y);
-    }
-    else
-    {
-      players[player_index].global_y = players[player_index].global_y + delta_y;
-    }
+      // Cache analog values - always assign (don't skip zeros)
+      players[player_index].analog[0] = event->analog[0];  // Left stick X
+      players[player_index].analog[1] = event->analog[1];  // Left stick Y
+      players[player_index].analog[2] = event->analog[2];  // Right stick X
+      players[player_index].analog[3] = event->analog[3];  // Right stick Y
+      players[player_index].analog[5] = event->analog[5];  // Left trigger
+      players[player_index].analog[6] = event->analog[6];  // Right trigger
 
-    if (players[player_index].global_y > 127)
-    {
-      delta_y = 0xff;
-    }
-    else if (players[player_index].global_y < -127)
-    {
-      delta_y = 1;
-    }
-    else
-    {
-      delta_y = 128 + players[player_index].global_y;
-    }
+      // For digital-only triggers: convert button press to full analog value
+      if (event->analog[5] == 0 && (event->buttons & USBR_BUTTON_L2) == 0) {
+        players[player_index].analog[5] = 255;
+      }
+      if (event->analog[6] == 0 && (event->buttons & USBR_BUTTON_R2) == 0) {
+        players[player_index].analog[6] = 255;
+      }
 
-    // printf("X: %d, Y: %d   ", players[player_index].global_x, players[player_index].global_y);
-    // printf("X1: %d, Y1: %d   ", delta_x, delta_y);
+      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
-    // cache analog and button values to player object
-    players[player_index].output_analog_1x = delta_x;
-    players[player_index].output_analog_1y = delta_y;
-    // players[player_index].output_analog_2x = delta_x;
-    // players[player_index].output_analog_2y = delta_y;
-    players[player_index].output_buttons = buttons;
+      players[player_index].keypress[0] = (event->keys) & 0xff;
+      players[player_index].keypress[1] = (event->keys >> 8) & 0xff;
+      players[player_index].keypress[2] = (event->keys >> 16) & 0xff;
 
-    update_output();
+      // GameCube-specific trigger logic with profile-based thresholds
+      bool original_l2_pressed = (event->buttons & USBR_BUTTON_L2) == 0;
+      bool original_r2_pressed = (event->buttons & USBR_BUTTON_R2) == 0;
+
+      // Force L2/R2 to "not pressed" initially
+      players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
+
+      // Use profile-based threshold if analog present, otherwise use digital button
+      if (event->analog[5] > active_profile->l2_threshold || (event->analog[5] == 0 && original_l2_pressed)) {
+        players[player_index].output_buttons &= ~USBR_BUTTON_L2;
+      }
+      if (event->analog[6] > active_profile->r2_threshold || (event->analog[6] == 0 && original_r2_pressed)) {
+        players[player_index].output_buttons &= ~USBR_BUTTON_R2;
+      }
+
+      update_output();
+    }
   }
 }

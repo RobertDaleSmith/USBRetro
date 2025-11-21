@@ -1,6 +1,7 @@
 // hid_keyboard.c
 #include "hid_keyboard.h"
 #include "globals.h"
+#include "input_event.h"
 #include "pico/time.h"
 
 #ifdef CONFIG_NGC
@@ -456,7 +457,16 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
 
   // TODO: map L2/R2/L3/R3 buttons
 
-  post_globals(dev_addr, instance, buttons, analog_left_x, analog_left_y, analog_right_x, analog_right_y, analog_l, analog_r, reportKeys, 0);
+  input_event_t event = {
+    .dev_addr = dev_addr,
+    .instance = instance,
+    .type = INPUT_TYPE_KEYBOARD,
+    .buttons = buttons,
+    .analog = {analog_left_x, analog_left_y, analog_right_x, analog_right_y, 128, analog_l, analog_r, 128},
+    .keys = reportKeys,
+    .quad_x = 0
+  };
+  post_input_event(&event);
 
   prev_report = *report;
 }

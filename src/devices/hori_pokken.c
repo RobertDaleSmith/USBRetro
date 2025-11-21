@@ -1,6 +1,7 @@
 // hori_pokken.c
 #include "hori_pokken.h"
 #include "globals.h"
+#include "input_event.h"
 
 // check if device is HORI Pokken controller for Wii U
 static inline bool is_hori_pokken(uint16_t vid, uint16_t pid) {
@@ -80,7 +81,16 @@ void process_hori_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, 0, 0, 0, 0);
+    input_event_t event = {
+      .dev_addr = dev_addr,
+      .instance = instance,
+      .type = INPUT_TYPE_GAMEPAD,
+      .buttons = buttons,
+      .analog = {axis_x, axis_y, axis_z, axis_rz, 128, 0, 0, 128},
+      .keys = 0,
+      .quad_x = 0
+    };
+    post_input_event(&event);
 
     prev_report[dev_addr-1][instance] = update_report;
   }

@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include "tusb.h"
+#include "input_event.h"
 #ifdef CONFIG_NGC
 #include "lib/joybus-pio/include/gamecube_definitions.h"
 #endif
@@ -16,28 +17,33 @@
 // Define constants
 typedef struct TU_ATTR_PACKED
 {
+  // Device identification
   int dev_addr;
   int instance;
   int player_number;
+  input_device_type_t device_type;  // NEW: Device type (gamepad, flightstick, mouse, etc.)
 
+  // Digital inputs
   int32_t global_buttons;
   int32_t altern_buttons;
+  int32_t output_buttons;
+  int32_t prev_buttons;
+
+  // Analog inputs (unified array)
+  // [0]=LX, [1]=LY, [2]=RX, [3]=RY, [4]=LT, [5]=RT, [6]=Extra1, [7]=Extra2
+  int16_t analog[8];              // NEW: Replaces output_analog_1x/y, 2x/y, l, r
+
+  // Mouse/relative motion accumulators
   int16_t global_x;
   int16_t global_y;
 
-  int32_t output_buttons;
-  int16_t output_analog_1x;
-  int16_t output_analog_1y;
-  int16_t output_analog_2x;
-  int16_t output_analog_2y;
-  int16_t output_analog_l;
-  int16_t output_analog_r;
-
+  // Keyboard
   uint8_t keypress[3];
 
-  int32_t prev_buttons;
-
+  // Mode
   int button_mode;
+
+  // Console-specific extensions
 #ifdef CONFIG_NGC
   gc_report_t gc_report;
 #elif CONFIG_NUON

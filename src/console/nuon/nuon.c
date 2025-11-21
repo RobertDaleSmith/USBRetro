@@ -436,10 +436,10 @@ void __not_in_flash_func(update_output)(void)
                     (players[0].output_buttons_alt & 0xffff);
 
   output_buttons_0 = crc_data_packet(buttons, 2);
-  output_analog_1x = crc_data_packet(players[0].output_analog_1x, 1);
-  output_analog_1y = crc_data_packet(players[0].output_analog_1y, 1);
-  output_analog_2x = crc_data_packet(players[0].output_analog_2x, 1);
-  output_analog_2y = crc_data_packet(players[0].output_analog_2y, 1);
+  output_analog_1x = crc_data_packet(players[0].analog[0], 1);  // ANALOG_X
+  output_analog_1y = crc_data_packet(players[0].analog[1], 1);  // ANALOG_Y
+  output_analog_2x = crc_data_packet(players[0].analog[2], 1);  // ANALOG_Z
+  output_analog_2y = crc_data_packet(players[0].analog[3], 1);  // ANALOG_RX
   output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);
 
   codes_task();
@@ -448,114 +448,87 @@ void __not_in_flash_func(update_output)(void)
 }
 
 //
-// post_globals - accumulate button and analog values
+// post_input_event - NEW unified input event handler
 //
-void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint32_t buttons,
-  uint8_t analog_1x,
-  uint8_t analog_1y,
-  uint8_t analog_2x,
-  uint8_t analog_2y,
-  uint8_t analog_l,
-  uint8_t analog_r,
-  uint32_t keys,
-  uint8_t quad_x)
+void __not_in_flash_func(post_input_event)(const input_event_t* event)
 {
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
+  if (!event) return;
+
+  // Handle merged instances (e.g., Joy-Con Charging Grip)
+  int8_t instance = event->instance;
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
+  // Find or add player
+  int player_index = find_player_index(event->dev_addr, instance);
 
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    // extra instance buttons to merge with root player
-    if (is_extra)
-    {
-      players[0].altern_buttons = buttons;
-    }
-    else
-    {
-      players[player_index].global_buttons = buttons;
+  if (event->type == INPUT_TYPE_MOUSE) {
+    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    uint32_t nuon_buttons = map_nuon_buttons(buttons);
-    if (!instance)
-    {
-      players[player_index].output_buttons = nuon_buttons;
+    if (player_index >= 0) {
+      players[player_index].device_type = event->type;
+      players[player_index].global_buttons = event->buttons;
+
+      // Swap B2 and S2 for mouse
+      if (!(event->buttons & USBR_BUTTON_B2)) {
+        players[player_index].global_buttons |= USBR_BUTTON_B2;
+        players[player_index].global_buttons &= ~USBR_BUTTON_S2;
+      }
+      if (!(event->buttons & USBR_BUTTON_S2)) {
+        players[player_index].global_buttons |= USBR_BUTTON_S2;
+        players[player_index].global_buttons &= ~USBR_BUTTON_B2;
+      }
+
+      players[player_index].output_buttons = map_nuon_buttons(players[player_index].global_buttons & players[player_index].altern_buttons);
+
+      // Center all analog axes for mouse mode
+      players[player_index].analog[0] = 128;
+      players[player_index].analog[1] = 128;
+      players[player_index].analog[2] = 128;
+      players[player_index].analog[3] = 128;
+      players[player_index].analog[5] = 0;
+      players[player_index].analog[6] = 0;
+
+      if (event->quad_x) players[player_index].output_quad_x = event->quad_x;
+      update_output();
     }
-    else
-    {
-      players[player_index].output_buttons_alt = nuon_buttons;
-    }
-
-    if (analog_1x) players[player_index].output_analog_1x = analog_1x;
-    if (analog_1y) players[player_index].output_analog_1y = 256 - analog_1y;
-    if (analog_2x) players[player_index].output_analog_2x = analog_2x;
-    if (analog_2y) players[player_index].output_analog_2y = 256 - analog_2y;
-    if (quad_x) players[player_index].output_quad_x = quad_x;
-    update_output();
-  }
-}
-
-//
-// post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
-//
-void __not_in_flash_func(post_mouse_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint16_t buttons,
-  uint8_t delta_x,
-  uint8_t delta_y,
-  uint8_t quad_x)
-{
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00));
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
-
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    players[player_index].global_buttons = buttons;
-
-    // Swap B2 and S2
-    if (!(buttons & USBR_BUTTON_B2)) {
-      players[player_index].global_buttons |= USBR_BUTTON_B2;
-      players[player_index].global_buttons &= ~USBR_BUTTON_S2;
-    }
-    if (!(buttons & USBR_BUTTON_S2)) {
-      players[player_index].global_buttons |= USBR_BUTTON_S2;
-      players[player_index].global_buttons &= ~USBR_BUTTON_B2;
+  } else {
+    // Gamepad, keyboard, flightstick, wheel, etc.
+    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    players[player_index].output_buttons = map_nuon_buttons(players[player_index].global_buttons & players[player_index].altern_buttons);
-    players[player_index].output_analog_1x = 128;
-    players[player_index].output_analog_1y = 128;
-    players[player_index].output_analog_2x = 128;
-    players[player_index].output_analog_2y = 128;
-    players[player_index].output_analog_l = 0;
-    players[player_index].output_analog_r = 0;
-    if (quad_x) players[player_index].output_quad_x = quad_x;
+    if (player_index >= 0) {
+      players[player_index].device_type = event->type;
 
-    update_output();
+      // Extra instance buttons to merge with root player
+      if (is_extra) {
+        players[0].altern_buttons = event->buttons;
+      } else {
+        players[player_index].global_buttons = event->buttons;
+      }
+
+      uint32_t nuon_buttons = map_nuon_buttons(event->buttons);
+      if (!instance) {
+        players[player_index].output_buttons = nuon_buttons;
+      } else {
+        players[player_index].output_buttons_alt = nuon_buttons;
+      }
+
+      // Update analog values (with Y-axis inversion)
+      if (event->analog[0]) players[player_index].analog[0] = event->analog[0];
+      if (event->analog[1]) players[player_index].analog[1] = 256 - event->analog[1];
+      if (event->analog[2]) players[player_index].analog[2] = event->analog[2];
+      if (event->analog[3]) players[player_index].analog[3] = 256 - event->analog[3];
+      if (event->quad_x) players[player_index].output_quad_x = event->quad_x;
+
+      update_output();
+    }
   }
 }

@@ -1,6 +1,7 @@
 // hid_mouse.c
 #include "hid_mouse.h"
 #include "globals.h"
+#include "input_event.h"
 
 static uint8_t local_x;
 static uint8_t local_y;
@@ -143,7 +144,18 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
 #endif
   // add to accumulator and post to the state machine
   // if a scan from the host machine is ongoing, wait
-  post_mouse_globals(dev_addr, instance, buttons, local_x, local_y, spinner);
+  input_event_t event = {
+    .dev_addr = dev_addr,
+    .instance = instance,
+    .type = INPUT_TYPE_MOUSE,
+    .buttons = buttons,
+    .analog = {128, 128, 128, 128, 128, 0, 0, 128},
+    .delta_x = local_x,
+    .delta_y = local_y,
+    .quad_x = spinner,
+    .keys = 0
+  };
+  post_input_event(&event);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel, spinner);

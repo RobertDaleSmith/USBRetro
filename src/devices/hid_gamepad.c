@@ -2,6 +2,7 @@
 #include "hid_gamepad.h"
 #include "hid_parser.h"
 #include "globals.h"
+#include "input_event.h"
 
 typedef struct
 {
@@ -505,7 +506,16 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
     // keep analog within range [1-255]
     ensureAllNonZero(&axis_x, &axis_y, &axis_z, &axis_rz);
 
-    post_globals(dev_addr, instance, buttons, axis_x, axis_y, axis_z, axis_rz, current.rx, current.ry, 0, 0);
+    input_event_t event = {
+      .dev_addr = dev_addr,
+      .instance = instance,
+      .type = INPUT_TYPE_GAMEPAD,
+      .buttons = buttons,
+      .analog = {axis_x, axis_y, axis_z, axis_rz, 128, current.rx, current.ry, 128},
+      .keys = 0,
+      .quad_x = 0
+    };
+    post_input_event(&event);
   }
 }
 

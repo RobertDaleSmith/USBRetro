@@ -1,6 +1,7 @@
 // logitech_wingman.c
 #include "logitech_wingman.h"
 #include "globals.h"
+#include "input_event.h"
 
 // check if device is Logitech WingMan Action controller
 static inline bool is_logitech_wingman(uint16_t vid, uint16_t pid) {
@@ -114,7 +115,16 @@ void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const*
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, analog_x1, analog_y1, analog_x2, analog_y2, 0, 0, 0, 0);
+    input_event_t event = {
+      .dev_addr = dev_addr,
+      .instance = instance,
+      .type = INPUT_TYPE_GAMEPAD,
+      .buttons = buttons,
+      .analog = {analog_x1, analog_y1, analog_x2, analog_y2, 128, 0, 0, 128},
+      .keys = 0,
+      .quad_x = 0
+    };
+    post_input_event(&event);
 
     prev_report[dev_addr-1] = wingman_report;
   }

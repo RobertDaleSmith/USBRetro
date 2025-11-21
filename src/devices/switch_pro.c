@@ -1,6 +1,7 @@
 // switch_pro.c
 #include "switch_pro.h"
 #include "globals.h"
+#include "input_event.h"
 #include "pico/time.h"
 
 // Switch instance state
@@ -242,7 +243,16 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       // add to accumulator and post to the state machine
       // if a scan from the host machine is ongoing, wait
       bool is_root = instance == switch_devices[dev_addr].instance_root;
-      post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
+      input_event_t event = {
+        .dev_addr = dev_addr,
+        .instance = is_root ? instance : -1,
+        .type = INPUT_TYPE_GAMEPAD,
+        .buttons = buttons,
+        .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
+        .keys = 0,
+        .quad_x = 0
+      };
+      post_input_event(&event);
 
       prev_report[dev_addr-1][instance] = update_report;
 
@@ -327,7 +337,16 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
                ((1)/*has_6btns*/       ? 0x00 : 0x800));
 
     bool is_root = instance == switch_devices[dev_addr].instance_root;
-    post_globals(dev_addr, is_root ? instance : -1, buttons, leftX, leftY, rightX, rightY, 0, 0, 0, 0);
+    input_event_t event = {
+      .dev_addr = dev_addr,
+      .instance = is_root ? instance : -1,
+      .type = INPUT_TYPE_GAMEPAD,
+      .buttons = buttons,
+      .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
+      .keys = 0,
+      .quad_x = 0
+    };
+    post_input_event(&event);
   }
   else // process input reports for events and command acknowledgments
   {

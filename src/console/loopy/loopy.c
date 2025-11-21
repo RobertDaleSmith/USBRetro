@@ -190,8 +190,8 @@ void __not_in_flash_func(core1_entry)(void)
       // [X encoder raw]   [Y encoder raw]   Left     N/C      Right    Presence
       //
 
-      uint8_t x_gray = players[0].output_analog_1x;
-      uint8_t y_gray = players[0].output_analog_1y;
+      uint8_t x_gray = players[0].analog[0];
+      uint8_t y_gray = players[0].analog[1];
       // printf("[raw_gray_code] [%d, %d]\n", x_gray, y_gray);
 
       loopy_byte |= ((x_gray)      & 0x1             ) ? LOOPY_BIT0 : 0; // X
@@ -218,11 +218,11 @@ void __not_in_flash_func(core1_entry)(void)
     unsigned short int i;
     for (i = 0; i < MAX_PLAYERS; ++i) {
       // decrement outputs from globals
-      // players[i].global_x = (players[i].global_x - players[i].output_analog_1x);
-      // players[i].global_y = (players[i].global_y - players[i].output_analog_1y);
+      // players[i].global_x = (players[i].global_x - players[i].analog[0]);
+      // players[i].global_y = (players[i].global_y - players[i].analog[1]);
 
-      // players[i].output_analog_1x = 0;
-      // players[i].output_analog_1y = 0;
+      // players[i].analog[0] = 0;
+      // players[i].analog[1] = 0;
       players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
     }
   }
@@ -274,178 +274,168 @@ void __not_in_flash_func(update_output)(void)
 }
 
 //
-// post_globals - accumulate the many intermediate mouse scans (~1ms)
-//                into an accumulator which will be reported back to loopy
+// post_input_event - NEW unified input event handler
 //
-void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr, int8_t instance, uint32_t buttons,
-  uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x,
-  uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r,
-  uint32_t keys, uint8_t quad_x)
+void __not_in_flash_func(post_input_event)(const input_event_t* event)
 {
+  if (!event) return;
+
+  int8_t instance = event->instance;
+
   // for merging extra device instances into the root instance (ex: joycon charging grip)
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
+  int player_index = find_player_index(event->dev_addr, instance);
 
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    // map analog to dpad movement here
-    uint8_t dpad_offset = 32;
-    if (analog_1x)
+  if (event->type == INPUT_TYPE_MOUSE) {
+    // Mouse handling - gray code state machine for Loopy
+    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
+    if (player_index < 0 && buttons_pressed)
     {
-      if (analog_1x > 128 + dpad_offset) buttons &= ~(0x02); // right
-      else if (analog_1x < 128 - dpad_offset) buttons &= ~(0x08); // left
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
-    if (analog_1y)
+
+    if (player_index >= 0)
     {
-      if (analog_1y > 128 + dpad_offset) buttons &= ~(0x01); // up
-      else if (analog_1y < 128 - dpad_offset) buttons &= ~(0x04); // down
-    }
+      players[player_index].global_buttons = event->buttons;
 
-    // extra instance buttons to merge with root player
-    if (is_extra)
+      // Gray code state machine for mouse movement
+      uint8_t delta_x = event->delta_x;
+      uint8_t delta_y = event->delta_y;
+
+      if (delta_x >= 128) {
+        // x-axis moving left
+        switch (players[player_index].analog[0])
+        {
+        case 2:
+          players[player_index].analog[0] = 3;
+          break;
+        case 3:
+          players[player_index].analog[0] = 1;
+          break;
+        case 1:
+          players[player_index].analog[0] = 0;
+          break;
+        case 0:
+          players[player_index].analog[0] = 2;
+          break;
+        default:
+          break;
+        }
+      } else {
+        // x-axis moving right
+        switch (players[player_index].analog[0])
+        {
+        case 0:
+          players[player_index].analog[0] = 1;
+          break;
+        case 1:
+          players[player_index].analog[0] = 3;
+          break;
+        case 3:
+          players[player_index].analog[0] = 2;
+          break;
+        case 2:
+          players[player_index].analog[0] = 0;
+          break;
+        default:
+          break;
+        }
+      }
+
+      if (delta_y >= 128) {
+        // y-axis moving up
+        switch (players[player_index].analog[1])
+        {
+        case 2:
+          players[player_index].analog[1] = 3;
+          break;
+        case 3:
+          players[player_index].analog[1] = 1;
+          break;
+        case 1:
+          players[player_index].analog[1] = 0;
+          break;
+        case 0:
+          players[player_index].analog[1] = 2;
+          break;
+        default:
+          break;
+        }
+      } else {
+        // y-axis moving down
+        switch (players[player_index].analog[1])
+        {
+        case 0:
+          players[player_index].analog[1] = 1;
+          break;
+        case 1:
+          players[player_index].analog[1] = 3;
+          break;
+        case 3:
+          players[player_index].analog[1] = 2;
+          break;
+        case 2:
+          players[player_index].analog[1] = 0;
+          break;
+        default:
+          break;
+        }
+      }
+
+      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+
+      update_output();
+    }
+  } else {
+    // Gamepad/keyboard handling
+    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+    if (player_index < 0 && buttons_pressed)
     {
-      players[0].altern_buttons = buttons;
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
-    else
+
+    if (player_index >= 0)
     {
-      players[player_index].global_buttons = buttons;
-    }
+      uint32_t buttons = event->buttons;
 
-    players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-    // basic socd (up priority, left+right neutral)
-    if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
-      players[player_index].output_buttons ^= 0x04;
-    }
-    if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
-      players[player_index].output_buttons ^= 0x0a;
-    }
-
-    update_output();
-  }
-}
-
-//
-// post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
-//                into an accumulator which will be reported back to loopy
-//
-void __not_in_flash_func(post_mouse_globals)(
-  uint8_t dev_addr, int8_t instance, uint16_t buttons,
-  uint8_t delta_x, uint8_t delta_y, uint8_t quad_x)
-{
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00));
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
-
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    players[player_index].global_buttons = buttons;
-
-    // TODO: continue to parse mouse movement into RAW gray code correctly.
-    //      [0, 1, 3, 2 ... for one direction and 2, 3, 1, 0 ... for other]
-    if (delta_x >= 128) {
-      // x-axis moving left
-      switch (players[player_index].output_analog_1x)
+      // map analog to dpad movement here
+      uint8_t dpad_offset = 32;
+      if (event->analog[0])
       {
-      case 2:
-        players[player_index].output_analog_1x = 3;
-        break;
-      case 3:
-        players[player_index].output_analog_1x = 1;
-        break;
-      case 1:
-        players[player_index].output_analog_1x = 0;
-        break;
-      case 0:
-        players[player_index].output_analog_1x = 2;
-        break;
-      default:
-        break;
+        if (event->analog[0] > 128 + dpad_offset) buttons &= ~(0x02); // right
+        else if (event->analog[0] < 128 - dpad_offset) buttons &= ~(0x08); // left
       }
-    } else {
-      // x-axis moving right
-      switch (players[player_index].output_analog_1x)
+      if (event->analog[1])
       {
-      case 0:
-        players[player_index].output_analog_1x = 1;
-        break;
-      case 1:
-        players[player_index].output_analog_1x = 3;
-        break;
-      case 3:
-        players[player_index].output_analog_1x = 2;
-        break;
-      case 2:
-        players[player_index].output_analog_1x = 0;
-        break;
-      default:
-        break;
+        if (event->analog[1] > 128 + dpad_offset) buttons &= ~(0x01); // up
+        else if (event->analog[1] < 128 - dpad_offset) buttons &= ~(0x04); // down
       }
+
+      // extra instance buttons to merge with root player
+      if (is_extra)
+      {
+        players[0].altern_buttons = buttons;
+      }
+      else
+      {
+        players[player_index].global_buttons = buttons;
+      }
+
+      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+
+      // basic socd (up priority, left+right neutral)
+      if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
+        players[player_index].output_buttons ^= 0x04;
+      }
+      if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
+        players[player_index].output_buttons ^= 0x0a;
+      }
+
+      update_output();
     }
-
-    if (delta_y >= 128) {
-      // y-axis moving up
-      switch (players[player_index].output_analog_1y)
-      {
-      case 2:
-        players[player_index].output_analog_1y = 3;
-        break;
-      case 3:
-        players[player_index].output_analog_1y = 1;
-        break;
-      case 1:
-        players[player_index].output_analog_1y = 0;
-        break;
-      case 0:
-        players[player_index].output_analog_1y = 2;
-        break;
-      default:
-        break;
-      }
-    } else {
-      // y-axis moving down
-      switch (players[player_index].output_analog_1y)
-      {
-      case 0:
-        players[player_index].output_analog_1y = 1;
-        break;
-      case 1:
-        players[player_index].output_analog_1y = 3;
-        break;
-      case 3:
-        players[player_index].output_analog_1y = 2;
-        break;
-      case 2:
-        players[player_index].output_analog_1y = 0;
-        break;
-      default:
-        break;
-      }
-    }
-
-    players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-    update_output();
   }
 }

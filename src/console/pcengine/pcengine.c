@@ -16,12 +16,6 @@ uint64_t turbo_frequency;
 PIO pio;
 uint sm1, sm2, sm3;
 
-// Definition of global variables
-uint32_t output_analog_1x = 0;
-uint32_t output_analog_1y = 0;
-uint32_t output_analog_2x = 0;
-uint32_t output_analog_2y = 0;
-
 // When PCE reads, set interlock to ensure atomic update
 //
 volatile bool  output_exclude = false;
@@ -186,11 +180,11 @@ void __not_in_flash_func(core1_entry)(void)
       unsigned short int i;
       for (i = 0; i < MAX_PLAYERS; ++i) {
         // decrement outputs from globals
-        players[i].global_x = (players[i].global_x - players[i].output_analog_1x);
-        players[i].global_y = (players[i].global_y - players[i].output_analog_1y);
+        players[i].global_x = (players[i].global_x - players[i].analog[0]);  // ANALOG_X
+        players[i].global_y = (players[i].global_y - players[i].analog[1]);  // ANALOG_Y
 
-        players[i].output_analog_1x = 0;
-        players[i].output_analog_1y = 0;
+        players[i].analog[0] = 0;  // ANALOG_X (Left stick X)
+        players[i].analog[1] = 0;  // ANALOG_Y (Left stick Y)
         players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
       }
 
@@ -311,16 +305,16 @@ void __not_in_flash_func(update_output)(void)
       switch (state)
       {
         case 3: // state 3: x most significant nybble
-          byte |= (((players[i].output_analog_1x>>1) & 0xf0) >> 4);
+          byte |= (((players[i].analog[0]>>1) & 0xf0) >> 4);  // ANALOG_X
         break;
         case 2: // state 2: x least significant nybble
-          byte |= (((players[i].output_analog_1x>>1) & 0x0f));
+          byte |= (((players[i].analog[0]>>1) & 0x0f));  // ANALOG_X
         break;
         case 1: // state 1: y most significant nybble
-          byte |= (((players[i].output_analog_1y>>1) & 0xf0) >> 4);
+          byte |= (((players[i].analog[1]>>1) & 0xf0) >> 4);  // ANALOG_Y
         break;
         case 0: // state 0: y least significant nybble
-          byte |= (((players[i].output_analog_1y>>1) & 0x0f));
+          byte |= (((players[i].analog[1]>>1) & 0x0f));  // ANALOG_Y
         break;
       }
     }
@@ -341,123 +335,99 @@ void __not_in_flash_func(update_output)(void)
 
 
 //
-// post_globals - accumulate the many intermediate mouse scans (~1ms)
-//                into an accumulator which will be reported back to PCE
 //
-void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr, int8_t instance, uint32_t buttons,
-  uint8_t analog_1x, uint8_t analog_1y, uint8_t analog_2x,
-  uint8_t analog_2y, uint8_t analog_l, uint8_t analog_r,
-  uint32_t keys, uint8_t quad_x)
+// post_input_event - NEW unified input event handler
+//
+void __not_in_flash_func(post_input_event)(const input_event_t* event)
 {
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
+  if (!event) return;
+
+  // Handle merged instances (e.g., Joy-Con Charging Grip)
+  int8_t instance = event->instance;
   bool is_extra = (instance == -1);
   if (is_extra) instance = 0;
 
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x800)) || keys;
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
+  // Find or add player
+  int player_index = find_player_index(event->dev_addr, instance);
 
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    // guide button mapping to igr
-    if (!(buttons & (USBR_BUTTON_A1))) {
-      buttons ^= (USBR_BUTTON_S2 | USBR_BUTTON_S1);
+  if (event->type == INPUT_TYPE_MOUSE) {
+    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    // map analog to dpad movement here
-    uint8_t dpad_offset = 32;
-    if (analog_1x)
-    {
-      if (analog_1x > 128 + dpad_offset) buttons &= ~(0x02); // right
-      else if (analog_1x < 128 - dpad_offset) buttons &= ~(0x08); // left
+    if (player_index >= 0) {
+      players[player_index].global_buttons = event->buttons;
+      players[player_index].device_type = event->type;
+
+      // Accumulate mouse deltas
+      if (event->delta_x >= 128)
+        players[player_index].global_x = players[player_index].global_x - (256 - event->delta_x);
+      else
+        players[player_index].global_x = players[player_index].global_x + event->delta_x;
+
+      if (event->delta_y >= 128)
+        players[player_index].global_y = players[player_index].global_y - (256 - event->delta_y);
+      else
+        players[player_index].global_y = players[player_index].global_y + event->delta_y;
+
+      if (!output_exclude) {
+        players[player_index].analog[0] = players[player_index].global_x;
+        players[player_index].analog[1] = players[player_index].global_y;
+        players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
+        update_output();
+      }
     }
-    if (analog_1y)
-    {
-      if (analog_1y > 128 + dpad_offset) buttons &= ~(0x01); // up
-      else if (analog_1y < 128 - dpad_offset) buttons &= ~(0x04); // down
+  } else {
+    // Gamepad, keyboard, flightstick, wheel, etc.
+    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+    if (player_index < 0 && buttons_pressed) {
+      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
+      player_index = add_player(event->dev_addr, instance);
     }
 
-    // extra instance buttons to merge with root player
-    if (is_extra)
-    {
-      players[0].altern_buttons = buttons;
-    }
-    else
-    {
-      players[player_index].global_buttons = buttons;
-    }
+    if (player_index >= 0) {
+      uint32_t buttons = event->buttons;
+      players[player_index].device_type = event->type;
 
-    // TODO: 
-    //  - Map home button to S1 + S2
+      // Guide button mapping to IGR
+      if (!(buttons & (USBR_BUTTON_A1))) {
+        buttons ^= (USBR_BUTTON_S2 | USBR_BUTTON_S1);
+      }
 
-    // TODO:
-    //  - May need to output_exclude on 6-button?
+      // Map analog to dpad movement
+      uint8_t dpad_offset = 32;
+      if (event->analog[0]) {
+        if (event->analog[0] > 128 + dpad_offset) buttons &= ~(0x02); // right
+        else if (event->analog[0] < 128 - dpad_offset) buttons &= ~(0x08); // left
+      }
+      if (event->analog[1]) {
+        if (event->analog[1] > 128 + dpad_offset) buttons &= ~(0x01); // up
+        else if (event->analog[1] < 128 - dpad_offset) buttons &= ~(0x04); // down
+      }
 
-    // if (!output_exclude || !isMouse)
-    // {
+      // Extra instance buttons to merge with root player
+      if (is_extra) {
+        players[0].altern_buttons = buttons;
+      } else {
+        players[player_index].global_buttons = buttons;
+      }
+
+      // Update analog values
+      for (int i = 0; i < 8; i++) {
+        players[player_index].analog[i] = event->analog[i];
+      }
+
       players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
-      // basic socd (up priority, left+right neutral)
+      // Basic SOCD (up priority, left+right neutral)
       if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
         players[player_index].output_buttons ^= 0x04;
       }
       if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
         players[player_index].output_buttons ^= 0x0a;
       }
-
-      update_output();
-    // }
-  }
-}
-
-//
-// post_mouse_globals - accumulate the many intermediate mouse scans (~1ms)
-//                into an accumulator which will be reported back to PCE
-//
-void __not_in_flash_func(post_mouse_globals)(
-  uint8_t dev_addr, int8_t instance, uint16_t buttons,
-  uint8_t delta_x, uint8_t delta_y, uint8_t quad_x)
-{
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(dev_addr, instance);
-  uint16_t buttons_pressed = (~(buttons | 0x0f00));
-  if (player_index < 0 && buttons_pressed)
-  {
-    printf("[add player] [%d, %d]\n", dev_addr, instance);
-    player_index = add_player(dev_addr, instance);
-  }
-
-  // printf("[player_index] [%d] [%d, %d]\n", player_index, dev_addr, instance);
-
-  if (player_index >= 0)
-  {
-    players[player_index].global_buttons = buttons;
-
-    if (delta_x >= 128)
-      players[player_index].global_x = players[player_index].global_x - (256-delta_x);
-    else
-      players[player_index].global_x = players[player_index].global_x + delta_x;
-
-    if (delta_y >= 128)
-      players[player_index].global_y = players[player_index].global_y - (256-delta_y);
-    else
-      players[player_index].global_y = players[player_index].global_y + delta_y;
-
-    if (!output_exclude)
-    {
-      players[player_index].output_analog_1x = players[player_index].global_x;
-      players[player_index].output_analog_1y = players[player_index].global_y;
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
 
       update_output();
     }

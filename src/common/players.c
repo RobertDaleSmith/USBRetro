@@ -2,6 +2,7 @@
 
 #include "players.h"
 #include "globals.h"
+#include "input_event.h"
 
 // Definition of global variables
 Player_t players[MAX_PLAYERS];
@@ -43,12 +44,13 @@ void players_init()
 #endif
     players[i].global_x = 0;
     players[i].global_y = 0;
-    players[i].output_analog_1x = 128;
-    players[i].output_analog_1y = 128;
-    players[i].output_analog_2x = 128;
-    players[i].output_analog_2y = 128;
-    players[i].output_analog_l = 0;
-    players[i].output_analog_r = 0;
+
+    // Initialize all analog axes to centered position (128 = neutral)
+    for (int j = 0; j < 8; j++) {
+      players[i].analog[j] = 128;
+    }
+
+    players[i].device_type = INPUT_TYPE_NONE;
     players[i].prev_buttons = 0xFFFFF;
     players[i].button_mode = 0;
   }
@@ -83,8 +85,13 @@ int __not_in_flash_func(add_player)(int dev_addr, int instance)
     players[playersCount].global_y = 0;
 
     players[playersCount].output_buttons = 0xFFFFF;
-    players[playersCount].output_analog_1x = 0;
-    players[playersCount].output_analog_1y = 0;
+
+    // Initialize all analog axes to centered position
+    for (int j = 0; j < 8; j++) {
+      players[playersCount].analog[j] = 128;
+    }
+
+    players[playersCount].device_type = INPUT_TYPE_NONE;
     players[playersCount].button_mode = 0;
     players[playersCount].prev_buttons = 0xFFFFF;
 

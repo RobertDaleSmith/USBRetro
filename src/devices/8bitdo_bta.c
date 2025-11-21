@@ -1,6 +1,7 @@
 // 8bitdo_bta.c
 #include "8bitdo_bta.h"
 #include "globals.h"
+#include "input_event.h"
 
 // check if device is 8BitDo Wireless Adapter (D-input)
 bool is_8bitdo_bta(uint16_t vid, uint16_t pid) {
@@ -98,7 +99,16 @@ void process_8bitdo_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait
-    post_globals(dev_addr, instance, buttons, analog_1x, analog_1y, analog_2x, analog_2y, l2_trigger, r2_trigger, 0, 0);
+    input_event_t event = {
+      .dev_addr = dev_addr,
+      .instance = instance,
+      .type = INPUT_TYPE_GAMEPAD,
+      .buttons = buttons,
+      .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, l2_trigger, r2_trigger, 128},
+      .keys = 0,
+      .quad_x = 0
+    };
+    post_input_event(&event);
 
     prev_report[dev_addr-1] = input_report;
   }

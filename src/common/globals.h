@@ -3,6 +3,7 @@
 #define GLOBALS_H
 
 #include "codes.h"
+#include "input_event.h"
 #include "players.h"
 
 #define UART_ID uart0
@@ -44,30 +45,8 @@ extern bool update_pending;
 extern uint8_t gc_rumble;
 extern uint8_t gc_kb_led;
 
-// common console response for controller data
-void __not_in_flash_func(post_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint32_t buttons,
-  uint8_t analog_1x,
-  uint8_t analog_1y,
-  uint8_t analog_2x,
-  uint8_t analog_2y,
-  uint8_t analog_l,
-  uint8_t analog_r,
-  uint32_t keys,
-  uint8_t quad_x
-);
-
-// common console response for mouse data
-void __not_in_flash_func(post_mouse_globals)(
-  uint8_t dev_addr,
-  int8_t instance,
-  uint16_t buttons,
-  uint8_t delta_x,
-  uint8_t delta_y,
-  uint8_t spinner
-);
+// Unified input event callback
+void __not_in_flash_func(post_input_event)(const input_event_t* event);
 
 int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
 int __not_in_flash_func(add_player)(int dev_addr, int instance);

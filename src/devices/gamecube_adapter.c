@@ -1,6 +1,7 @@
 // gamecube_adapter.c
 #include "gamecube_adapter.h"
 #include "globals.h"
+#include "input_event.h"
 #include "pico/time.h"
 
 // check if device is GameCube Adapter for WiiU/Switch
@@ -90,16 +91,25 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
           uint8_t zr_axis = gamecube_report.port[i].zr;
           zr_axis = zr_axis > 38 ? zr_axis - 38 : 0;
 
-          post_globals(dev_addr, i, buttons,
-            gamecube_report.port[i].x1,
-            gamecube_report.port[i].y1,
-            gamecube_report.port[i].x2,
-            gamecube_report.port[i].y2,
-            zl_axis,
-            zr_axis,
-            0,
-            0
-          );
+          input_event_t event = {
+            .dev_addr = dev_addr,
+            .instance = i,
+            .type = INPUT_TYPE_GAMEPAD,
+            .buttons = buttons,
+            .analog = {
+              gamecube_report.port[i].x1,
+              gamecube_report.port[i].y1,
+              gamecube_report.port[i].x2,
+              gamecube_report.port[i].y2,
+              128,
+              zl_axis,
+              zr_axis,
+              128
+            },
+            .keys = 0,
+            .quad_x = 0
+          };
+          post_input_event(&event);
 
           prev_report[dev_addr-1][instance + i] = gamecube_report;
         }

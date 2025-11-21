@@ -79,11 +79,5 @@ uint32_t crc_data_packet(int32_t value, int8_t size);
 
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
-void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
-  uint32_t buttons, uint8_t analog_1x, uint8_t analog_1y,
-  uint8_t analog_2x, uint8_t analog_2y, uint8_t analog_l,
-  uint8_t analog_r, uint32_t keys, uint8_t quad_x);
-void __not_in_flash_func(post_mouse_globals)(uint8_t dev_addr, int8_t instance,
-  uint16_t buttons, uint8_t delta_x, uint8_t delta_y, uint8_t quad_x);
 
 #endif // NUON_H
