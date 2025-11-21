@@ -14,7 +14,7 @@
 
 // Define constants
 #undef MAX_PLAYERS
-#define MAX_PLAYERS 9               // 3DO supports up to 9 controllers
+#define MAX_PLAYERS 8               // 3DO supports up to 8 controllers
 
 // GPIO Pin definitions (from USBTo3DO)
 // These match the Waveshare RP2040 Zero pinout
