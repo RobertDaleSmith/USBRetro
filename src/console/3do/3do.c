@@ -353,6 +353,27 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
   uint8_t az = players[player_index].output_analog_2x;
   uint8_t at = players[player_index].output_analog_2y;
 
+  // DEBUG: Log button state when S1 or B4 is pressed
+  static uint32_t debug_counter = 0;
+  static uint32_t last_buttons = 0;
+
+  // Only log when button state changes to reduce spam
+  if (buttons != last_buttons && ((buttons & USBR_BUTTON_S1) || (buttons & USBR_BUTTON_B4))) {
+    uint32_t s1_val = (buttons & USBR_BUTTON_S1);
+    uint32_t b4_val = (buttons & USBR_BUTTON_B4);
+    bool or_result = (s1_val || b4_val);
+
+    printf("[DEBUG] buttons=0x%08X | S1=0x%08X(%d) | B4=0x%08X(%d) | OR=%d\n",
+      buttons,
+      s1_val, s1_val ? 1 : 0,
+      b4_val, b4_val ? 1 : 0,
+      or_result ? 1 : 0
+    );
+    last_buttons = buttons;
+  } else if (!(buttons & (USBR_BUTTON_S1 | USBR_BUTTON_B4))) {
+    last_buttons = buttons;  // Reset tracking when both buttons released
+  }
+
   // Determine if this is a flight stick (has significant analog input)
   // TODO: Add better heuristics or device-type detection
   bool is_joystick = false;
@@ -367,41 +388,45 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     report.analog3 = az;
     report.analog4 = at;
 
-    // Map digital buttons (3DO uses active-low: 0 = pressed, 1 = not pressed)
-    report.A = (buttons & USBR_BUTTON_B1) ? 0 : 1;
-    report.B = (buttons & USBR_BUTTON_B2) ? 0 : 1;
-    report.C = (buttons & USBR_BUTTON_B3) ? 0 : 1;
-    report.X = (buttons & USBR_BUTTON_B4) ? 0 : 1;
-    report.L = (buttons & USBR_BUTTON_L1) ? 0 : 1;
-    report.R = (buttons & USBR_BUTTON_R1) ? 0 : 1;
-    report.P = (buttons & USBR_BUTTON_S2) ? 0 : 1;
-    report.FIRE = (buttons & USBR_BUTTON_B1) ? 0 : 1;
+    // Map digital buttons (check == 0 because xinput sends inverted)
+    // 3DO uses active-low: 0 = pressed, 1 = not pressed
+    // Button mapping matches SNES23DO layout
+    report.A = (buttons & USBR_BUTTON_B3) == 0 ? 1 : 0;  // B3 -> A
+    report.B = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // B1 -> B
+    report.C = (buttons & USBR_BUTTON_B2) == 0 ? 1 : 0;  // B2 -> C
+    report.X = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S1) == 0) ? 1 : 0;  // B4 OR S1 -> X
+    report.L = ((buttons & USBR_BUTTON_L1) == 0 || (buttons & USBR_BUTTON_L2) == 0) ? 1 : 0;  // L1 OR L2 -> L
+    report.R = ((buttons & USBR_BUTTON_R1) == 0 || (buttons & USBR_BUTTON_R2) == 0) ? 1 : 0;  // R1 OR R2 -> R
+    report.P = (buttons & USBR_BUTTON_S2) == 0 ? 1 : 0;  // S2 -> P
+    report.FIRE = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // FIRE = B
 
-    // Map D-pad (3DO uses active-low: 0 = pressed, 1 = not pressed)
-    report.left = (buttons & USBR_BUTTON_DL) ? 0 : 1;
-    report.right = (buttons & USBR_BUTTON_DR) ? 0 : 1;
-    report.up = (buttons & USBR_BUTTON_DU) ? 0 : 1;
-    report.down = (buttons & USBR_BUTTON_DD) ? 0 : 1;
+    // Map D-pad (check == 0 because xinput sends inverted)
+    report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
+    report.right = (buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
+    report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
+    report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
     update_3do_joystick(report, player_index);
   } else {
     // Send joypad report
     _3do_joypad_report report = new_3do_joypad_report();
 
-    // Map buttons (3DO uses active-low: 0 = pressed, 1 = not pressed)
-    report.A = (buttons & USBR_BUTTON_B1) ? 0 : 1;
-    report.B = (buttons & USBR_BUTTON_B2) ? 0 : 1;
-    report.C = (buttons & USBR_BUTTON_B3) ? 0 : 1;
-    report.X = (buttons & USBR_BUTTON_B4) ? 0 : 1;
-    report.L = (buttons & USBR_BUTTON_L1) ? 0 : 1;
-    report.R = (buttons & USBR_BUTTON_R1) ? 0 : 1;
-    report.P = (buttons & USBR_BUTTON_S2) ? 0 : 1;
+    // Map buttons (check == 0 because xinput sends inverted: bit clear = pressed)
+    // 3DO uses active-low: 0 = pressed, 1 = not pressed
+    // Button mapping matches SNES23DO layout
+    report.A = (buttons & USBR_BUTTON_B3) == 0 ? 1 : 0;  // B3 -> A
+    report.B = (buttons & USBR_BUTTON_B1) == 0 ? 1 : 0;  // B1 -> B
+    report.C = (buttons & USBR_BUTTON_B2) == 0 ? 1 : 0;  // B2 -> C
+    report.X = ((buttons & USBR_BUTTON_B4) == 0 || (buttons & USBR_BUTTON_S1) == 0) ? 1 : 0;  // B4 OR S1 -> X
+    report.L = ((buttons & USBR_BUTTON_L1) == 0 || (buttons & USBR_BUTTON_L2) == 0) ? 1 : 0;  // L1 OR L2 -> L
+    report.R = ((buttons & USBR_BUTTON_R1) == 0 || (buttons & USBR_BUTTON_R2) == 0) ? 1 : 0;  // R1 OR R2 -> R
+    report.P = (buttons & USBR_BUTTON_S2) == 0 ? 1 : 0;  // S2 -> P
 
-    // Map D-pad (3DO uses active-low: 0 = pressed, 1 = not pressed)
-    report.left = (buttons & USBR_BUTTON_DL) ? 0 : 1;
-    report.right = (buttons & USBR_BUTTON_DR) ? 0 : 1;
-    report.up = (buttons & USBR_BUTTON_DU) ? 0 : 1;
-    report.down = (buttons & USBR_BUTTON_DD) ? 0 : 1;
+    // Map D-pad (check == 0 because xinput sends inverted)
+    report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
+    report.right = (buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
+    report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
+    report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
     // If no digital D-pad pressed, use analog stick (active-low)
     if (!(buttons & (USBR_BUTTON_DL | USBR_BUTTON_DR | USBR_BUTTON_DU | USBR_BUTTON_DD))) {
@@ -422,9 +447,12 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
 {
   int player_index = find_player_index(dev_addr, instance);
 
+  // Invert buttons ONLY for checking if any button is pressed (for player registration)
+  uint32_t buttons_pressed = (~(buttons | 0x800)) || keys;
+
   if (player_index == -1) {
     // First button press - register player
-    if (buttons != 0) {
+    if (buttons_pressed) {
       player_index = add_player(dev_addr, instance);
       #if CFG_TUSB_DEBUG >= 1
       printf("[3DO] New device: addr=%d inst=%d -> player %d\n", dev_addr, instance, player_index);
@@ -441,7 +469,7 @@ void __not_in_flash_func(post_globals)(uint8_t dev_addr, int8_t instance,
     return;
   }
 
-  // Update players[] array
+  // Store RAW inverted buttons (like GameCube does)
   players[player_index].global_buttons = buttons;
   players[player_index].output_analog_1x = analog_1x;
   players[player_index].output_analog_1y = analog_1y;
