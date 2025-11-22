@@ -1,21 +1,25 @@
 // device_registry.c
 #include "device_registry.h"
-#include "sony_ds3.h"
-#include "sony_ds4.h"
-#include "sony_ds5.h"
-#include "sony_psc.h"
-#include "8bitdo_bta.h"
-#include "8bitdo_m30.h"
-#include "8bitdo_pce.h"
-#include "gamecube_adapter.h"
-#include "hori_horipad.h"
-#include "hori_pokken.h"
-#include "logitech_wingman.h"
-#include "sega_astrocity.h"
-#include "switch_pro.h"
-#include "hid_gamepad.h"
-#include "hid_keyboard.h"
-#include "hid_mouse.h"
+
+// Generic HID handlers
+#include "../generic/hid_gamepad.h"
+#include "../generic/hid_keyboard.h"
+#include "../generic/hid_mouse.h"
+
+// Vendor-specific drivers
+#include "../vendors/sony/sony_ds3.h"
+#include "../vendors/sony/sony_ds4.h"
+#include "../vendors/sony/sony_ds5.h"
+#include "../vendors/sony/sony_psc.h"
+#include "../vendors/8bitdo/8bitdo_bta.h"
+#include "../vendors/8bitdo/8bitdo_m30.h"
+#include "../vendors/8bitdo/8bitdo_pce.h"
+#include "../vendors/nintendo/gamecube_adapter.h"
+#include "../vendors/nintendo/switch_pro.h"
+#include "../vendors/hori/hori_horipad.h"
+#include "../vendors/hori/hori_pokken.h"
+#include "../vendors/logitech/logitech_wingman.h"
+#include "../vendors/sega/sega_astrocity.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT] = {0};

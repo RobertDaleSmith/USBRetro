@@ -2,8 +2,8 @@
 #ifndef BITDO_BTA_HEADER_H
 #define BITDO_BTA_HEADER_H
 
-#include "device_interface.h"
-#include "device_utils.h"
+#include "../../core/device_interface.h"
+#include "../../core/device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface bitdo_bta_interface;

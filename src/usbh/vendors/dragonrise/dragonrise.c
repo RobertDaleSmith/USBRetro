@@ -9,7 +9,7 @@ static inline bool is_dragonrise(uint16_t vid, uint16_t pid) {
 }
 
 // check if 2 reports are different enough
-bool diff_report_pokken(dragonrise_report_t const* rpt1, dragonrise_report_t const* rpt2)
+bool dragonrise_diff_report(dragonrise_report_t const* rpt1, dragonrise_report_t const* rpt2)
 {
   bool result;
 

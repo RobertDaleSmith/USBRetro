@@ -72,26 +72,44 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_keyboard.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_mouse.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_parser.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_gamepad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_bta.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_neo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_m30.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_pce.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/gamecube_adapter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hori_horipad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hori_pokken.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/logitech_wingman.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sega_astrocity.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds3.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds4.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds5.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_psc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/switch_pro.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/device_utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/device_registry.c
+
+    # USB Host - Core Infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/core/device_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/core/device_registry.c
+
+    # USB Host - Generic HID Handlers
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/generic/hid_keyboard.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/generic/hid_mouse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/generic/hid_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/generic/hid_gamepad.c
+
+    # USB Host - Vendor Drivers: 8BitDo
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/8bitdo/8bitdo_bta.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/8bitdo/8bitdo_neo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/8bitdo/8bitdo_m30.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/8bitdo/8bitdo_pce.c
+
+    # USB Host - Vendor Drivers: Nintendo
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/nintendo/gamecube_adapter.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/nintendo/switch_pro.c
+
+    # USB Host - Vendor Drivers: Sony
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/sony/sony_ds3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/sony/sony_ds4.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/sony/sony_ds5.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/sony/sony_psc.c
+
+    # USB Host - Vendor Drivers: Hori
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/hori/hori_horipad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/hori/hori_pokken.c
+
+    # USB Host - Vendor Drivers: Other
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/logitech/logitech_wingman.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/sega/sega_astrocity.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/dragonrise/dragonrise.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/misc/triple_adapter_v1.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/misc/triple_adapter_v2.c
+
     ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
