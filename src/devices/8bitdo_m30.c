@@ -107,7 +107,6 @@ void process_8bitdo_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .buttons = buttons,
       .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, 0, 0, 128},
       .keys = 0,
-      .quad_x = 0
     };
     post_input_event(&event);
 

@@ -142,7 +142,6 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .buttons = buttons,
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
         .keys = 0,
-        .quad_x = 0
       };
       post_input_event(&event);
 

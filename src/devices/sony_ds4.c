@@ -138,26 +138,21 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t analog_l = ds4_report.l2_trigger;
       uint8_t analog_r = ds4_report.r2_trigger;
 
-#ifdef CONFIG_NUON
-      // Touch Pad - Atari50 Tempest like spinner input
+      // Touch Pad - provides mouse-like delta for horizontal swipes
+      // Can be used for spinners, camera control, etc. (platform-agnostic)
+      int8_t touchpad_delta_x = 0;
       if (!ds4_report.tpad_f1_down) {
-        // scroll spinner value while swipping
+        // Calculate horizontal swipe delta while finger is down
         if (tpadDragging) {
-          // get directional difference delta
           int16_t delta = 0;
           if (tx >= tpadLastPos) delta = tx - tpadLastPos;
           else delta = (-1) * (tpadLastPos - tx);
 
-          // check max/min delta value
+          // Clamp delta to reasonable range
           if (delta > 12) delta = 12;
           if (delta < -12) delta = -12;
 
-          // inc global spinner value by delta
-          spinner += delta;
-
-          // check max/min spinner value
-          if (spinner > 255) spinner -= 255;
-          if (spinner < 0) spinner = 256 - (-1 * spinner);
+          touchpad_delta_x = (int8_t)delta;
         }
 
         tpadLastPos = tx;
@@ -165,8 +160,7 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       } else {
         tpadDragging = false;
       }
-      // TU_LOG1(" (spinner) = (%u)\r\n", spinner);
-#endif
+
       // keep analog within range [1-255]
       ensureAllNonZero(&analog_1x, &analog_1y, &analog_2x, &analog_2y);
 
@@ -185,8 +179,8 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .type = INPUT_TYPE_GAMEPAD,
         .buttons = buttons,
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
-        .keys = 0,
-        .quad_x = spinner
+        .delta_x = touchpad_delta_x,  // Touchpad horizontal swipe as mouse-like delta
+        .keys = 0
       };
       post_input_event(&event);
 

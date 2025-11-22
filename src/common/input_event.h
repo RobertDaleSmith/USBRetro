@@ -76,7 +76,6 @@ typedef struct {
                                 // 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
 
     // Extended features (for future use)
-    uint8_t quad_x;             // Quadrature encoder (Nuon spinner)
     bool has_rumble;            // Device supports rumble
     bool has_force_feedback;    // Device supports force feedback
 } input_event_t;
@@ -112,7 +111,7 @@ static inline void gamepad_to_input_event(
     uint8_t analog_2x, uint8_t analog_2y,
     uint8_t analog_l, uint8_t analog_r,
     uint32_t keys,
-    uint8_t quad_x)
+    uint8_t quad_x)  // Ignored - consoles accumulate delta_x into spinner
 {
     init_input_event(event);
 
@@ -121,7 +120,6 @@ static inline void gamepad_to_input_event(
     event->type = INPUT_TYPE_GAMEPAD;
     event->buttons = buttons;
     event->keys = keys;
-    event->quad_x = quad_x;
 
     // Map to standard gamepad layout
     event->analog[ANALOG_X] = analog_1x;      // Left stick X
@@ -140,7 +138,7 @@ static inline void mouse_to_input_event(
     uint16_t buttons,
     uint8_t delta_x,
     uint8_t delta_y,
-    uint8_t spinner)
+    uint8_t spinner)  // Ignored - consoles accumulate delta_x into spinner
 {
     init_input_event(event);
 
@@ -150,7 +148,6 @@ static inline void mouse_to_input_event(
     event->buttons = buttons;
     event->delta_x = (int8_t)delta_x;
     event->delta_y = (int8_t)delta_y;
-    event->quad_x = spinner;
 }
 
 #endif // INPUT_EVENT_H

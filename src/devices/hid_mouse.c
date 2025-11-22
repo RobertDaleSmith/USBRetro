@@ -105,45 +105,8 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
   local_y = ((~report->y) & 0xff);
 #endif
 
-#ifdef CONFIG_NUON
-  // mouse wheel to spinner rotation conversion
-  if (report->wheel != 0) {
-    if (report->wheel < 0) { // clockwise
-      spinner += ((-1 * report->wheel) + 3);
-      if (spinner > 255) spinner -= 255;
-    } else { // counter-clockwise
-      if (spinner >= ((report->wheel) + 3)) {
-        spinner += report->wheel;
-        spinner -= 3;
-      } else {
-        spinner = 255 - ((report->wheel) - spinner) - 3;
-      }
-    }
-  }
-
-  int16_t delta = (report->x * -1);
-
-  // check max/min delta value
-  if (delta > 15) delta = 15;
-  if (delta < -15) delta = -15;
-
-  // mouse x-axis to spinner rotation conversion
-  if (delta != 0) {
-    if (delta < 0) { // clockwise
-      spinner += delta;
-      if (spinner > 255) spinner -= 255;
-    } else { // counter-clockwise
-      if (spinner >= ((delta))) {
-        spinner += delta;
-      } else {
-        spinner = 255 - delta - spinner;
-      }
-    }
-  }
-
-#endif
-  // add to accumulator and post to the state machine
-  // if a scan from the host machine is ongoing, wait
+  // Pass raw mouse deltas (platform-agnostic)
+  // Console-side decides how to interpret (e.g., Nuon converts to spinner)
   input_event_t event = {
     .dev_addr = dev_addr,
     .instance = instance,
@@ -152,13 +115,13 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
     .analog = {128, 128, 128, 128, 128, 0, 0, 128},
     .delta_x = local_x,
     .delta_y = local_y,
-    .quad_x = spinner,
+    .delta_wheel = report->wheel,
     .keys = 0
   };
   post_input_event(&event);
 
   //------------- cursor movement -------------//
-  cursor_movement(report->x, report->y, report->wheel, spinner);
+  cursor_movement(report->x, report->y, report->wheel, 0);
 }
 
 DeviceInterface hid_mouse_interface = {

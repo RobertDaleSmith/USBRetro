@@ -250,7 +250,6 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
         .buttons = buttons,
         .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
         .keys = 0,
-        .quad_x = 0
       };
       post_input_event(&event);
 
@@ -344,7 +343,6 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       .buttons = buttons,
       .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
       .keys = 0,
-      .quad_x = 0
     };
     post_input_event(&event);
   }

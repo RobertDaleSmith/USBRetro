@@ -128,8 +128,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
         .type = INPUT_TYPE_GAMEPAD,
         .buttons = buttons,
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
-        .keys = 0,
-        .quad_x = jsSpinner
+        .keys = 0
       };
       post_input_event(&event);
     }

@@ -112,7 +112,6 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .buttons = buttons,
       .analog = {axis_1x, axis_1y, axis_2x, axis_2y, 128, 0, 0, 128},
       .keys = 0,
-      .quad_x = 0
     };
     post_input_event(&event);
 

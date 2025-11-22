@@ -75,7 +75,6 @@ void process_8bitdo_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .buttons = buttons,
       .analog = {128, 128, 128, 128, 128, 0, 0, 128},
       .keys = 0,
-      .quad_x = 0
     };
     post_input_event(&event);
 

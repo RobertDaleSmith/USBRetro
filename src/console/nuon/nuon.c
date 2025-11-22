@@ -493,7 +493,30 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
       players[player_index].analog[5] = 0;
       players[player_index].analog[6] = 0;
 
-      if (event->quad_x) players[player_index].output_quad_x = event->quad_x;
+      // Accumulate mouse deltas into spinner (0-255 wraparound)
+      // Mouse wheel: scroll wheel rotation
+      if (event->delta_wheel != 0) {
+        int16_t delta = event->delta_wheel;
+        if (delta < 0) {
+          players[player_index].output_quad_x += ((-1 * delta) + 3);
+        } else {
+          players[player_index].output_quad_x -= (delta + 3);
+        }
+      }
+
+      // Mouse X-axis: horizontal movement
+      if (event->delta_x != 0) {
+        int16_t delta = event->delta_x * -1;
+        // Clamp delta
+        if (delta > 15) delta = 15;
+        if (delta < -15) delta = -15;
+        players[player_index].output_quad_x += delta;
+      }
+
+      // Wrap spinner to 0-255 range
+      while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
+      while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
+
       update_output();
     }
   } else {
@@ -526,7 +549,19 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
       if (event->analog[1]) players[player_index].analog[1] = 256 - event->analog[1];
       if (event->analog[2]) players[player_index].analog[2] = event->analog[2];
       if (event->analog[3]) players[player_index].analog[3] = 256 - event->analog[3];
-      if (event->quad_x) players[player_index].output_quad_x = event->quad_x;
+
+      // Accumulate touchpad delta into spinner (DS4/DS5 touchpad)
+      if (event->delta_x != 0) {
+        int16_t delta = event->delta_x;
+        // Clamp delta
+        if (delta > 12) delta = 12;
+        if (delta < -12) delta = -12;
+        players[player_index].output_quad_x += delta;
+
+        // Wrap spinner to 0-255 range
+        while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
+        while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
+      }
 
       update_output();
     }
