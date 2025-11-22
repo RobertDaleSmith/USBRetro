@@ -3,7 +3,7 @@
 #define SWITCH_PRO_HEADER_H
 
 #include "../../../hid_device.h"
-#include "../../../device_utils.h"
+#include "../../../hid_utils.h"
 #include "tusb.h"
 
 // commands

@@ -1,4 +1,4 @@
-#include "device_utils.h"
+#include "hid_utils.h"
 
 // check if different than 2
 bool diff_than_n(uint16_t x, uint16_t y, uint8_t n)

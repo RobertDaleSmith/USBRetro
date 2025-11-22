@@ -1,5 +1,5 @@
 // device_registry.c
-#include "device_registry.h"
+#include "hid_registry.h"
 
 // Generic HID handlers
 #include "devices/generic/hid_gamepad.h"

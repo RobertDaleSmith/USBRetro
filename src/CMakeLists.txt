@@ -76,8 +76,8 @@ set(COMMON_SOURCES
 
     # USB Host - HID Protocol Stack
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/device_utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/device_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid_registry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_keyboard.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_mouse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_parser.c

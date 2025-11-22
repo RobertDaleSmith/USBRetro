@@ -3,7 +3,7 @@
 #define SONY_DS4_HEADER_H
 
 #include "../../../hid_device.h"
-#include "../../../device_utils.h"
+#include "../../../hid_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface sony_ds4_interface;

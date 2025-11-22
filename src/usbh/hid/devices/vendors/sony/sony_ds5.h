@@ -3,7 +3,7 @@
 #define SONY_DS5_HEADER_H
 
 #include "../../../hid_device.h"
-#include "../../../device_utils.h"
+#include "../../../hid_utils.h"
 #include "tusb.h"
 
 #define GC_TRIGGER_THRESHOLD 75

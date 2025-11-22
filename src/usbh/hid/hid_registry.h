@@ -1,4 +1,4 @@
-// device_registry.h
+// hid_registry.h
 #include "hid_device.h"
 
 // Controller Types

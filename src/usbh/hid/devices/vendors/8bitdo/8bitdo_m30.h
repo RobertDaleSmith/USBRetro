@@ -3,7 +3,7 @@
 #define BITDO_M30_HEADER_H
 
 #include "../../../hid_device.h"
-#include "../../../device_utils.h"
+#include "../../../hid_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface bitdo_m30_interface;

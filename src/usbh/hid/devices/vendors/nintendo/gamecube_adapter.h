@@ -3,7 +3,7 @@
 #define GAMECUBE_ADAPTER_HEADER_H
 
 #include "../../../hid_device.h"
-#include "../../../device_utils.h"
+#include "../../../hid_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface gamecube_adapter_interface;
