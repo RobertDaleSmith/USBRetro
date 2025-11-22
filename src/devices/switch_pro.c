@@ -386,7 +386,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
 }
 
 // process usb hid output reports
-void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds)
+void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
 {
   static uint8_t output_sequence_counter = 0;
   // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
@@ -575,7 +575,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
 }
 
 // process usb hid output reports
-void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds)
+void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
 {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
@@ -584,7 +584,7 @@ void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   if (current_time_ms - start_ms >= interval_ms)
   {
     start_ms = current_time_ms;
-    output_switch_pro(dev_addr, instance, player_index, rumble, leds);
+    output_switch_pro(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
   }
 }
 

@@ -34,7 +34,7 @@ void hid_app_init()
   register_devices();
 }
 
-void hid_app_task(uint8_t rumble, uint8_t leds)
+void hid_app_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
 {
   uint32_t buttons;
   if (is_fun) {
@@ -60,7 +60,7 @@ void hid_app_task(uint8_t rumble, uint8_t leds)
         {
           // Override player_index during profile indication for all controllers
           int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
-          device_interfaces[ctrl_type]->task(dev_addr, instance, display_player_index, rumble, leds);
+          device_interfaces[ctrl_type]->task(dev_addr, instance, display_player_index, rumble, leds, trigger_threshold);
         }
         break;
       default:

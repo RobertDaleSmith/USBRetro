@@ -34,6 +34,11 @@ static const gc_profile_t* active_profile = &profiles[GC_DEFAULT_PROFILE_INDEX];
 // Current profile index (for cycling through profiles)
 static uint8_t active_profile_index = GC_DEFAULT_PROFILE_INDEX;
 
+// Get the current active profile (for external access)
+gc_profile_t* get_active_profile(void) {
+    return (gc_profile_t*)active_profile;  // Cast away const for external access
+}
+
 extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
 extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);

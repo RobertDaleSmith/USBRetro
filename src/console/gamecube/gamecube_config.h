@@ -81,6 +81,9 @@ typedef struct {
     uint8_t l2_analog_value;    // Custom L analog value (0 = use passthrough)
     uint8_t r2_analog_value;    // Custom R analog value (0 = use passthrough)
 
+    // DualSense adaptive trigger feedback (uses l2_threshold/r2_threshold)
+    bool adaptive_triggers;     // Enable haptic trigger resistance feedback
+
     // Stick sensitivity (0.0-1.0, typically 1.0 = 100%)
     float left_stick_sensitivity;
     float right_stick_sensitivity;
@@ -142,6 +145,9 @@ typedef struct {
     .l2_analog_value = 0, \
     .r2_analog_value = 0, \
     \
+    /* DualSense adaptive triggers */ \
+    .adaptive_triggers = true, \
+    \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
     .right_stick_sensitivity = 1.0f, \
@@ -187,6 +193,9 @@ typedef struct {
     /* Custom trigger analog values */ \
     .l2_analog_value = 0, \
     .r2_analog_value = 0, \
+    \
+    /* DualSense adaptive triggers */ \
+    .adaptive_triggers = true, \
     \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \
@@ -234,6 +243,9 @@ typedef struct {
     .l2_analog_value = 43,      /* L analog at 43 (~17% light shield) */ \
     .r2_analog_value = 0, \
     \
+    /* DualSense adaptive triggers */ \
+    .adaptive_triggers = true, \
+    \
     /* Stick sensitivity (85% for Melee precision) */ \
     .left_stick_sensitivity = 0.85f, \
     .right_stick_sensitivity = 1.0f, \
@@ -279,6 +291,9 @@ typedef struct {
     /* Custom trigger analog values */ \
     .l2_analog_value = 0, \
     .r2_analog_value = 0, \
+    \
+    /* DualSense adaptive triggers */ \
+    .adaptive_triggers = true, \
     \
     /* Stick sensitivity */ \
     .left_stick_sensitivity = 1.0f, \

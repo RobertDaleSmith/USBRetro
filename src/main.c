@@ -34,7 +34,7 @@ uint8_t gc_kb_led = 0;
 #endif
 
 extern void hid_app_init(void);
-extern void hid_app_task(uint8_t rumble, uint8_t leds);
+extern void hid_app_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold);
 extern void xinput_task(uint8_t rumble);
 
 extern void neopixel_init(void);
@@ -49,6 +49,8 @@ extern void players_init(void);
 
 #ifdef CONFIG_NGC
 extern void flash_settings_task(void);
+#include "console/gamecube/gamecube_config.h"
+extern gc_profile_t* get_active_profile(void);
 #endif
 
 /*------------- MAIN -------------*/
@@ -86,12 +88,21 @@ static void __not_in_flash_func(process_signals)(void)
     // Get player LED value (combines keyboard mode LED with profile indicator)
     uint8_t player_led = profile_indicator_get_player_led(playersCount) | gc_kb_led;
 
+    // Get adaptive trigger threshold from console profile/config
+    uint8_t trigger_threshold = 0;
+#ifdef CONFIG_NGC
+    gc_profile_t* profile = get_active_profile();
+    if (profile && profile->adaptive_triggers) {
+      trigger_threshold = profile->l2_threshold;
+    }
+#endif
+
     // xinput rumble task
     xinput_task(combined_rumble);
 
 #if CFG_TUH_HID
     // hid_device rumble/led task
-    hid_app_task(combined_rumble, player_led);
+    hid_app_task(combined_rumble, player_led, trigger_threshold);
 
 #endif
 #ifdef CONFIG_PCE
