@@ -192,14 +192,14 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, device_output_config_t*
   }
 
   // fun
-  if (config->player_index+1 && is_fun) {
-    output_report.data.leds_bitmap = (fun_inc & 0b00011110);
+  if (config->player_index+1 && config->test) {
+    output_report.data.leds_bitmap = (config->test & 0b00011110);
 
     // led brightness
     for (int n = 0; n < 4; n++) {
-      output_report.data.led[n].duty_length = (fun_inc & 0x07);
-      output_report.data.led[n].duty_on = fun_inc;
-      output_report.data.led[n].duty_off = 255 - fun_inc;
+      output_report.data.led[n].duty_length = (config->test & 0x07);
+      output_report.data.led[n].duty_on = config->test;
+      output_report.data.led[n].duty_off = 255 - config->test;
     }
   }
 
@@ -212,7 +212,7 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, device_output_config_t*
 
   if (ds3_devices[dev_addr].instances[instance].rumble != config->rumble ||
       ds3_devices[dev_addr].instances[instance].player != output_report.data.leds_bitmap ||
-      is_fun)
+      config->test)
   {
     ds3_devices[dev_addr].instances[instance].rumble = config->rumble;
     ds3_devices[dev_addr].instances[instance].player = output_report.data.leds_bitmap;

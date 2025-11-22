@@ -494,7 +494,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
         uint8_t instance_index = instance_count == 1 ? instance : switch_devices[dev_addr].instance_root;
         int player_index = find_player_index(dev_addr, instance_index);
 
-        if (is_fun ||
+        if (config->test ||
           switch_devices[dev_addr].instances[instance].player_led_set != player_index
         ) {
           TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, player_index+1);
@@ -523,8 +523,8 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
           }
 
           // fun
-          if (player_index+1 && is_fun) {
-            report[0x0A + 1] = (fun_inc & 0b00001111);
+          if (player_index+1 && config->test) {
+            report[0x0A + 1] = (config->test & 0b00001111);
           }
 
           switch_devices[dev_addr].instances[instance].player_led_set = player_index;

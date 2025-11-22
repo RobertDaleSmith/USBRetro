@@ -484,7 +484,7 @@ void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, device_output_confi
     // kbd_leds = KEYBOARD_LED_NUMLOCK;
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
   }
-  else if (config->leds != hid_kb_devices[dev_addr].instances[instance].leds || is_fun)
+  else if (config->leds != hid_kb_devices[dev_addr].instances[instance].leds || config->test)
   {
     // LED state can be controlled externally via config->leds (from console/main.c)
     // or animated during fun mode. We use a local copy to preserve config as read-only.
@@ -495,10 +495,10 @@ void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, device_output_confi
     // 3. Set keyboard hardware LEDs
     // 4. Store final LED state for comparison on next call
     //
-    // This allows external control while adding animation effects without modifying
+    // This allows external control while adding test pattern effects without modifying
     // the read-only config parameter.
     uint8_t leds = config->leds;
-    if (is_fun) leds |= ((fun_inc >> (fun_inc & 0b00000111)) & 0b00000111);
+    if (config->test) leds |= ((config->test >> (config->test & 0b00000111)) & 0b00000111);
 
     if (leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
     else kbd_leds &= ~KEYBOARD_LED_NUMLOCK;

@@ -10,7 +10,7 @@ typedef struct {
     uint8_t rumble;            // Rumble intensity (0-255, 0=off)
     uint8_t leds;              // LED pattern/state
     uint8_t trigger_threshold; // Adaptive trigger threshold (0=disabled, 1-255=threshold)
-    // Future expansion: gyro settings, battery level requests, etc.
+    uint8_t test;              // Test pattern counter (0=disabled)
 } device_output_config_t;
 
 typedef struct {

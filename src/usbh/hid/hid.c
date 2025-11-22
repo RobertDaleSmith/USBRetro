@@ -29,18 +29,14 @@ int16_t spinner = 0;
 
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
-void hid_app_init()
+void hid_init()
 {
   register_devices();
 }
 
-void hid_app_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t test)
 {
   uint32_t buttons;
-  if (is_fun) {
-    fun_inc++;
-    if (!fun_inc) fun_player = ++fun_player%0x20;
-  }
 
   // iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++)
@@ -66,7 +62,8 @@ void hid_app_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
             .player_index = display_player_index,
             .rumble = rumble,
             .leds = leds,
-            .trigger_threshold = trigger_threshold
+            .trigger_threshold = trigger_threshold,
+            .test = test
           };
 
           device_interfaces[ctrl_type]->task(dev_addr, instance, &config);

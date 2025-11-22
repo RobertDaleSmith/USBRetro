@@ -33,8 +33,8 @@ uint8_t gc_kb_led = 0;
 #include "console/xboxone/xboxone.h"
 #endif
 
-extern void hid_app_init(void);
-extern void hid_app_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold);
+extern void hid_init(void);
+extern void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t test);
 extern void xinput_task(uint8_t rumble);
 
 extern void neopixel_init(void);
@@ -97,12 +97,16 @@ static void __not_in_flash_func(process_signals)(void)
     }
 #endif
 
+    // test pattern counter (managed by application layer)
+    static uint8_t test_counter = 0;
+    if (is_fun) test_counter++;
+
     // xinput rumble task
     xinput_task(combined_rumble);
 
 #if CFG_TUH_HID
     // hid_device rumble/led task
-    hid_app_task(combined_rumble, player_led, trigger_threshold);
+    hid_task(combined_rumble, player_led, trigger_threshold, test_counter);
 
 #endif
 #ifdef CONFIG_PCE
@@ -129,7 +133,7 @@ int main(void)
   sleep_ms(250);
 #endif
 
-  hid_app_init(); // init hid device interfaces
+  hid_init(); // init hid device interfaces
 
   tusb_init(); // init tinyusb for usb host input
 

@@ -235,10 +235,10 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, device_output_config_t*
   }
 
   // fun
-  if (config->player_index+1 && is_fun) {
-    output_report.lightbar_red = fun_inc;
-    output_report.lightbar_green = (fun_inc%2 == 0) ? fun_inc+64 : 0;
-    output_report.lightbar_blue = (fun_inc%2 == 0) ? 0 : fun_inc+128;
+  if (config->player_index+1 && config->test) {
+    output_report.lightbar_red = config->test;
+    output_report.lightbar_green = (config->test%2 == 0) ? config->test+64 : 0;
+    output_report.lightbar_blue = (config->test%2 == 0) ? 0 : config->test+128;
   }
 
   output_report.set_rumble = 1;
@@ -252,10 +252,10 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, device_output_config_t*
 
   if (ds4_devices[dev_addr].instances[instance].rumble != config->rumble ||
       ds4_devices[dev_addr].instances[instance].player != config->player_index+1 ||
-      is_fun)
+      config->test)
   {
     ds4_devices[dev_addr].instances[instance].rumble = config->rumble;
-    ds4_devices[dev_addr].instances[instance].player = is_fun ? fun_inc : config->player_index+1;
+    ds4_devices[dev_addr].instances[instance].player = config->test ? config->test : config->player_index+1;
     tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
   }
 }

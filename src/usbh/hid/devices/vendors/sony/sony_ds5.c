@@ -272,12 +272,12 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t*
     break;
   }
 
-  // fun
-  if (config->player_index+1 && is_fun) {
-    ds5_fb.player_led = fun_player;
-    ds5_fb.lightbar_r = fun_inc;
-    ds5_fb.lightbar_g = fun_inc+64;
-    ds5_fb.lightbar_b = fun_inc+128;
+  // test pattern
+  if (config->player_index+1 && config->test) {
+    ds5_fb.player_led = config->test;
+    ds5_fb.lightbar_r = config->test;
+    ds5_fb.lightbar_g = config->test+64;
+    ds5_fb.lightbar_b = config->test+128;
   }
 
   if (config->rumble) {
@@ -290,7 +290,7 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t*
 
   if (ds5_devices[dev_addr].instances[instance].rumble != config->rumble ||
       ds5_devices[dev_addr].instances[instance].player != ds5_fb.player_led ||
-      is_fun)
+      config->test)
   {
     ds5_devices[dev_addr].instances[instance].rumble = config->rumble;
     ds5_devices[dev_addr].instances[instance].player = ds5_fb.player_led & 0xff;
