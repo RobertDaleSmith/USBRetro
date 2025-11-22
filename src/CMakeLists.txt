@@ -110,8 +110,10 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/misc/triple_adapter_v1.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usbh/vendors/misc/triple_adapter_v2.c
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
+    # USB Host - Protocol Handlers
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/protocols/hid.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/protocols/xinput.c
+
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
 

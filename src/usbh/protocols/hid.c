@@ -1,4 +1,4 @@
-// hid_app.c
+// hid.c - HID protocol handler (TinyUSB HID host callbacks)
 #include "tusb.h"
 #include "globals.h"
 #include "usbh/core/device_utils.h"
