@@ -2,8 +2,8 @@
 #ifndef TRIPLE_ADAPTER_V2_HEADER_H
 #define TRIPLE_ADAPTER_V2_HEADER_H
 
-#include "../../../core/device_interface.h"
-#include "../../../core/device_utils.h"
+#include "../../../hid_device.h"
+#include "../../../device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface triple_adapter_v2_interface;

@@ -2,8 +2,8 @@
 #ifndef BITDO_NEO_HEADER_H
 #define BITDO_NEO_HEADER_H
 
-#include "../../../core/device_interface.h"
-#include "../../../core/device_utils.h"
+#include "../../../hid_device.h"
+#include "../../../device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface bitdo_neo_interface;

@@ -2,8 +2,8 @@
 #ifndef SONY_PSC_HEADER_H
 #define SONY_PSC_HEADER_H
 
-#include "../../../core/device_interface.h"
-#include "../../../core/device_utils.h"
+#include "../../../hid_device.h"
+#include "../../../device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface sony_psc_interface;

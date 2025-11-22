@@ -2,24 +2,24 @@
 #include "device_registry.h"
 
 // Generic HID handlers
-#include "../devices/generic/hid_gamepad.h"
-#include "../devices/generic/hid_keyboard.h"
-#include "../devices/generic/hid_mouse.h"
+#include "devices/generic/hid_gamepad.h"
+#include "devices/generic/hid_keyboard.h"
+#include "devices/generic/hid_mouse.h"
 
 // Vendor-specific drivers
-#include "../devices/vendors/sony/sony_ds3.h"
-#include "../devices/vendors/sony/sony_ds4.h"
-#include "../devices/vendors/sony/sony_ds5.h"
-#include "../devices/vendors/sony/sony_psc.h"
-#include "../devices/vendors/8bitdo/8bitdo_bta.h"
-#include "../devices/vendors/8bitdo/8bitdo_m30.h"
-#include "../devices/vendors/8bitdo/8bitdo_pce.h"
-#include "../devices/vendors/nintendo/gamecube_adapter.h"
-#include "../devices/vendors/nintendo/switch_pro.h"
-#include "../devices/vendors/hori/hori_horipad.h"
-#include "../devices/vendors/hori/hori_pokken.h"
-#include "../devices/vendors/logitech/logitech_wingman.h"
-#include "../devices/vendors/sega/sega_astrocity.h"
+#include "devices/vendors/sony/sony_ds3.h"
+#include "devices/vendors/sony/sony_ds4.h"
+#include "devices/vendors/sony/sony_ds5.h"
+#include "devices/vendors/sony/sony_psc.h"
+#include "devices/vendors/8bitdo/8bitdo_bta.h"
+#include "devices/vendors/8bitdo/8bitdo_m30.h"
+#include "devices/vendors/8bitdo/8bitdo_pce.h"
+#include "devices/vendors/nintendo/gamecube_adapter.h"
+#include "devices/vendors/nintendo/switch_pro.h"
+#include "devices/vendors/hori/hori_horipad.h"
+#include "devices/vendors/hori/hori_pokken.h"
+#include "devices/vendors/logitech/logitech_wingman.h"
+#include "devices/vendors/sega/sega_astrocity.h"
 // Include other devices here
 
 DeviceInterface* device_interfaces[CONTROLLER_TYPE_COUNT] = {0};

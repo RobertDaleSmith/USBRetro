@@ -1,5 +1,5 @@
 // device_registry.h
-#include "device_interface.h"
+#include "hid_device.h"
 
 // Controller Types
 typedef enum {

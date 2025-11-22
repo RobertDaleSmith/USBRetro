@@ -2,8 +2,8 @@
 #ifndef HID_GAMEPAD_HEADER_H
 #define HID_GAMEPAD_HEADER_H
 
-#include "../../core/device_interface.h"
-#include "../../core/device_utils.h"
+#include "../../hid_device.h"
+#include "../../device_utils.h"
 #include "tusb.h"
 
 #define INVALID_REPORT_ID -1 // means 1/X of half range of analog would be dead zone
