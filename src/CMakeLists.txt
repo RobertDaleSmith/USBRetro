@@ -72,26 +72,26 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_keyboard.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_mouse.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_parser.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hid_gamepad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_bta.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_neo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_m30.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/8bitdo_pce.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/gamecube_adapter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_horipad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/hori_pokken.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/logitech_wingman.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/sega_astrocity.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds3.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds4.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_ds5.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/sony_psc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/switch_pro.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/devices/device_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_keyboard.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_mouse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid_gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_bta.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_neo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_m30.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/8bitdo_pce.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/gamecube_adapter.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hori_horipad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hori_pokken.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/logitech_wingman.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sega_astrocity.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds4.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_ds5.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/sony_psc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/switch_pro.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/device_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/device_registry.c
     ${CMAKE_CURRENT_SOURCE_DIR}/xinput_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hid_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
