@@ -486,18 +486,19 @@ void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, device_output_confi
   }
   else if (config->leds != hid_kb_devices[dev_addr].instances[instance].leds || is_fun)
   {
-    // fun
-    if (is_fun) config->leds |= ((fun_inc >> (fun_inc & 0b00000111)) & 0b00000111);
+    // Apply fun mode animation to LED pattern (use local variable to preserve read-only config)
+    uint8_t leds = config->leds;
+    if (is_fun) leds |= ((fun_inc >> (fun_inc & 0b00000111)) & 0b00000111);
 
-    if (config->leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
+    if (leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
     else kbd_leds &= ~KEYBOARD_LED_NUMLOCK;
-    if (config->leds & 0x2) kbd_leds |= KEYBOARD_LED_CAPSLOCK;
+    if (leds & 0x2) kbd_leds |= KEYBOARD_LED_CAPSLOCK;
     else kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
-    if (config->leds & 0x4) kbd_leds |= KEYBOARD_LED_SCROLLLOCK;
+    if (leds & 0x4) kbd_leds |= KEYBOARD_LED_SCROLLLOCK;
     else kbd_leds &= ~KEYBOARD_LED_SCROLLLOCK;
 
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
-    hid_kb_devices[dev_addr].instances[instance].leds = config->leds;
+    hid_kb_devices[dev_addr].instances[instance].leds = leds;
   }
   if (config->rumble != hid_kb_devices[dev_addr].instances[instance].rumble)
   {
