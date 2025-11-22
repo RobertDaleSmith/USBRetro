@@ -489,14 +489,15 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
 
       // } else if (switch_devices[dev_addr].instances[instance].imu_enabled) {
       } else if (switch_devices[dev_addr].instances[instance].full_report_enabled) {
+        // For Joy-Con pairs, use root instance player index; otherwise use config value
         uint8_t instance_count = switch_devices[dev_addr].instance_count;
         uint8_t instance_index = instance_count == 1 ? instance : switch_devices[dev_addr].instance_root;
-        config->player_index = find_player_index(dev_addr, instance_index);
+        int player_index = find_player_index(dev_addr, instance_index);
 
         if (is_fun ||
-          switch_devices[dev_addr].instances[instance].player_led_set != config->player_index
+          switch_devices[dev_addr].instances[instance].player_led_set != player_index
         ) {
-          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, config->player_index+1);
+          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, player_index+1);
 
           report_size = 12;
 
@@ -505,28 +506,28 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
           report[0x0A + 0] = CMD_LED;    // SUB_COMMAND
 
           // SUB_COMMAND ARGS
-          switch (config->player_index+1)
+          switch (player_index+1)
           {
           case 1:
           case 2:
           case 3:
           case 4:
           case 5:
-            report[0x0A + 1] = PLAYER_LEDS[config->player_index+1];
+            report[0x0A + 1] = PLAYER_LEDS[player_index+1];
             break;
 
-          default: // unassigned - turn all config->leds on
-            // 
+          default: // unassigned - turn all leds on
+            //
             report[0x0A + 1] = 0x0f;
             break;
           }
 
           // fun
-          if (config->player_index+1 && is_fun) {
+          if (player_index+1 && is_fun) {
             report[0x0A + 1] = (fun_inc & 0b00001111);
           }
 
-          switch_devices[dev_addr].instances[instance].player_led_set = config->player_index;
+          switch_devices[dev_addr].instances[instance].player_led_set = player_index;
 
           tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
