@@ -36,10 +36,10 @@ endif
 export PICO_TINYUSB_PATH := $(CURDIR)/src/lib/tinyusb
 
 # Board-specific build scripts
-BOARD_SCRIPT_pico := build_rpi_pico.sh
-BOARD_SCRIPT_kb2040 := build_ada_kb2040.sh
-BOARD_SCRIPT_qtpy := build_ada_qtpy.sh
-BOARD_SCRIPT_rp2040zero := build_waveshare_rp2040_zero.sh
+BOARD_SCRIPT_pico := boards/build_rpi_pico.sh
+BOARD_SCRIPT_kb2040 := boards/build_ada_kb2040.sh
+BOARD_SCRIPT_qtpy := boards/build_ada_qtpy.sh
+BOARD_SCRIPT_rp2040zero := boards/build_waveshare_rp2040_zero.sh
 
 # Console targets
 CONSOLE_pce := usbretro_pce

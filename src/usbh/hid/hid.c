@@ -1,8 +1,8 @@
 // hid.c - HID protocol handler (TinyUSB HID host callbacks)
 #include "tusb.h"
 #include "globals.h"
-#include "usbh/core/device_utils.h"
-#include "usbh/core/device_registry.h"
+#include "usbh/hid/core/device_utils.h"
+#include "usbh/hid/core/device_registry.h"
 #include "common/profile_indicator.h"
 
 // #define LANGUAGE_ID 0x0409
