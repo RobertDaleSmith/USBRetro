@@ -1,6 +1,7 @@
 // nuon.c
 
 #include "nuon.h"
+#include <math.h>
 
 PIO pio;
 uint sm1, sm2;
@@ -17,6 +18,10 @@ uint32_t output_quad_x = 0;
 uint32_t device_mode   = 0b10111001100000111001010100000000;
 uint32_t device_config = 0b10000000100000110000001100000000;
 uint32_t device_switch = 0b10000000100000110000001100000000;
+
+// Stick-to-spinner configuration
+bool analog_stick_to_spinner = true;  // Enable right stick to spinner conversion
+static int16_t last_stick_angle[MAX_PLAYERS] = {0};  // Track last angle per player
 
 bool softReset = false;
 uint32_t pressTime = 0;
@@ -549,6 +554,42 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
       if (event->analog[1]) players[player_index].analog[1] = 256 - event->analog[1];
       if (event->analog[2]) players[player_index].analog[2] = event->analog[2];
       if (event->analog[3]) players[player_index].analog[3] = 256 - event->analog[3];
+
+      // Right stick to spinner conversion (works for all controllers)
+      if (analog_stick_to_spinner) {
+        uint8_t stick_x = event->analog[2];
+        uint8_t stick_y = event->analog[3];
+
+        // Check if stick is outside deadzone (64-192 is center zone)
+        if (stick_x && stick_y && (stick_x < 64 || stick_x > 192 || stick_y < 64 || stick_y > 192)) {
+          // Calculate angle from stick position (0-359 degrees)
+          int16_t x_centered = stick_x - 128;
+          int16_t y_centered = stick_y - 128;
+          float angle_rad = atan2f(y_centered, x_centered);
+          int16_t angle = (int16_t)(angle_rad * (180.0f / 3.14159265f)) + 179;
+
+          // Compute angular delta
+          int16_t delta = 0;
+          if (angle >= last_stick_angle[player_index]) {
+            delta = angle - last_stick_angle[player_index];
+          } else {
+            delta = (-1) * (last_stick_angle[player_index] - angle);
+          }
+
+          // Clamp delta to prevent jumps
+          if (delta > 16) delta = 16;
+          if (delta < -16) delta = -16;
+
+          // Accumulate into spinner
+          players[player_index].output_quad_x -= delta;
+
+          // Wrap spinner to 0-255 range
+          while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
+          while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
+
+          last_stick_angle[player_index] = angle;
+        }
+      }
 
       // Accumulate touchpad delta into spinner (DS4/DS5 touchpad)
       if (event->delta_x != 0) {
