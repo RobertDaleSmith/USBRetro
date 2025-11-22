@@ -2,8 +2,8 @@
 #ifndef LOGITECH_WINGMAN_HEADER_H
 #define LOGITECH_WINGMAN_HEADER_H
 
-#include "../../core/device_interface.h"
-#include "../../core/device_utils.h"
+#include "../../../core/device_interface.h"
+#include "../../../core/device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface logitech_wingman_interface;

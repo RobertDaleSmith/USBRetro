@@ -2,8 +2,8 @@
 #ifndef HORI_POKKEN_HEADER_H
 #define HORI_POKKEN_HEADER_H
 
-#include "../../core/device_interface.h"
-#include "../../core/device_utils.h"
+#include "../../../core/device_interface.h"
+#include "../../../core/device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface hori_pokken_interface;

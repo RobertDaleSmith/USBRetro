@@ -2,8 +2,8 @@
 #ifndef SONY_DS4_HEADER_H
 #define SONY_DS4_HEADER_H
 
-#include "../../core/device_interface.h"
-#include "../../core/device_utils.h"
+#include "../../../core/device_interface.h"
+#include "../../../core/device_utils.h"
 #include "tusb.h"
 
 extern DeviceInterface sony_ds4_interface;
