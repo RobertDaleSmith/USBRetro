@@ -151,7 +151,7 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process output report for rumble and player LED assignment
-void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void output_sony_ds3(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   sony_ds3_output_report_01_t output_report = {
     .buf = {
       0x01,
@@ -168,21 +168,21 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   };
 
   // led player indicator
-  switch (player_index+1)
+  switch (config->player_index+1)
   {
   case 1:
   case 2:
   case 3:
   case 4:
   case 5:
-    output_report.data.leds_bitmap = (PLAYER_LEDS[player_index+1] << 1);
+    output_report.data.leds_bitmap = (PLAYER_LEDS[config->player_index+1] << 1);
     break;
 
   default: // unassigned
-    // turn all leds on
+    // turn all config->leds on
     output_report.data.leds_bitmap = (PLAYER_LEDS[10] << 1);
 
-    // make all leds dim
+    // make all config->leds dim
     for (int n = 0; n < 4; n++) {
       output_report.data.led[n].duty_length = 0;
       output_report.data.led[n].duty_on = 32;
@@ -192,7 +192,7 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   }
 
   // fun
-  if (player_index+1 && is_fun) {
+  if (config->player_index+1 && is_fun) {
     output_report.data.leds_bitmap = (fun_inc & 0b00011110);
 
     // led brightness
@@ -203,18 +203,18 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8
     }
   }
 
-  if (rumble) {
+  if (config->rumble) {
     output_report.data.rumble.right_motor_on = 1;
     output_report.data.rumble.left_motor_force = 128;
     output_report.data.rumble.left_duration = 128;
     output_report.data.rumble.right_duration = 128;
   }
 
-  if (ds3_devices[dev_addr].instances[instance].rumble != rumble ||
+  if (ds3_devices[dev_addr].instances[instance].rumble != config->rumble ||
       ds3_devices[dev_addr].instances[instance].player != output_report.data.leds_bitmap ||
       is_fun)
   {
-    ds3_devices[dev_addr].instances[instance].rumble = rumble;
+    ds3_devices[dev_addr].instances[instance].rumble = config->rumble;
     ds3_devices[dev_addr].instances[instance].player = output_report.data.leds_bitmap;
 
     // Send report without the report ID, start at index 1 instead of 0
@@ -241,14 +241,14 @@ static inline bool init_sony_ds3(uint8_t dev_addr, uint8_t instance) {
 }
 
 // process usb hid output reports
-void task_sony_ds3(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void task_sony_ds3(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
-    output_sony_ds3(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
+    output_sony_ds3(dev_addr, instance, config);
   }
 }
 

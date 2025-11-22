@@ -121,31 +121,31 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
 }
 
 // process usb hid output reports
-void output_gamecube_adapter(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void output_gamecube_adapter(uint8_t dev_addr, uint8_t instance, device_output_config_t* config)
 {
   static uint8_t last_rumble = 0;
-  if (rumble != last_rumble)
+  if (config->rumble != last_rumble)
   {
-    last_rumble = rumble;
+    last_rumble = config->rumble;
 
     uint8_t buf4[5] = { 0x11, /* GC_CMD_RUMBLE */ };
     for(int i = 0; i < 4; i++)
     {
-      buf4[i+1] = rumble ? 1 : 0;
+      buf4[i+1] = config->rumble ? 1 : 0;
     }
     tuh_hid_send_report(dev_addr, instance, buf4[0], &(buf4[0])+1, sizeof(buf4) - 1);
   }
 }
 
 // process usb hid output reports
-void task_gamecube_adapter(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void task_gamecube_adapter(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
-    output_gamecube_adapter(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
+    output_gamecube_adapter(dev_addr, instance, config);
   }
 }
 

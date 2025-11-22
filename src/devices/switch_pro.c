@@ -386,10 +386,10 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
 }
 
 // process usb hid output reports
-void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_t* config)
 {
   static uint8_t output_sequence_counter = 0;
-  // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (rumble|leds)
+  // Nintendo Switch Pro/JoyCons Charging Grip initialization and subcommands (config->rumble|config->leds)
   // See: https://github.com/Dan611/hid-procon/
   //      https://github.com/felis/USB_Host_Shield_2.0/
   //      https://github.com/nicman23/dkms-hid-nintendo/
@@ -491,12 +491,12 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
       } else if (switch_devices[dev_addr].instances[instance].full_report_enabled) {
         uint8_t instance_count = switch_devices[dev_addr].instance_count;
         uint8_t instance_index = instance_count == 1 ? instance : switch_devices[dev_addr].instance_root;
-        player_index = find_player_index(dev_addr, instance_index);
+        config->player_index = find_player_index(dev_addr, instance_index);
 
         if (is_fun ||
-          switch_devices[dev_addr].instances[instance].player_led_set != player_index
+          switch_devices[dev_addr].instances[instance].player_led_set != config->player_index
         ) {
-          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, player_index+1);
+          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, config->player_index+1);
 
           report_size = 12;
 
@@ -505,67 +505,67 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
           report[0x0A + 0] = CMD_LED;    // SUB_COMMAND
 
           // SUB_COMMAND ARGS
-          switch (player_index+1)
+          switch (config->player_index+1)
           {
           case 1:
           case 2:
           case 3:
           case 4:
           case 5:
-            report[0x0A + 1] = PLAYER_LEDS[player_index+1];
+            report[0x0A + 1] = PLAYER_LEDS[config->player_index+1];
             break;
 
-          default: // unassigned - turn all leds on
+          default: // unassigned - turn all config->leds on
             // 
             report[0x0A + 1] = 0x0f;
             break;
           }
 
           // fun
-          if (player_index+1 && is_fun) {
+          if (config->player_index+1 && is_fun) {
             report[0x0A + 1] = (fun_inc & 0b00001111);
           }
 
-          switch_devices[dev_addr].instances[instance].player_led_set = player_index;
+          switch_devices[dev_addr].instances[instance].player_led_set = config->player_index;
 
           tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
-        else if (switch_devices[dev_addr].instances[instance].rumble != rumble)
+        else if (switch_devices[dev_addr].instances[instance].rumble != config->rumble)
         {
-          TU_LOG1("SWITCH[%d|%d]: CMD_RUMBLE_ONLY, %d\r\n", dev_addr, instance, rumble);
+          TU_LOG1("SWITCH[%d|%d]: CMD_RUMBLE_ONLY, %d\r\n", dev_addr, instance, config->rumble);
 
           report_size = 10;
           
           report[0x01] = output_sequence_counter++;
           report[0x00] = CMD_RUMBLE_ONLY; // COMMAND
           
-          if (rumble) {
-            // Left rumble ON data
+          if (config->rumble) {
+            // Left config->rumble ON data
             report[0x02 + 0] = 0x20;
             report[0x02 + 1] = 0x78;
             report[0x02 + 2] = 0x28;
             report[0x02 + 3] = 0x5e;
 
-            // Right rumble ON data
+            // Right config->rumble ON data
             report[0x02 + 4] = 0x20;
             report[0x02 + 5] = 0x78;
             report[0x02 + 6] = 0x28;
             report[0x02 + 7] = 0x5e;
           } else {
-            // Left rumble OFF data
+            // Left config->rumble OFF data
             report[0x02 + 0] = 0x00;
             report[0x02 + 1] = 0x01;
             report[0x02 + 2] = 0x40;
             report[0x02 + 3] = 0x40;
 
-            // Right rumble OFF data
+            // Right config->rumble OFF data
             report[0x02 + 4] = 0x00;
             report[0x02 + 5] = 0x01;
             report[0x02 + 6] = 0x40;
             report[0x02 + 7] = 0x40;
           }
 
-          switch_devices[dev_addr].instances[instance].rumble = rumble;
+          switch_devices[dev_addr].instances[instance].rumble = config->rumble;
 
           tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
@@ -575,7 +575,7 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uin
 }
 
 // process usb hid output reports
-void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void task_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_t* config)
 {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
@@ -584,7 +584,7 @@ void task_switch_pro(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   if (current_time_ms - start_ms >= interval_ms)
   {
     start_ms = current_time_ms;
-    output_switch_pro(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
+    output_switch_pro(dev_addr, instance, config);
   }
 }
 

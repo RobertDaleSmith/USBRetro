@@ -184,7 +184,7 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process usb hid output reports
-void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t trigger_threshold) {
+void output_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   ds5_feedback_t ds5_fb = {0};
 
   // set flags for trigger_r, trigger_l, lightbar, and player_led
@@ -194,12 +194,12 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
 
   // Adaptive trigger feedback - console-controlled via profile/config
   // Simulates analog trigger resistance for enhanced tactile feedback
-  if (trigger_threshold > 0) {
+  if (config->trigger_threshold > 0) {
     ds5_fb.flags |= (1 << 2); // trigger_r
     ds5_fb.flags |= (1 << 3); // trigger_l
 
     // Convert threshold from 0-255 to percentage (0-100)
-    int32_t perc_threshold = (trigger_threshold * 100) / 255;
+    int32_t perc_threshold = (config->trigger_threshold * 100) / 255;
 
     // Calculate resistance values for analog trigger click simulation
     uint8_t l2_start_resistance_value = (perc_threshold * 255) / 100;
@@ -227,7 +227,7 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   }
 
   // Console-specific LED colors from led_config.h
-  switch (player_index+1)
+  switch (config->player_index+1)
   {
   case 1:
     ds5_fb.player_led = LED_P1_PATTERN;
@@ -273,14 +273,14 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   }
 
   // fun
-  if (player_index+1 && is_fun) {
+  if (config->player_index+1 && is_fun) {
     ds5_fb.player_led = fun_player;
     ds5_fb.lightbar_r = fun_inc;
     ds5_fb.lightbar_g = fun_inc+64;
     ds5_fb.lightbar_b = fun_inc+128;
   }
 
-  if (rumble) {
+  if (config->rumble) {
     ds5_fb.rumble_l = 192;
     ds5_fb.rumble_r = 192;
   } else {
@@ -288,25 +288,25 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8
     ds5_fb.rumble_r = 0;
   }
 
-  if (ds5_devices[dev_addr].instances[instance].rumble != rumble ||
+  if (ds5_devices[dev_addr].instances[instance].rumble != config->rumble ||
       ds5_devices[dev_addr].instances[instance].player != ds5_fb.player_led ||
       is_fun)
   {
-    ds5_devices[dev_addr].instances[instance].rumble = rumble;
+    ds5_devices[dev_addr].instances[instance].rumble = config->rumble;
     ds5_devices[dev_addr].instances[instance].player = ds5_fb.player_led & 0xff;
     tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
   }
 }
 
 // process usb hid output reports
-void task_sony_ds5(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void task_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
-    output_sony_ds5(dev_addr, instance, player_index, rumble, trigger_threshold);
+    output_sony_ds5(dev_addr, instance, config);
   }
 }
 

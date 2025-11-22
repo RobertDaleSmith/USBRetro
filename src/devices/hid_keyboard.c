@@ -471,7 +471,7 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
 }
 
 // process usb hid output reports
-void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, device_output_config_t* config)
 {
   // Keyboard LED control
   static uint8_t kbd_leds = 0;
@@ -484,30 +484,30 @@ void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, u
     // kbd_leds = KEYBOARD_LED_NUMLOCK;
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
   }
-  else if (leds != hid_kb_devices[dev_addr].instances[instance].leds || is_fun)
+  else if (config->leds != hid_kb_devices[dev_addr].instances[instance].leds || is_fun)
   {
     // fun
-    if (is_fun) leds |= ((fun_inc >> (fun_inc & 0b00000111)) & 0b00000111);
+    if (is_fun) config->leds |= ((fun_inc >> (fun_inc & 0b00000111)) & 0b00000111);
 
-    if (leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
+    if (config->leds & 0x1) kbd_leds |= KEYBOARD_LED_NUMLOCK;
     else kbd_leds &= ~KEYBOARD_LED_NUMLOCK;
-    if (leds & 0x2) kbd_leds |= KEYBOARD_LED_CAPSLOCK;
+    if (config->leds & 0x2) kbd_leds |= KEYBOARD_LED_CAPSLOCK;
     else kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
-    if (leds & 0x4) kbd_leds |= KEYBOARD_LED_SCROLLLOCK;
+    if (config->leds & 0x4) kbd_leds |= KEYBOARD_LED_SCROLLLOCK;
     else kbd_leds &= ~KEYBOARD_LED_SCROLLLOCK;
 
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &kbd_leds, sizeof(kbd_leds));
-    hid_kb_devices[dev_addr].instances[instance].leds = leds;
+    hid_kb_devices[dev_addr].instances[instance].leds = config->leds;
   }
-  if (rumble != hid_kb_devices[dev_addr].instances[instance].rumble)
+  if (config->rumble != hid_kb_devices[dev_addr].instances[instance].rumble)
   {
-    if (rumble)
+    if (config->rumble)
     {
       kbd_leds |= KEYBOARD_LED_CAPSLOCK | KEYBOARD_LED_SCROLLLOCK | KEYBOARD_LED_NUMLOCK;
     } else {
       kbd_leds = 0; // kbd_leds &= ~KEYBOARD_LED_CAPSLOCK;
     }
-    hid_kb_devices[dev_addr].instances[instance].rumble = rumble;
+    hid_kb_devices[dev_addr].instances[instance].rumble = config->rumble;
 
     if (kbd_leds != prev_kbd_leds)
     {
@@ -518,7 +518,7 @@ void output_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, u
 }
 
 // process usb hid output reports
-void task_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold)
+void task_hid_keyboard(uint8_t dev_addr, uint8_t instance, device_output_config_t* config)
 {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
@@ -527,7 +527,7 @@ void task_hid_keyboard(uint8_t dev_addr, uint8_t instance, int player_index, uin
   if (current_time_ms - start_ms >= interval_ms)
   {
     start_ms = current_time_ms;
-    output_hid_keyboard(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
+    output_hid_keyboard(dev_addr, instance, config);
   }
 }
 

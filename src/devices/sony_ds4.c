@@ -190,12 +190,12 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
 }
 
 // process usb hid output reports
-void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void output_sony_ds4(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   sony_ds4_output_report_t output_report = {0};
   output_report.set_led = 1;
 
   // Console-specific LED colors from led_config.h
-  switch (player_index+1)
+  switch (config->player_index+1)
   {
   case 1:
     output_report.lightbar_red = LED_P1_R;
@@ -235,14 +235,14 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8
   }
 
   // fun
-  if (player_index+1 && is_fun) {
+  if (config->player_index+1 && is_fun) {
     output_report.lightbar_red = fun_inc;
     output_report.lightbar_green = (fun_inc%2 == 0) ? fun_inc+64 : 0;
     output_report.lightbar_blue = (fun_inc%2 == 0) ? 0 : fun_inc+128;
   }
 
   output_report.set_rumble = 1;
-  if (rumble) {
+  if (config->rumble) {
     output_report.motor_left = 192;
     output_report.motor_right = 192;
   } else {
@@ -250,25 +250,25 @@ void output_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8
     output_report.motor_right = 0;
   }
 
-  if (ds4_devices[dev_addr].instances[instance].rumble != rumble ||
-      ds4_devices[dev_addr].instances[instance].player != player_index+1 ||
+  if (ds4_devices[dev_addr].instances[instance].rumble != config->rumble ||
+      ds4_devices[dev_addr].instances[instance].player != config->player_index+1 ||
       is_fun)
   {
-    ds4_devices[dev_addr].instances[instance].rumble = rumble;
-    ds4_devices[dev_addr].instances[instance].player = is_fun ? fun_inc : player_index+1;
+    ds4_devices[dev_addr].instances[instance].rumble = config->rumble;
+    ds4_devices[dev_addr].instances[instance].player = is_fun ? fun_inc : config->player_index+1;
     tuh_hid_send_report(dev_addr, instance, 5, &output_report, sizeof(output_report));
   }
 }
 
 // process usb hid output reports
-void task_sony_ds4(uint8_t dev_addr, uint8_t instance, int player_index, uint8_t rumble, uint8_t leds, uint8_t trigger_threshold) {
+void task_sony_ds4(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   const uint32_t interval_ms = 20;
   static uint32_t start_ms = 0;
 
   uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
   if (current_time_ms - start_ms >= interval_ms) {
     start_ms = current_time_ms;
-    output_sony_ds4(dev_addr, instance, player_index, rumble, leds, trigger_threshold);
+    output_sony_ds4(dev_addr, instance, config);
   }
 }
 
