@@ -67,6 +67,29 @@ void router_init(const router_config_t* config) {
 // INPUT SUBMISSION (Core 0 - Event Driven)
 // ============================================================================
 
+// Bridge: Update legacy players[] array from input_event_t
+// TODO: Remove this when Phase 3 (Output Driver Migration) is complete
+static inline void update_legacy_players_array(const input_event_t* event, int player_index) {
+    extern Player_t players[];
+
+    if (player_index < 0 || player_index >= MAX_PLAYERS) return;
+
+    // Update digital inputs
+    players[player_index].global_buttons = event->buttons;
+    players[player_index].output_buttons = event->buttons;
+
+    // Update analog inputs (new unified array format)
+    for (int i = 0; i < 8; i++) {
+        players[player_index].analog[i] = event->analog[i];
+    }
+
+    // Update keyboard state
+    players[player_index].keypress[0] = event->keys;
+
+    // Update device type
+    players[player_index].device_type = event->type;
+}
+
 // SIMPLE MODE: Direct 1:1 pass-through (zero overhead, can be inlined)
 static inline void router_simple_mode(const input_event_t* event, output_target_t output) {
     // Find or add player
@@ -89,6 +112,9 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         router_outputs[output][player_index].current_state = *event;
         router_outputs[output][player_index].updated = true;
         router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;  // Default for now
+
+        // Bridge: Update legacy players[] array
+        update_legacy_players_array(event, player_index);
     }
 }
 
@@ -104,6 +130,9 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
             router_outputs[output][0].current_state = *event;
             router_outputs[output][0].updated = true;
             router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;  // Default for now
+
+            // Bridge: Update legacy players[] array (always player 0 in merge mode)
+            update_legacy_players_array(event, 0);
         }
     } else {
         // MERGE_PRIORITY: High priority input wins, low priority fallback
