@@ -53,17 +53,17 @@ pico_add_extra_outputs(usbretro_xb1)
 pico_add_extra_outputs(usbretro_nuon)
 pico_add_extra_outputs(usbretro_loopy)
 
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/plex.pio )
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/clock.pio )
-pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/console/pcengine/select.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/clock.pio )
+pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/select.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 pico_generate_pio_header(usbretro_xb1 ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
-pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_read.pio )
-pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/console/nuon/polyface_send.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_read.pio )
+pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_send.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
-pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/console/loopy/loopy.pio )
+pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/native/device/loopy/loopy.pio )
 pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 
 ## SET TARGE SOURCES
@@ -73,96 +73,97 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/output.c
 
     # USB Host - HID Protocol Stack
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid_utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/hid_registry.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_keyboard.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_mouse.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_parser.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/generic/hid_gamepad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/8bitdo/8bitdo_bta.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/8bitdo/8bitdo_m30.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/nintendo/gamecube_adapter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/nintendo/switch_pro.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/sony/sony_ds3.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/sony/sony_ds4.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/sony/sony_ds5.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/sony/sony_psc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/hori/hori_horipad.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/hori/hori_pokken.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/logitech/logitech_wingman.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/sega/sega_astrocity.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/dragonrise/dragonrise.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/misc/triple_adapter_v1.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/hid/devices/vendors/misc/triple_adapter_v2.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/hid_keyboard.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/hid_mouse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/hid_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/hid_gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_bta.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_m30.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/nintendo/gamecube_adapter.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/nintendo/switch_pro.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sony/sony_ds3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sony/sony_ds4.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sony/sony_psc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/hori/hori_horipad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/hori/hori_pokken.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/logitech/logitech_wingman.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sega/sega_astrocity.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/dragonrise/dragonrise.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v1.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v2.c
 
     # USB Host - X-input Protocol
-    ${CMAKE_CURRENT_SOURCE_DIR}/usbh/xinput/xinput.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
 
 target_sources(usbretro_pce PUBLIC # For PCE
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine/pcengine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine/pcengine_device.c
 )
 
 target_sources(usbretro_ngc PUBLIC # For NGC
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube/gamecube.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/gamecube/gamecube_device.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/joybus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
 )
 
 target_sources(usbretro_xb1 PUBLIC # For XB1
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone/xboxone.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone/xboxone_device.c
 )
 
 target_sources(usbretro_nuon PUBLIC # For NUON
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon/nuon.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/nuon/nuon_device.c
 )
 
 target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/loopy/loopy.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/loopy/loopy_device.c
 )
 
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/pcengine
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine
 )
 
 target_include_directories(usbretro_ngc PUBLIC # FOR NGC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/gamecube
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/gamecube
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/include
 )
 
 target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/xboxone
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone
 )
 
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/nuon
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/nuon
 )
 
 target_include_directories(usbretro_loopy PUBLIC # FOR LOOPY
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/loopy
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/loopy
 )
 
 ## SET TARGET LINK LIBS

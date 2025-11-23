@@ -1,7 +1,7 @@
-// xboxone.h
+// xboxone_device.h
 
-#ifndef XBOXONE_H
-#define XBOXONE_H
+#ifndef XBOXONE_DEVICE_H
+#define XBOXONE_DEVICE_H
 
 #include <stdint.h>
 
@@ -74,4 +74,4 @@ void i2c_slave_handler(i2c_inst_t *i2c, i2c_slave_event_t event);
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
 
-#endif // XBOXONE_H
+#endif // XBOXONE_DEVICE_H

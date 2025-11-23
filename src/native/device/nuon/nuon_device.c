@@ -1,6 +1,6 @@
 // nuon.c
 
-#include "nuon.h"
+#include "nuon_device.h"
 #include <math.h>
 
 PIO pio;
@@ -608,3 +608,17 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
     }
   }
 }
+
+// ============================================================================
+// OUTPUT INTERFACE
+// ============================================================================
+
+#include "common/output_interface.h"
+
+const OutputInterface nuon_output_interface = {
+    .name = "Nuon",
+    .init = nuon_init,
+    .handle_input = post_input_event,
+    .core1_entry = core1_entry,
+    .task = nuon_task,  // Nuon needs periodic soft reset task
+};

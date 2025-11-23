@@ -20,18 +20,9 @@ bool update_pending = false;
 uint8_t gc_rumble = 0;
 uint8_t gc_kb_led = 0;
 
-// include console specific handling
-#ifdef CONFIG_NGC
-#include "console/gamecube/gamecube.h"
-#elif CONFIG_LOOPY
-#include "console/loopy/loopy.h"
-#elif CONFIG_NUON
-#include "console/nuon/nuon.h"
-#elif CONFIG_PCE
-#include "console/pcengine/pcengine.h"
-#elif CONFIG_XB1
-#include "console/xboxone/xboxone.h"
-#endif
+// Output interface abstraction
+#include "common/output_interface.h"
+extern const OutputInterface* active_output;
 
 extern void hid_init(void);
 extern void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t test);
@@ -49,7 +40,7 @@ extern void players_init(void);
 
 #ifdef CONFIG_NGC
 extern void flash_settings_task(void);
-#include "console/gamecube/gamecube_config.h"
+#include "native/device/gamecube/gamecube_config.h"
 extern gc_profile_t* get_active_profile(void);
 #endif
 
@@ -107,16 +98,12 @@ static void __not_in_flash_func(process_signals)(void)
 #if CFG_TUH_HID
     // hid_device rumble/led task
     hid_task(combined_rumble, player_led, trigger_threshold, test_counter);
-
 #endif
-#ifdef CONFIG_PCE
-    // detection of when a PCE scan is no longer in process (reset period)
-    pce_task();
 
-#elif CONFIG_NUON
-    nuon_task();
-
-#endif
+    // Console-specific periodic task (if needed)
+    if (active_output->task) {
+      active_output->task();
+    }
   }
 }
 
@@ -124,7 +111,7 @@ int main(void)
 {
   stdio_init_all();
 
-  printf("\nUSB_RETRO::");
+  printf("\nUSB_RETRO::%s\n\n", active_output->name);
 
   // board_init() removed in latest pico-sdk/TinyUSB
 
@@ -143,25 +130,13 @@ int main(void)
 
   players_init(); // init multi-player management
 
-#ifdef CONFIG_NGC
-  printf("GAMECUBE");
-  ngc_init();
-#elif CONFIG_LOOPY
-  printf("LOOPY");
-  loopy_init();
-#elif CONFIG_NUON
-  printf("NUON");
-  nuon_init();
-#elif CONFIG_PCE
-  printf("PCENGINE");
-  pce_init();
-#elif CONFIG_XB1
-  printf("XBOXONE");
-  xb1_init();
-#endif
-  printf("\n\n");
+  // Initialize active output (console-specific or USB device)
+  active_output->init();
 
-  multicore_launch_core1(core1_entry);
+  // Launch Core1 for console output protocol (if needed)
+  if (active_output->core1_entry) {
+    multicore_launch_core1(active_output->core1_entry);
+  }
 
   process_signals();
 

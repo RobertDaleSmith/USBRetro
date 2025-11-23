@@ -1,6 +1,6 @@
 // xboxone.c
 
-#include "xboxone.h"
+#include "xboxone_device.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
 
@@ -322,3 +322,17 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
     }
   }
 }
+
+// ============================================================================
+// OUTPUT INTERFACE
+// ============================================================================
+
+#include "common/output_interface.h"
+
+const OutputInterface xboxone_output_interface = {
+    .name = "Xbox One",
+    .init = xb1_init,
+    .handle_input = post_input_event,
+    .core1_entry = core1_entry,
+    .task = NULL,  // Xbox One doesn't need periodic task
+};

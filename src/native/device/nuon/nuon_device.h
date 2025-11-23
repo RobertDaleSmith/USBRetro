@@ -1,7 +1,7 @@
-// nuon.h
+// nuon_device.h
 
-#ifndef NUON_H
-#define NUON_H
+#ifndef NUON_DEVICE_H
+#define NUON_DEVICE_H
 
 #include <stdint.h>
 #include "hardware/pio.h"
@@ -80,4 +80,4 @@ uint32_t crc_data_packet(int32_t value, int8_t size);
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
 
-#endif // NUON_H
+#endif // NUON_DEVICE_H

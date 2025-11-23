@@ -1,7 +1,7 @@
-// loopy.h
+// loopy_device.h
 
-#ifndef LOOPY_H
-#define LOOPY_H
+#ifndef LOOPY_DEVICE_H
+#define LOOPY_DEVICE_H
 
 #include <pico/stdlib.h>
 // #include <hardware/pio.h>
@@ -56,4 +56,4 @@ void loopy_init(void);
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
 
-#endif // LOOPY_H
+#endif // LOOPY_DEVICE_H

@@ -1,6 +1,6 @@
 // pcengine.c
 
-#include "pcengine.h"
+#include "pcengine_device.h"
 #include "hardware/clocks.h"
 
 #if CFG_TUSB_DEBUG >= 1
@@ -433,3 +433,17 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
     }
   }
 }
+
+// ============================================================================
+// OUTPUT INTERFACE
+// ============================================================================
+
+#include "common/output_interface.h"
+
+const OutputInterface pcengine_output_interface = {
+    .name = "PCEngine",
+    .init = pce_init,
+    .handle_input = post_input_event,
+    .core1_entry = core1_entry,
+    .task = pce_task,  // PCEngine needs periodic scan detection task
+};

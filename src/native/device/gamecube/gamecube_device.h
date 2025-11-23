@@ -1,7 +1,7 @@
-// gamecube.h
+// gamecube_device.h
 
-#ifndef GAMECUBE_H
-#define GAMECUBE_H
+#ifndef GAMECUBE_DEVICE_H
+#define GAMECUBE_DEVICE_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -54,4 +54,4 @@ void ngc_init(void);
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
 
-#endif // GAMECUBE_H
+#endif // GAMECUBE_DEVICE_H

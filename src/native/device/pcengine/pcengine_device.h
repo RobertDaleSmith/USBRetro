@@ -1,7 +1,7 @@
-// pcengine.h
+// pcengine_device.h
 
-#ifndef PCENGINE_H
-#define PCENGINE_H
+#ifndef PCENGINE_DEVICE_H
+#define PCENGINE_DEVICE_H
 
 #include <stdint.h>
 
@@ -56,4 +56,4 @@ void turbo_init(void);
 void __not_in_flash_func(core1_entry)(void);
 void __not_in_flash_func(update_output)(void);
 
-#endif // PCENGINE_H
+#endif // PCENGINE_DEVICE_H
