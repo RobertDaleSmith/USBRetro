@@ -97,7 +97,7 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
 
     if (player_index < 0) {
         // Check if any button pressed (auto-assign on first press)
-        uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+        uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
         if (buttons_pressed) {
             player_index = add_player(event->dev_addr, event->instance);
             if (player_index >= 0) {
@@ -124,7 +124,20 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
         // MERGE_ALL: Latest active input wins (current GCUSB behavior)
         // All USB controllers merged to single output port
 
-        uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
+        // Register player if not already registered (for LED and rumble support)
+        int player_index = find_player_index(event->dev_addr, event->instance);
+        if (player_index < 0) {
+            uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
+            if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
+                player_index = add_player(event->dev_addr, event->instance);
+                if (player_index >= 0) {
+                    printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
+                        player_index + 1, event->dev_addr, event->instance);
+                }
+            }
+        }
+
+        uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
         if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
             // Any button pressed or mouse movement → use this input
             router_outputs[output][0].current_state = *event;
