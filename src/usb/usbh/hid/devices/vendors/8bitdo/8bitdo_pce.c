@@ -76,7 +76,7 @@ void process_8bitdo_pce(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .analog = {128, 128, 128, 128, 128, 0, 0, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
 
     prev_report[dev_addr-1] = pce_report;
   }

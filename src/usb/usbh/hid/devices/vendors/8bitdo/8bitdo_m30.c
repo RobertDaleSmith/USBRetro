@@ -108,7 +108,7 @@ void process_8bitdo_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, 0, 0, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
 
     prev_report[dev_addr-1] = input_report;
   }

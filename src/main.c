@@ -130,6 +130,21 @@ int main(void)
 
   players_init(); // init multi-player management
 
+  // Initialize router system (Phase 2)
+  router_config_t router_cfg = {
+    #ifdef CONFIG_NGC
+      .mode = ROUTING_MODE_MERGE,      // GameCube: merge all USB inputs (current behavior)
+      .merge_mode = MERGE_ALL,
+      .merge_all_inputs = true,
+    #else
+      .mode = ROUTING_MODE_SIMPLE,     // Other consoles: simple 1:1
+      .merge_mode = MERGE_ALL,
+      .merge_all_inputs = false,
+    #endif
+    .max_players_per_output = {4, 5, 8, 5, 1, 5, 4, 4},  // GC=4, PCE=5, 3DO=8, etc.
+  };
+  router_init(&router_cfg);
+
   // Initialize active output (console-specific or USB device)
   active_output->init();
 

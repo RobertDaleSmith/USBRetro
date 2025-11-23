@@ -465,7 +465,7 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
     .analog = {analog_left_x, analog_left_y, analog_right_x, analog_right_y, 128, analog_l, analog_r, 128},
     .keys = reportKeys
   };
-  post_input_event(&event);
+  router_submit_input(&event);
 
   prev_report = *report;
 }

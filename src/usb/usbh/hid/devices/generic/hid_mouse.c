@@ -118,7 +118,7 @@ void process_hid_mouse(uint8_t dev_addr, uint8_t instance, uint8_t const* mouse_
     .delta_wheel = report->wheel,
     .keys = 0
   };
-  post_input_event(&event);
+  router_submit_input(&event);
 
   //------------- cursor movement -------------//
   cursor_movement(report->x, report->y, report->wheel, 0);

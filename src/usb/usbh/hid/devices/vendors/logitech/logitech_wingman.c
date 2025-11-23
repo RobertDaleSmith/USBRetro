@@ -123,7 +123,7 @@ void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const*
       .analog = {analog_x1, analog_y1, analog_x2, analog_y2, 128, 0, 0, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
 
     prev_report[dev_addr-1] = wingman_report;
   }

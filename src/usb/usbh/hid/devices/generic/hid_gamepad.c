@@ -514,7 +514,7 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
       .analog = {axis_x, axis_y, axis_z, axis_rz, 128, current.rx, current.ry, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
   }
 }
 

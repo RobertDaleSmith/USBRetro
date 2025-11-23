@@ -182,7 +182,7 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .delta_x = touchpad_delta_x,  // Touchpad horizontal swipe as mouse-like delta
         .keys = 0
       };
-      post_input_event(&event);
+      router_submit_input(&event);
 
       prev_report[dev_addr-1] = ds4_report;
     }

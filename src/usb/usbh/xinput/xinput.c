@@ -75,7 +75,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
         .keys = 0
       };
-      post_input_event(&event);
+      router_submit_input(&event);
     }
   }
   tuh_xinput_receive_report(dev_addr, instance);

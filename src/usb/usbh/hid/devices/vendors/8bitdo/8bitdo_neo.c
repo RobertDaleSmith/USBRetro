@@ -23,7 +23,7 @@ void process_8bitdo_neo(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
   memcpy(&input_report, report, sizeof(input_report));
 
   if (diff_report_neo(&prev_report[dev_addr-1], &input_report)) {
-    // TODO: Parse input_report and call post_input_event() with INPUT_TYPE_GAMEPAD
+    // TODO: Parse input_report and call router_submit_input() with INPUT_TYPE_GAMEPAD
     prev_report[dev_addr-1] = input_report;
   }
 }

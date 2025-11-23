@@ -251,7 +251,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
         .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
         .keys = 0,
       };
-      post_input_event(&event);
+      router_submit_input(&event);
 
       prev_report[dev_addr-1][instance] = update_report;
 
@@ -344,7 +344,7 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
   }
   else // process input reports for events and command acknowledgments
   {

@@ -108,7 +108,7 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
             },
             .keys = 0,
           };
-          post_input_event(&event);
+          router_submit_input(&event);
 
           prev_report[dev_addr-1][instance + i] = gamecube_report;
         }

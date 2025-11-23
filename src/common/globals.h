@@ -45,8 +45,11 @@ extern bool update_pending;
 extern uint8_t gc_rumble;
 extern uint8_t gc_kb_led;
 
-// Unified input event callback
-void __not_in_flash_func(post_input_event)(const input_event_t* event);
+// Router system (replaces post_input_event)
+#include "core/router/router.h"
+
+// OLD: Console-specific post_input_event (being replaced by router)
+// void __not_in_flash_func(post_input_event)(const input_event_t* event);
 
 int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
 int __not_in_flash_func(add_player)(int dev_addr, int instance);

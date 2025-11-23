@@ -110,7 +110,7 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       TU_LOG1("\r\n");
 
       // All shoulder buttons passed as digital (platform-agnostic)
-      // Consoles handle analog trigger thresholds in their post_input_event()
+      // Consoles handle analog trigger thresholds in their router_submit_input()
       buttons = (((ds3_report.up)       ? 0x00 : USBR_BUTTON_DU) |
                  ((ds3_report.down)     ? 0x00 : USBR_BUTTON_DD) |
                  ((ds3_report.left)     ? 0x00 : USBR_BUTTON_DL) |
@@ -143,7 +143,7 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
         .keys = 0,
       };
-      post_input_event(&event);
+      router_submit_input(&event);
 
       prev_report[dev_addr-1] = ds3_report;
     }

@@ -113,7 +113,7 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .analog = {axis_1x, axis_1y, axis_2x, axis_2y, 128, 0, 0, 128},
       .keys = 0,
     };
-    post_input_event(&event);
+    router_submit_input(&event);
 
     prev_report[dev_addr-1][instance] = update_report;
   }

@@ -75,6 +75,9 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/output.c
 
+    # Core Router System
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/router/router.c
+
     # USB Host - HID Protocol Stack
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid_utils.c
