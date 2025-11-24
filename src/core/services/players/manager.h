@@ -11,9 +11,8 @@
 #include <stdint.h>
 #include "tusb.h"
 #include "input_event.h"
-#ifdef CONFIG_NGC
-#include "lib/joybus-pio/include/gamecube_definitions.h"
-#endif
+// Note: Console-specific output formats (gc_report, etc.) are stored in the
+// console device layer, not in Player_t. Player_t stores generic USBR state.
 
 #ifndef MAX_PLAYERS
 #define MAX_PLAYERS 5
@@ -70,10 +69,8 @@ typedef struct TU_ATTR_PACKED
   // Mode
   int button_mode;
 
-  // Console-specific extensions
-#ifdef CONFIG_NGC
-  gc_report_t gc_report;
-#endif
+  // Note: Console-specific output formats (gc_report_t, etc.) belong in the
+  // console device layer, not here. Player_t stores generic USBR state only.
 } Player_t;
 
 // ============================================================================
