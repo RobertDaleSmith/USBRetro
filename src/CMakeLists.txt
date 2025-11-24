@@ -154,6 +154,8 @@ target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
 target_sources(usbretro_3do PUBLIC # For 3DO
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do/3do_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/3dousb/main.c
 )
 
 ## SET TARGET INCLUDE DIRS
