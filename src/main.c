@@ -131,7 +131,7 @@ int main(void)
   players_init(); // init multi-player management
 
   // Initialize app layer (Phase 5)
-  // Apps handle their own router/player/profile configuration
+  // Every product MUST have an app that configures router/players/profiles
 #if defined(CONFIG_NGC)
   extern void app_init(void);
   app_init();
@@ -148,20 +148,7 @@ int main(void)
   extern void app_init(void);
   app_init();
 #else
-  // Console without app - provide default router configuration
-  router_config_t router_cfg = {
-    .mode = ROUTING_MODE_SIMPLE,
-    .merge_mode = MERGE_ALL,
-    .merge_all_inputs = false,
-    .max_players_per_output = {4, 5, 8, 5, 1, 5, 4, 4},
-    #if defined(CONFIG_LOOPY)
-      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,
-    #else
-      .transform_flags = TRANSFORM_NONE,
-    #endif
-    .mouse_drain_rate = 8,
-  };
-  router_init(&router_cfg);
+  #error "No app defined for this console! Create an app in src/apps/ first."
 #endif
 
   // Initialize active output (console-specific or USB device)
