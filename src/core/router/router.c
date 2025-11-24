@@ -25,6 +25,16 @@ static output_target_t active_outputs[MAX_OUTPUTS];
 static uint8_t active_output_count = 0;
 
 // ============================================================================
+// TRANSFORMATION STATE (Phase 5)
+// ============================================================================
+
+// Mouse-to-analog accumulators (per output, per player)
+static mouse_accumulator_t mouse_accumulators[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
+
+// Instance merging state (per output, per player)
+static instance_merge_t instance_merges[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -57,10 +67,109 @@ void router_init(const router_config_t* config) {
             router_outputs[output][player].updated = false;
             router_outputs[output][player].player_id = player;
             router_outputs[output][player].source = INPUT_SOURCE_USB_HOST;  // Default
+
+            // Initialize transformation state
+            mouse_accumulators[output][player].accum_x = 0;
+            mouse_accumulators[output][player].accum_y = 0;
+            mouse_accumulators[output][player].drain_rate = config->mouse_drain_rate;
+
+            instance_merges[output][player].active = false;
+            instance_merges[output][player].instance_count = 0;
+            instance_merges[output][player].root_instance = 0;
         }
     }
 
     printf("[router] Initialized successfully\n");
+    if (config->transform_flags) {
+        printf("[router]   Transformations enabled: 0x%02x\n", config->transform_flags);
+        if (config->transform_flags & TRANSFORM_MOUSE_TO_ANALOG)
+            printf("[router]     - Mouse-to-analog (drain_rate=%d)\n", config->mouse_drain_rate);
+        if (config->transform_flags & TRANSFORM_MERGE_INSTANCES)
+            printf("[router]     - Instance merging\n");
+        if (config->transform_flags & TRANSFORM_SPINNER)
+            printf("[router]     - Spinner accumulation\n");
+    }
+}
+
+// ============================================================================
+// INPUT TRANSFORMATIONS (Phase 5)
+// ============================================================================
+
+// Mouse-to-analog: Accumulate mouse deltas into analog stick positions
+// This replaces the console-specific accumulator code in Xbox/PCEngine/Loopy
+static void transform_mouse_to_analog(input_event_t* event, output_target_t output, int player_index) {
+    if (event->type != INPUT_TYPE_MOUSE) return;
+    if (player_index < 0 || player_index >= MAX_PLAYERS_PER_OUTPUT) return;
+
+    mouse_accumulator_t* accum = &mouse_accumulators[output][player_index];
+
+    // Accumulate mouse deltas (handle signed 8-bit deltas)
+    if (event->delta_x >= 128)
+        accum->accum_x -= (256 - event->delta_x);
+    else
+        accum->accum_x += event->delta_x;
+
+    if (event->delta_y >= 128)
+        accum->accum_y -= (256 - event->delta_y);
+    else
+        accum->accum_y += event->delta_y;
+
+    // Clamp accumulator to [-127, 127]
+    if (accum->accum_x > 127) accum->accum_x = 127;
+    if (accum->accum_x < -127) accum->accum_x = -127;
+    if (accum->accum_y > 127) accum->accum_y = 127;
+    if (accum->accum_y < -127) accum->accum_y = -127;
+
+    // Convert accumulated deltas to analog stick positions (centered at 128)
+    event->analog[ANALOG_X] = 128 + accum->accum_x;  // Left stick X
+    event->analog[ANALOG_Y] = 128 + accum->accum_y;  // Left stick Y
+
+    // Drain accumulator gradually (move back toward center)
+    if (accum->accum_x > 0) {
+        accum->accum_x -= (accum->accum_x > accum->drain_rate) ? accum->drain_rate : accum->accum_x;
+    } else if (accum->accum_x < 0) {
+        accum->accum_x += (-accum->accum_x > accum->drain_rate) ? accum->drain_rate : -accum->accum_x;
+    }
+
+    if (accum->accum_y > 0) {
+        accum->accum_y -= (accum->accum_y > accum->drain_rate) ? accum->drain_rate : accum->accum_y;
+    } else if (accum->accum_y < 0) {
+        accum->accum_y += (-accum->accum_y > accum->drain_rate) ? accum->drain_rate : -accum->accum_y;
+    }
+
+    // Clear delta fields (no longer needed, analog values now set)
+    event->delta_x = 0;
+    event->delta_y = 0;
+}
+
+// Instance merging: Merge multi-instance devices (Joy-Con Grip, etc.)
+// TODO Phase 5: Implement Joy-Con Grip merging
+static void transform_merge_instances(input_event_t* event, output_target_t output, int player_index) {
+    if (player_index < 0 || player_index >= MAX_PLAYERS_PER_OUTPUT) return;
+
+    // TODO: Detect multi-instance devices (instance == -1 flag from device driver)
+    // TODO: Merge button states and analog inputs from both instances
+    // TODO: Present as single unified controller
+
+    (void)event;  // Suppress unused warning for now
+    (void)output;
+}
+
+// Apply transformations to input event (modifies event in-place)
+static void apply_transformations(input_event_t* event, output_target_t output, int player_index) {
+    if (!router_config.transform_flags) return;  // No transformations enabled
+
+    // Apply mouse-to-analog transformation
+    if (router_config.transform_flags & TRANSFORM_MOUSE_TO_ANALOG) {
+        transform_mouse_to_analog(event, output, player_index);
+    }
+
+    // Apply instance merging
+    if (router_config.transform_flags & TRANSFORM_MERGE_INSTANCES) {
+        transform_merge_instances(event, output, player_index);
+    }
+
+    // TODO: TRANSFORM_SPINNER (Nuon spinner accumulation)
 }
 
 // ============================================================================
@@ -111,13 +220,19 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
     }
 
     if (player_index >= 0 && player_index < router_config.max_players_per_output[output]) {
-        // Direct pass-through (atomic write)
-        router_outputs[output][player_index].current_state = *event;
+        // Create local copy for transformation
+        input_event_t transformed = *event;
+
+        // Apply transformations (mouse-to-analog, instance merging, etc.)
+        apply_transformations(&transformed, output, player_index);
+
+        // Store transformed event (atomic write)
+        router_outputs[output][player_index].current_state = transformed;
         router_outputs[output][player_index].updated = true;
         router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;  // Default for now
 
         // Bridge: Update legacy players[] array
-        update_legacy_players_array(event, player_index);
+        update_legacy_players_array(&transformed, player_index);
     }
 }
 
@@ -142,12 +257,19 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
 
         // Update output state for registered players (process all events, not just button presses)
         if (player_index >= 0) {
-            router_outputs[output][0].current_state = *event;
+            // Create local copy for transformation
+            input_event_t transformed = *event;
+
+            // Apply transformations (mouse-to-analog, instance merging, etc.)
+            apply_transformations(&transformed, output, 0);  // Always player 0 in merge mode
+
+            // Store transformed event (atomic write)
+            router_outputs[output][0].current_state = transformed;
             router_outputs[output][0].updated = true;
             router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;  // Default for now
 
             // Bridge: Update legacy players[] array (always player 0 in merge mode)
-            update_legacy_players_array(event, 0);
+            update_legacy_players_array(&transformed, 0);
         }
     } else {
         // MERGE_PRIORITY: High priority input wins, low priority fallback

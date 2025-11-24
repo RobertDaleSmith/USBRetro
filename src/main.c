@@ -142,6 +142,18 @@ int main(void)
       .merge_all_inputs = false,
     #endif
     .max_players_per_output = {4, 5, 8, 5, 1, 5, 4, 4},  // GC=4, PCE=5, 3DO=8, etc.
+
+    // Phase 5: Input transformations
+    #if defined(CONFIG_XB1)
+      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,  // Xbox One: enable mouse-to-analog
+      .mouse_drain_rate = 8,                          // Gradual drain (balance responsiveness/smoothness)
+    #elif defined(CONFIG_PCE) || defined(CONFIG_LOOPY)
+      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,  // PCEngine/Loopy: enable mouse support
+      .mouse_drain_rate = 8,
+    #else
+      .transform_flags = TRANSFORM_NONE,             // Other consoles: no transformations
+      .mouse_drain_rate = 8,
+    #endif
   };
   router_init(&router_cfg);
 

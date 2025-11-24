@@ -53,6 +53,32 @@ typedef enum {
 } output_target_t;
 
 // ============================================================================
+// INPUT TRANSFORMATIONS
+// ============================================================================
+
+// Transformation flags (enable/disable per console)
+typedef enum {
+    TRANSFORM_NONE              = 0x00,
+    TRANSFORM_MOUSE_TO_ANALOG   = 0x01,  // Convert mouse deltas → analog stick (for Xbox, etc.)
+    TRANSFORM_MERGE_INSTANCES   = 0x02,  // Merge multi-instance devices (Joy-Con Grip)
+    TRANSFORM_SPINNER           = 0x04,  // Accumulate X-axis for spinners (Nuon, etc.)
+} transformation_flags_t;
+
+// Mouse-to-analog accumulator state (per player)
+typedef struct {
+    int16_t accum_x;        // Accumulated X delta
+    int16_t accum_y;        // Accumulated Y delta
+    uint8_t drain_rate;     // How fast to drain per frame (0 = instant, 255 = slow)
+} mouse_accumulator_t;
+
+// Instance merging state (for Joy-Con Grip, etc.)
+typedef struct {
+    bool active;            // Is this a merged device?
+    uint8_t instance_count; // How many instances are merged
+    uint8_t root_instance;  // Root instance ID
+} instance_merge_t;
+
+// ============================================================================
 // ROUTER CONFIGURATION
 // ============================================================================
 
@@ -64,6 +90,10 @@ typedef struct {
     merge_mode_t merge_mode;
     uint8_t max_players_per_output[MAX_OUTPUTS];  // Per-output limits (GC=4, 3DO=8, PCE=5)
     bool merge_all_inputs;                        // Merge all inputs to single output (current GC)
+
+    // Input transformations (Phase 5)
+    uint8_t transform_flags;                      // Which transformations to enable (bitfield)
+    uint8_t mouse_drain_rate;                     // Mouse accumulator drain rate (default: 8)
 } router_config_t;
 
 // ============================================================================

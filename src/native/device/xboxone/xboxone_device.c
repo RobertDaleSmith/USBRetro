@@ -153,12 +153,10 @@ void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8
 // core1_entry - inner-loop for the second core
 void __not_in_flash_func(core1_entry)(void)
 {
-  // Temporary bridge access for mouse accumulators (TODO: move to console-local state)
-  extern Player_t players[];
-
   while (1)
   {
     // Get input from router (Xbox One uses MERGE mode, all inputs merged to player 0)
+    // Router applies TRANSFORM_MOUSE_TO_ANALOG to convert mouse deltas → analog sticks
     const input_event_t* event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
     if (!event || playersCount == 0) continue;
 
@@ -189,22 +187,6 @@ void __not_in_flash_func(core1_entry)(void)
 
     update_pending = false;
 
-    // Mouse accumulator handling (TODO: move to console-local state)
-    unsigned short int i;
-    for (i = 0; i < MAX_PLAYERS; ++i)
-    {
-      // decrement outputs from globals
-      if (players[i].global_x != 0)
-      {
-        players[i].global_x = (players[i].global_x - (players[i].analog[0] - 128));  // ANALOG_X
-        players[i].analog[0] = 128;  // ANALOG_X
-      }
-      if (players[i].global_y != 0)
-      {
-        players[i].global_y = (players[i].global_y - (players[i].analog[1] - 128));  // ANALOG_Y
-        players[i].analog[1] = 128;  // ANALOG_Y
-      }
-    }
     update_output();
   }
 }

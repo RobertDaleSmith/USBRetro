@@ -224,14 +224,12 @@ void __not_in_flash_func(core1_entry)(void)
 
     update_output();
 
+    // NOTE: This legacy code accesses players[] array directly
+    // TODO Phase 5: Remove players[] bridge and refactor Loopy-specific state handling
     unsigned short int i;
     for (i = 0; i < MAX_PLAYERS; ++i) {
-      // decrement outputs from globals
-      // players[i].global_x = (players[i].global_x - players[i].analog[0]);
-      // players[i].global_y = (players[i].global_y - players[i].analog[1]);
+      // Mouse accumulator removed - router now handles TRANSFORM_MOUSE_TO_ANALOG
 
-      // players[i].analog[0] = 0;
-      // players[i].analog[1] = 0;
       players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
     }
   }
