@@ -153,6 +153,8 @@ target_sources(usbretro_nuon PUBLIC # For NUON
 target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/loopy/loopy_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/loopyusb/main.c
 )
 
 target_sources(usbretro_3do PUBLIC # For 3DO

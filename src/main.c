@@ -126,8 +126,8 @@ int main(void)
   // Initialize app layer (Phase 5)
   // Every product MUST have an app that configures router/players/profiles
   // Apps own configuration (router, players, profiles), firmware provides runtime
-#if !defined(CONFIG_NGC) && !defined(CONFIG_PCE) && !defined(CONFIG_3DO) && !defined(CONFIG_NUON) && !defined(CONFIG_XB1)
-  #error "No console configuration defined! Build system must define CONFIG_NGC, CONFIG_PCE, CONFIG_3DO, CONFIG_NUON, or CONFIG_XB1"
+#if !defined(CONFIG_NGC) && !defined(CONFIG_PCE) && !defined(CONFIG_3DO) && !defined(CONFIG_NUON) && !defined(CONFIG_XB1) && !defined(CONFIG_LOOPY)
+  #error "No console configuration defined! Build system must define CONFIG_NGC, CONFIG_PCE, CONFIG_3DO, CONFIG_NUON, CONFIG_XB1, or CONFIG_LOOPY"
 #endif
 
   app_init();
