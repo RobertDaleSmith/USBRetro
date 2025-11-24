@@ -123,6 +123,8 @@ set(COMMON_SOURCES
 target_sources(usbretro_pce PUBLIC # For PCE
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine/pcengine_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2pce/main.c
 )
 
 target_sources(usbretro_ngc PUBLIC # For NGC
