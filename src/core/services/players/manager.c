@@ -60,18 +60,10 @@ void players_init(void)
     players[i].player_number = 0;
 
     // Initialize generic USBR button state (inverted logic: 1 = released)
-    // Note: Console-specific output formats (gc_report, etc.) are stored and
-    // initialized in the console device layer, not here
-#ifdef CONFIG_NUON
-    // Nuon uses different neutral state for its output
-    players[i].global_buttons = 0x80;
-    players[i].altern_buttons = 0x80;
-    players[i].output_buttons = 0x80;
-#else
+    // Note: Console-specific output formats are stored in the device layer
     players[i].global_buttons = 0xFFFFF;
     players[i].altern_buttons = 0xFFFFF;
     players[i].output_buttons = 0xFFFFF;
-#endif
     players[i].global_x = 0;
     players[i].global_y = 0;
 
@@ -114,18 +106,10 @@ void players_init_with_config(const player_config_t* config)
     players[i].player_number = 0;
 
     // Initialize generic USBR button state (inverted logic: 1 = released)
-    // Note: Console-specific output formats (gc_report, etc.) are stored and
-    // initialized in the console device layer, not here
-#ifdef CONFIG_NUON
-    // Nuon uses different neutral state for its output
-    players[i].global_buttons = 0x80;
-    players[i].altern_buttons = 0x80;
-    players[i].output_buttons = 0x80;
-#else
+    // Note: Console-specific output formats are stored in the device layer
     players[i].global_buttons = 0xFFFFF;
     players[i].altern_buttons = 0xFFFFF;
     players[i].output_buttons = 0xFFFFF;
-#endif
     players[i].global_x = 0;
     players[i].global_y = 0;
 

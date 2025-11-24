@@ -1,6 +1,7 @@
 // codes.c
 
 #include "codes.h"
+#include "core/router/router.h"
 
 // Definition of global variables
 uint32_t code_buffer[CODE_LENGTH] = {0};
@@ -9,32 +10,50 @@ bool is_fun = false;
 unsigned char fun_inc = 0;
 unsigned char fun_player = 1;
 
+// Previous button state for edge detection (local to codes.c)
+static uint32_t codes_prev_buttons = 0xFFFFF;
+
 // shift button state into buffer and scan for matching codes
+// Called by console update_output() after sending data to console
+// Reads button state from router (player 0) for cheat code detection
 void codes_task()
 {
-  int32_t btns = (~players[0].output_buttons & 0xffff);
-  int32_t prev_btns = (~players[0].prev_buttons & 0xffff);
+  // Get current button state from router (player 0)
+  // Note: Caller (console device) must have already called router_get_output()
+  // This reads from the same output state the console just used
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
 
-  // Stash previous buttons to detect release
-  if (!btns || btns != prev_btns)
-  {
-    players[0].prev_buttons = players[0].output_buttons;
-  }
+  // Fallback to other outputs if GameCube returns NULL
+  // (codes_task is called by multiple consoles)
+  if (!event) event = router_get_output(OUTPUT_TARGET_PCENGINE, 0);
+  if (!event) event = router_get_output(OUTPUT_TARGET_NUON, 0);
+  if (!event) event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
+  if (!event) event = router_get_output(OUTPUT_TARGET_LOOPY, 0);
+  if (!event) return;  // No input available
 
-  // Check if code has been entered
-#ifdef CONFIG_NUON
-  if (btns != 0xff7f && btns != prev_btns)
+  // USBR buttons use inverted logic (0 = pressed, 1 = released)
+  // Invert to get positive logic (1 = pressed)
+  uint32_t btns = ~event->buttons & 0x3f;  // D-pad (0x0F) + B1/B2 (0x30)
+  uint32_t prev_btns = ~codes_prev_buttons & 0x3f;
+
+  // Detect button press edge (new press that wasn't pressed before)
+  if (btns && btns != prev_btns)
   {
-    shift_buffer_and_insert(~btns & 0xff7f);
-    check_for_konami_code();
+    // Find which single button was just pressed
+    // Konami code expects individual button presses, not combos
+    uint32_t new_presses = btns & ~prev_btns;
+    if (new_presses)
+    {
+      shift_buffer_and_insert(new_presses);
+      check_for_konami_code();
+    }
+    codes_prev_buttons = event->buttons;
   }
-#else
-  if ((btns & 0xff) && btns != prev_btns)
+  else if (!btns && prev_btns)
   {
-    shift_buffer_and_insert(btns & 0xff);
-    check_for_konami_code();
+    // All buttons released
+    codes_prev_buttons = event->buttons;
   }
-#endif
 }
 
 // shift button presses into buffer
