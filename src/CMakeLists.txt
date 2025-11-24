@@ -83,6 +83,7 @@ set(COMMON_SOURCES
 
     # Core Services
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/profiles/profiles.c
 
     # Core Router System
     ${CMAKE_CURRENT_SOURCE_DIR}/core/router/router.c

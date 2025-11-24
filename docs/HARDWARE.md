@@ -243,7 +243,6 @@ Pin 6: 3.3V (optional)
 
 **Connection:**
 - Data pin → RP2040 GPIO (configurable)
-- Use 1kΩ pullup resistor on data line
 - Share ground with RP2040
 
 ### Nuon Adapter
