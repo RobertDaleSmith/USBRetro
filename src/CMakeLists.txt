@@ -69,8 +69,8 @@ pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/n
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/native/device/loopy/loopy.pio )
 pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
-pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/console/3do/sampling.pio )
-pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/console/3do/output.pio )
+pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/sampling.pio )
+pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/output.pio )
 pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pio )
 
 ## SET TARGE SOURCES
@@ -146,7 +146,7 @@ target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
 
 target_sources(usbretro_3do PUBLIC # For 3DO
     ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/3do/3do.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do/3do_device.c
 )
 
 ## SET TARGET INCLUDE DIRS
@@ -184,7 +184,7 @@ target_include_directories(usbretro_loopy PUBLIC # FOR LOOPY
 target_include_directories(usbretro_3do PUBLIC # FOR 3DO
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/console/3do
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do
 )
 
 ## SET TARGET LINK LIBS

@@ -21,7 +21,7 @@ is_zero:
 
 % c-sdk {
 
-#include "console/3do/3do.h"
+#include "native/device/3do/3do_device.h"
 
 static inline void sampling_program_init(PIO pio, uint sm, uint offset) {
     pio_sm_config c = sampling_program_get_default_config(offset);

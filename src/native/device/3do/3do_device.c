@@ -1,8 +1,8 @@
-// 3do.c - 3DO console output implementation for USBRetro
+// 3do_device.c - 3DO console output implementation for USBRetro
 // Based on FCare/USBTo3DO protocol implementation
 // Adapted to USBRetro architecture
 
-#include "3do.h"
+#include "3do_device.h"
 #include "3do_config.h"
 #include "flash_settings.h"
 #include "profile_indicator.h"
