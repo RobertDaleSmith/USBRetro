@@ -68,7 +68,10 @@ void router_init(const router_config_t* config) {
 // ============================================================================
 
 // Bridge: Update legacy players[] array from input_event_t
-// TODO: Remove this when Phase 3 (Output Driver Migration) is complete
+// TODO: Remove this in Phase 5 (Console-Specific State Migration)
+// Currently still needed by:
+// - Xbox One: mouse accumulator (players[i].global_x/y, players[i].analog[])
+// - Can be removed once console-specific state is moved to local structures
 static inline void update_legacy_players_array(const input_event_t* event, int player_index) {
     extern Player_t players[];
 

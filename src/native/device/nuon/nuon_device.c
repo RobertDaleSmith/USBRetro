@@ -444,17 +444,20 @@ void __not_in_flash_func(update_output)(void)
   if (!event || playersCount == 0) return;
 
   // Calculate and set Nuon output packet values here.
-  // TODO: Move output_buttons_alt to console-local state in future phase
-  extern Player_t players[];  // Temporary bridge access for console-specific fields
-  int32_t buttons = (event->buttons & 0xffff) |
-                    (players[0].output_buttons_alt & 0xffff);
+  int32_t buttons = (event->buttons & 0xffff);
+
+  // TODO Phase 5: Re-implement merged instance support (Joy-Con Grip)
+  // output_buttons_alt was set in post_input_event() - need to handle merged inputs in router
 
   output_buttons_0 = crc_data_packet(buttons, 2);
   output_analog_1x = crc_data_packet(event->analog[0], 1);  // ANALOG_X
   output_analog_1y = crc_data_packet(event->analog[1], 1);  // ANALOG_Y
   output_analog_2x = crc_data_packet(event->analog[2], 1);  // ANALOG_Z
   output_analog_2y = crc_data_packet(event->analog[3], 1);  // ANALOG_RX
-  output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);  // TODO: Move to console-local state
+
+  // TODO Phase 5: Re-implement spinner/mouse wheel support
+  // output_quad_x was accumulated in post_input_event() - need console-local accumulator
+  output_quad_x    = crc_data_packet(0, 1);  // Disabled for now
 
   codes_task();
 
