@@ -450,8 +450,8 @@ void __not_in_flash_func(update_output)(void)
   // Calculate and set Nuon output packet values here.
   int32_t buttons = (event->buttons & 0xffff);
 
-  // TODO Phase 5: Re-implement merged instance support (Joy-Con Grip)
-  // output_buttons_alt was set in post_input_event() - need to handle merged inputs in router
+  // Joy-Con Grip merging now handled at device driver level (switch_pro.c)
+  // Router receives unified input from merged Joy-Cons automatically
 
   output_buttons_0 = crc_data_packet(buttons, 2);
   output_analog_1x = crc_data_packet(event->analog[0], 1);  // ANALOG_X

@@ -46,10 +46,10 @@ typedef struct TU_ATTR_PACKED
   // Console-specific extensions
 #ifdef CONFIG_NGC
   gc_report_t gc_report;
-#elif CONFIG_NUON
-  int32_t output_buttons_alt;
-  int16_t output_quad_x;
 #endif
+  // Note: Nuon-specific fields (output_buttons_alt, output_quad_x) removed in Phase 5
+  // - Joy-Con merging now handled at device driver level (switch_pro.c)
+  // - Spinner accumulation to be implemented as router transformation (TRANSFORM_SPINNER)
 } Player_t;
 
 // Declaration of global variables

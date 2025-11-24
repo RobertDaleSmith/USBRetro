@@ -35,8 +35,7 @@ void players_init()
     players[i].global_buttons = 0x80;
     players[i].altern_buttons = 0x80;
     players[i].output_buttons = 0x80;
-    players[i].output_buttons_alt = 0x80;
-    players[i].output_quad_x = 0;
+    // Note: output_buttons_alt and output_quad_x removed (Phase 5 cleanup)
 #else
     players[i].global_buttons = 0xFFFFF;
     players[i].altern_buttons = 0xFFFFF;
