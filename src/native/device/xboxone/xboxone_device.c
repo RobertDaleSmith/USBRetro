@@ -4,6 +4,9 @@
 #include "pico/stdlib.h"
 #include "tusb.h"
 
+// Console-local state (not input data)
+#include "core/router/router.h"
+
 // init for xboxone communication
 void xb1_init()
 {
@@ -150,18 +153,25 @@ void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8
 // core1_entry - inner-loop for the second core
 void __not_in_flash_func(core1_entry)(void)
 {
+  // Temporary bridge access for mouse accumulators (TODO: move to console-local state)
+  extern Player_t players[];
+
   while (1)
   {
+    // Get input from router (Xbox One uses MERGE mode, all inputs merged to player 0)
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
+    if (!event || playersCount == 0) continue;
+
     // Analog outputs
-    uint16_t x1Val = ((players[0].analog[0] * 2047)/255);  // ANALOG_X
-    uint16_t y1Val = ((players[0].analog[1] * 2047)/255);  // ANALOG_Y
+    uint16_t x1Val = ((event->analog[0] * 2047)/255);  // ANALOG_X
+    uint16_t y1Val = ((event->analog[1] * 2047)/255);  // ANALOG_Y
              y1Val = (y1Val - 2047) * -1;
-    uint16_t x2Val = ((players[0].analog[2] * 2047)/255);  // ANALOG_Z
-    uint16_t y2Val = ((players[0].analog[3] * 2047)/255);  // ANALOG_RX
+    uint16_t x2Val = ((event->analog[2] * 2047)/255);  // ANALOG_Z
+    uint16_t y2Val = ((event->analog[3] * 2047)/255);  // ANALOG_RX
              y2Val = (y2Val - 2047) * -1;
-    uint16_t lVal = ((players[0].analog[5] * 2047)/255);   // ANALOG_RZ
+    uint16_t lVal = ((event->analog[5] * 2047)/255);   // ANALOG_RZ
              lVal = (lVal - 2047) * -1;
-    uint16_t rVal = ((players[0].analog[6] * 2047)/255);   // ANALOG_SLIDER
+    uint16_t rVal = ((event->analog[6] * 2047)/255);   // ANALOG_SLIDER
              rVal = (rVal - 2047) * -1;
 
     mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR0, 0, x1Val);
@@ -172,13 +182,14 @@ void __not_in_flash_func(core1_entry)(void)
     mcp4728_write_dac(I2C_DAC_PORT, MCP4728_I2C_ADDR1, 1, rVal);
 
     // Individual buttons
-    gpio_put(XBOX_B_BTN_PIN, ((players[0].output_buttons & USBR_BUTTON_B2) == 0) ? 0 : 1);
-    gpio_put(XBOX_GUIDE_PIN, ((players[0].output_buttons & USBR_BUTTON_A1) == 0) ? 0 : 1);
-    gpio_put(XBOX_R3_BTN_PIN,((players[0].output_buttons & USBR_BUTTON_R3) == 0) ? 0 : 1);
-    gpio_put(XBOX_L3_BTN_PIN,((players[0].output_buttons & USBR_BUTTON_L3) == 0) ? 0 : 1);
+    gpio_put(XBOX_B_BTN_PIN, ((event->buttons & USBR_BUTTON_B2) == 0) ? 0 : 1);
+    gpio_put(XBOX_GUIDE_PIN, ((event->buttons & USBR_BUTTON_A1) == 0) ? 0 : 1);
+    gpio_put(XBOX_R3_BTN_PIN,((event->buttons & USBR_BUTTON_R3) == 0) ? 0 : 1);
+    gpio_put(XBOX_L3_BTN_PIN,((event->buttons & USBR_BUTTON_L3) == 0) ? 0 : 1);
 
     update_pending = false;
 
+    // Mouse accumulator handling (TODO: move to console-local state)
     unsigned short int i;
     for (i = 0; i < MAX_PLAYERS; ++i)
     {
@@ -186,15 +197,11 @@ void __not_in_flash_func(core1_entry)(void)
       if (players[i].global_x != 0)
       {
         players[i].global_x = (players[i].global_x - (players[i].analog[0] - 128));  // ANALOG_X
-        // if (players[i].global_x > 128) players[i].global_x = 128;
-        // if (players[i].global_x < -128) players[i].global_x = -128;
         players[i].analog[0] = 128;  // ANALOG_X
       }
       if (players[i].global_y != 0)
       {
         players[i].global_y = (players[i].global_y - (players[i].analog[1] - 128));  // ANALOG_Y
-        // if (players[i].global_y > 128) players[i].global_y = 128;
-        // if (players[i].global_y < -128) players[i].global_y = -128;
         players[i].analog[1] = 128;  // ANALOG_Y
       }
     }
@@ -206,122 +213,34 @@ void __not_in_flash_func(core1_entry)(void)
 // update_output - updates i2c slave buffer with GPIO expander button bits
 void __not_in_flash_func(update_output)(void)
 {
-  unsigned short int i;
-  for (i = 0; i < playersCount; ++i)
-  {
-    // base controller buttons
-    int16_t byte = (players[i].output_buttons & 0xffff);
-    i2c_slave_read_buffer[0] = 0xFA;
-    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B3) == 0) ? 0x02 : 0; // X
-    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B4) == 0) ? 0x08 : 0; // Y
-    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_R1) == 0) ? 0x10 : 0; // R
-    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_L1) == 0) ? 0x20 : 0; // L
-    i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_S2) == 0) ? 0x80 : 0; // MENU
+  // Get input from router (Xbox One uses MERGE mode, all inputs merged to player 0)
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
+  if (!event || playersCount == 0) return;
 
-    i2c_slave_read_buffer[1] = 0xFF;
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DU) == 0) ? 0x02 : 0; // UP
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DR) == 0) ? 0x04 : 0; // RIGHT
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DD) == 0) ? 0x10 : 0; // DOWN
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DL) == 0) ? 0x08 : 0; // LEFT
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_S1) == 0) ? 0x20 : 0; // VIEW
-    i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_B1) == 0) ? 0x80 : 0; // A
-  }
+  // base controller buttons
+  int16_t byte = (event->buttons & 0xffff);
+  i2c_slave_read_buffer[0] = 0xFA;
+  i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B3) == 0) ? 0x02 : 0; // X
+  i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_B4) == 0) ? 0x08 : 0; // Y
+  i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_R1) == 0) ? 0x10 : 0; // R
+  i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_L1) == 0) ? 0x20 : 0; // L
+  i2c_slave_read_buffer[0] ^= ((byte & USBR_BUTTON_S2) == 0) ? 0x80 : 0; // MENU
+
+  i2c_slave_read_buffer[1] = 0xFF;
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DU) == 0) ? 0x02 : 0; // UP
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DR) == 0) ? 0x04 : 0; // RIGHT
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DD) == 0) ? 0x10 : 0; // DOWN
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_DL) == 0) ? 0x08 : 0; // LEFT
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_S1) == 0) ? 0x20 : 0; // VIEW
+  i2c_slave_read_buffer[1] ^= ((byte & USBR_BUTTON_B1) == 0) ? 0x80 : 0; // A
 
   codes_task();
 
   update_pending = true;
 }
 
-//
-// post_input_event - NEW unified input event handler
-//
-void __not_in_flash_func(post_input_event)(const input_event_t* event)
-{
-  if (!event) return;
-
-  int8_t instance = event->instance;
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(event->dev_addr, instance);
-
-  if (event->type == INPUT_TYPE_MOUSE) {
-    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-      uint8_t delta_x = event->delta_x;
-      uint8_t delta_y = event->delta_y;
-      if (delta_x == 0) delta_x = 1;
-      if (delta_y == 0) delta_y = 1;
-
-      if (delta_x >= 128) {
-        players[player_index].global_x -= (256 - delta_x);
-      } else {
-        players[player_index].global_x += delta_x;
-      }
-      delta_x = (players[player_index].global_x > 127) ? 0xff :
-                (players[player_index].global_x < -127) ? 1 :
-                128 + players[player_index].global_x;
-
-      if (delta_y >= 128) {
-        players[player_index].global_y -= (256 - delta_y);
-      } else {
-        players[player_index].global_y += delta_y;
-      }
-      delta_y = (players[player_index].global_y > 127) ? 0xff :
-                (players[player_index].global_y < -127) ? 1 :
-                128 + players[player_index].global_y;
-
-      players[player_index].analog[0] = delta_x;
-      players[player_index].analog[1] = delta_y;
-      players[player_index].output_buttons = event->buttons;
-      update_output();
-    }
-  } else {
-    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-
-      if (is_extra) {
-        players[0].altern_buttons = event->buttons;
-      } else {
-        players[player_index].global_buttons = event->buttons;
-      }
-
-      // Maps View + Menu + Up combo to Guide button
-      if (!((players[player_index].global_buttons) & XBOX_GUIDE_COMBO)) {
-        players[player_index].global_buttons ^= USBR_BUTTON_A1;
-        players[player_index].global_buttons |= XBOX_GUIDE_COMBO;
-      }
-
-      if (event->analog[0]) players[player_index].analog[0] = event->analog[0];
-      if (event->analog[1]) players[player_index].analog[1] = event->analog[1];
-      if (event->analog[2]) players[player_index].analog[2] = event->analog[2];
-      if (event->analog[3]) players[player_index].analog[3] = event->analog[3];
-      players[player_index].analog[5] = event->analog[5];
-      players[player_index].analog[6] = event->analog[6];
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-      if (!(players[player_index].output_buttons & USBR_BUTTON_R2)) {
-        players[player_index].analog[6] = 255;
-      }
-      if (!(players[player_index].output_buttons & USBR_BUTTON_L2)) {
-        players[player_index].analog[5] = 255;
-      }
-      update_output();
-    }
-  }
-}
+// post_input_event removed - replaced by router architecture
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → update_output()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -332,7 +251,7 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
 const OutputInterface xboxone_output_interface = {
     .name = "Xbox One",
     .init = xb1_init,
-    .handle_input = post_input_event,
+    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // Xbox One doesn't need periodic task
 };
