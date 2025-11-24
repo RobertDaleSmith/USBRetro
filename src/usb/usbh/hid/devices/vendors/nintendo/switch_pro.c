@@ -29,6 +29,11 @@ typedef struct TU_ATTR_PACKED
   uint8_t instance_count;
   uint8_t instance_root;
   bool is_pro;
+
+  // Joy-Con Grip merging state (for instance_count > 1)
+  input_event_t merged_event;        // Combined input from both Joy-Cons
+  bool left_updated;                 // Left Joy-Con has reported
+  bool right_updated;                // Right Joy-Con has reported
 } switch_device_t;
 
 static switch_device_t switch_devices[MAX_DEVICES] = { 0 };
@@ -240,18 +245,77 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
                  ((bttn_a1)              ? 0x00 : USBR_BUTTON_A1) |
                  ((1)/*has_6btns*/       ? 0x00 : 0x800));
 
-      // add to accumulator and post to the state machine
-      // if a scan from the host machine is ongoing, wait
-      bool is_root = instance == switch_devices[dev_addr].instance_root;
-      input_event_t event = {
-        .dev_addr = dev_addr,
-        .instance = is_root ? instance : -1,
-        .type = INPUT_TYPE_GAMEPAD,
-        .buttons = buttons,
-        .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
-        .keys = 0,
-      };
-      router_submit_input(&event);
+      // Joy-Con Grip merging: combine both Joy-Con inputs into one controller
+      if (switch_devices[dev_addr].instance_count > 1) {
+        // Multi-instance device (Joy-Con Grip) - merge before submitting
+        bool is_left_joycon = (!update_report.right_x && !update_report.right_y);
+        bool is_right_joycon = (!update_report.left_x && !update_report.left_y);
+
+        if (is_left_joycon) {
+          // Update left Joy-Con portion of merged event
+          switch_devices[dev_addr].merged_event.dev_addr = dev_addr;
+          switch_devices[dev_addr].merged_event.instance = 0;  // Merged instance
+          switch_devices[dev_addr].merged_event.type = INPUT_TYPE_GAMEPAD;
+
+          // Left Joy-Con: D-pad, left stick, L buttons
+          uint32_t left_buttons = (((dpad_up)   ? 0x00 : USBR_BUTTON_DU) |
+                                   ((dpad_down) ? 0x00 : USBR_BUTTON_DD) |
+                                   ((dpad_left) ? 0x00 : USBR_BUTTON_DL) |
+                                   ((dpad_right)? 0x00 : USBR_BUTTON_DR) |
+                                   ((bttn_l1)   ? 0x00 : USBR_BUTTON_L1) |
+                                   ((update_report.zl) ? 0x00 : USBR_BUTTON_L2) |
+                                   ((update_report.lstick) ? 0x00 : USBR_BUTTON_L3) |
+                                   ((bttn_s1)   ? 0x00 : USBR_BUTTON_S1));  // Minus button
+
+          switch_devices[dev_addr].merged_event.buttons |= left_buttons;
+          switch_devices[dev_addr].merged_event.analog[0] = leftX;  // Left stick X
+          switch_devices[dev_addr].merged_event.analog[1] = leftY;  // Left stick Y
+          switch_devices[dev_addr].left_updated = true;
+        }
+        else if (is_right_joycon) {
+          // Update right Joy-Con portion of merged event
+          switch_devices[dev_addr].merged_event.dev_addr = dev_addr;
+          switch_devices[dev_addr].merged_event.instance = 0;  // Merged instance
+          switch_devices[dev_addr].merged_event.type = INPUT_TYPE_GAMEPAD;
+
+          // Right Joy-Con: Face buttons, right stick, R buttons
+          uint32_t right_buttons = (((bttn_b1) ? 0x00 : USBR_BUTTON_B1) |
+                                    ((bttn_b2) ? 0x00 : USBR_BUTTON_B2) |
+                                    ((bttn_b3) ? 0x00 : USBR_BUTTON_B3) |
+                                    ((bttn_b4) ? 0x00 : USBR_BUTTON_B4) |
+                                    ((bttn_r1) ? 0x00 : USBR_BUTTON_R1) |
+                                    ((update_report.zr) ? 0x00 : USBR_BUTTON_R2) |
+                                    ((update_report.rstick) ? 0x00 : USBR_BUTTON_R3) |
+                                    ((bttn_s2) ? 0x00 : USBR_BUTTON_S2) |  // Plus button
+                                    ((bttn_a1) ? 0x00 : USBR_BUTTON_A1));  // Home button
+
+          switch_devices[dev_addr].merged_event.buttons |= right_buttons;
+          switch_devices[dev_addr].merged_event.analog[2] = rightX;  // Right stick X
+          switch_devices[dev_addr].merged_event.analog[3] = rightY;  // Right stick Y
+          switch_devices[dev_addr].right_updated = true;
+        }
+
+        // Submit merged event only when BOTH Joy-Cons have reported
+        if (switch_devices[dev_addr].left_updated && switch_devices[dev_addr].right_updated) {
+          router_submit_input(&switch_devices[dev_addr].merged_event);
+
+          // Reset merge state for next frame
+          switch_devices[dev_addr].left_updated = false;
+          switch_devices[dev_addr].right_updated = false;
+          switch_devices[dev_addr].merged_event.buttons = 0xFFFFFFFF;  // All released
+        }
+      } else {
+        // Single instance device (normal Switch Pro controller)
+        input_event_t event = {
+          .dev_addr = dev_addr,
+          .instance = instance,
+          .type = INPUT_TYPE_GAMEPAD,
+          .buttons = buttons,
+          .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
+          .keys = 0,
+        };
+        router_submit_input(&event);
+      }
 
       prev_report[dev_addr-1][instance] = update_report;
 
