@@ -35,6 +35,14 @@ static mouse_accumulator_t mouse_accumulators[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPU
 static instance_merge_t instance_merges[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
 
 // ============================================================================
+// ROUTING TABLE (Phase 6)
+// ============================================================================
+
+// Routing table for N:M input-to-output mapping
+static route_entry_t routing_table[MAX_ROUTES];
+static uint8_t route_count = 0;
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -78,6 +86,9 @@ void router_init(const router_config_t* config) {
             instance_merges[output][player].root_instance = 0;
         }
     }
+
+    // Initialize routing table
+    router_clear_routes();
 
     printf("[router] Initialized successfully\n");
     if (config->transform_flags) {
@@ -170,6 +181,122 @@ static void apply_transformations(input_event_t* event, output_target_t output, 
     }
 
     // TODO: TRANSFORM_SPINNER (Nuon spinner accumulation)
+}
+
+// ============================================================================
+// ROUTING TABLE MANAGEMENT (Phase 6)
+// ============================================================================
+
+// Add simple route (input → output)
+bool router_add_route(input_source_t input, output_target_t output, uint8_t priority) {
+    if (route_count >= MAX_ROUTES) {
+        printf("[router] ERROR: Routing table full (%d routes)\n", MAX_ROUTES);
+        return false;
+    }
+
+    routing_table[route_count].input = input;
+    routing_table[route_count].output = output;
+    routing_table[route_count].priority = priority;
+    routing_table[route_count].active = true;
+    routing_table[route_count].input_dev_addr = 0;      // Wildcard
+    routing_table[route_count].input_instance = -1;     // Wildcard
+    routing_table[route_count].output_player_id = 0xFF; // Auto-assign
+
+    route_count++;
+    printf("[router] Route added: %s → %s (priority=%d)\n",
+        input == INPUT_SOURCE_USB_HOST ? "USB" : "?",
+        output == OUTPUT_TARGET_GAMECUBE ? "GameCube" :
+        output == OUTPUT_TARGET_PCENGINE ? "PCEngine" :
+        output == OUTPUT_TARGET_NUON ? "Nuon" :
+        output == OUTPUT_TARGET_XBOXONE ? "XboxOne" :
+        output == OUTPUT_TARGET_LOOPY ? "Loopy" : "?",
+        priority);
+
+    return true;
+}
+
+// Add route with filters (advanced)
+bool router_add_route_filtered(const route_entry_t* route) {
+    if (!route || route_count >= MAX_ROUTES) {
+        printf("[router] ERROR: Cannot add filtered route\n");
+        return false;
+    }
+
+    routing_table[route_count] = *route;
+    routing_table[route_count].active = true;
+    route_count++;
+
+    printf("[router] Filtered route added (dev_addr=%d, instance=%d, player=%d)\n",
+        route->input_dev_addr, route->input_instance, route->output_player_id);
+
+    return true;
+}
+
+// Remove route by index
+void router_remove_route(uint8_t route_index) {
+    if (route_index >= MAX_ROUTES || !routing_table[route_index].active) return;
+
+    routing_table[route_index].active = false;
+    printf("[router] Route %d removed\n", route_index);
+}
+
+// Clear all routes
+void router_clear_routes(void) {
+    for (uint8_t i = 0; i < MAX_ROUTES; i++) {
+        routing_table[i].active = false;
+    }
+    route_count = 0;
+    printf("[router] All routes cleared\n");
+}
+
+// Get number of active routes
+uint8_t router_get_route_count(void) {
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < MAX_ROUTES; i++) {
+        if (routing_table[i].active) count++;
+    }
+    return count;
+}
+
+// Get route by index
+const route_entry_t* router_get_route(uint8_t route_index) {
+    if (route_index >= MAX_ROUTES || !routing_table[route_index].active) {
+        return NULL;
+    }
+    return &routing_table[route_index];
+}
+
+// Find matching routes for an input event
+// Returns number of matches found (fills matches array)
+static uint8_t router_find_routes(const input_event_t* event, route_entry_t* matches, uint8_t max_matches) {
+    uint8_t match_count = 0;
+
+    for (uint8_t i = 0; i < MAX_ROUTES && match_count < max_matches; i++) {
+        if (!routing_table[i].active) continue;
+
+        // Check if input source matches (wildcard = INPUT_SOURCE_USB_HOST)
+        if (routing_table[i].input != INPUT_SOURCE_USB_HOST) {
+            // TODO: Add other input sources (BLE, GPIO, etc.)
+            continue;
+        }
+
+        // Check device address filter (0 = wildcard)
+        if (routing_table[i].input_dev_addr != 0 &&
+            routing_table[i].input_dev_addr != event->dev_addr) {
+            continue;
+        }
+
+        // Check instance filter (-1 = wildcard)
+        if (routing_table[i].input_instance != -1 &&
+            routing_table[i].input_instance != event->instance) {
+            continue;
+        }
+
+        // Match found!
+        matches[match_count++] = routing_table[i];
+    }
+
+    return match_count;
 }
 
 // ============================================================================
@@ -292,8 +419,23 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
             break;
 
         case ROUTING_MODE_CONFIGURABLE:
-            // TODO: Implement configurable mode (Phase 7)
-            router_simple_mode(event, output);
+            // Phase 6: Use routing table for N:M mapping
+            {
+                route_entry_t matches[MAX_ROUTES];
+                uint8_t match_count = router_find_routes(event, matches, MAX_ROUTES);
+
+                if (match_count == 0) {
+                    // No routes found - fall back to compile-time output
+                    router_simple_mode(event, output);
+                } else {
+                    // Route to all matching outputs
+                    for (uint8_t i = 0; i < match_count; i++) {
+                        // Use the routing mode specified for this output
+                        // For now, use simple mode for each route
+                        router_simple_mode(event, matches[i].output);
+                    }
+                }
+            }
             break;
     }
 
@@ -343,16 +485,6 @@ uint8_t router_get_player_count(output_target_t output) {
 // ============================================================================
 // ROUTING CONFIGURATION
 // ============================================================================
-
-void router_add_route(input_source_t input, output_target_t output, uint8_t priority) {
-    // TODO: Implement routing table (Phase 6)
-    printf("[router] Route added: input=%d → output=%d (priority=%d)\n", input, output, priority);
-}
-
-void router_clear_routes(void) {
-    // TODO: Implement routing table (Phase 6)
-    printf("[router] Routes cleared\n");
-}
 
 void router_set_merge_mode(output_target_t output, merge_mode_t mode) {
     router_config.merge_mode = mode;

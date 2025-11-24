@@ -127,14 +127,46 @@ bool router_has_updates(output_target_t output);
 uint8_t router_get_player_count(output_target_t output);
 
 // ============================================================================
+// ROUTING TABLES (Phase 6)
+// ============================================================================
+
+#define MAX_ROUTES 32  // Maximum number of routes in routing table
+
+// Route entry for N:M routing
+typedef struct {
+    input_source_t input;       // Input source (USB_HOST, BLE, etc.)
+    output_target_t output;     // Output target (GAMECUBE, PCENGINE, etc.)
+    uint8_t priority;           // Priority (0 = highest, 255 = lowest)
+    bool active;                // Is this route active?
+
+    // Optional filters (0 = wildcard, matches all)
+    uint8_t input_dev_addr;     // Filter by USB device address
+    int8_t input_instance;      // Filter by device instance
+    uint8_t output_player_id;   // Target specific player slot (0xFF = auto-assign)
+} route_entry_t;
+
+// ============================================================================
 // ROUTING CONFIGURATION (called by apps at init or runtime)
 // ============================================================================
 
-// Add route (input → output mapping)
-void router_add_route(input_source_t input, output_target_t output, uint8_t priority);
+// Add simple route (input → output mapping)
+// Returns true if route added successfully, false if table full
+bool router_add_route(input_source_t input, output_target_t output, uint8_t priority);
+
+// Add route with filters (advanced routing)
+bool router_add_route_filtered(const route_entry_t* route);
+
+// Remove specific route by index
+void router_remove_route(uint8_t route_index);
 
 // Clear all routes (for runtime reconfiguration)
 void router_clear_routes(void);
+
+// Get number of active routes
+uint8_t router_get_route_count(void);
+
+// Get route by index (for debugging/inspection)
+const route_entry_t* router_get_route(uint8_t route_index);
 
 // Set merge mode for output
 void router_set_merge_mode(output_target_t output, merge_mode_t mode);
