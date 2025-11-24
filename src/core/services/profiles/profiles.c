@@ -21,6 +21,10 @@ static profile_system_config_t current_config = {
 // Active profile index (0-based)
 static uint8_t active_profile_index = 0;
 
+// Profile storage (registered by apps)
+static const usbretro_profile_t* profiles[MAX_PROFILES] = {NULL};
+static uint8_t registered_profile_count = 0;
+
 // Profile switch callback (optional, registered by console)
 static profile_switch_callback_t switch_callback = NULL;
 
@@ -41,6 +45,32 @@ void profiles_init(const profile_system_config_t* config)
     printf("[profiles] Initialized profile system\n");
     printf("[profiles]   Profile count: %d\n", config->profile_count);
     printf("[profiles]   Default profile: %d\n", config->default_profile_index);
+}
+
+void profiles_register(const usbretro_profile_t** profiles_array, uint8_t count)
+{
+    if (!profiles_array || count == 0) {
+        printf("[profiles] ERROR: Invalid profiles array\n");
+        return;
+    }
+
+    if (count > MAX_PROFILES) {
+        printf("[profiles] WARNING: Too many profiles (%d), capping at %d\n", count, MAX_PROFILES);
+        count = MAX_PROFILES;
+    }
+
+    // Store pointers to profiles (apps own the profile data)
+    for (uint8_t i = 0; i < count; i++) {
+        profiles[i] = profiles_array[i];
+    }
+    registered_profile_count = count;
+
+    printf("[profiles] Registered %d profiles\n", count);
+    for (uint8_t i = 0; i < count; i++) {
+        if (profiles[i]) {
+            printf("[profiles]   [%d] %s - %s\n", i, profiles[i]->name, profiles[i]->description);
+        }
+    }
 }
 
 // ============================================================================
@@ -144,4 +174,44 @@ void profile_register_switch_callback(profile_switch_callback_t callback)
 {
     switch_callback = callback;
     printf("[profiles] Profile switch callback registered\n");
+}
+
+// ============================================================================
+// PROFILE SETTINGS GETTERS
+// ============================================================================
+
+uint8_t profile_get_l2_threshold(void)
+{
+    if (registered_profile_count == 0) {
+        return 0;  // No profiles registered
+    }
+
+    if (active_profile_index >= registered_profile_count) {
+        return 0;  // Invalid index
+    }
+
+    const usbretro_profile_t* active = profiles[active_profile_index];
+    if (!active) {
+        return 0;  // NULL profile
+    }
+
+    return active->l2_threshold;
+}
+
+uint8_t profile_get_r2_threshold(void)
+{
+    if (registered_profile_count == 0) {
+        return 0;
+    }
+
+    if (active_profile_index >= registered_profile_count) {
+        return 0;
+    }
+
+    const usbretro_profile_t* active = profiles[active_profile_index];
+    if (!active) {
+        return 0;
+    }
+
+    return active->r2_threshold;
 }

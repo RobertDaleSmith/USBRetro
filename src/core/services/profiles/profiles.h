@@ -54,8 +54,13 @@ typedef struct {
 // PROFILE SYSTEM API
 // ============================================================================
 
-// Initialize profile system (called by console at startup)
+// Initialize profile system (called by app at startup)
 void profiles_init(const profile_system_config_t* config);
+
+// Register profiles (called by app to provide profile data)
+// profiles_array: Array of profile pointers (stored in app code, not copied)
+// count: Number of profiles in array
+void profiles_register(const usbretro_profile_t** profiles_array, uint8_t count);
 
 // Get active profile index (0-based)
 uint8_t profile_get_active_index(void);
@@ -95,5 +100,16 @@ typedef void (*profile_switch_callback_t)(uint8_t new_index);
 
 // Register callback for profile switches
 void profile_register_switch_callback(profile_switch_callback_t callback);
+
+// ============================================================================
+// PROFILE SETTINGS GETTERS (for main loop)
+// ============================================================================
+
+// Get L2 trigger threshold for adaptive triggers (DualSense, Xbox Elite)
+// Returns 0 if no profile system initialized or adaptive triggers disabled
+uint8_t profile_get_l2_threshold(void);
+
+// Get R2 trigger threshold
+uint8_t profile_get_r2_threshold(void);
 
 #endif // PROFILES_H

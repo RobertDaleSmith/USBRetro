@@ -38,11 +38,11 @@ extern uint8_t profile_indicator_get_player_led(uint8_t player_count);
 
 extern void players_init(void);
 
-#ifdef CONFIG_NGC
+// Generic flash settings (profile persistence) - used by all consoles with profiles
 extern void flash_settings_task(void);
-#include "native/device/gamecube/gamecube_config.h"
-extern gc_profile_t* get_active_profile(void);
-#endif
+
+// App layer initialization (every product has an app)
+extern void app_init(void);
 
 /*------------- MAIN -------------*/
 
@@ -68,10 +68,9 @@ static void __not_in_flash_func(process_signals)(void)
     // profile indicator task (rumble and player LED patterns)
     profile_indicator_task();
 
-#ifdef CONFIG_NGC
     // flash settings task (debounced flash writes for profile persistence)
+    // Generic service used by all consoles with profiles (3DO, GameCube, etc.)
     flash_settings_task();
-#endif
 
     // Combine GameCube console rumble with profile indicator rumble
     uint8_t combined_rumble = gc_rumble | profile_indicator_get_rumble();
@@ -79,14 +78,10 @@ static void __not_in_flash_func(process_signals)(void)
     // Get player LED value (combines keyboard mode LED with profile indicator)
     uint8_t player_led = profile_indicator_get_player_led(playersCount) | gc_kb_led;
 
-    // Get adaptive trigger threshold from console profile/config
-    uint8_t trigger_threshold = 0;
-#ifdef CONFIG_NGC
-    gc_profile_t* profile = get_active_profile();
-    if (profile && profile->adaptive_triggers) {
-      trigger_threshold = profile->l2_threshold;
-    }
-#endif
+    // Get adaptive trigger threshold from universal profile system (DualSense L2/R2)
+    // Apps register their profiles during app_init(), system provides threshold
+    extern uint8_t profile_get_l2_threshold(void);
+    uint8_t trigger_threshold = profile_get_l2_threshold();
 
     // test pattern counter (managed by application layer)
     static uint8_t test_counter = 0;
@@ -115,10 +110,8 @@ int main(void)
 
   // board_init() removed in latest pico-sdk/TinyUSB
 
-#ifndef CONFIG_LOOPY
-  // pause briefly for stability before starting activity
+  // Pause briefly for stability before starting USB activity
   sleep_ms(250);
-#endif
 
   hid_init(); // init hid device interfaces
 
@@ -132,24 +125,12 @@ int main(void)
 
   // Initialize app layer (Phase 5)
   // Every product MUST have an app that configures router/players/profiles
-#if defined(CONFIG_NGC)
-  extern void app_init(void);
-  app_init();
-#elif defined(CONFIG_PCE)
-  extern void app_init(void);
-  app_init();
-#elif defined(CONFIG_3DO)
-  extern void app_init(void);
-  app_init();
-#elif defined(CONFIG_NUON)
-  extern void app_init(void);
-  app_init();
-#elif defined(CONFIG_XB1)
-  extern void app_init(void);
-  app_init();
-#else
-  #error "No app defined for this console! Create an app in src/apps/ first."
+  // Apps own configuration (router, players, profiles), firmware provides runtime
+#if !defined(CONFIG_NGC) && !defined(CONFIG_PCE) && !defined(CONFIG_3DO) && !defined(CONFIG_NUON) && !defined(CONFIG_XB1)
+  #error "No console configuration defined! Build system must define CONFIG_NGC, CONFIG_PCE, CONFIG_3DO, CONFIG_NUON, or CONFIG_XB1"
 #endif
+
+  app_init();
 
   // Initialize active output (console-specific or USB device)
   active_output->init();

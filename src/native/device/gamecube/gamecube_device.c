@@ -633,6 +633,8 @@ void __not_in_flash_func(update_output)(void)
 
 #include "common/output_interface.h"
 
+// Get adaptive trigger threshold for DualSense L2/R2
+
 const OutputInterface gamecube_output_interface = {
     .name = "GameCube",
     .init = ngc_init,
