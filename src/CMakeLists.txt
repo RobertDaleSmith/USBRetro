@@ -139,6 +139,8 @@ target_sources(usbretro_ngc PUBLIC # For NGC
 target_sources(usbretro_xb1 PUBLIC # For XB1
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone/xboxone_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/xboxadapter/main.c
 )
 
 target_sources(usbretro_nuon PUBLIC # For NUON
