@@ -130,54 +130,38 @@ int main(void)
 
   players_init(); // init multi-player management
 
-  // Initialize router system (Phase 2)
-  router_config_t router_cfg = {
-    #ifdef CONFIG_NGC
-      .mode = ROUTING_MODE_MERGE,      // GameCube: merge all USB inputs (current behavior)
-      .merge_mode = MERGE_ALL,
-      .merge_all_inputs = true,
-    #else
-      .mode = ROUTING_MODE_SIMPLE,     // Other consoles: simple 1:1
-      .merge_mode = MERGE_ALL,
-      .merge_all_inputs = false,
-    #endif
-    .max_players_per_output = {4, 5, 8, 5, 1, 5, 4, 4},  // GC=4, PCE=5, 3DO=8, etc.
-
-    // Phase 5: Input transformations
-    #if defined(CONFIG_XB1)
-      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,  // Xbox One: enable mouse-to-analog
-      .mouse_drain_rate = 8,                          // Gradual drain (balance responsiveness/smoothness)
-    #elif defined(CONFIG_PCE) || defined(CONFIG_LOOPY)
-      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,  // PCEngine/Loopy: enable mouse support
-      .mouse_drain_rate = 8,
-    #else
-      .transform_flags = TRANSFORM_NONE,             // Other consoles: no transformations
-      .mouse_drain_rate = 8,
-    #endif
-  };
-  router_init(&router_cfg);
-
-  // Initialize app layer (Phase 5 - optional, only for app-based builds)
+  // Initialize app layer (Phase 5)
+  // Apps handle their own router/player/profile configuration
 #if defined(CONFIG_NGC)
-  // GCUSB app initialization
   extern void app_init(void);
   app_init();
 #elif defined(CONFIG_PCE)
-  // USB2PCE app initialization
   extern void app_init(void);
   app_init();
 #elif defined(CONFIG_3DO)
-  // 3DOUSB app initialization
   extern void app_init(void);
   app_init();
 #elif defined(CONFIG_NUON)
-  // NUONUSB app initialization
   extern void app_init(void);
   app_init();
 #elif defined(CONFIG_XB1)
-  // Xbox Adapter app initialization
   extern void app_init(void);
   app_init();
+#else
+  // Console without app - provide default router configuration
+  router_config_t router_cfg = {
+    .mode = ROUTING_MODE_SIMPLE,
+    .merge_mode = MERGE_ALL,
+    .merge_all_inputs = false,
+    .max_players_per_output = {4, 5, 8, 5, 1, 5, 4, 4},
+    #if defined(CONFIG_LOOPY)
+      .transform_flags = TRANSFORM_MOUSE_TO_ANALOG,
+    #else
+      .transform_flags = TRANSFORM_NONE,
+    #endif
+    .mouse_drain_rate = 8,
+  };
+  router_init(&router_cfg);
 #endif
 
   // Initialize active output (console-specific or USB device)
