@@ -6,6 +6,9 @@
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 
+// Console-local state (not input data)
+#include "core/router/router.h"
+
 PIO pio;
 uint sm1, sm2, sm3;
 
@@ -76,7 +79,7 @@ void __not_in_flash_func(core1_entry)(void)
 
   while (1)
   {
-    // 
+    //
     // rx_bit = pio_sm_get(pio, sm1);
 
     // assume data is already formatted in output_word and push it to the state machine
@@ -85,10 +88,16 @@ void __not_in_flash_func(core1_entry)(void)
     // pio_sm_put(pio, sm3, (output_word << 8) & 0x0f);
     // TODO: implement gamepad, mouse, multi-tap output with PIO.
 
-    int16_t player_1 = (players[0].output_buttons & 0xffff);
-    int16_t player_2 = (players[1].output_buttons & 0xffff);
-    int16_t player_3 = (players[2].output_buttons & 0xffff);
-    int16_t player_4 = (players[3].output_buttons & 0xffff);
+    // Get input from router (Loopy uses SIMPLE mode, 1:1 per player slot)
+    const input_event_t* event1 = router_get_output(OUTPUT_TARGET_LOOPY, 0);
+    const input_event_t* event2 = router_get_output(OUTPUT_TARGET_LOOPY, 1);
+    const input_event_t* event3 = router_get_output(OUTPUT_TARGET_LOOPY, 2);
+    const input_event_t* event4 = router_get_output(OUTPUT_TARGET_LOOPY, 3);
+
+    int16_t player_1 = (event1 && playersCount >= 1) ? (event1->buttons & 0xffff) : 0xffff;
+    int16_t player_2 = (event2 && playersCount >= 2) ? (event2->buttons & 0xffff) : 0xffff;
+    int16_t player_3 = (event3 && playersCount >= 3) ? (event3->buttons & 0xffff) : 0xffff;
+    int16_t player_4 = (event4 && playersCount >= 4) ? (event4->buttons & 0xffff) : 0xffff;
     bool is_mouse = !(player_1 & 0x0f);
     // TODO: properly handle mouse detection at boot
 
@@ -273,172 +282,8 @@ void __not_in_flash_func(update_output)(void)
   codes_task();
 }
 
-//
-// post_input_event - NEW unified input event handler
-//
-void __not_in_flash_func(post_input_event)(const input_event_t* event)
-{
-  if (!event) return;
-
-  int8_t instance = event->instance;
-
-  // for merging extra device instances into the root instance (ex: joycon charging grip)
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  int player_index = find_player_index(event->dev_addr, instance);
-
-  if (event->type == INPUT_TYPE_MOUSE) {
-    // Mouse handling - gray code state machine for Loopy
-    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
-    if (player_index < 0 && buttons_pressed)
-    {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0)
-    {
-      players[player_index].global_buttons = event->buttons;
-
-      // Gray code state machine for mouse movement
-      uint8_t delta_x = event->delta_x;
-      uint8_t delta_y = event->delta_y;
-
-      if (delta_x >= 128) {
-        // x-axis moving left
-        switch (players[player_index].analog[0])
-        {
-        case 2:
-          players[player_index].analog[0] = 3;
-          break;
-        case 3:
-          players[player_index].analog[0] = 1;
-          break;
-        case 1:
-          players[player_index].analog[0] = 0;
-          break;
-        case 0:
-          players[player_index].analog[0] = 2;
-          break;
-        default:
-          break;
-        }
-      } else {
-        // x-axis moving right
-        switch (players[player_index].analog[0])
-        {
-        case 0:
-          players[player_index].analog[0] = 1;
-          break;
-        case 1:
-          players[player_index].analog[0] = 3;
-          break;
-        case 3:
-          players[player_index].analog[0] = 2;
-          break;
-        case 2:
-          players[player_index].analog[0] = 0;
-          break;
-        default:
-          break;
-        }
-      }
-
-      if (delta_y >= 128) {
-        // y-axis moving up
-        switch (players[player_index].analog[1])
-        {
-        case 2:
-          players[player_index].analog[1] = 3;
-          break;
-        case 3:
-          players[player_index].analog[1] = 1;
-          break;
-        case 1:
-          players[player_index].analog[1] = 0;
-          break;
-        case 0:
-          players[player_index].analog[1] = 2;
-          break;
-        default:
-          break;
-        }
-      } else {
-        // y-axis moving down
-        switch (players[player_index].analog[1])
-        {
-        case 0:
-          players[player_index].analog[1] = 1;
-          break;
-        case 1:
-          players[player_index].analog[1] = 3;
-          break;
-        case 3:
-          players[player_index].analog[1] = 2;
-          break;
-        case 2:
-          players[player_index].analog[1] = 0;
-          break;
-        default:
-          break;
-        }
-      }
-
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-      update_output();
-    }
-  } else {
-    // Gamepad/keyboard handling
-    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
-    if (player_index < 0 && buttons_pressed)
-    {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0)
-    {
-      uint32_t buttons = event->buttons;
-
-      // map analog to dpad movement here
-      uint8_t dpad_offset = 32;
-      if (event->analog[0])
-      {
-        if (event->analog[0] > 128 + dpad_offset) buttons &= ~(0x02); // right
-        else if (event->analog[0] < 128 - dpad_offset) buttons &= ~(0x08); // left
-      }
-      if (event->analog[1])
-      {
-        if (event->analog[1] > 128 + dpad_offset) buttons &= ~(0x01); // up
-        else if (event->analog[1] < 128 - dpad_offset) buttons &= ~(0x04); // down
-      }
-
-      // extra instance buttons to merge with root player
-      if (is_extra)
-      {
-        players[0].altern_buttons = buttons;
-      }
-      else
-      {
-        players[player_index].global_buttons = buttons;
-      }
-
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-      // basic socd (up priority, left+right neutral)
-      if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
-        players[player_index].output_buttons ^= 0x04;
-      }
-      if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
-        players[player_index].output_buttons ^= 0x0a;
-      }
-
-      update_output();
-    }
-  }
-}
+// post_input_event removed - replaced by router architecture
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → core1_entry()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -449,7 +294,7 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
 const OutputInterface loopy_output_interface = {
     .name = "Loopy",
     .init = loopy_init,
-    .handle_input = post_input_event,
+    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // Loopy doesn't need periodic task
 };
