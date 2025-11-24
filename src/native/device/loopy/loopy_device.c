@@ -199,8 +199,8 @@ void __not_in_flash_func(core1_entry)(void)
       // [X encoder raw]   [Y encoder raw]   Left     N/C      Right    Presence
       //
 
-      uint8_t x_gray = players[0].analog[0];
-      uint8_t y_gray = players[0].analog[1];
+      uint8_t x_gray = event1 ? event1->analog[0] : 128;
+      uint8_t y_gray = event1 ? event1->analog[1] : 128;
       // printf("[raw_gray_code] [%d, %d]\n", x_gray, y_gray);
 
       loopy_byte |= ((x_gray)      & 0x1             ) ? LOOPY_BIT0 : 0; // X
@@ -223,15 +223,6 @@ void __not_in_flash_func(core1_entry)(void)
     gpio_put(BIT7_PIN, (loopy_byte & LOOPY_BIT7) ? 1 : 0);
 
     update_output();
-
-    // NOTE: This legacy code accesses players[] array directly
-    // TODO Phase 5: Remove players[] bridge and refactor Loopy-specific state handling
-    unsigned short int i;
-    for (i = 0; i < MAX_PLAYERS; ++i) {
-      // Mouse accumulator removed - router now handles TRANSFORM_MOUSE_TO_ANALOG
-
-      players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
-    }
   }
 }
 

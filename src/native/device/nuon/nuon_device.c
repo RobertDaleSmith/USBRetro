@@ -180,9 +180,13 @@ void trigger_button_press(uint8_t pin)
 
 void nuon_task()
 {
+  // Get input from router (Nuon uses MERGE mode, all inputs merged to player 0)
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_NUON, 0);
+  if (!event) return;
+
   // Calculate and set Nuon output packet values here.
-  int32_t buttons = (players[0].output_buttons & 0xffff) |
-                    (players[0].output_buttons_alt & 0xffff);
+  // TODO Phase 5: Re-implement merged instance support (Joy-Con Grip) if needed
+  int32_t buttons = (event->buttons & 0xffff);
 
   // Check for button combination (Nuon + Start + L + R)
   if ((buttons & 0x3030) == 0x3030) {

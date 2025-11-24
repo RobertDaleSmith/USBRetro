@@ -185,18 +185,6 @@ void __not_in_flash_func(core1_entry)(void)
     else
     {
       update_output();
-
-      // NOTE: This legacy code accesses players[] array directly
-      // TODO Phase 5: Remove players[] bridge and refactor PCEngine-specific state handling
-      unsigned short int i;
-      for (i = 0; i < MAX_PLAYERS; ++i) {
-        // Mouse accumulator removed - router now handles TRANSFORM_MOUSE_TO_ANALOG
-
-        players[i].analog[0] = 0;  // ANALOG_X (Left stick X)
-        players[i].analog[1] = 0;  // ANALOG_Y (Left stick Y)
-        players[i].output_buttons = players[i].global_buttons & players[i].altern_buttons;
-      }
-
       output_exclude = true;            // continue to lock the output values (which are now zero)
     }
   }
