@@ -76,11 +76,13 @@ pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pi
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/codes.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/players.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/profile_indicator.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/common/output.c
+
+    # Core Services
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/manager.c
 
     # Core Router System
     ${CMAKE_CURRENT_SOURCE_DIR}/core/router/router.c

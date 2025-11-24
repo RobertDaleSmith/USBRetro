@@ -4,7 +4,7 @@
 // Note: NeoPixel LED blinking is handled separately in ws2812.c
 
 #include "profile_indicator.h"
-#include "players.h"
+#include "core/services/players/manager.h"
 #include "pico/stdlib.h"
 #include <stdint.h>
 #include <stdbool.h>
