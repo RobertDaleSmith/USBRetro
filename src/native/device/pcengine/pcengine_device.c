@@ -47,6 +47,15 @@ uint32_t output_word_1 = 0;
 
 int state = 0; // countdown sequence for shift-register position
 
+// Console-local state (not input data)
+#include "core/router/router.h"
+
+static struct {
+    int button_mode[MAX_PLAYERS];  // Button mode per player (6-button, 2-button, etc.)
+} pce_state = {
+    .button_mode = {BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2}
+};
+
 static absolute_time_t init_time;
 static absolute_time_t current_time;
 static absolute_time_t loop_time;
@@ -216,24 +225,29 @@ void __not_in_flash_func(update_output)(void)
   unsigned short int i;
   for (i = 0; i < MAX_PLAYERS; ++i)
   {
-    // base controller/mouse buttons
-    int8_t byte = (players[i].output_buttons & 0xff);
+    // Get input from router (PCEngine uses SIMPLE mode, 1:1 per player slot)
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_PCENGINE, i);
 
-    if (i >= playersCount && !hotkey)
-    {
-      bytes[i] = 0xff;
-      continue;
+    // Skip if no input for this player slot
+    if (!event || i >= playersCount) {
+      if (!hotkey) {
+        bytes[i] = 0xff;
+        continue;
+      }
     }
 
+    // base controller/mouse buttons
+    int8_t byte = (event->buttons & 0xff);
+
     // check for 6-button enable/disable hotkeys
-    if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DU)))
-      players[i].button_mode = BUTTON_MODE_6;
-    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DD)))
-      players[i].button_mode = BUTTON_MODE_2;
-    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DR)))
-      players[i].button_mode = BUTTON_MODE_3_SEL;
-    else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DL)))
-      players[i].button_mode = BUTTON_MODE_3_RUN;
+    if (!(event->buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DU)))
+      pce_state.button_mode[i] = BUTTON_MODE_6;
+    else if (!(event->buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DD)))
+      pce_state.button_mode[i] = BUTTON_MODE_2;
+    else if (!(event->buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DR)))
+      pce_state.button_mode[i] = BUTTON_MODE_3_SEL;
+    else if (!(event->buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DL)))
+      pce_state.button_mode[i] = BUTTON_MODE_3_RUN;
 
     // Turbo EverDrive Pro hot-key fix
     if (hotkey)
@@ -242,31 +256,31 @@ void __not_in_flash_func(update_output)(void)
     }
     else if (i == 0)
     {
-      int16_t btns= (~players[i].output_buttons & 0xff);
+      int16_t btns= (~event->buttons & 0xff);
       if     (btns == 0x82) hotkey = ~0x82; // RUN + RIGHT
       else if(btns == 0x88) hotkey = ~0x88; // RUN + LEFT
       else if(btns == 0x84) hotkey = ~0x84; // RUN + DOWN
     }
 
-    bool has6Btn = !(players[i].output_buttons & 0x800);
-    bool isMouse = !(players[i].output_buttons & 0x0f);
-    bool is6btn = has6Btn && players[i].button_mode == BUTTON_MODE_6;
-    bool is3btnSel = has6Btn && players[i].button_mode == BUTTON_MODE_3_SEL;
-    bool is3btnRun = has6Btn && players[i].button_mode == BUTTON_MODE_3_RUN;
+    bool has6Btn = !(event->buttons & 0x800);
+    bool isMouse = !(event->buttons & 0x0f);
+    bool is6btn = has6Btn && pce_state.button_mode[i] == BUTTON_MODE_6;
+    bool is3btnSel = has6Btn && pce_state.button_mode[i] == BUTTON_MODE_3_SEL;
+    bool is3btnRun = has6Btn && pce_state.button_mode[i] == BUTTON_MODE_3_RUN;
 
     // 6 button extra four buttons (III/IV/V/VI)
     if (is6btn)
     {
       if (state == 2)
       {
-        byte = ((players[i].output_buttons>>8) & 0xf0);
+        byte = ((event->buttons>>8) & 0xf0);
       }
     }
 
     //
     else if (is3btnSel)
     {
-      if ((~(players[i].output_buttons>>8)) & 0x30)
+      if ((~(event->buttons>>8)) & 0x30)
       {
         byte &= 0b01111111;
       }
@@ -275,7 +289,7 @@ void __not_in_flash_func(update_output)(void)
     //
     else if (is3btnRun)
     {
-      if ((~(players[i].output_buttons>>8)) & 0x30)
+      if ((~(event->buttons>>8)) & 0x30)
       {
         byte &= 0b10111111;
       }
@@ -287,16 +301,16 @@ void __not_in_flash_func(update_output)(void)
       if (turbo_state)
       {
         // Set the button state as pressed
-        if ((~(players[i].output_buttons>>8)) & 0x20) byte &= 0b11011111;
-        if ((~(players[i].output_buttons>>8)) & 0x10) byte &= 0b11101111;
+        if ((~(event->buttons>>8)) & 0x20) byte &= 0b11011111;
+        if ((~(event->buttons>>8)) & 0x10) byte &= 0b11101111;
       }
       else
       {
         // Set the button state as released
       }
 
-      if ((~(players[i].output_buttons>>8)) & 0x40) timer_threshold = timer_threshold_a;
-      if ((~(players[i].output_buttons>>8)) & 0x80) timer_threshold = timer_threshold_b;
+      if ((~(event->buttons>>8)) & 0x40) timer_threshold = timer_threshold_a;
+      if ((~(event->buttons>>8)) & 0x80) timer_threshold = timer_threshold_b;
     }
 
     // mouse x/y states
@@ -305,16 +319,16 @@ void __not_in_flash_func(update_output)(void)
       switch (state)
       {
         case 3: // state 3: x most significant nybble
-          byte |= (((players[i].analog[0]>>1) & 0xf0) >> 4);  // ANALOG_X
+          byte |= (((event->analog[0]>>1) & 0xf0) >> 4);  // ANALOG_X
         break;
         case 2: // state 2: x least significant nybble
-          byte |= (((players[i].analog[0]>>1) & 0x0f));  // ANALOG_X
+          byte |= (((event->analog[0]>>1) & 0x0f));  // ANALOG_X
         break;
         case 1: // state 1: y most significant nybble
-          byte |= (((players[i].analog[1]>>1) & 0xf0) >> 4);  // ANALOG_Y
+          byte |= (((event->analog[1]>>1) & 0xf0) >> 4);  // ANALOG_Y
         break;
         case 0: // state 0: y least significant nybble
-          byte |= (((players[i].analog[1]>>1) & 0x0f));  // ANALOG_Y
+          byte |= (((event->analog[1]>>1) & 0x0f));  // ANALOG_Y
         break;
       }
     }
@@ -334,105 +348,8 @@ void __not_in_flash_func(update_output)(void)
 }
 
 
-//
-//
-// post_input_event - NEW unified input event handler
-//
-void __not_in_flash_func(post_input_event)(const input_event_t* event)
-{
-  if (!event) return;
-
-  // Handle merged instances (e.g., Joy-Con Charging Grip)
-  int8_t instance = event->instance;
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  // Find or add player
-  int player_index = find_player_index(event->dev_addr, instance);
-
-  if (event->type == INPUT_TYPE_MOUSE) {
-    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].global_buttons = event->buttons;
-      players[player_index].device_type = event->type;
-
-      // Accumulate mouse deltas
-      if (event->delta_x >= 128)
-        players[player_index].global_x = players[player_index].global_x - (256 - event->delta_x);
-      else
-        players[player_index].global_x = players[player_index].global_x + event->delta_x;
-
-      if (event->delta_y >= 128)
-        players[player_index].global_y = players[player_index].global_y - (256 - event->delta_y);
-      else
-        players[player_index].global_y = players[player_index].global_y + event->delta_y;
-
-      if (!output_exclude) {
-        players[player_index].analog[0] = players[player_index].global_x;
-        players[player_index].analog[1] = players[player_index].global_y;
-        players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-        update_output();
-      }
-    }
-  } else {
-    // Gamepad, keyboard, flightstick, wheel, etc.
-    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      uint32_t buttons = event->buttons;
-      players[player_index].device_type = event->type;
-
-      // Guide button mapping to IGR
-      if (!(buttons & (USBR_BUTTON_A1))) {
-        buttons ^= (USBR_BUTTON_S2 | USBR_BUTTON_S1);
-      }
-
-      // Map analog to dpad movement
-      uint8_t dpad_offset = 32;
-      if (event->analog[0]) {
-        if (event->analog[0] > 128 + dpad_offset) buttons &= ~(0x02); // right
-        else if (event->analog[0] < 128 - dpad_offset) buttons &= ~(0x08); // left
-      }
-      if (event->analog[1]) {
-        if (event->analog[1] > 128 + dpad_offset) buttons &= ~(0x01); // up
-        else if (event->analog[1] < 128 - dpad_offset) buttons &= ~(0x04); // down
-      }
-
-      // Extra instance buttons to merge with root player
-      if (is_extra) {
-        players[0].altern_buttons = buttons;
-      } else {
-        players[player_index].global_buttons = buttons;
-      }
-
-      // Update analog values
-      for (int i = 0; i < 8; i++) {
-        players[player_index].analog[i] = event->analog[i];
-      }
-
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-      // Basic SOCD (up priority, left+right neutral)
-      if (((~players[player_index].output_buttons) & 0x01) && ((~players[player_index].output_buttons) & 0x04)) {
-        players[player_index].output_buttons ^= 0x04;
-      }
-      if (((~players[player_index].output_buttons) & 0x02) && ((~players[player_index].output_buttons) & 0x08)) {
-        players[player_index].output_buttons ^= 0x0a;
-      }
-
-      update_output();
-    }
-  }
-}
+// post_input_event removed - replaced by router architecture
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → update_output()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -443,7 +360,7 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
 const OutputInterface pcengine_output_interface = {
     .name = "PCEngine",
     .init = pce_init,
-    .handle_input = post_input_event,
+    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = pce_task,  // PCEngine needs periodic scan detection task
 };

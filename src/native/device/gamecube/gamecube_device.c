@@ -39,6 +39,19 @@ gc_profile_t* get_active_profile(void) {
     return (gc_profile_t*)active_profile;  // Cast away const for external access
 }
 
+// ============================================================================
+// CONSOLE-LOCAL STATE (Phase 3: Router Migration)
+// ============================================================================
+
+#include "core/router/router.h"
+
+// Console-specific state (not input data from router)
+static struct {
+    int button_mode;  // BUTTON_MODE_KB or BUTTON_MODE_3
+} gc_state = {
+    .button_mode = BUTTON_MODE_3  // Default to gamepad mode
+};
+
 extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, int sm, int offset);
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
 extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
@@ -256,25 +269,10 @@ void __not_in_flash_func(core1_entry)(void)
     gc_kb_counter++;
     gc_kb_counter &= 15;
 
-    unsigned short int i;
-    for (i = 0; i < MAX_PLAYERS; ++i)
-    {
-      // decrement outputs from globals
-      if (players[i].global_x != 0)
-      {
-        players[i].global_x = (players[i].global_x - (players[i].analog[0] - 128));  // ANALOG_X
-        // if (players[i].global_x > 128) players[i].global_x = 128;
-        // if (players[i].global_x < -128) players[i].global_x = -128;
-        players[i].analog[0] = 128;  // ANALOG_X (Left stick X)
-      }
-      if (players[i].global_y != 0)
-      {
-        players[i].global_y = (players[i].global_y - (players[i].analog[1] - 128));  // ANALOG_Y
-        // if (players[i].global_y > 128) players[i].global_y = 128;
-        // if (players[i].global_y < -128) players[i].global_y = -128;
-        players[i].analog[1] = 128;  // ANALOG_Y (Left stick Y)
-      }
-    }
+    // TODO(Phase 3): Mouse motion handling needs refactoring for router architecture
+    // Mouse delta accumulation should be in console-local state, not players[]
+    // For now, disabled since GameCube MERGE mode primarily uses gamepads
+
     update_output();
 
     // printf("MODE: %d\n", gc._reading_mode);
@@ -304,7 +302,7 @@ static void switch_to_profile(uint8_t new_profile_index)
 }
 
 // Check for profile switching: SELECT + D-pad Up/Down
-static void check_profile_switch_combo(void)
+static void check_profile_switch_combo(uint32_t buttons)
 {
   static uint32_t select_hold_start = 0;   // When Select was first pressed
   static bool select_was_held = false;
@@ -314,8 +312,6 @@ static void check_profile_switch_combo(void)
   const uint32_t INITIAL_HOLD_TIME_MS = 2000; // Must hold 2 seconds for first trigger
 
   if (playersCount == 0) return; // No controllers connected
-
-  uint32_t buttons = players[0].output_buttons;
   bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
   bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
   bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
@@ -460,13 +456,17 @@ void __not_in_flash_func(update_output)(void)
 {
   static bool kbModeButtonHeld = false;
 
+  // Get input from router (GameCube uses MERGE mode, all inputs merged to player 0)
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
+  if (!event || playersCount == 0) return;  // No input available
+
   // Check for profile switching combo
-  check_profile_switch_combo();
+  check_profile_switch_combo(event->buttons);
 
   // Build report locally to avoid Core 1 reading partial updates
   gc_report_t new_report;
 
-  if (players[0].button_mode == BUTTON_MODE_KB)
+  if (gc_state.button_mode == BUTTON_MODE_KB)
   {
     new_report = default_gc_kb_report;
   }
@@ -475,32 +475,25 @@ void __not_in_flash_func(update_output)(void)
     new_report = default_gc_report;
   }
 
-  unsigned short int i;
-  for (i = 0; i < playersCount; ++i)
-  {
-    // base controller buttons
-    int32_t byte = (players[i].output_buttons & 0x3ffff);
-    bool kbModeButtonPress = players[i].keypress[0] == HID_KEY_SCROLL_LOCK || players[i].keypress[0] == HID_KEY_F14;
+  // Process input event (replaces multi-player loop since router already merges)
+  int32_t byte = (event->buttons & 0x3ffff);
+  bool kbModeButtonPress = event->keys == HID_KEY_SCROLL_LOCK || event->keys == HID_KEY_F14;
     if (kbModeButtonPress)
     {
       if (!kbModeButtonHeld)
       {
-        if (players[0].button_mode != BUTTON_MODE_KB)
+        if (gc_state.button_mode != BUTTON_MODE_KB)
         {
-          players[0].button_mode = BUTTON_MODE_KB; // global
-          players[i].button_mode = BUTTON_MODE_KB;
+          gc_state.button_mode = BUTTON_MODE_KB;
           GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
           new_report = default_gc_kb_report;
-          // players[i].gc_report = default_gc_kb_report;
           gc_kb_led = 0x4;
         }
         else
         {
-          players[0].button_mode = BUTTON_MODE_3; // global
-          players[i].button_mode = BUTTON_MODE_3;
+          gc_state.button_mode = BUTTON_MODE_3;
           GamecubeConsole_SetMode(&gc, GamecubeMode_3);
           new_report = default_gc_report;
-          // players[i].gc_report = default_gc_report;
           gc_kb_led = 0;
         }
       }
@@ -511,7 +504,7 @@ void __not_in_flash_func(update_output)(void)
       kbModeButtonHeld = false;
     }
 
-    if (players[0].button_mode != BUTTON_MODE_KB)
+    if (gc_state.button_mode != BUTTON_MODE_KB)
     {
       // ======================================================================
       // PROFILE-BASED BUTTON MAPPING
@@ -602,32 +595,26 @@ void __not_in_flash_func(update_output)(void)
       }
 
       // Analog sticks with profile-based sensitivity
-      new_report.stick_x    = furthest_from_center(new_report.stick_x,
-                                                   scale_toward_center(players[i].analog[0], active_profile->left_stick_sensitivity, 128),  // ANALOG_X
-                                                   128);
-      new_report.stick_y    = furthest_from_center(new_report.stick_y,
-                                                   scale_toward_center(players[i].analog[1], active_profile->left_stick_sensitivity, 128),  // ANALOG_Y
-                                                   128);
-      new_report.cstick_x   = furthest_from_center(new_report.cstick_x,
-                                                   scale_toward_center(players[i].analog[2], active_profile->right_stick_sensitivity, 128),  // ANALOG_Z
-                                                   128);
-      new_report.cstick_y   = furthest_from_center(new_report.cstick_y,
-                                                   scale_toward_center(players[i].analog[3], active_profile->right_stick_sensitivity, 128),  // ANALOG_RX
-                                                   128);
-      new_report.l_analog   = furthest_from_center(new_report.l_analog, players[i].analog[5], 0);  // ANALOG_RZ
-      new_report.r_analog   = furthest_from_center(new_report.r_analog, players[i].analog[6], 0);  // ANALOG_SLIDER
+      new_report.stick_x    = scale_toward_center(event->analog[0], active_profile->left_stick_sensitivity, 128);
+      new_report.stick_y    = scale_toward_center(event->analog[1], active_profile->left_stick_sensitivity, 128);
+      new_report.cstick_x   = scale_toward_center(event->analog[2], active_profile->right_stick_sensitivity, 128);
+      new_report.cstick_y   = scale_toward_center(event->analog[3], active_profile->right_stick_sensitivity, 128);
+      new_report.l_analog   = event->analog[5];
+      new_report.r_analog   = event->analog[6];
     }
     else
     {
-      new_report.keyboard.keypress[0] = gc_kb_key_lookup(players[i].keypress[2]);
-      new_report.keyboard.keypress[1] = gc_kb_key_lookup(players[i].keypress[1]);
-      new_report.keyboard.keypress[2] = gc_kb_key_lookup(players[i].keypress[0]);
+      // Keyboard mode - input_event_t only has keys field, not individual keypress array
+      // For now, map the single key to all three slots (TODO: proper multi-key support)
+      uint8_t gc_key = gc_kb_key_lookup(event->keys);
+      new_report.keyboard.keypress[0] = gc_key;
+      new_report.keyboard.keypress[1] = GC_KEY_NOT_FOUND;
+      new_report.keyboard.keypress[2] = GC_KEY_NOT_FOUND;
       new_report.keyboard.checksum = new_report.keyboard.keypress[0] ^
                                     new_report.keyboard.keypress[1] ^
                                     new_report.keyboard.keypress[2] ^ gc_kb_counter;
       new_report.keyboard.counter = gc_kb_counter;
     }
-  }
 
   codes_task();
 
@@ -637,134 +624,8 @@ void __not_in_flash_func(update_output)(void)
   update_pending = true;
 }
 
-//
-// post_input_event - NEW unified input event handler
-//
-void __not_in_flash_func(post_input_event)(const input_event_t* event)
-{
-  if (!event) return;
-
-  // Handle merged instances (e.g., Joy-Con Charging Grip)
-  int8_t instance = event->instance;
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  // Find or add player
-  int player_index = find_player_index(event->dev_addr, instance);
-
-  if (event->type == INPUT_TYPE_MOUSE) {
-    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-
-      // Fixes out of range analog values (1-255)
-      uint8_t delta_x = event->delta_x;
-      uint8_t delta_y = event->delta_y;
-      if (delta_x == 0) delta_x = 1;
-      if (delta_y == 0) delta_y = 1;
-
-      // Accumulate mouse deltas
-      if (delta_x >= 128) {
-        players[player_index].global_x = players[player_index].global_x - (256 - delta_x);
-      } else {
-        players[player_index].global_x = players[player_index].global_x + delta_x;
-      }
-
-      // Clamp and convert global_x to delta_x
-      if (players[player_index].global_x > 127) {
-        delta_x = 0xff;
-      } else if (players[player_index].global_x < -127) {
-        delta_x = 1;
-      } else {
-        delta_x = 128 + players[player_index].global_x;
-      }
-
-      if (delta_y >= 128) {
-        players[player_index].global_y = players[player_index].global_y - (256 - delta_y);
-      } else {
-        players[player_index].global_y = players[player_index].global_y + delta_y;
-      }
-
-      // Clamp and convert global_y to delta_y
-      if (players[player_index].global_y > 127) {
-        delta_y = 0xff;
-      } else if (players[player_index].global_y < -127) {
-        delta_y = 1;
-      } else {
-        delta_y = 128 + players[player_index].global_y;
-      }
-
-      // Cache analog and button values to player object
-      players[player_index].analog[0] = delta_x;
-      players[player_index].analog[1] = delta_y;
-      players[player_index].output_buttons = event->buttons;
-
-      update_output();
-    }
-  } else {
-    // Gamepad, keyboard, flightstick, wheel, etc.
-    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-
-      // Extra instance buttons to merge with root player
-      if (is_extra) {
-        players[0].altern_buttons = event->buttons;
-      } else {
-        players[player_index].global_buttons = event->buttons;
-      }
-
-      // Cache analog values - always assign (don't skip zeros)
-      players[player_index].analog[0] = event->analog[0];  // Left stick X
-      players[player_index].analog[1] = event->analog[1];  // Left stick Y
-      players[player_index].analog[2] = event->analog[2];  // Right stick X
-      players[player_index].analog[3] = event->analog[3];  // Right stick Y
-      players[player_index].analog[5] = event->analog[5];  // Left trigger
-      players[player_index].analog[6] = event->analog[6];  // Right trigger
-
-      // For digital-only triggers: convert button press to full analog value
-      if (event->analog[5] == 0 && (event->buttons & USBR_BUTTON_L2) == 0) {
-        players[player_index].analog[5] = 255;
-      }
-      if (event->analog[6] == 0 && (event->buttons & USBR_BUTTON_R2) == 0) {
-        players[player_index].analog[6] = 255;
-      }
-
-      players[player_index].output_buttons = players[player_index].global_buttons & players[player_index].altern_buttons;
-
-      players[player_index].keypress[0] = (event->keys) & 0xff;
-      players[player_index].keypress[1] = (event->keys >> 8) & 0xff;
-      players[player_index].keypress[2] = (event->keys >> 16) & 0xff;
-
-      // GameCube-specific trigger logic with profile-based thresholds
-      bool original_l2_pressed = (event->buttons & USBR_BUTTON_L2) == 0;
-      bool original_r2_pressed = (event->buttons & USBR_BUTTON_R2) == 0;
-
-      // Force L2/R2 to "not pressed" initially
-      players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
-
-      // Use profile-based threshold if analog present, otherwise use digital button
-      if (event->analog[5] > active_profile->l2_threshold || (event->analog[5] == 0 && original_l2_pressed)) {
-        players[player_index].output_buttons &= ~USBR_BUTTON_L2;
-      }
-      if (event->analog[6] > active_profile->r2_threshold || (event->analog[6] == 0 && original_r2_pressed)) {
-        players[player_index].output_buttons &= ~USBR_BUTTON_R2;
-      }
-
-      update_output();
-    }
-  }
-}
+// post_input_event removed - replaced by router architecture
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → update_output()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -775,7 +636,7 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
 const OutputInterface gamecube_output_interface = {
     .name = "GameCube",
     .init = ngc_init,
-    .handle_input = post_input_event,
+    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // GameCube doesn't need periodic task
 };
