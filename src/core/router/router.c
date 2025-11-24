@@ -137,9 +137,8 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
             }
         }
 
-        uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
-        if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
-            // Any button pressed or mouse movement → use this input
+        // Update output state for registered players (process all events, not just button presses)
+        if (player_index >= 0) {
             router_outputs[output][0].current_state = *event;
             router_outputs[output][0].updated = true;
             router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;  // Default for now
