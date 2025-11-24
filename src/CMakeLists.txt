@@ -130,6 +130,8 @@ target_sources(usbretro_ngc PUBLIC # For NGC
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/gamecube/gamecube_device.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/joybus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/gcusb/main.c
 )
 
 target_sources(usbretro_xb1 PUBLIC # For XB1

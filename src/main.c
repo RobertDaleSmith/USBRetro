@@ -157,6 +157,13 @@ int main(void)
   };
   router_init(&router_cfg);
 
+  // Initialize app layer (Phase 5 - optional, only for app-based builds)
+#ifdef CONFIG_NGC
+  // GCUSB app initialization
+  extern void app_init(void);
+  app_init();
+#endif
+
   // Initialize active output (console-specific or USB device)
   active_output->init();
 
