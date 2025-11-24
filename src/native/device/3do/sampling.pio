@@ -1,0 +1,38 @@
+; 3DO Clock Sampling PIO Program
+; Based on USBTo3DO by FCare (https://github.com/FCare/USBTo3DO)
+; Monitors CLK line and triggers IRQ after 32 consecutive high cycles
+
+.program sampling
+
+public entry_point:
+    set x, 31
+.wrap_target
+test:
+    jmp pin is_one
+    jmp is_zero
+is_one:
+    jmp x--, test
+    irq set 0
+wait_zero:
+    jmp pin wait_zero
+is_zero:
+    set x, 31
+.wrap
+
+% c-sdk {
+
+#include "console/3do/3do.h"
+
+static inline void sampling_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = sampling_program_get_default_config(offset);
+
+    sm_config_set_jmp_pin(&c, CLK_PIN);
+
+    sm_config_set_clkdiv(&c, 50.0);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}

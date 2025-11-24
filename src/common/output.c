@@ -29,6 +29,11 @@ extern const OutputInterface loopy_output_interface;
 extern const OutputInterface xboxone_output_interface;
 #endif
 
+#ifdef CONFIG_3DO
+#include "native/device/3do/3do_device.h"
+extern const OutputInterface threedooutput_interface;
+#endif
+
 // Select active output at compile-time
 const OutputInterface* active_output =
 #ifdef CONFIG_NGC
@@ -41,6 +46,8 @@ const OutputInterface* active_output =
     &loopy_output_interface;
 #elif CONFIG_XB1
     &xboxone_output_interface;
+#elif CONFIG_3DO
+    &threedooutput_interface;
 #else
-    #error "No output configured - must define CONFIG_NGC, CONFIG_PCE, CONFIG_NUON, CONFIG_LOOPY, or CONFIG_XB1"
+    #error "No output configured - must define CONFIG_NGC, CONFIG_PCE, CONFIG_NUON, CONFIG_LOOPY, CONFIG_XB1, or CONFIG_3DO"
 #endif
