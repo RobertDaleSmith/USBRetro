@@ -1,0 +1,36 @@
+; 3DO Serial Output PIO Program
+; Based on USBTo3DO by FCare (https://github.com/FCare/USBTo3DO)
+; Handles clock-synchronized serial data output and daisy chain input
+
+.program output
+
+.define CLK_PIN 2
+
+public entry_point:
+  wait 0 gpio CLK_PIN
+.wrap_target
+start:
+  out pins,1
+  wait 1 gpio CLK_PIN
+  wait 0 gpio CLK_PIN
+  in pins,1
+.wrap
+
+% c-sdk {
+
+#include "console/3do/3do.h"
+
+static inline void output_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = output_program_get_default_config(offset);
+
+    sm_config_set_out_pins(&c, DATA_OUT_PIN, 1);
+    sm_config_set_out_shift(&c, false, true, 8);
+    sm_config_set_in_pins(&c, DATA_IN_PIN);
+    sm_config_set_in_shift(&c, false, true, 8);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
