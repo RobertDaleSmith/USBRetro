@@ -144,6 +144,8 @@ target_sources(usbretro_xb1 PUBLIC # For XB1
 target_sources(usbretro_nuon PUBLIC # For NUON
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/nuon/nuon_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/nuonusb/main.c
 )
 
 target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY

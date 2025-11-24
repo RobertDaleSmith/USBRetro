@@ -170,6 +170,10 @@ int main(void)
   // 3DOUSB app initialization
   extern void app_init(void);
   app_init();
+#elif defined(CONFIG_NUON)
+  // NUONUSB app initialization
+  extern void app_init(void);
+  app_init();
 #endif
 
   // Initialize active output (console-specific or USB device)
