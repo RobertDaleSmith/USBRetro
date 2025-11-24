@@ -19,6 +19,9 @@ uint32_t device_mode   = 0b10111001100000111001010100000000;
 uint32_t device_config = 0b10000000100000110000001100000000;
 uint32_t device_switch = 0b10000000100000110000001100000000;
 
+// Console-local state (not input data)
+#include "core/router/router.h"
+
 // Stick-to-spinner configuration
 bool analog_stick_to_spinner = true;  // Enable right stick to spinner conversion
 static int16_t last_stick_angle[MAX_PLAYERS] = {0};  // Track last angle per player
@@ -436,178 +439,30 @@ void __not_in_flash_func(core1_entry)(void)
 //
 void __not_in_flash_func(update_output)(void)
 {
+  // Get input from router (Nuon uses MERGE mode, all inputs merged to player 0)
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_NUON, 0);
+  if (!event || playersCount == 0) return;
+
   // Calculate and set Nuon output packet values here.
-  int32_t buttons = (players[0].output_buttons & 0xffff) |
+  // TODO: Move output_buttons_alt to console-local state in future phase
+  extern Player_t players[];  // Temporary bridge access for console-specific fields
+  int32_t buttons = (event->buttons & 0xffff) |
                     (players[0].output_buttons_alt & 0xffff);
 
   output_buttons_0 = crc_data_packet(buttons, 2);
-  output_analog_1x = crc_data_packet(players[0].analog[0], 1);  // ANALOG_X
-  output_analog_1y = crc_data_packet(players[0].analog[1], 1);  // ANALOG_Y
-  output_analog_2x = crc_data_packet(players[0].analog[2], 1);  // ANALOG_Z
-  output_analog_2y = crc_data_packet(players[0].analog[3], 1);  // ANALOG_RX
-  output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);
+  output_analog_1x = crc_data_packet(event->analog[0], 1);  // ANALOG_X
+  output_analog_1y = crc_data_packet(event->analog[1], 1);  // ANALOG_Y
+  output_analog_2x = crc_data_packet(event->analog[2], 1);  // ANALOG_Z
+  output_analog_2y = crc_data_packet(event->analog[3], 1);  // ANALOG_RX
+  output_quad_x    = crc_data_packet(players[0].output_quad_x, 1);  // TODO: Move to console-local state
 
   codes_task();
 
   update_pending = true;
 }
 
-//
-// post_input_event - NEW unified input event handler
-//
-void __not_in_flash_func(post_input_event)(const input_event_t* event)
-{
-  if (!event) return;
-
-  // Handle merged instances (e.g., Joy-Con Charging Grip)
-  int8_t instance = event->instance;
-  bool is_extra = (instance == -1);
-  if (is_extra) instance = 0;
-
-  // Find or add player
-  int player_index = find_player_index(event->dev_addr, instance);
-
-  if (event->type == INPUT_TYPE_MOUSE) {
-    uint16_t buttons_pressed = (~(event->buttons | 0x0f00));
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-      players[player_index].global_buttons = event->buttons;
-
-      // Swap B2 and S2 for mouse
-      if (!(event->buttons & USBR_BUTTON_B2)) {
-        players[player_index].global_buttons |= USBR_BUTTON_B2;
-        players[player_index].global_buttons &= ~USBR_BUTTON_S2;
-      }
-      if (!(event->buttons & USBR_BUTTON_S2)) {
-        players[player_index].global_buttons |= USBR_BUTTON_S2;
-        players[player_index].global_buttons &= ~USBR_BUTTON_B2;
-      }
-
-      players[player_index].output_buttons = map_nuon_buttons(players[player_index].global_buttons & players[player_index].altern_buttons);
-
-      // Center all analog axes for mouse mode
-      players[player_index].analog[0] = 128;
-      players[player_index].analog[1] = 128;
-      players[player_index].analog[2] = 128;
-      players[player_index].analog[3] = 128;
-      players[player_index].analog[5] = 0;
-      players[player_index].analog[6] = 0;
-
-      // Accumulate mouse deltas into spinner (0-255 wraparound)
-      // Mouse wheel: scroll wheel rotation
-      if (event->delta_wheel != 0) {
-        int16_t delta = event->delta_wheel;
-        if (delta < 0) {
-          players[player_index].output_quad_x += ((-1 * delta) + 3);
-        } else {
-          players[player_index].output_quad_x -= (delta + 3);
-        }
-      }
-
-      // Mouse X-axis: horizontal movement
-      if (event->delta_x != 0) {
-        int16_t delta = event->delta_x * -1;
-        // Clamp delta
-        if (delta > 15) delta = 15;
-        if (delta < -15) delta = -15;
-        players[player_index].output_quad_x += delta;
-      }
-
-      // Wrap spinner to 0-255 range
-      while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
-      while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
-
-      update_output();
-    }
-  } else {
-    // Gamepad, keyboard, flightstick, wheel, etc.
-    uint16_t buttons_pressed = (~(event->buttons | 0x800)) || event->keys;
-    if (player_index < 0 && buttons_pressed) {
-      printf("[add player] [%d, %d]\n", event->dev_addr, instance);
-      player_index = add_player(event->dev_addr, instance);
-    }
-
-    if (player_index >= 0) {
-      players[player_index].device_type = event->type;
-
-      // Extra instance buttons to merge with root player
-      if (is_extra) {
-        players[0].altern_buttons = event->buttons;
-      } else {
-        players[player_index].global_buttons = event->buttons;
-      }
-
-      uint32_t nuon_buttons = map_nuon_buttons(event->buttons);
-      if (!instance) {
-        players[player_index].output_buttons = nuon_buttons;
-      } else {
-        players[player_index].output_buttons_alt = nuon_buttons;
-      }
-
-      // Update analog values (with Y-axis inversion)
-      if (event->analog[0]) players[player_index].analog[0] = event->analog[0];
-      if (event->analog[1]) players[player_index].analog[1] = 256 - event->analog[1];
-      if (event->analog[2]) players[player_index].analog[2] = event->analog[2];
-      if (event->analog[3]) players[player_index].analog[3] = 256 - event->analog[3];
-
-      // Right stick to spinner conversion (works for all controllers)
-      if (analog_stick_to_spinner) {
-        uint8_t stick_x = event->analog[2];
-        uint8_t stick_y = event->analog[3];
-
-        // Check if stick is outside deadzone (64-192 is center zone)
-        if (stick_x && stick_y && (stick_x < 64 || stick_x > 192 || stick_y < 64 || stick_y > 192)) {
-          // Calculate angle from stick position (0-359 degrees)
-          int16_t x_centered = stick_x - 128;
-          int16_t y_centered = stick_y - 128;
-          float angle_rad = atan2f(y_centered, x_centered);
-          int16_t angle = (int16_t)(angle_rad * (180.0f / 3.14159265f)) + 179;
-
-          // Compute angular delta
-          int16_t delta = 0;
-          if (angle >= last_stick_angle[player_index]) {
-            delta = angle - last_stick_angle[player_index];
-          } else {
-            delta = (-1) * (last_stick_angle[player_index] - angle);
-          }
-
-          // Clamp delta to prevent jumps
-          if (delta > 16) delta = 16;
-          if (delta < -16) delta = -16;
-
-          // Accumulate into spinner
-          players[player_index].output_quad_x -= delta;
-
-          // Wrap spinner to 0-255 range
-          while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
-          while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
-
-          last_stick_angle[player_index] = angle;
-        }
-      }
-
-      // Accumulate touchpad delta into spinner (DS4/DS5 touchpad)
-      if (event->delta_x != 0) {
-        int16_t delta = event->delta_x;
-        // Clamp delta
-        if (delta > 12) delta = 12;
-        if (delta < -12) delta = -12;
-        players[player_index].output_quad_x += delta;
-
-        // Wrap spinner to 0-255 range
-        while (players[player_index].output_quad_x > 255) players[player_index].output_quad_x -= 255;
-        while (players[player_index].output_quad_x < 0) players[player_index].output_quad_x += 256;
-      }
-
-      update_output();
-    }
-  }
-}
+// post_input_event removed - replaced by router architecture
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → update_output()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -618,7 +473,7 @@ void __not_in_flash_func(post_input_event)(const input_event_t* event)
 const OutputInterface nuon_output_interface = {
     .name = "Nuon",
     .init = nuon_init,
-    .handle_input = post_input_event,
+    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = nuon_task,  // Nuon needs periodic soft reset task
 };
