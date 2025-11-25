@@ -1,7 +1,7 @@
 // gamecube_adapter.c
 #include "gamecube_adapter.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "pico/time.h"
 
 // check if device is GameCube Adapter for WiiU/Switch

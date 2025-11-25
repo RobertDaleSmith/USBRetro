@@ -1,7 +1,7 @@
 // sega_astrocity.c
 #include "sega_astrocity.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is Sega Astro City mini controller
 static inline bool is_sega_astrocity(uint16_t vid, uint16_t pid) {

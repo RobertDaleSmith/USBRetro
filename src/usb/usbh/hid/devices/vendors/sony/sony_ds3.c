@@ -1,7 +1,7 @@
 // sony_ds3.c
 #include "sony_ds3.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "pico/time.h"
 
 // DualSense instance state

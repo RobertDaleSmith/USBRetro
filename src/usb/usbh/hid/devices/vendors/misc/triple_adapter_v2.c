@@ -1,7 +1,7 @@
 // triple_adapter_v2.c
 #include "triple_adapter_v2.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is TripleController (Arduino based HID)
 static inline bool is_triple_adapter_v2(uint16_t vid, uint16_t pid) {

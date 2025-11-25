@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "common/input_event.h"
+#include "core/input_event.h"
 
 // ============================================================================
 // ROUTING MODES

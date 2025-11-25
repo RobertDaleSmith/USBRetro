@@ -1,7 +1,7 @@
 // hori_horipad.c
 #include "hori_horipad.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is HORIPAD for Nintendo Switch 
 //                (or Sega Genesis mini controllers)

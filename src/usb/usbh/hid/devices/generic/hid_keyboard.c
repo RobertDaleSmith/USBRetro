@@ -1,7 +1,7 @@
 // hid_keyboard.c
 #include "hid_keyboard.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "pico/time.h"
 
 // Analog stick intensity values (canonical - console layer can scale if needed)

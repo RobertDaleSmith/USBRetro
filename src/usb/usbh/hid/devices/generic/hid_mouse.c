@@ -1,7 +1,7 @@
 // hid_mouse.c
 #include "hid_mouse.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 static uint8_t local_x;
 static uint8_t local_y;

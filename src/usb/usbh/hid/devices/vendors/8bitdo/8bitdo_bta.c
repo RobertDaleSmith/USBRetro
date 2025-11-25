@@ -1,7 +1,7 @@
 // 8bitdo_bta.c
 #include "8bitdo_bta.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is 8BitDo Wireless Adapter (D-input)
 bool is_8bitdo_bta(uint16_t vid, uint16_t pid) {

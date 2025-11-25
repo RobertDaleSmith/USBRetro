@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 #include "tusb.h"
-#include "input_event.h"
+#include "core/input_event.h"
 // Note: Console-specific output formats (gc_report, etc.) are stored in the
 // console device layer, not in Player_t. Player_t stores generic USBR state.
 

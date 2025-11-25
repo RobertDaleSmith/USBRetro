@@ -1,7 +1,7 @@
 // sony_ds5.c
 #include "sony_ds5.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "pico/time.h"
 #include "led_config.h"
 

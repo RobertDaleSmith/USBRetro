@@ -1,7 +1,7 @@
 // 8bitdo_pce.c
 #include "8bitdo_pce.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is 8BitDo PCE 2.4g controllers
 bool is_8bitdo_pce(uint16_t vid, uint16_t pid) {

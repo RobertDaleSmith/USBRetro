@@ -2,7 +2,7 @@
 #include "tusb.h"
 #include "globals.h"
 #include "xinput_host.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 uint32_t buttons;
 int last_player_count = 0; // used by xboxone
@@ -64,7 +64,8 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
                 ((p->wButtons & XINPUT_GAMEPAD_START)          ? 0x00 : USBR_BUTTON_S2) |
                 ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB)     ? 0x00 : USBR_BUTTON_L3) |
                 ((p->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)    ? 0x00 : USBR_BUTTON_R3) |
-                ((p->wButtons & XINPUT_GAMEPAD_GUIDE)          ? 0x00 : USBR_BUTTON_A1));
+                ((p->wButtons & XINPUT_GAMEPAD_GUIDE)          ? 0x00 : USBR_BUTTON_A1) |
+                ((p->wButtons & XINPUT_GAMEPAD_SHARE)          ? 0x00 : USBR_BUTTON_A2));
 
       input_event_t event = {
         .dev_addr = dev_addr,

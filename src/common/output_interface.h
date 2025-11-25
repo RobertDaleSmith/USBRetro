@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "input_event.h"
+#include "core/input_event.h"
 
 // Output interface - abstracts different output types (native consoles, USB device, BLE, etc.)
 typedef struct {

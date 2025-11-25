@@ -1,7 +1,7 @@
 // dragonrise.c
 #include "dragonrise.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is generic NES USB Controller
 static inline bool is_dragonrise(uint16_t vid, uint16_t pid) {

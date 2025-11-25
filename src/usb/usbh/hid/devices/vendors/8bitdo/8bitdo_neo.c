@@ -1,7 +1,7 @@
 // 8bitdo_neo.c
 #include "8bitdo_neo.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is 8BitDo NeoGeo gamepad
 bool is_8bitdo_neo(uint16_t vid, uint16_t pid) {

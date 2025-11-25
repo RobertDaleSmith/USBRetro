@@ -3,7 +3,7 @@
 #define GLOBALS_H
 
 #include "codes.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "core/services/players/manager.h"
 
 #define UART_ID uart0

@@ -1,7 +1,7 @@
 // switch_pro.c
 #include "switch_pro.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 #include "pico/time.h"
 
 // Switch instance state

@@ -1,7 +1,7 @@
 // 8bitdo_m30.c
 #include "8bitdo_m30.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is 8BitDo Bluetooth gamepad (D-input)
 bool is_8bitdo_m30(uint16_t vid, uint16_t pid) {

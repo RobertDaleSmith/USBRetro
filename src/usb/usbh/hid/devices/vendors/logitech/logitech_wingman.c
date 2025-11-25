@@ -1,7 +1,7 @@
 // logitech_wingman.c
 #include "logitech_wingman.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is Logitech WingMan Action controller
 static inline bool is_logitech_wingman(uint16_t vid, uint16_t pid) {

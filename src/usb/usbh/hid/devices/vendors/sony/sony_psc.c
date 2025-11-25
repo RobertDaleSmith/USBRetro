@@ -1,7 +1,7 @@
 // sony_psc.c
 #include "sony_psc.h"
 #include "globals.h"
-#include "input_event.h"
+#include "core/input_event.h"
 
 // check if device is PlayStation Classic controller
 bool is_sony_psc(uint16_t vid, uint16_t pid) {
