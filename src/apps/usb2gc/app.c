@@ -30,7 +30,7 @@ const OutputInterface* app_get_output_interface(void)
 
 void app_init(void)
 {
-    printf("[app:gcusb] Initializing GCUSB v%s\n", APP_VERSION);
+    printf("[app:usb2gc] Initializing GCUSB v%s\n", APP_VERSION);
 
     // Configure router for GCUSB
     router_config_t router_cfg = {
@@ -63,10 +63,10 @@ void app_init(void)
     };
     profiles_init(&profile_cfg);
 
-    printf("[app:gcusb] Initialization complete\n");
-    printf("[app:gcusb]   Routing: %s\n", "MERGE_ALL (all USB → single GC port)");
-    printf("[app:gcusb]   Player slots: %d (FIXED mode for future 4-port)\n", MAX_PLAYER_SLOTS);
-    printf("[app:gcusb]   Profiles: %d\n", profile_cfg.profile_count);
+    printf("[app:usb2gc] Initialization complete\n");
+    printf("[app:usb2gc]   Routing: %s\n", "MERGE_ALL (all USB → single GC port)");
+    printf("[app:usb2gc]   Player slots: %d (FIXED mode for future 4-port)\n", MAX_PLAYER_SLOTS);
+    printf("[app:usb2gc]   Profiles: %d\n", profile_cfg.profile_count);
 }
 
 // ============================================================================

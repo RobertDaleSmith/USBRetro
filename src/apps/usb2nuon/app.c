@@ -1,5 +1,5 @@
-// app.c - LoopyUSB App Entry Point
-// USB to Casio Loopy adapter (experimental)
+// app.c - NUONUSB App Entry Point
+// USB to Nuon DVD player adapter
 //
 // This file contains app-specific initialization and logic.
 // The firmware calls app_init() after core system initialization.
@@ -8,7 +8,7 @@
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
 #include "core/output_interface.h"
-#include "native/device/loopy/loopy_device.h"
+#include "native/device/nuon/nuon_device.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -16,11 +16,11 @@
 // ============================================================================
 
 // Provide output interface for firmware to use
-extern const OutputInterface loopy_output_interface;
+extern const OutputInterface nuon_output_interface;
 
 const OutputInterface* app_get_output_interface(void)
 {
-    return &loopy_output_interface;
+    return &nuon_output_interface;
 }
 
 // ============================================================================
@@ -29,23 +29,23 @@ const OutputInterface* app_get_output_interface(void)
 
 void app_init(void)
 {
-    printf("[app:loopyusb] Initializing LoopyUSB v%s (EXPERIMENTAL)\n", APP_VERSION);
+    printf("[app:usb2nuon] Initializing NUONUSB v%s\n", APP_VERSION);
 
-    // Configure router for LoopyUSB
+    // Configure router for NUONUSB
     router_config_t router_cfg = {
         .mode = ROUTING_MODE,
         .merge_mode = MERGE_MODE,
         .max_players_per_output = {
-            [OUTPUT_TARGET_LOOPY] = LOOPY_OUTPUT_PORTS,  // 4 players
+            [OUTPUT_TARGET_NUON] = NUON_OUTPUT_PORTS,  // Single player
         },
-        .merge_all_inputs = false,  // Simple 1:1 mapping (each USB device → Loopy port)
+        .merge_all_inputs = false,  // Simple 1:1 mapping
         .transform_flags = TRANSFORM_FLAGS,
         .mouse_drain_rate = 8,
     };
     router_init(&router_cfg);
 
-    // Add default route: USB → Loopy
-    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_LOOPY, 0);
+    // Add default route: USB → Nuon
+    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_NUON, 0);
 
     // Configure player management
     player_config_t player_cfg = {
@@ -55,8 +55,9 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    printf("[app:loopyusb] Initialization complete\n");
-    printf("[app:loopyusb]   Routing: %s\n", "SIMPLE (USB → Loopy 1:1)");
-    printf("[app:loopyusb]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
-    printf("[app:loopyusb]   Status: EXPERIMENTAL - protocol partially implemented\n");
+    printf("[app:usb2nuon] Initialization complete\n");
+    printf("[app:usb2nuon]   Routing: %s\n", "SIMPLE (USB → Nuon 1:1)");
+    printf("[app:usb2nuon]   Player slots: %d (single player)\n", MAX_PLAYER_SLOTS);
+    printf("[app:usb2nuon]   Spinner support: enabled (right stick → spinner)\n");
+    printf("[app:usb2nuon]   Soft reset: enabled (button combo)\n");
 }

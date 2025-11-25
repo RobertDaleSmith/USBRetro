@@ -30,7 +30,7 @@ const OutputInterface* app_get_output_interface(void)
 
 void app_init(void)
 {
-    printf("[app:3dousb] Initializing 3DOUSB v%s\n", APP_VERSION);
+    printf("[app:usb23do] Initializing 3DOUSB v%s\n", APP_VERSION);
 
     // Configure router for 3DOUSB
     router_config_t router_cfg = {
@@ -59,10 +59,10 @@ void app_init(void)
     // Note: 3DO profiles are managed by 3do_device.c using its own profile system
     // (stored in 3do_config.h). The universal profile system is not used for 3DO.
 
-    printf("[app:3dousb] Initialization complete\n");
-    printf("[app:3dousb]   Routing: %s\n", "SIMPLE (USB → 3DO PBUS 1:1)");
-    printf("[app:3dousb]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
-    printf("[app:3dousb]   Mouse support: enabled\n");
-    printf("[app:3dousb]   Extension passthrough: enabled (native 3DO controllers)\n");
-    printf("[app:3dousb]   Profile switching: enabled (SELECT+2sec, D-pad Up/Down)\n");
+    printf("[app:usb23do] Initialization complete\n");
+    printf("[app:usb23do]   Routing: %s\n", "SIMPLE (USB → 3DO PBUS 1:1)");
+    printf("[app:usb23do]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
+    printf("[app:usb23do]   Mouse support: enabled\n");
+    printf("[app:usb23do]   Extension passthrough: enabled (native 3DO controllers)\n");
+    printf("[app:usb23do]   Profile switching: enabled (SELECT+2sec, D-pad Up/Down)\n");
 }

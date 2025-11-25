@@ -133,7 +133,7 @@ target_sources(usbretro_ngc PUBLIC # For NGC
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/joybus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
     # Phase 5: App layer
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/gcusb/app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2gc/app.c
 )
 
 target_sources(usbretro_xb1 PUBLIC # For XB1
@@ -147,21 +147,21 @@ target_sources(usbretro_nuon PUBLIC # For NUON
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/nuon/nuon_device.c
     # Phase 5: App layer
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/nuonusb/app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2nuon/app.c
 )
 
 target_sources(usbretro_loopy PUBLIC # For (Casio) LOOPY
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/loopy/loopy_device.c
     # Phase 5: App layer
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/loopyusb/app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2loopy/app.c
 )
 
 target_sources(usbretro_3do PUBLIC # For 3DO
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do/3do_device.c
     # Phase 5: App layer
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/3dousb/app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb23do/app.c
 )
 
 ## SET TARGET INCLUDE DIRS
