@@ -1,5 +1,5 @@
-// main.c - Xbox Adapter App Entry Point
-// USB to Xbox One adapter (hardware passthrough)
+// app.c - USB2PCE App Entry Point
+// USB to PCEngine/TurboGrafx-16 adapter
 //
 // This file contains app-specific initialization and logic.
 // The firmware calls app_init() after core system initialization.
@@ -8,7 +8,7 @@
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
 #include "core/output_interface.h"
-#include "native/device/xboxone/xboxone_device.h"
+#include "native/device/pcengine/pcengine_device.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -16,11 +16,11 @@
 // ============================================================================
 
 // Provide output interface for firmware to use
-extern const OutputInterface xboxone_output_interface;
+extern const OutputInterface pcengine_output_interface;
 
 const OutputInterface* app_get_output_interface(void)
 {
-    return &xboxone_output_interface;
+    return &pcengine_output_interface;
 }
 
 // ============================================================================
@@ -29,23 +29,23 @@ const OutputInterface* app_get_output_interface(void)
 
 void app_init(void)
 {
-    printf("[app:xboxadapter] Initializing Xbox-Adapter v%s\n", APP_VERSION);
+    printf("[app:usb2pce] Initializing USB2PCE v%s\n", APP_VERSION);
 
-    // Configure router for Xbox Adapter
+    // Configure router for USB2PCE
     router_config_t router_cfg = {
         .mode = ROUTING_MODE,
         .merge_mode = MERGE_MODE,
         .max_players_per_output = {
-            [OUTPUT_TARGET_XBOXONE] = XBOXONE_OUTPUT_PORTS,  // Single player
+            [OUTPUT_TARGET_PCENGINE] = PCENGINE_OUTPUT_PORTS,  // 5 players via multitap
         },
-        .merge_all_inputs = false,  // Simple 1:1 mapping
+        .merge_all_inputs = false,  // Simple 1:1 mapping (each USB device → multitap port)
         .transform_flags = TRANSFORM_FLAGS,
         .mouse_drain_rate = 8,
     };
     router_init(&router_cfg);
 
-    // Add default route: USB → Xbox One
-    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_XBOXONE, 0);
+    // Add default route: USB → PCEngine
+    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_PCENGINE, 0);
 
     // Configure player management
     player_config_t player_cfg = {
@@ -55,10 +55,8 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    printf("[app:xboxadapter] Initialization complete\n");
-    printf("[app:xboxadapter]   Routing: %s\n", "SIMPLE (USB → Xbox One 1:1)");
-    printf("[app:xboxadapter]   Player slots: %d (single player)\n", MAX_PLAYER_SLOTS);
-    printf("[app:xboxadapter]   Mouse support: enabled\n");
-    printf("[app:xboxadapter]   I2C passthrough: enabled (GPIO expander emulation)\n");
-    printf("[app:xboxadapter]   DAC analog: enabled (MCP4728 for sticks/triggers)\n");
+    printf("[app:usb2pce] Initialization complete\n");
+    printf("[app:usb2pce]   Routing: %s\n", "SIMPLE (USB → PCE multitap 1:1)");
+    printf("[app:usb2pce]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
+    printf("[app:usb2pce]   Mouse support: enabled (Populous)\n");
 }

@@ -1,4 +1,4 @@
-// main.c - LoopyUSB App Entry Point
+// app.c - LoopyUSB App Entry Point
 // USB to Casio Loopy adapter (experimental)
 //
 // This file contains app-specific initialization and logic.

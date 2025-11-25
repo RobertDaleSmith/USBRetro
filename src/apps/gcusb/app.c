@@ -1,4 +1,4 @@
-// main.c - GCUSB App Entry Point
+// app.c - GCUSB App Entry Point
 // USB to GameCube adapter
 //
 // This file contains app-specific initialization and logic.

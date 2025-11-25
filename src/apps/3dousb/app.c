@@ -1,5 +1,5 @@
-// main.c - USB2PCE App Entry Point
-// USB to PCEngine/TurboGrafx-16 adapter
+// app.c - 3DOUSB App Entry Point
+// USB to 3DO adapter with 8-player support and extension passthrough
 //
 // This file contains app-specific initialization and logic.
 // The firmware calls app_init() after core system initialization.
@@ -7,8 +7,9 @@
 #include "app.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/services/players/profile.h"
 #include "core/output_interface.h"
-#include "native/device/pcengine/pcengine_device.h"
+#include "native/device/3do/3do_device.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -16,11 +17,11 @@
 // ============================================================================
 
 // Provide output interface for firmware to use
-extern const OutputInterface pcengine_output_interface;
+extern const OutputInterface threedooutput_interface;
 
 const OutputInterface* app_get_output_interface(void)
 {
-    return &pcengine_output_interface;
+    return &threedooutput_interface;
 }
 
 // ============================================================================
@@ -29,23 +30,23 @@ const OutputInterface* app_get_output_interface(void)
 
 void app_init(void)
 {
-    printf("[app:usb2pce] Initializing USB2PCE v%s\n", APP_VERSION);
+    printf("[app:3dousb] Initializing 3DOUSB v%s\n", APP_VERSION);
 
-    // Configure router for USB2PCE
+    // Configure router for 3DOUSB
     router_config_t router_cfg = {
         .mode = ROUTING_MODE,
         .merge_mode = MERGE_MODE,
         .max_players_per_output = {
-            [OUTPUT_TARGET_PCENGINE] = PCENGINE_OUTPUT_PORTS,  // 5 players via multitap
+            [OUTPUT_TARGET_3DO] = TDO_OUTPUT_PORTS,  // 8 players via PBUS
         },
-        .merge_all_inputs = false,  // Simple 1:1 mapping (each USB device → multitap port)
+        .merge_all_inputs = false,  // Simple 1:1 mapping (each USB device → PBUS port)
         .transform_flags = TRANSFORM_FLAGS,
         .mouse_drain_rate = 8,
     };
     router_init(&router_cfg);
 
-    // Add default route: USB → PCEngine
-    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_PCENGINE, 0);
+    // Add default route: USB → 3DO
+    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_3DO, 0);
 
     // Configure player management
     player_config_t player_cfg = {
@@ -55,8 +56,13 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    printf("[app:usb2pce] Initialization complete\n");
-    printf("[app:usb2pce]   Routing: %s\n", "SIMPLE (USB → PCE multitap 1:1)");
-    printf("[app:usb2pce]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
-    printf("[app:usb2pce]   Mouse support: enabled (Populous)\n");
+    // Note: 3DO profiles are managed by 3do_device.c using its own profile system
+    // (stored in 3do_config.h). The universal profile system is not used for 3DO.
+
+    printf("[app:3dousb] Initialization complete\n");
+    printf("[app:3dousb]   Routing: %s\n", "SIMPLE (USB → 3DO PBUS 1:1)");
+    printf("[app:3dousb]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
+    printf("[app:3dousb]   Mouse support: enabled\n");
+    printf("[app:3dousb]   Extension passthrough: enabled (native 3DO controllers)\n");
+    printf("[app:3dousb]   Profile switching: enabled (SELECT+2sec, D-pad Up/Down)\n");
 }
