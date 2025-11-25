@@ -4,7 +4,7 @@
 #include "core/router/router.h"
 #include "core/input_event.h"
 #include "pico/time.h"
-#include "led_config.h"
+#include "app_config.h"
 
 static uint16_t tpadLastPos;
 static bool tpadDragging;

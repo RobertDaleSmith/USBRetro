@@ -9,7 +9,7 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "ws2812.pio.h"
-#include "led_config.h"
+#include "app_config.h"
 
 #define NUM_PIXELS 1
 
