@@ -5,7 +5,7 @@
 #include "3do_device.h"
 #include "3do_config.h"
 #include "flash_settings.h"
-#include "core/services/players/profile_feedback.h"
+#include "core/services/players/feedback.h"
 #include "core/router/router.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
@@ -437,7 +437,7 @@ static void switch_to_profile(uint8_t new_index)
   neopixel_indicate_profile(new_index);
 
   // Trigger controller LED + rumble feedback
-  profile_feedback_trigger(new_index, router_get_player_count(OUTPUT_TARGET_3DO));
+  feedback_trigger(new_index, router_get_player_count(OUTPUT_TARGET_3DO));
 
   // Save profile selection to flash (debounced - writes after 5 seconds)
   flash_settings_t settings;
@@ -499,7 +499,7 @@ static void check_profile_switch_combo(void)
 
   // Can trigger - check for D-pad edge detection (rising edge = just pressed)
   // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
-  if (neopixel_is_indicating() || profile_feedback_is_active())
+  if (neopixel_is_indicating() || feedback_is_active())
   {
     // Still showing feedback from previous switch - wait for it to finish
     return;

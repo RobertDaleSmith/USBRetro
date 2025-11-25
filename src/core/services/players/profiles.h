@@ -87,7 +87,7 @@ uint8_t profile_cycle_next(void);
 uint8_t profile_cycle_prev(void);
 
 // Check if profile indicator is currently active (for debouncing profile switches)
-extern bool profile_feedback_is_active(void);
+extern bool feedback_is_active(void);
 
 // ============================================================================
 // CONSOLE-SPECIFIC PROFILE HOOKS
