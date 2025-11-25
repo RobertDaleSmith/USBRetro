@@ -42,10 +42,6 @@
 // handles state of multi-player inputs
 extern bool update_pending;
 
-// GameCube rumble and keyboard LED states
-extern uint8_t gc_rumble;
-extern uint8_t gc_kb_led;
-
 int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
 int __not_in_flash_func(add_player)(int dev_addr, int instance);
 void remove_players_by_address(int dev_addr, int instance);

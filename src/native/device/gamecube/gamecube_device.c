@@ -15,6 +15,13 @@ GamecubeConsole gc;
 gc_report_t gc_report;
 PIO pio = pio0;
 
+// GameCube-specific state for USB device output
+static uint8_t gc_rumble = 0;
+static uint8_t gc_kb_led = 0;
+
+uint8_t gc_get_rumble(void) { return gc_rumble; }
+uint8_t gc_get_kb_led(void) { return gc_kb_led; }
+
 // ============================================================================
 // PROFILE SYSTEM
 // ============================================================================

@@ -17,8 +17,10 @@
 #include "core/globals.h"
 
 bool update_pending = false;
-uint8_t gc_rumble = 0;
-uint8_t gc_kb_led = 0;
+
+// Weak functions for console-specific rumble/LED - overridden by console devices
+__attribute__((weak)) uint8_t gc_get_rumble(void) { return 0; }
+__attribute__((weak)) uint8_t gc_get_kb_led(void) { return 0; }
 
 // Output interface abstraction
 #include "core/output_interface.h"
@@ -74,11 +76,11 @@ static void __not_in_flash_func(process_signals)(void)
     // Generic service used by all consoles with profiles (3DO, GameCube, etc.)
     flash_task();
 
-    // Combine GameCube console rumble with profile indicator rumble
-    uint8_t combined_rumble = gc_rumble | feedback_get_rumble();
+    // Combine console rumble with profile indicator rumble
+    uint8_t combined_rumble = gc_get_rumble() | feedback_get_rumble();
 
     // Get player LED value (combines keyboard mode LED with profile indicator)
-    uint8_t player_led = feedback_get_player_led(playersCount) | gc_kb_led;
+    uint8_t player_led = feedback_get_player_led(playersCount) | gc_get_kb_led();
 
     // Get adaptive trigger threshold from universal profile system (DualSense L2/R2)
     // Apps register their profiles during app_init(), system provides threshold

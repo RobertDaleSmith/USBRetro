@@ -48,6 +48,10 @@
 // Global variables
 extern PIO pio;
 
+// Rumble and keyboard LED state (set by GameCube console, read by main for USB device output)
+uint8_t gc_get_rumble(void);
+uint8_t gc_get_kb_led(void);
+
 // Function declarations
 void ngc_init(void);
 
