@@ -20,6 +20,16 @@ typedef struct {
     // Feedback to USB input devices (rumble, LEDs)
     uint8_t (*get_rumble)(void);                           // Get rumble state (0-255), NULL = no rumble
     uint8_t (*get_player_led)(void);                       // Get player LED state, NULL = no LED override
+
+    // Profile system (output-specific profiles)
+    // Each output defines its own profile structure with console-specific button mappings
+    uint8_t (*get_profile_count)(void);                    // Get number of available profiles, NULL = no profiles
+    uint8_t (*get_active_profile)(void);                   // Get active profile index (0-based)
+    void (*set_active_profile)(uint8_t index);             // Set active profile (triggers flash save)
+    const char* (*get_profile_name)(uint8_t index);        // Get profile name for display, NULL = use index
+
+    // Input device feedback (from current profile)
+    uint8_t (*get_trigger_threshold)(void);                // Get L2/R2 threshold for adaptive triggers, NULL = 0
 } OutputInterface;
 
 // Active output interface (set at compile-time, selected in common/output.c)

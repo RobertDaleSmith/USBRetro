@@ -8,6 +8,8 @@
 
 // Console-local state (not input data)
 #include "core/router/router.h"
+#include "core/services/hotkey/hotkey.h"
+#include "core/uart.h"
 
 PIO pio;
 uint sm1, sm2, sm3;
@@ -286,4 +288,12 @@ const OutputInterface loopy_output_interface = {
     .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // Loopy doesn't need periodic task
+    .get_rumble = NULL,
+    .get_player_led = NULL,
+    // No profile system - Loopy uses fixed button mapping
+    .get_profile_count = NULL,
+    .get_active_profile = NULL,
+    .set_active_profile = NULL,
+    .get_profile_name = NULL,
+    .get_trigger_threshold = NULL,
 };

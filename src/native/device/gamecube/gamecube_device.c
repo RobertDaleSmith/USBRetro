@@ -9,6 +9,8 @@
 #include "pico/flash.h"
 #include "tusb.h"
 #include "core/services/storage/flash.h"
+#include "core/services/profile/profile.h"
+#include "core/router/router.h"
 
 // Declaration of global variables
 GamecubeConsole gc;
@@ -35,22 +37,51 @@ static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
     GC_PROFILE_FIGHTING,     // Profile 4
 };
 
+// Profile names for core profile system
+static const char* const gc_profile_names[GC_PROFILE_COUNT] = {
+    "default", "snes", "ssbm", "mkwii", "fighting"
+};
+
 // Active profile pointer (4 bytes of RAM, points to flash data)
 static const gc_profile_t* active_profile = &profiles[GC_DEFAULT_PROFILE_INDEX];
-
-// Current profile index (for cycling through profiles)
-static uint8_t active_profile_index = GC_DEFAULT_PROFILE_INDEX;
 
 // Get the current active profile (for external access)
 gc_profile_t* get_active_profile(void) {
     return (gc_profile_t*)active_profile;  // Cast away const for external access
 }
 
+// Callback when core profile system switches profiles
+static void gc_on_profile_switch(uint8_t new_index) {
+    active_profile = &profiles[new_index];
+    printf("GC profile: %s (%s)\n", active_profile->name, active_profile->description);
+}
+
+// Player count callback for profile feedback
+static uint8_t gc_get_player_count_for_profile(void) {
+    return router_get_player_count(OUTPUT_TARGET_GAMECUBE);
+}
+
+// Profile system accessors for OutputInterface
+static uint8_t gc_get_profile_count(void) { return profile_get_count(); }
+static uint8_t gc_get_active_profile(void) { return profile_get_active_index(); }
+
+static void gc_set_active_profile(uint8_t index) {
+    profile_set_active(index);  // Delegates to core
+}
+
+static const char* gc_get_profile_name(uint8_t index) {
+    return profile_get_name(index);  // Delegates to core
+}
+
+static uint8_t gc_get_trigger_threshold(void) {
+    // Return L2 threshold from active profile (used for DualSense adaptive triggers)
+    return active_profile->l2_threshold;
+}
+
 // ============================================================================
 // CONSOLE-LOCAL STATE (Phase 3: Router Migration)
 // ============================================================================
 
-#include "core/router/router.h"
 #include "core/services/players/manager.h"
 #include "core/services/hotkey/hotkey.h"
 
@@ -65,10 +96,6 @@ extern void GamecubeConsole_init(GamecubeConsole* console, uint pin, PIO pio, in
 extern bool GamecubeConsole_WaitForPoll(GamecubeConsole* console);
 extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *report);
 extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
-extern void neopixel_indicate_profile(uint8_t profile_index);
-extern bool neopixel_is_indicating(void);
-extern void feedback_trigger(uint8_t profile_index, uint8_t player_count);
-extern bool feedback_is_active(void);
 
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
@@ -193,20 +220,15 @@ void ngc_init()
   // Initialize flash settings system
   flash_init();
 
-  // Load saved profile from flash (if valid)
-  flash_t settings;
-  if (flash_load(&settings)) {
-    // Valid settings found - restore saved profile
-    if (settings.active_profile_index < GC_PROFILE_COUNT) {
-      active_profile_index = settings.active_profile_index;
-      active_profile = &profiles[active_profile_index];
-      printf("Loaded profile from flash: %s (%s)\n", active_profile->name, active_profile->description);
-    } else {
-      printf("Invalid profile index in flash (%d), using default\n", settings.active_profile_index);
-    }
-  } else {
-    printf("No valid settings in flash, using default profile\n");
-  }
+  // Initialize core profile system (handles flash load/save, switching, combos)
+  profile_init_simple(GC_PROFILE_COUNT, GC_DEFAULT_PROFILE_INDEX, gc_profile_names);
+  profile_set_player_count_callback(gc_get_player_count_for_profile);
+  profile_set_switch_callback(gc_on_profile_switch);
+
+  // Update local profile pointer to match loaded index
+  uint8_t loaded_index = profile_get_active_index();
+  active_profile = &profiles[loaded_index];
+  printf("Loaded profile from flash: %s (%s)\n", active_profile->name, active_profile->description);
 
   // Ground gpio attatched to sheilding
   gpio_init(SHIELD_PIN_L);
@@ -288,99 +310,8 @@ void __not_in_flash_func(core1_entry)(void)
 }
 
 // ============================================================================
-// PROFILE SWITCHING
+// BUTTON MAPPING
 // ============================================================================
-
-// Switch to a specific profile with visual and haptic feedback
-static void switch_to_profile(uint8_t new_profile_index)
-{
-  active_profile_index = new_profile_index;
-  active_profile = &profiles[active_profile_index];
-
-  // Trigger visual and haptic feedback to indicate which profile was selected
-  neopixel_indicate_profile(active_profile_index);  // NeoPixel LED blinking
-  feedback_trigger(active_profile_index, playersCount);  // Rumble and player LED
-
-  // Save profile selection to flash (debounced - writes after 5 seconds)
-  flash_t settings;
-  settings.active_profile_index = active_profile_index;
-  flash_save(&settings);
-
-  printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
-}
-
-// Check for profile switching: SELECT + D-pad Up/Down
-static void check_profile_switch_combo(uint32_t buttons)
-{
-  static uint32_t select_hold_start = 0;   // When Select was first pressed
-  static bool select_was_held = false;
-  static bool dpad_up_was_pressed = false;
-  static bool dpad_down_was_pressed = false;
-  static bool initial_trigger_done = false; // Has first 2-second trigger happened?
-  const uint32_t INITIAL_HOLD_TIME_MS = 2000; // Must hold 2 seconds for first trigger
-
-  if (playersCount == 0) return; // No controllers connected
-  bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
-  bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
-  bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
-
-  // Select released - reset everything
-  if (!select_held)
-  {
-    select_hold_start = 0;
-    select_was_held = false;
-    dpad_up_was_pressed = false;
-    dpad_down_was_pressed = false;
-    initial_trigger_done = false;
-    return;
-  }
-
-  // Select is held
-  if (!select_was_held)
-  {
-    // Select just pressed - start timer
-    select_hold_start = to_ms_since_boot(get_absolute_time());
-    select_was_held = true;
-  }
-
-  uint32_t current_time = to_ms_since_boot(get_absolute_time());
-  uint32_t select_hold_duration = current_time - select_hold_start;
-
-  // Check if initial 2-second hold period has elapsed
-  bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
-
-  if (!can_trigger)
-  {
-    // Still waiting for initial 2-second hold - don't trigger yet
-    return;
-  }
-
-  // Can trigger - check for D-pad edge detection (rising edge = just pressed)
-  // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
-  if (neopixel_is_indicating() || feedback_is_active())
-  {
-    // Still showing feedback from previous switch - wait for it to finish
-    return;
-  }
-
-  // D-pad Up - cycle forward on rising edge
-  if (dpad_up_pressed && !dpad_up_was_pressed)
-  {
-    uint8_t new_index = (active_profile_index + 1) % GC_PROFILE_COUNT;
-    switch_to_profile(new_index);
-    initial_trigger_done = true; // Mark that first trigger happened
-  }
-  dpad_up_was_pressed = dpad_up_pressed;
-
-  // D-pad Down - cycle backward on rising edge
-  if (dpad_down_pressed && !dpad_down_was_pressed)
-  {
-    uint8_t new_index = (active_profile_index == 0) ? (GC_PROFILE_COUNT - 1) : (active_profile_index - 1);
-    switch_to_profile(new_index);
-    initial_trigger_done = true; // Mark that first trigger happened
-  }
-  dpad_down_was_pressed = dpad_down_pressed;
-}
 
 // Helper function to apply a button mapping to the report
 static inline void apply_button_mapping(gc_report_t* report, gc_button_output_t action, bool pressed)
@@ -468,8 +399,8 @@ void __not_in_flash_func(update_output)(void)
   const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
   if (!event || playersCount == 0) return;  // No input available
 
-  // Check for profile switching combo
-  check_profile_switch_combo(event->buttons);
+  // Check for profile switching combo (delegated to core)
+  profile_check_switch_combo(event->buttons);
 
   // Build report locally to avoid Core 1 reading partial updates
   gc_report_t new_report;
@@ -670,4 +601,10 @@ const OutputInterface gamecube_output_interface = {
     .task = NULL,  // GameCube doesn't need periodic task
     .get_rumble = gc_get_rumble,
     .get_player_led = gc_get_kb_led,
+    // Profile system
+    .get_profile_count = gc_get_profile_count,
+    .get_active_profile = gc_get_active_profile,
+    .set_active_profile = gc_set_active_profile,
+    .get_profile_name = gc_get_profile_name,
+    .get_trigger_threshold = gc_get_trigger_threshold,
 };

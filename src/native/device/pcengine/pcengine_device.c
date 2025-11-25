@@ -364,4 +364,12 @@ const OutputInterface pcengine_output_interface = {
     .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = pce_task,  // PCEngine needs periodic scan detection task
+    .get_rumble = NULL,
+    .get_player_led = NULL,
+    // No profile system - PCEngine uses fixed button mapping
+    .get_profile_count = NULL,
+    .get_active_profile = NULL,
+    .set_active_profile = NULL,
+    .get_profile_name = NULL,
+    .get_trigger_threshold = NULL,
 };

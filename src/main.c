@@ -83,10 +83,9 @@ static void __not_in_flash_func(process_signals)(void)
     uint8_t console_led = (output->get_player_led) ? output->get_player_led() : 0;
     uint8_t player_led = feedback_get_player_led(playersCount) | console_led;
 
-    // Get adaptive trigger threshold from universal profile system (DualSense L2/R2)
-    // Apps register their profiles during app_init(), system provides threshold
-    extern uint8_t profile_get_l2_threshold(void);
-    uint8_t trigger_threshold = profile_get_l2_threshold();
+    // Get adaptive trigger threshold from output interface (DualSense L2/R2)
+    // Output device provides threshold from its active profile
+    uint8_t trigger_threshold = (output->get_trigger_threshold) ? output->get_trigger_threshold() : 0;
 
     // test pattern counter (managed by application layer)
     static uint8_t test_counter = 0;

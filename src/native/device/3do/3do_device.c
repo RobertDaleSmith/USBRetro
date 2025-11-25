@@ -7,6 +7,7 @@
 #include "core/services/storage/flash.h"
 #include "core/services/players/feedback.h"
 #include "core/router/router.h"
+#include "core/services/profile/profile.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
@@ -30,14 +31,36 @@ static const tdo_profile_t profiles[TDO_PROFILE_COUNT] = {
     TDO_PROFILE_SHOOTER,      // Profile 2
 };
 
+// Profile names for core profile system
+static const char* const tdo_profile_names[TDO_PROFILE_COUNT] = {
+    "default", "fighting", "shooter"
+};
+
 // Active profile pointer (4 bytes of RAM, points to flash data)
 static const tdo_profile_t* active_profile = &profiles[TDO_DEFAULT_PROFILE_INDEX];
 
-// Current profile index (for cycling through profiles)
-static uint8_t active_profile_index = TDO_DEFAULT_PROFILE_INDEX;
+// Callback when core profile system switches profiles
+static void tdo_on_profile_switch(uint8_t new_index) {
+    active_profile = &profiles[new_index];
+    printf("3DO profile: %s (%s)\n", active_profile->name, active_profile->description);
+}
 
-extern void neopixel_indicate_profile(uint8_t profile_index);
-extern bool neopixel_is_indicating(void);
+// Player count callback for profile feedback
+static uint8_t tdo_get_player_count_for_profile(void) {
+    return router_get_player_count(OUTPUT_TARGET_3DO);
+}
+
+// Profile system accessors for OutputInterface
+static uint8_t tdo_get_profile_count(void) { return profile_get_count(); }
+static uint8_t tdo_get_active_profile(void) { return profile_get_active_index(); }
+
+static void tdo_set_active_profile(uint8_t index) {
+    profile_set_active(index);  // Delegates to core
+}
+
+static const char* tdo_get_profile_name(uint8_t index) {
+    return profile_get_name(index);  // Delegates to core
+}
 
 // PIO state machines
 PIO pio;
@@ -400,18 +423,14 @@ void _3do_init(void) {
   pio_gpio_init(pio1, DATA_OUT_PIN);
   pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
-  // Load saved profile from flash (if valid)
-  flash_t settings;
-  if (flash_load(&settings)) {
-    // Valid settings found - restore saved profile
-    if (settings.active_profile_index < TDO_PROFILE_COUNT) {
-      active_profile_index = settings.active_profile_index;
-      active_profile = &profiles[active_profile_index];
-      #if CFG_TUSB_DEBUG >= 1
-      printf("Loaded profile from flash: %s\n", active_profile->name);
-      #endif
-    }
-  }
+  // Initialize core profile system (handles flash load/save, switching, combos)
+  profile_init_simple(TDO_PROFILE_COUNT, TDO_DEFAULT_PROFILE_INDEX, tdo_profile_names);
+  profile_set_player_count_callback(tdo_get_player_count_for_profile);
+  profile_set_switch_callback(tdo_on_profile_switch);
+
+  // Update local profile pointer to match loaded index
+  uint8_t loaded_index = profile_get_active_index();
+  active_profile = &profiles[loaded_index];
 
   #if CFG_TUSB_DEBUG >= 1
   printf("3DO protocol initialized successfully.\n");
@@ -419,109 +438,6 @@ void _3do_init(void) {
   #endif
 
   // Note: Core1 is launched by main.c, not here
-}
-
-//-----------------------------------------------------------------------------
-// Profile Switching
-//-----------------------------------------------------------------------------
-
-// Switch to a new profile
-static void switch_to_profile(uint8_t new_index)
-{
-  if (new_index >= TDO_PROFILE_COUNT) return;
-
-  active_profile_index = new_index;
-  active_profile = &profiles[new_index];
-
-  // Trigger NeoPixel LED feedback (OFF blinks = profile number + 1)
-  neopixel_indicate_profile(new_index);
-
-  // Trigger controller LED + rumble feedback
-  feedback_trigger(new_index, router_get_player_count(OUTPUT_TARGET_3DO));
-
-  // Save profile selection to flash (debounced - writes after 5 seconds)
-  flash_t settings;
-  settings.active_profile_index = active_profile_index;
-  flash_save(&settings);
-
-  printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
-}
-
-// Check for profile switching: SELECT + D-pad Up/Down
-static void check_profile_switch_combo(void)
-{
-  static uint32_t select_hold_start = 0;   // When Select was first pressed
-  static bool select_was_held = false;
-  static bool dpad_up_was_pressed = false;
-  static bool dpad_down_was_pressed = false;
-  static bool initial_trigger_done = false; // Has first 2-second trigger happened?
-  const uint32_t INITIAL_HOLD_TIME_MS = 2000; // Must hold 2 seconds for first trigger
-
-  // Get input from router for player 0 (controller 1)
-  const input_event_t* event = router_get_output(OUTPUT_TARGET_3DO, 0);
-  if (!event) return; // No controller connected
-
-  uint32_t buttons = event->buttons;
-  bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
-  bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
-  bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
-
-  // Select released - reset everything
-  if (!select_held)
-  {
-    select_hold_start = 0;
-    select_was_held = false;
-    dpad_up_was_pressed = false;
-    dpad_down_was_pressed = false;
-    initial_trigger_done = false;
-    return;
-  }
-
-  // Select is held
-  if (!select_was_held)
-  {
-    // Select just pressed - start timer
-    select_hold_start = to_ms_since_boot(get_absolute_time());
-    select_was_held = true;
-  }
-
-  uint32_t current_time = to_ms_since_boot(get_absolute_time());
-  uint32_t select_hold_duration = current_time - select_hold_start;
-
-  // Check if initial 2-second hold period has elapsed
-  bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
-
-  if (!can_trigger)
-  {
-    // Still waiting for initial 2-second hold - don't trigger yet
-    return;
-  }
-
-  // Can trigger - check for D-pad edge detection (rising edge = just pressed)
-  // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
-  if (neopixel_is_indicating() || feedback_is_active())
-  {
-    // Still showing feedback from previous switch - wait for it to finish
-    return;
-  }
-
-  // D-pad Up - cycle forward on rising edge
-  if (dpad_up_pressed && !dpad_up_was_pressed)
-  {
-    uint8_t new_index = (active_profile_index + 1) % TDO_PROFILE_COUNT;
-    switch_to_profile(new_index);
-    initial_trigger_done = true; // Mark that first trigger happened
-  }
-  dpad_up_was_pressed = dpad_up_pressed;
-
-  // D-pad Down - cycle backward on rising edge
-  if (dpad_down_pressed && !dpad_down_was_pressed)
-  {
-    uint8_t new_index = (active_profile_index == 0) ? (TDO_PROFILE_COUNT - 1) : (active_profile_index - 1);
-    switch_to_profile(new_index);
-    initial_trigger_done = true; // Mark that first trigger happened
-  }
-  dpad_down_was_pressed = dpad_down_pressed;
 }
 
 //-----------------------------------------------------------------------------
@@ -934,8 +850,11 @@ void _3do_task() {
     update_3do_report(i);
   }
 
-  // Check for profile switching combo
-  check_profile_switch_combo();
+  // Check for profile switching combo (delegated to core)
+  const input_event_t* event = router_get_output(OUTPUT_TARGET_3DO, 0);
+  if (event) {
+    profile_check_switch_combo(event->buttons);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -1063,4 +982,12 @@ const OutputInterface threedooutput_interface = {
     .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = _3do_task,  // 3DO needs periodic polling and extension controller detection
+    .get_rumble = NULL,  // 3DO doesn't have rumble
+    .get_player_led = NULL,  // 3DO doesn't override player LED
+    // Profile system
+    .get_profile_count = tdo_get_profile_count,
+    .get_active_profile = tdo_get_active_profile,
+    .set_active_profile = tdo_set_active_profile,
+    .get_profile_name = tdo_get_profile_name,
+    .get_trigger_threshold = NULL,  // 3DO profiles don't use adaptive triggers
 };

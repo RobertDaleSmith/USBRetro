@@ -41,7 +41,7 @@ BOARD_SCRIPT_kb2040 := boards/build_ada_kb2040.sh
 BOARD_SCRIPT_qtpy := boards/build_ada_qtpy.sh
 BOARD_SCRIPT_rp2040zero := boards/build_waveshare_rp2040_zero.sh
 
-# Console targets
+# Console targets (cmake target names)
 CONSOLE_3do := usbretro_3do
 CONSOLE_pce := usbretro_pce
 CONSOLE_ngc := usbretro_ngc
@@ -49,15 +49,20 @@ CONSOLE_xb1 := usbretro_xb1
 CONSOLE_nuon := usbretro_nuon
 CONSOLE_loopy := usbretro_loopy
 
-# Product definitions: PRODUCT_name = board console output_name
-PRODUCT_3dousb := rp2040zero 3do 3DOUSB
-PRODUCT_usb2pce := kb2040 pce USB2PCE
-PRODUCT_gcusb := kb2040 ngc GCUSB
-PRODUCT_nuonusb := kb2040 nuon NUONUSB
-PRODUCT_xboxadapter := qtpy xb1 Xbox-Adapter
+# App definitions: APP_name = board console output_name
+# Naming convention: usb2<console> for all apps
+APP_usb2pce := kb2040 pce usb2pce
+APP_usb2gc := kb2040 ngc usb2gc
+APP_usb2nuon := kb2040 nuon usb2nuon
+APP_usb2xb1 := qtpy xb1 usb2xb1
+APP_usb2loopy := kb2040 loopy usb2loopy
+APP_usb23do := rp2040zero 3do usb23do
 
-# All products
-PRODUCTS := 3dousb usb2pce gcusb nuonusb xboxadapter
+# All apps
+APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do
+
+# Stable apps for release (mature enough for public release)
+RELEASE_APPS := usb2pce usb2gc usb2nuon
 
 # Release directory
 RELEASE_DIR := releases
@@ -77,36 +82,38 @@ help:
 	@echo ""
 	@echo "$(GREEN)Quick Start:$(NC)"
 	@echo "  make init          - Initialize submodules (run once after clone)"
-	@echo "  make build         - Build all products (alias for 'make all')"
+	@echo "  make build         - Build all apps (alias for 'make all')"
 	@echo ""
-	@echo "$(GREEN)Product Targets:$(NC)"
-	@echo "  make 3dousb        - Build 3DO USB (Waveshare RP2040 Zero + 3DO)"
-	@echo "  make usb2pce       - Build USB2PCE (KB2040 + PCEngine)"
-	@echo "  make gcusb         - Build GCUSB (KB2040 + GameCube)"
-	@echo "  make nuonusb       - Build NUON USB (KB2040 + Nuon)"
-	@echo "  make xboxadapter   - Build Xbox Adapter (QT Py + Xbox One)"
+	@echo "$(GREEN)App Targets:$(NC)"
+	@echo "  make usb2pce       - Build usb2pce (KB2040 + PCEngine)"
+	@echo "  make usb2gc        - Build usb2gc (KB2040 + GameCube)"
+	@echo "  make usb2nuon      - Build usb2nuon (KB2040 + Nuon)"
+	@echo "  make usb2xb1       - Build usb2xb1 (QT Py + Xbox One)"
+	@echo "  make usb2loopy     - Build usb2loopy (KB2040 + Loopy)"
+	@echo "  make usb23do       - Build usb23do (RP2040 Zero + 3DO)"
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
-	@echo "  make all           - Build all products"
+	@echo "  make all           - Build all apps"
 	@echo "  make clean         - Clean build artifacts"
 	@echo "  make fullclean     - Reset to fresh clone state (removes all untracked files)"
-	@echo "  make releases      - Build all products for release"
+	@echo "  make releases      - Build stable apps for release"
 	@echo ""
 	@echo "$(GREEN)Flash Targets:$(NC)"
 	@echo "  make flash         - Flash most recently built firmware"
-	@echo "  make flash-3dousb  - Flash 3DO USB firmware"
-	@echo "  make flash-usb2pce - Flash USB2PCE firmware"
-	@echo "  make flash-gcusb   - Flash GCUSB firmware"
-	@echo "  make flash-nuonusb - Flash NUON USB firmware"
-	@echo "  make flash-xboxadapter - Flash Xbox Adapter firmware"
+	@echo "  make flash-usb2pce - Flash usb2pce firmware"
+	@echo "  make flash-usb2gc  - Flash usb2gc firmware"
+	@echo "  make flash-usb2nuon - Flash usb2nuon firmware"
+	@echo "  make flash-usb2xb1 - Flash usb2xb1 firmware"
+	@echo "  make flash-usb2loopy - Flash usb2loopy firmware"
+	@echo "  make flash-usb23do - Flash usb23do firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
-	@echo "  make 3do           - Build 3DO firmware"
 	@echo "  make pce           - Build PCEngine firmware"
 	@echo "  make ngc           - Build GameCube firmware"
-	@echo "  make xb1           - Build Xbox One firmware"
 	@echo "  make nuon          - Build Nuon firmware"
+	@echo "  make xb1           - Build Xbox One firmware"
 	@echo "  make loopy         - Build Loopy firmware"
+	@echo "  make 3do           - Build 3DO firmware"
 	@echo ""
 	@echo "$(GREEN)Environment:$(NC)"
 	@echo "  PICO_SDK_PATH:       $(PICO_SDK_PATH)"
@@ -130,42 +137,53 @@ init:
 .PHONY: build
 build: all
 
-# Generic product build function
-define build_product
+# Generic app build function
+define build_app
 	@echo "$(YELLOW)Building $1...$(NC)"
-	@echo "  Board:   $(word 1,$(PRODUCT_$1))"
-	@echo "  Console: $(word 2,$(PRODUCT_$1))"
+	@echo "  Board:   $(word 1,$(APP_$1))"
+	@echo "  Console: $(word 2,$(APP_$1))"
 	@cd src && rm -rf build
-	@cd src && sh $(BOARD_SCRIPT_$(word 1,$(PRODUCT_$1)))
-	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_$(word 2,$(PRODUCT_$1))) -j4
+	@cd src && sh $(BOARD_SCRIPT_$(word 1,$(APP_$1)))
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_$(word 2,$(APP_$1))) -j4
 	@mkdir -p $(RELEASE_DIR)
-	@cp src/build/$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2 \
-	    $(RELEASE_DIR)/$(word 3,$(PRODUCT_$1))_$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2
+	@cp src/build/$(CONSOLE_$(word 2,$(APP_$1))).uf2 \
+	    $(RELEASE_DIR)/$(word 3,$(APP_$1))_$(CONSOLE_$(word 2,$(APP_$1))).uf2
 	@echo "$(GREEN)✓ $1 built successfully$(NC)"
-	@echo "  Output: $(RELEASE_DIR)/$(word 3,$(PRODUCT_$1))_$(CONSOLE_$(word 2,$(PRODUCT_$1))).uf2"
+	@echo "  Output: $(RELEASE_DIR)/$(word 3,$(APP_$1))_$(CONSOLE_$(word 2,$(APP_$1))).uf2"
 	@echo ""
 endef
 
-# Product-specific targets
-.PHONY: 3dousb
-3dousb:
-	$(call build_product,3dousb)
-
+# App targets
 .PHONY: usb2pce
 usb2pce:
-	$(call build_product,usb2pce)
+	$(call build_app,usb2pce)
 
-.PHONY: gcusb
-gcusb:
-	$(call build_product,gcusb)
+.PHONY: usb2gc
+usb2gc:
+	$(call build_app,usb2gc)
 
-.PHONY: nuonusb
-nuonusb:
-	$(call build_product,nuonusb)
+.PHONY: usb2nuon
+usb2nuon:
+	$(call build_app,usb2nuon)
 
-.PHONY: xboxadapter
-xboxadapter:
-	$(call build_product,xboxadapter)
+.PHONY: usb2xb1
+usb2xb1:
+	$(call build_app,usb2xb1)
+
+.PHONY: usb2loopy
+usb2loopy:
+	$(call build_app,usb2loopy)
+
+.PHONY: usb23do
+usb23do:
+	$(call build_app,usb23do)
+
+# Legacy aliases for backward compatibility
+.PHONY: gcusb nuonusb xboxadapter 3dousb
+gcusb: usb2gc
+nuonusb: usb2nuon
+xboxadapter: usb2xb1
+3dousb: usb23do
 
 # Console-only targets (defaults to KB2040)
 .PHONY: 3do
@@ -231,18 +249,23 @@ loopy:
 	@echo "  Output: src/build/$(CONSOLE_loopy).uf2"
 	@echo ""
 
-# Build all products
+# Build all apps
 .PHONY: all
-all: $(PRODUCTS)
+all: $(APPS)
 	@echo "$(BLUE)==============================$(NC)"
-	@echo "$(GREEN)All products built!$(NC)"
+	@echo "$(GREEN)All apps built!$(NC)"
 	@echo "$(BLUE)==============================$(NC)"
 	@ls -lh $(RELEASE_DIR)/*.uf2
 	@echo ""
 
-# Alias for all
+# Build only stable apps for release
 .PHONY: releases
-releases: all
+releases: $(RELEASE_APPS)
+	@echo "$(BLUE)==============================$(NC)"
+	@echo "$(GREEN)Release apps built!$(NC)"
+	@echo "$(BLUE)==============================$(NC)"
+	@ls -lh $(RELEASE_DIR)/*.uf2
+	@echo ""
 
 # Flash target - flashes most recently built firmware
 .PHONY: flash
@@ -265,26 +288,37 @@ flash:
 	echo "$(GREEN)✓ Firmware flashed successfully!$(NC)" && \
 	echo "$(GREEN)  Device will reboot automatically$(NC)"
 
-# Flash specific products
+# Flash specific apps
 .PHONY: flash-usb2pce
 flash-usb2pce:
-	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_usb2pce))_$(CONSOLE_$(word 2,$(PRODUCT_usb2pce))).uf2
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2pce))_$(CONSOLE_$(word 2,$(APP_usb2pce))).uf2
 
-.PHONY: flash-gcusb
-flash-gcusb:
-	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_gcusb))_$(CONSOLE_$(word 2,$(PRODUCT_gcusb))).uf2
+.PHONY: flash-usb2gc
+flash-usb2gc:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2gc))_$(CONSOLE_$(word 2,$(APP_usb2gc))).uf2
 
-.PHONY: flash-nuonusb
-flash-nuonusb:
-	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_nuonusb))_$(CONSOLE_$(word 2,$(PRODUCT_nuonusb))).uf2
+.PHONY: flash-usb2nuon
+flash-usb2nuon:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2nuon))_$(CONSOLE_$(word 2,$(APP_usb2nuon))).uf2
 
-.PHONY: flash-xboxadapter
-flash-xboxadapter:
-	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_xboxadapter))_$(CONSOLE_$(word 2,$(PRODUCT_xboxadapter))).uf2
+.PHONY: flash-usb2xb1
+flash-usb2xb1:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2xb1))_$(CONSOLE_$(word 2,$(APP_usb2xb1))).uf2
 
-.PHONY: flash-3dousb
-flash-3dousb:
-	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(PRODUCT_3dousb))_$(CONSOLE_$(word 2,$(PRODUCT_3dousb))).uf2
+.PHONY: flash-usb2loopy
+flash-usb2loopy:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2loopy))_$(CONSOLE_$(word 2,$(APP_usb2loopy))).uf2
+
+.PHONY: flash-usb23do
+flash-usb23do:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb23do))_$(CONSOLE_$(word 2,$(APP_usb23do))).uf2
+
+# Legacy flash aliases
+.PHONY: flash-gcusb flash-nuonusb flash-xboxadapter flash-3dousb
+flash-gcusb: flash-usb2gc
+flash-nuonusb: flash-usb2nuon
+flash-xboxadapter: flash-usb2xb1
+flash-3dousb: flash-usb23do
 
 # Internal flash helper
 .PHONY: _flash

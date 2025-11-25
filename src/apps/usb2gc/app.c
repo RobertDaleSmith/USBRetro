@@ -7,7 +7,6 @@
 #include "app.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
-#include "core/services/players/profile.h"
 #include "core/output_interface.h"
 #include "native/device/gamecube/gamecube_device.h"
 #include <stdio.h>
@@ -56,17 +55,15 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    // Configure profile system
-    profile_system_config_t profile_cfg = {
-        .profile_count = 5,  // GameCube has 5 profiles
-        .default_profile_index = 0,
-    };
-    profiles_init(&profile_cfg);
+    // Note: GameCube profiles are managed by gamecube_device.c
+    // Profile count and switching exposed via OutputInterface
+    const OutputInterface* output = app_get_output_interface();
+    uint8_t profile_count = output->get_profile_count ? output->get_profile_count() : 0;
 
     printf("[app:usb2gc] Initialization complete\n");
     printf("[app:usb2gc]   Routing: %s\n", "MERGE_ALL (all USB → single GC port)");
     printf("[app:usb2gc]   Player slots: %d (FIXED mode for future 4-port)\n", MAX_PLAYER_SLOTS);
-    printf("[app:usb2gc]   Profiles: %d\n", profile_cfg.profile_count);
+    printf("[app:usb2gc]   Profiles: %d (device-managed)\n", profile_count);
 }
 
 // ============================================================================
