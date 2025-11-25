@@ -19,8 +19,8 @@ PIO pio = pio0;
 static uint8_t gc_rumble = 0;
 static uint8_t gc_kb_led = 0;
 
-uint8_t gc_get_rumble(void) { return gc_rumble; }
-uint8_t gc_get_kb_led(void) { return gc_kb_led; }
+static uint8_t gc_get_rumble(void) { return gc_rumble; }
+static uint8_t gc_get_kb_led(void) { return gc_kb_led; }
 
 // ============================================================================
 // PROFILE SYSTEM
@@ -668,4 +668,6 @@ const OutputInterface gamecube_output_interface = {
     .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // GameCube doesn't need periodic task
+    .get_rumble = gc_get_rumble,
+    .get_player_led = gc_get_kb_led,
 };

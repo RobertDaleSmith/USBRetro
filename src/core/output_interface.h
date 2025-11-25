@@ -16,6 +16,10 @@ typedef struct {
     void (*handle_input)(const input_event_t* event);      // Handle incoming input event
     void (*core1_entry)(void);                             // Core1 entry point (NULL if not needed)
     void (*task)(void);                                    // Periodic task (NULL if not needed)
+
+    // Feedback to USB input devices (rumble, LEDs)
+    uint8_t (*get_rumble)(void);                           // Get rumble state (0-255), NULL = no rumble
+    uint8_t (*get_player_led)(void);                       // Get player LED state, NULL = no LED override
 } OutputInterface;
 
 // Active output interface (set at compile-time, selected in common/output.c)
