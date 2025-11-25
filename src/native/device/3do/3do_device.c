@@ -5,7 +5,7 @@
 #include "3do_device.h"
 #include "3do_config.h"
 #include "flash_settings.h"
-#include "core/services/profiles/profile_feedback.h"
+#include "core/services/players/profile_feedback.h"
 #include "core/router/router.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
