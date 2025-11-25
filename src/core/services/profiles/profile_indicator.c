@@ -3,7 +3,7 @@
 // Manages rumble and player LED feedback when switching profiles.
 // Note: NeoPixel LED blinking is handled separately in ws2812.c
 
-#include "profile_indicator.h"
+#include "core/services/profiles/profile_indicator.h"
 #include "core/services/players/manager.h"
 #include "pico/stdlib.h"
 #include <stdint.h>

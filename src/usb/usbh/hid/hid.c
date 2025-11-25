@@ -3,7 +3,7 @@
 #include "globals.h"
 #include "usb/usbh/hid/hid_utils.h"
 #include "usb/usbh/hid/hid_registry.h"
-#include "common/profile_indicator.h"
+#include "core/services/profiles/profile_indicator.h"
 
 // #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
