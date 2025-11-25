@@ -1,6 +1,7 @@
 // sony_ds4.c
 #include "sony_ds4.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 #include "pico/time.h"
 #include "led_config.h"

@@ -10,7 +10,8 @@
 
 #include "tusb.h"
 #include "hardware/pio.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/services/players/manager.h"
 
 // Define constants
 #undef MAX_PLAYERS

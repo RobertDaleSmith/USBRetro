@@ -1,6 +1,7 @@
 // triple_adapter_v1.c
 #include "triple_adapter_v1.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 // check if device is TripleController (Arduino based HID)

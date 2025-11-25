@@ -6,6 +6,7 @@
 
 // Console-local state (not input data)
 #include "core/router/router.h"
+#include "core/services/hotkey/hotkey.h"
 
 // init for xboxone communication
 void xb1_init()

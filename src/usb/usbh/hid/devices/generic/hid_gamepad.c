@@ -1,7 +1,9 @@
 // hid_gamepad.c
 #include "hid_gamepad.h"
 #include "hid_parser.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 typedef struct

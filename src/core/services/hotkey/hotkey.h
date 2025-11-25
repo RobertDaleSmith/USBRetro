@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 #include "tusb.h"
-#include "core/globals.h"
+#include "core/buttons.h"
 
 // Define constants
 #define HOTKEY_LENGTH 10

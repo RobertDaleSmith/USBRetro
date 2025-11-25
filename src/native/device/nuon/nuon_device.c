@@ -1,6 +1,7 @@
 // nuon.c
 
 #include "nuon_device.h"
+#include "core/services/hotkey/hotkey.h"
 #include <math.h>
 
 PIO pio;

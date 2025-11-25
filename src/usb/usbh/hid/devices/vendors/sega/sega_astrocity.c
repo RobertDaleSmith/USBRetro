@@ -1,6 +1,7 @@
 // sega_astrocity.c
 #include "sega_astrocity.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 // check if device is Sega Astro City mini controller

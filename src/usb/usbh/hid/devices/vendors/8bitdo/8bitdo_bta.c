@@ -1,6 +1,7 @@
 // 8bitdo_bta.c
 #include "8bitdo_bta.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 // check if device is 8BitDo Wireless Adapter (D-input)

@@ -1,6 +1,8 @@
 // xinput.c - X-input protocol handler (TinyUSB X-input host callbacks)
 #include "tusb.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/services/players/manager.h"
+#include "core/router/router.h"
 #include "xinput_host.h"
 #include "core/input_event.h"
 

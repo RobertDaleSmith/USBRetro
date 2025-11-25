@@ -14,7 +14,8 @@
 #include "tusb.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
-#include "core/globals.h"
+#include "core/services/players/manager.h"
+#include "core/services/hotkey/hotkey.h"
 
 // Weak functions for console-specific rumble/LED - overridden by console devices
 __attribute__((weak)) uint8_t gc_get_rumble(void) { return 0; }

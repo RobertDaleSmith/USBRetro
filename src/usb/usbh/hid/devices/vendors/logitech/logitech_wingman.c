@@ -1,6 +1,7 @@
 // logitech_wingman.c
 #include "logitech_wingman.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 // check if device is Logitech WingMan Action controller

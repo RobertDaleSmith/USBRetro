@@ -7,7 +7,8 @@
 
 #include "hardware/i2c.h"
 #include "pico/i2c_slave.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/services/players/manager.h"
 
 // Define constants
 #undef MAX_PLAYERS

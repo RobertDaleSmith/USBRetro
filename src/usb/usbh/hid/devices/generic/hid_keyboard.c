@@ -1,6 +1,8 @@
 // hid_keyboard.c
 #include "hid_keyboard.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 #include "pico/time.h"
 

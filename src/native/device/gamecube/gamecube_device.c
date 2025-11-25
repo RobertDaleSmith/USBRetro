@@ -51,6 +51,8 @@ gc_profile_t* get_active_profile(void) {
 // ============================================================================
 
 #include "core/router/router.h"
+#include "core/services/players/manager.h"
+#include "core/services/hotkey/hotkey.h"
 
 // Console-specific state (not input data from router)
 static struct {

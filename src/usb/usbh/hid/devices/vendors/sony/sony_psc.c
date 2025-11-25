@@ -1,6 +1,7 @@
 // sony_psc.c
 #include "sony_psc.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 // check if device is PlayStation Classic controller

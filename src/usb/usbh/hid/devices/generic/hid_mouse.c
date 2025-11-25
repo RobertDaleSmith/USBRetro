@@ -1,6 +1,8 @@
 // hid_mouse.c
 #include "hid_mouse.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/router/router.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 
 static uint8_t local_x;

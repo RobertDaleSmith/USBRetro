@@ -10,7 +10,8 @@
 #include "tusb.h"
 #include "hardware/pio.h"
 #include "lib/joybus-pio/include/gamecube_definitions.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/uart.h"
 
 // Define constants
 #undef MAX_PLAYERS

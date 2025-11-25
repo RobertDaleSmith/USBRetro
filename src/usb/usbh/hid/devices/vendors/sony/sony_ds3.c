@@ -1,6 +1,8 @@
 // sony_ds3.c
 #include "sony_ds3.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/services/players/manager.h"
+#include "core/router/router.h"
 #include "core/input_event.h"
 #include "pico/time.h"
 

@@ -7,7 +7,9 @@
 #include "hardware/pio.h"
 #include "polyface_read.pio.h"
 #include "polyface_send.pio.h"
-#include "core/globals.h"
+#include "core/buttons.h"
+#include "core/services/players/manager.h"
+#include "pico/stdlib.h"
 // #include "pico/util/queue.h"
 
 // Define constants
