@@ -58,8 +58,8 @@ extern void GamecubeConsole_SendReport(GamecubeConsole* console, gc_report_t *re
 extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode);
 extern void neopixel_indicate_profile(uint8_t profile_index);
 extern bool neopixel_is_indicating(void);
-extern void profile_indicator_trigger(uint8_t profile_index, uint8_t player_count);
-extern bool profile_indicator_is_active(void);
+extern void profile_feedback_trigger(uint8_t profile_index, uint8_t player_count);
+extern bool profile_feedback_is_active(void);
 
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
@@ -291,7 +291,7 @@ static void switch_to_profile(uint8_t new_profile_index)
 
   // Trigger visual and haptic feedback to indicate which profile was selected
   neopixel_indicate_profile(active_profile_index);  // NeoPixel LED blinking
-  profile_indicator_trigger(active_profile_index, playersCount);  // Rumble and player LED
+  profile_feedback_trigger(active_profile_index, playersCount);  // Rumble and player LED
 
   // Save profile selection to flash (debounced - writes after 5 seconds)
   flash_settings_t settings;
@@ -349,7 +349,7 @@ static void check_profile_switch_combo(uint32_t buttons)
 
   // Can trigger - check for D-pad edge detection (rising edge = just pressed)
   // But don't allow switching while feedback (NeoPixel LED, rumble, player LED) is still active
-  if (neopixel_is_indicating() || profile_indicator_is_active())
+  if (neopixel_is_indicating() || profile_feedback_is_active())
   {
     // Still showing feedback from previous switch - wait for it to finish
     return;
