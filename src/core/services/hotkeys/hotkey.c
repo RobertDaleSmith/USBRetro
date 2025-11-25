@@ -1,11 +1,11 @@
 // codes.c
 
-#include "core/services/codes/codes.h"
+#include "core/services/hotkeys/hotkey.h"
 #include "core/router/router.h"
 
 // Definition of global variables
-uint32_t code_buffer[CODE_LENGTH] = {0};
-uint32_t konami_code[CODE_LENGTH] = KONAMI_CODE;
+uint32_t code_buffer[HOTKEY_LENGTH] = {0};
+uint32_t konami_code[HOTKEY_LENGTH] = KONAMI_CODE;
 bool is_fun = false;
 unsigned char fun_inc = 0;
 unsigned char fun_player = 1;
@@ -60,13 +60,13 @@ void codes_task()
 void __not_in_flash_func(shift_buffer_and_insert)(uint32_t new_value)
 {
   // Shift all elements to the left by 1
-  for (int i = 0; i < CODE_LENGTH - 1; i++)
+  for (int i = 0; i < HOTKEY_LENGTH - 1; i++)
   {
     code_buffer[i] = code_buffer[i + 1];
   }
 
   // Insert the new value at the end
-  code_buffer[CODE_LENGTH - 1] = new_value;
+  code_buffer[HOTKEY_LENGTH - 1] = new_value;
 }
 
 // check buffer for konami code match
@@ -74,13 +74,13 @@ void __not_in_flash_func(check_for_konami_code)(void)
 {
   // DEBUG LOGGING
   // printf("Buffer content: ");
-  // for (int i = 0; i < CODE_LENGTH; i++)
+  // for (int i = 0; i < HOTKEY_LENGTH; i++)
   // {
   //     printf("%x ", code_buffer[i]);
   // }
   // printf("\n");
 
-  for (int i = 0; i < CODE_LENGTH; i++)
+  for (int i = 0; i < HOTKEY_LENGTH; i++)
   {
     if (code_buffer[i] != konami_code[i])
     {

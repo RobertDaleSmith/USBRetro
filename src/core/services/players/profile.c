@@ -1,9 +1,9 @@
-// profiles.c
+// profile.c
 // USBRetro Core - Universal Profile System Implementation
 //
 // Provides profile storage, loading, and switching infrastructure.
 
-#include "profiles.h"
+#include "profile.h"
 #include "common/flash_settings.h"
 #include <stdio.h>
 #include <string.h>

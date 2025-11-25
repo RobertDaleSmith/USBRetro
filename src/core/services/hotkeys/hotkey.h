@@ -8,14 +8,14 @@
 #include "globals.h"
 
 // Define constants
-#define CODE_LENGTH 10
+#define HOTKEY_LENGTH 10
 #ifndef KONAMI_CODE
 #define KONAMI_CODE {USBR_BUTTON_DU, USBR_BUTTON_DU, USBR_BUTTON_DD, USBR_BUTTON_DD, USBR_BUTTON_DL, USBR_BUTTON_DR, USBR_BUTTON_DL, USBR_BUTTON_DR, USBR_BUTTON_B1, USBR_BUTTON_B2}
 #endif
 
 // Declaration of global variables
-extern uint32_t code_buffer[CODE_LENGTH];
-extern uint32_t konami_code[CODE_LENGTH];
+extern uint32_t code_buffer[HOTKEY_LENGTH];
+extern uint32_t konami_code[HOTKEY_LENGTH];
 extern bool is_fun;
 extern unsigned char fun_inc;
 extern unsigned char fun_player;

@@ -7,7 +7,7 @@
 #include "app.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
-#include "core/services/players/profiles.h"
+#include "core/services/players/profile.h"
 #include "common/output_interface.h"
 #include "native/device/gamecube/gamecube_device.h"
 #include <stdio.h>

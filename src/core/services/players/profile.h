@@ -1,4 +1,4 @@
-// profiles.h
+// profile.h
 // USBRetro Core - Universal Profile System
 //
 // Provides profile storage, loading, and switching infrastructure.

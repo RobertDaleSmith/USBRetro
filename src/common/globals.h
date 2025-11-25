@@ -2,7 +2,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#include "core/services/codes/codes.h"
+#include "core/services/hotkeys/hotkey.h"
 #include "core/input_event.h"
 #include "core/services/players/manager.h"
 
