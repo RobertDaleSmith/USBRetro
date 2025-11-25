@@ -13,7 +13,6 @@ typedef struct {
     const char* name;                                      // Output name (e.g., "GameCube", "USB Device (XInput)")
 
     void (*init)(void);                                    // Initialize output hardware/protocol
-    void (*handle_input)(const input_event_t* event);      // Handle incoming input event
     void (*core1_entry)(void);                             // Core1 entry point (NULL if not needed)
     void (*task)(void);                                    // Periodic task (NULL if not needed)
 

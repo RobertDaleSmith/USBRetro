@@ -361,7 +361,6 @@ void __not_in_flash_func(update_output)(void)
 const OutputInterface pcengine_output_interface = {
     .name = "PCEngine",
     .init = pce_init,
-    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = pce_task,  // PCEngine needs periodic scan detection task
     .get_rumble = NULL,

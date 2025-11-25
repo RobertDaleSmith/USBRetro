@@ -232,7 +232,6 @@ void __not_in_flash_func(update_output)(void)
 const OutputInterface xboxone_output_interface = {
     .name = "Xbox One",
     .init = xb1_init,
-    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = NULL,  // Xbox One doesn't need periodic task
     .get_rumble = NULL,

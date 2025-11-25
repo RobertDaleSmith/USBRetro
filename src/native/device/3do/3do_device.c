@@ -979,7 +979,6 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
 const OutputInterface threedooutput_interface = {
     .name = "3DO",
     .init = _3do_init,
-    .handle_input = NULL,  // Router architecture - inputs come via router_get_output()
     .core1_entry = core1_entry,
     .task = _3do_task,  // 3DO needs periodic polling and extension controller detection
     .get_rumble = NULL,  // 3DO doesn't have rumble
