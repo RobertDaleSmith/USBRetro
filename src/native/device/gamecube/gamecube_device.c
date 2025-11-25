@@ -8,7 +8,7 @@
 #include "pico/stdlib.h"
 #include "pico/flash.h"
 #include "tusb.h"
-#include "common/flash_settings.h"
+#include "core/services/storage/flash.h"
 
 // Declaration of global variables
 GamecubeConsole gc;
@@ -182,11 +182,11 @@ void ngc_init()
   stdio_init_all();
 
   // Initialize flash settings system
-  flash_settings_init();
+  flash_init();
 
   // Load saved profile from flash (if valid)
-  flash_settings_t settings;
-  if (flash_settings_load(&settings)) {
+  flash_t settings;
+  if (flash_load(&settings)) {
     // Valid settings found - restore saved profile
     if (settings.active_profile_index < GC_PROFILE_COUNT) {
       active_profile_index = settings.active_profile_index;
@@ -294,9 +294,9 @@ static void switch_to_profile(uint8_t new_profile_index)
   feedback_trigger(active_profile_index, playersCount);  // Rumble and player LED
 
   // Save profile selection to flash (debounced - writes after 5 seconds)
-  flash_settings_t settings;
+  flash_t settings;
   settings.active_profile_index = active_profile_index;
-  flash_settings_save(&settings);
+  flash_save(&settings);
 
   printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
 }

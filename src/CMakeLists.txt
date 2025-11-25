@@ -77,11 +77,11 @@ pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/common/ws2812.pi
 set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/feedback.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/flash_settings.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/flash.c
     # output.c removed - apps now provide output interface via app_get_output_interface()
 
     # Core Services
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/hotkeys/hotkey.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/hotkey/hotkey.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/profile.c
 

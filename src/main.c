@@ -41,7 +41,7 @@ extern uint8_t feedback_get_player_led(uint8_t player_count);
 extern void players_init(void);
 
 // Generic flash settings (profile persistence) - used by all consoles with profiles
-extern void flash_settings_task(void);
+extern void flash_task(void);
 
 // App layer initialization (every product has an app)
 extern void app_init(void);
@@ -72,7 +72,7 @@ static void __not_in_flash_func(process_signals)(void)
 
     // flash settings task (debounced flash writes for profile persistence)
     // Generic service used by all consoles with profiles (3DO, GameCube, etc.)
-    flash_settings_task();
+    flash_task();
 
     // Combine GameCube console rumble with profile indicator rumble
     uint8_t combined_rumble = gc_rumble | feedback_get_rumble();

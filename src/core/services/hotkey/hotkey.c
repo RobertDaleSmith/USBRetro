@@ -1,6 +1,6 @@
 // codes.c
 
-#include "core/services/hotkeys/hotkey.h"
+#include "core/services/hotkey/hotkey.h"
 #include "core/router/router.h"
 
 // Definition of global variables

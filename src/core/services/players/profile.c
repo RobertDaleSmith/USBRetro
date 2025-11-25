@@ -4,7 +4,7 @@
 // Provides profile storage, loading, and switching infrastructure.
 
 #include "profile.h"
-#include "common/flash_settings.h"
+#include "core/services/storage/flash.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -114,10 +114,10 @@ uint8_t profile_get_count(void)
 uint8_t profile_load_active_index_from_flash(uint8_t default_index)
 {
     // Use existing flash_settings system
-    extern bool flash_settings_load(flash_settings_t* settings);
-    flash_settings_t settings;
+    extern bool flash_load(flash_t* settings);
+    flash_t settings;
 
-    if (flash_settings_load(&settings)) {
+    if (flash_load(&settings)) {
         // Valid settings found - check if profile index is valid
         if (settings.active_profile_index < current_config.profile_count) {
             printf("[profiles] Loaded profile from flash: %d\n", settings.active_profile_index);
@@ -136,11 +136,11 @@ uint8_t profile_load_active_index_from_flash(uint8_t default_index)
 void profile_save_active_index_to_flash(uint8_t index)
 {
     // Use existing flash_settings system (debounced - writes after 5 seconds)
-    extern void flash_settings_save(const flash_settings_t* settings);
-    flash_settings_t settings;
+    extern void flash_save(const flash_t* settings);
+    flash_t settings;
     settings.magic = 0x47435052;  // "GCPR" magic
     settings.active_profile_index = index;
-    flash_settings_save(&settings);
+    flash_save(&settings);
 }
 
 // ============================================================================

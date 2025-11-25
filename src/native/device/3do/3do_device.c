@@ -4,7 +4,7 @@
 
 #include "3do_device.h"
 #include "3do_config.h"
-#include "flash_settings.h"
+#include "core/services/storage/flash.h"
 #include "core/services/players/feedback.h"
 #include "core/router/router.h"
 #include "hardware/clocks.h"
@@ -401,8 +401,8 @@ void _3do_init(void) {
   pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
   // Load saved profile from flash (if valid)
-  flash_settings_t settings;
-  if (flash_settings_load(&settings)) {
+  flash_t settings;
+  if (flash_load(&settings)) {
     // Valid settings found - restore saved profile
     if (settings.active_profile_index < TDO_PROFILE_COUNT) {
       active_profile_index = settings.active_profile_index;
@@ -440,9 +440,9 @@ static void switch_to_profile(uint8_t new_index)
   feedback_trigger(new_index, router_get_player_count(OUTPUT_TARGET_3DO));
 
   // Save profile selection to flash (debounced - writes after 5 seconds)
-  flash_settings_t settings;
+  flash_t settings;
   settings.active_profile_index = active_profile_index;
-  flash_settings_save(&settings);
+  flash_save(&settings);
 
   printf("Profile switched to: %s (%s)\n", active_profile->name, active_profile->description);
 }
