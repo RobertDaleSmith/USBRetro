@@ -185,12 +185,14 @@ target_sources(usbretro_snes3do PUBLIC # For SNES23DO (SNES→3DO)
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2pce
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine
 )
 
 target_include_directories(usbretro_ngc PUBLIC # FOR NGC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2gc
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/gamecube
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/include
 )
@@ -198,30 +200,35 @@ target_include_directories(usbretro_ngc PUBLIC # FOR NGC
 target_include_directories(usbretro_xb1 PUBLIC # FOR XB1
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2xb1
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone
 )
 
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2nuon
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/nuon
 )
 
 target_include_directories(usbretro_loopy PUBLIC # FOR LOOPY
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2loopy
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/loopy
 )
 
 target_include_directories(usbretro_3do PUBLIC # FOR 3DO
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb23do
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do
 )
 
 target_include_directories(usbretro_snes3do PUBLIC # FOR SNES23DO
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/snes23do
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/3do
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/snes
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src
