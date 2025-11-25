@@ -4,7 +4,6 @@
 // Configurable player slot management supporting both SHIFT and FIXED modes.
 
 #include "manager.h"
-#include "core/input_event.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -53,27 +52,9 @@ void players_init(void)
 
   for (int i = 0; i < MAX_PLAYERS; i++)
   {
-    // Mark all slots as empty
     players[i].dev_addr = -1;
     players[i].instance = -1;
     players[i].player_number = 0;
-
-    // Initialize generic USBR button state (inverted logic: 1 = released)
-    // Note: Console-specific output formats are stored in the device layer
-    players[i].global_buttons = 0xFFFFF;
-    players[i].altern_buttons = 0xFFFFF;
-    players[i].output_buttons = 0xFFFFF;
-    players[i].global_x = 0;
-    players[i].global_y = 0;
-
-    // Initialize all analog axes to centered position (128 = neutral)
-    for (int j = 0; j < 8; j++) {
-      players[i].analog[j] = 128;
-    }
-
-    players[i].device_type = INPUT_TYPE_NONE;
-    players[i].prev_buttons = 0xFFFFF;
-    players[i].button_mode = 0;
   }
 
   playersCount = 0;
@@ -100,25 +81,9 @@ void players_init_with_config(const player_config_t* config)
   // Initialize all slots
   for (int i = 0; i < MAX_PLAYERS; i++)
   {
-    players[i].dev_addr = -1;  // Empty slot marker
+    players[i].dev_addr = -1;
     players[i].instance = -1;
     players[i].player_number = 0;
-
-    // Initialize generic USBR button state (inverted logic: 1 = released)
-    // Note: Console-specific output formats are stored in the device layer
-    players[i].global_buttons = 0xFFFFF;
-    players[i].altern_buttons = 0xFFFFF;
-    players[i].output_buttons = 0xFFFFF;
-    players[i].global_x = 0;
-    players[i].global_y = 0;
-
-    for (int j = 0; j < 8; j++) {
-      players[i].analog[j] = 128;
-    }
-
-    players[i].device_type = INPUT_TYPE_NONE;
-    players[i].prev_buttons = 0xFFFFF;
-    players[i].button_mode = 0;
   }
 
   playersCount = 0;
@@ -201,22 +166,6 @@ int __not_in_flash_func(add_player)(int dev_addr, int instance)
   players[player_index].instance = instance;
   players[player_index].player_number = player_index + 1;
 
-  players[player_index].global_buttons = 0xFFFFF;
-  players[player_index].altern_buttons = 0xFFFFF;
-  players[player_index].global_x = 0;
-  players[player_index].global_y = 0;
-
-  players[player_index].output_buttons = 0xFFFFF;
-
-  // Initialize all analog axes to centered position
-  for (int j = 0; j < 8; j++) {
-    players[player_index].analog[j] = 128;
-  }
-
-  players[player_index].device_type = INPUT_TYPE_NONE;
-  players[player_index].button_mode = 0;
-  players[player_index].prev_buttons = 0xFFFFF;
-
   printf("[players] Player %d assigned (dev_addr=%d, instance=%d, mode=%s)\n",
       players[player_index].player_number, dev_addr, instance,
       current_slot_mode == PLAYER_SLOT_SHIFT ? "SHIFT" : "FIXED");
@@ -277,22 +226,7 @@ void remove_players_by_address(int dev_addr, int instance)
         // Mark slot as empty but don't shift
         players[i].dev_addr = -1;
         players[i].instance = -1;
-        players[i].player_number = 0;  // Mark as unassigned
-
-        // Reset to neutral state
-        players[i].global_buttons = 0xFFFFF;
-        players[i].altern_buttons = 0xFFFFF;
-        players[i].output_buttons = 0xFFFFF;
-        players[i].prev_buttons = 0xFFFFF;
-
-        for (int j = 0; j < 8; j++) {
-          players[i].analog[j] = 128;
-        }
-
-        players[i].device_type = INPUT_TYPE_NONE;
-        players[i].button_mode = 0;
-        players[i].global_x = 0;
-        players[i].global_y = 0;
+        players[i].player_number = 0;
       }
     }
 

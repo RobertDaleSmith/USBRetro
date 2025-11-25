@@ -10,9 +10,6 @@
 
 #include <stdint.h>
 #include "tusb.h"
-#include "core/input_event.h"
-// Note: Console-specific output formats (gc_report, etc.) are stored in the
-// console device layer, not in Player_t. Player_t stores generic USBR state.
 
 #ifndef MAX_PLAYERS
 #define MAX_PLAYERS 5
@@ -40,37 +37,14 @@ typedef struct {
 // ============================================================================
 // PLAYER DATA STRUCTURE
 // ============================================================================
+// Player_t is only used for device-to-slot mapping.
+// Actual input state is stored in router_outputs[][] (see router.c).
 
 typedef struct TU_ATTR_PACKED
 {
-  // Device identification
-  int dev_addr;
-  int instance;
-  int player_number;
-  input_device_type_t device_type;  // Device type (gamepad, flightstick, mouse, etc.)
-
-  // Digital inputs
-  int32_t global_buttons;
-  int32_t altern_buttons;
-  int32_t output_buttons;
-  int32_t prev_buttons;
-
-  // Analog inputs (unified array)
-  // [0]=LX, [1]=LY, [2]=RX, [3]=RY, [4]=LT, [5]=RT, [6]=Extra1, [7]=Extra2
-  int16_t analog[8];
-
-  // Mouse/relative motion accumulators
-  int16_t global_x;
-  int16_t global_y;
-
-  // Keyboard
-  uint8_t keypress[3];
-
-  // Mode
-  int button_mode;
-
-  // Note: Console-specific output formats (gc_report_t, etc.) belong in the
-  // console device layer, not here. Player_t stores generic USBR state only.
+  int dev_addr;       // USB device address (-1 = empty slot)
+  int instance;       // USB device instance
+  int player_number;  // 1-based player number (0 = unassigned)
 } Player_t;
 
 // ============================================================================
