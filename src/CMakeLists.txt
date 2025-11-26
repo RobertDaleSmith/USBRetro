@@ -89,8 +89,8 @@ pico_generate_pio_header(usbretro_uart ${CMAKE_CURRENT_LIST_DIR}/core/services/l
 set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/leds/leds.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/leds/neopixel/ws2812.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/storage.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/flash.c
-    # output.c removed - apps now provide output interface via app_get_output_interface()
 
     # Core Services
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/codes/codes.c

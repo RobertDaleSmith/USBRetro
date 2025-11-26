@@ -19,6 +19,7 @@ extern void xinput_task(void);
 void usbh_init(void)
 {
     hid_init();
+    tusb_init();
 }
 
 void usbh_task(void)

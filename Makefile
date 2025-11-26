@@ -194,13 +194,6 @@ snes23do:
 usb2uart:
 	$(call build_app,usb2uart)
 
-# Legacy aliases for backward compatibility
-.PHONY: gcusb nuonusb xboxadapter 3dousb
-gcusb: usb2gc
-nuonusb: usb2nuon
-xboxadapter: usb2xb1
-3dousb: usb23do
-
 # Console-only targets (defaults to KB2040)
 .PHONY: 3do
 3do:
@@ -336,13 +329,6 @@ flash-snes23do:
 .PHONY: flash-usb2uart
 flash-usb2uart:
 	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2uart))_$(CONSOLE_$(word 2,$(APP_usb2uart))).uf2
-
-# Legacy flash aliases
-.PHONY: flash-gcusb flash-nuonusb flash-xboxadapter flash-3dousb
-flash-gcusb: flash-usb2gc
-flash-nuonusb: flash-usb2nuon
-flash-xboxadapter: flash-usb2xb1
-flash-3dousb: flash-usb23do
 
 # Internal flash helper
 .PHONY: _flash
