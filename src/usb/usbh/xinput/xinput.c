@@ -2,6 +2,7 @@
 #include "tusb.h"
 #include "core/buttons.h"
 #include "core/services/players/manager.h"
+#include "core/services/players/feedback.h"
 #include "core/router/router.h"
 #include "xinput_host.h"
 #include "core/input_event.h"
@@ -114,29 +115,23 @@ uint8_t byteScaleAnalog(int16_t xbox_val)
   return scale_val;
 }
 
-void xinput_task(uint8_t rumble)
+void xinput_task(void)
 {
-  static uint8_t last_rumble = 0;
-  // rumble only if controller connected
+  // Rumble only if controller connected
   if (!playersCount) return;
 
-  // rumble state update only on diff than last
-  if (last_rumble == rumble && last_player_count == playersCount) return;
-  last_rumble = rumble;
-  last_player_count = playersCount;
-
-  // update rumble state for xinput device 1.
-  unsigned short int i;
-  for (i = 0; i < playersCount; ++i)
+  // Update rumble/LED state for each xinput device
+  for (int i = 0; i < playersCount; ++i)
   {
+    if (players[i].dev_addr < 0) continue;  // Skip empty slots
+
+    // Get per-player feedback state
+    feedback_state_t* fb = feedback_get_state(i);
+    uint8_t rumble = fb ? (fb->rumble.left > fb->rumble.right ? fb->rumble.left : fb->rumble.right) : 0;
+
     // TODO: throttle and only fire if device is xinput
-    // if (players[i].xinput)
-    // {
-      tuh_xinput_set_led(players[i].dev_addr, players[i].instance, i+1, true);
-      tuh_xinput_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble, true);
-    // } else {
-    //   hid_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble);
-    // }
+    tuh_xinput_set_led(players[i].dev_addr, players[i].instance, i+1, true);
+    tuh_xinput_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble, true);
   }
 }
 

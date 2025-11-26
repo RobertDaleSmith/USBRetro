@@ -15,7 +15,6 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "core/services/players/manager.h"
-#include "core/services/codes/codes.h"
 
 // Output interface abstraction
 #include "core/output_interface.h"
@@ -50,9 +49,6 @@ static void __not_in_flash_func(process_signals)(void)
 {
   while (1)
   {
-    // tinyusb host task
-    tuh_task();
-
     // neopixel task
     neopixel_task(playersCount);
 
@@ -111,27 +107,3 @@ int main(void)
 
   return 0;
 }
-
-//--------------------------------------------------------------------+
-// TinyUSB Callbacks
-//--------------------------------------------------------------------+
-#if CFG_TUH_HID
-
-void tuh_mount_cb(uint8_t dev_addr)
-{
-  // application set-up
-  printf("A device with address %d is mounted\r\n", dev_addr);
-}
-
-void tuh_umount_cb(uint8_t dev_addr)
-{
-  // application tear-down
-  printf("A device with address %d is unmounted \r\n", dev_addr);
-
-  remove_players_by_address(dev_addr, -1);
-
-  // Reset test mode when device disconnects
-  codes_reset_test_mode();
-}
-
-#endif

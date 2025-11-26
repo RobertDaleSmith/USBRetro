@@ -2,9 +2,11 @@
 #include "tusb.h"
 #include "core/buttons.h"
 #include "core/services/players/manager.h"
+#include "core/services/players/feedback.h"
+#include "core/services/profiles/profile_indicator.h"
+#include "core/services/codes/codes.h"
 #include "usb/usbh/hid/hid_utils.h"
 #include "usb/usbh/hid/hid_registry.h"
-#include "core/services/profiles/profile_indicator.h"
 
 // #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
@@ -35,11 +37,12 @@ void hid_init()
   register_devices();
 }
 
-void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t test)
+void hid_task(void)
 {
-  uint32_t buttons;
+  // Get test mode counter (for LED test patterns)
+  uint8_t test_counter = codes_get_test_counter();
 
-  // iterate devices and instances that can receive responses
+  // Iterate devices and instances that can receive responses
   for(uint8_t dev_addr=1; dev_addr<MAX_DEVICES; dev_addr++)
   {
     for(uint8_t instance=0; instance<CFG_TUH_HID; instance++)
@@ -55,16 +58,19 @@ void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t t
       case CONTROLLER_KEYBOARD: // send Keyboard LEDs
       case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
         {
-          // Override player_index during profile indication for all controllers
+          // Get per-player feedback state
+          feedback_state_t* fb = (player_index >= 0) ? feedback_get_state(player_index) : NULL;
+
+          // Override player_index during profile indication
           int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
 
-          // Build device output configuration
+          // Build legacy device output configuration from feedback state
           device_output_config_t config = {
             .player_index = display_player_index,
-            .rumble = rumble,
-            .leds = leds,
-            .trigger_threshold = trigger_threshold,
-            .test = test
+            .rumble = fb ? (fb->rumble.left > fb->rumble.right ? fb->rumble.left : fb->rumble.right) : 0,
+            .leds = fb ? fb->led.pattern : 0,
+            .trigger_threshold = fb ? fb->left_trigger.strength : 0,
+            .test = test_counter
           };
 
           device_interfaces[ctrl_type]->task(dev_addr, instance, &config);
