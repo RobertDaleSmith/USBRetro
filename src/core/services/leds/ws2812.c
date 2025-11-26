@@ -22,7 +22,7 @@
 
 #define IS_RGBW true
 
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 
 static PIO pio;
 static uint sm;
@@ -339,7 +339,7 @@ void neopixel_task(int pat)
     // Normal operation - show connection status patterns
     // Store pattern for profile indicator to use
     if (pat > 5) pat = 5;
-    if (pat && hotkey_is_test_mode()) pat = 6;
+    if (pat && codes_is_test_mode()) pat = 6;
     stored_pattern = pat;
 
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {

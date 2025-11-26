@@ -2,7 +2,7 @@
 
 #include "nuon_device.h"
 #include "nuon_buttons.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 #include "core/services/profile/profile.h"
 #include <math.h>
 

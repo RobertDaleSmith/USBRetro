@@ -7,7 +7,7 @@
 #include "tusb.h"
 #include "core/output_interface.h"
 #include "core/services/players/manager.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 
 // HID protocol handlers
 extern void hid_init(void);
@@ -45,7 +45,7 @@ void usbh_task(void)
     uint8_t trigger_threshold = (output->get_trigger_threshold) ? output->get_trigger_threshold() : 0;
 
     // Get test mode counter (for LED test patterns)
-    uint8_t test_counter = hotkey_get_test_counter();
+    uint8_t test_counter = codes_get_test_counter();
 
     // X-input rumble task (Xbox 360/One controllers)
     xinput_task(combined_rumble);

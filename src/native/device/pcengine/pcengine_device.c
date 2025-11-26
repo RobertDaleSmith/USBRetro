@@ -51,7 +51,7 @@ int state = 0; // countdown sequence for shift-register position
 #include "core/router/router.h"
 #include "core/input_event.h"
 #include "core/services/players/manager.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 
 static struct {
     int button_mode[MAX_PLAYERS];  // Button mode per player (6-button, 2-button, etc.)

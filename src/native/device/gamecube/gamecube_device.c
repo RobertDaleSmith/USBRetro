@@ -14,7 +14,7 @@
 #include "core/services/storage/flash.h"
 #include "core/services/profile/profile.h"
 #include "core/services/players/manager.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 #include "core/router/router.h"
 
 // Declaration of global variables

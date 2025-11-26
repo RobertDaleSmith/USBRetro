@@ -15,7 +15,7 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "core/services/players/manager.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 
 // Output interface abstraction
 #include "core/output_interface.h"
@@ -139,7 +139,7 @@ void tuh_umount_cb(uint8_t dev_addr)
   remove_players_by_address(dev_addr, -1);
 
   // Reset test mode when device disconnects
-  hotkey_reset_test_mode();
+  codes_reset_test_mode();
 }
 
 #endif

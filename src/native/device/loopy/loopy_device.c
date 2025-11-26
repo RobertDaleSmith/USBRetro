@@ -9,7 +9,7 @@
 
 // Console-local state (not input data)
 #include "core/router/router.h"
-#include "core/services/hotkey/hotkey.h"
+#include "core/services/codes/codes.h"
 #include "core/services/profile/profile.h"
 #include "core/uart.h"
 
