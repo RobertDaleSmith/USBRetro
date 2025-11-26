@@ -1,8 +1,21 @@
 /*
- * USBRetro - Adapts USB controllers/mice/keyboards for use with
- *            retro consoles. Built for RP2040-based MCUs.
+ * USBRetro - Modular controller firmware for RP2040-based devices
  *
- * Copyright (c) 2022-2023 Robert Dale Smith
+ * A flexible foundation for building controller adapters, arcade sticks,
+ * custom controllers, and any device that routes inputs to outputs.
+ * Apps define the product behavior while the core handles the complexity.
+ *
+ * Inputs:  USB host (HID, X-input), Native (console controllers), BLE*, UART
+ * Outputs: Native (GameCube, PCEngine, etc.), USB device*, BLE*, UART
+ * Core:    Router, players, profiles, feedback, storage, LEDs
+ *
+ * Whether you're building a simple adapter or a full custom controller,
+ * configure an app and let the firmware handle the rest.
+ *
+ * (* planned)
+ *
+ * Copyright (c) 2022-2025 Robert Dale Smith
+ * https://github.com/RobertDaleSmith/USBRetro
  */
 
 #include <stdio.h>
