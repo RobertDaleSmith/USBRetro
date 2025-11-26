@@ -1,106 +1,106 @@
 # GameCube / Wii Adapter
 
-USB controller adapter for GameCube and Wii consoles with advanced features.
+USB controller adapter for GameCube and Wii consoles with profiles, rumble, and keyboard mode.
 
 ## Features
 
-### 🎮 Controller Profiles
+### Controller Profiles
 
 Switch between optimized button mappings for different games:
 
 - **Default** - Standard mapping for most games
-- **SNES** - SNES-style layout (shoulder buttons → triggers)
-- **SSBM** - Super Smash Bros. Melee competitive (custom triggers, 85% stick)
-- **MKWII** - Mario Kart Wii optimized
+- **SNES** - SNES-style layout (L/R as full press, Select→Z)
+- **SSBM** - Super Smash Bros. Melee competitive
+- **MKWii** - Mario Kart Wii optimized
 - **Fighting** - Fighting game layout
 
 **Switching Profiles:**
-1. Hold **Start + Select** (or equivalent on your controller)
-2. Press **D-Pad direction**:
-   - **Up** → Default
-   - **Left** → SNES
-   - **Down** → SSBM
-   - **Right** → MKWii
-3. Controller will rumble and LED will flash to confirm
-4. Profile saves to flash memory (persists across power cycles)
+1. Hold **Select** for 2 seconds
+2. Press **D-Pad Up** to cycle forward
+3. Press **D-Pad Down** to cycle backward
+4. Controller rumbles and LED flashes to confirm
+5. Profile saves to flash memory (persists across power cycles)
 
-### ⌨️ Keyboard Mode
+### Keyboard Mode
 
 Use a USB keyboard as a GameCube keyboard:
 
 - Press **Scroll Lock** or **F14** to toggle keyboard mode
 - LED indicator shows when active
 - All standard keys mapped to GameCube keyboard protocol
-- Useful for Phantasy Star Online and other keyboard-compatible games
+- Works with Phantasy Star Online and other keyboard-compatible games
 
-### 🤝 Copilot Mode
+### Copilot Mode
 
-Combine up to 4 USB controllers into a single GameCube controller:
+Combine multiple USB controllers into a single GameCube controller:
 
 - Connect multiple controllers to USB hub
 - All inputs merge into one controller output
 - Perfect for accessibility or assisted gameplay
 - Each player can control different buttons simultaneously
 
-### 📳 Rumble Support
+### Rumble Support
 
-Full rumble/vibration support for compatible controllers:
+Full rumble/vibration feedback for compatible controllers:
 - Xbox controllers (all generations)
 - PlayStation DualShock 3/4/5
 - Switch Pro Controller
-- 8BitDo controllers
+- 8BitDo controllers with rumble
+
+### Adaptive Triggers (DualSense)
+
+DualSense controllers can use adaptive trigger threshold:
+- L2/R2 analog values mapped to GameCube L/R
+- Configurable threshold per profile
 
 ## Button Mappings
 
 ### Default Profile
 
+Standard mapping for most games:
+
 | USB Input | GameCube Output |
-|-----------|----------------|
-| B1 (A/Cross) | B |
-| B2 (B/Circle) | A |
-| B3 (X/Square) | Y |
-| B4 (Y/Triangle) | X |
-| L1 (LB/L) | L |
-| R1 (RB/R) | R |
-| L2 (LT/ZL) | L Analog |
-| R2 (RT/ZR) | R Analog |
-| S1 (Back/Select) | Z |
+|-----------|-----------------|
+| B1 (Cross/B) | B |
+| B2 (Circle/A) | A |
+| B3 (Square/X) | Y |
+| B4 (Triangle/Y) | X |
+| L1 (LB/L) | - (disabled) |
+| R1 (RB/R) | Z |
+| L2 (LT/ZL) | L (analog) |
+| R2 (RT/ZR) | R (analog) |
+| S1 (Select) | - (profile switch) |
 | S2 (Start) | Start |
-| A2 | Z |
 | D-Pad | D-Pad |
 | Left Stick | Control Stick |
 | Right Stick | C-Stick |
 
 ### SNES Profile
 
-Optimized for SNES-style games (Super Mario World, etc.):
+For SNES-style controllers (L/R as full press):
 
 | USB Input | GameCube Output |
-|-----------|----------------|
-| B1 (A) | A |
-| B2 (B) | B |
-| B3 (X) | Y |
-| B4 (Y) | X |
-| L1 (LB) | L Digital + Analog |
-| R1 (RB) | R Digital + Analog |
-| L2 (LT) | (none) |
-| R2 (RT) | (none) |
+|-----------|-----------------|
+| L1 (LB) | L (digital + full analog) |
+| R1 (RB) | R (digital + full analog) |
+| S1 (Select) | Z |
+| Other | Same as Default |
 
 ### SSBM Profile
 
-Competitive Super Smash Bros. Melee mapping:
+Super Smash Bros. Melee competitive mapping:
 
 | USB Input | GameCube Output | Notes |
-|-----------|----------------|-------|
-| B1 (A) | B | Attack |
-| B2 (B) | A | Jump |
-| B3 (X) | Y | Jump |
-| B4 (Y) | X | Jump |
+|-----------|-----------------|-------|
+| B1 (Cross/B) | B | Attack |
+| B2 (Circle/A) | A | Jump |
+| B3 (Square/X) | Y | Jump |
+| B4 (Triangle/Y) | X | Jump |
 | L1 (LB) | Z | Grab |
-| R1 (RB) | X | Jump |
-| L2 (LT @ 88%) | L Digital + 17% Analog | Light shield |
-| R2 (RT @ 55%) | L + R Digital | Quit combo |
-| Left Stick | Control Stick (85%) | Reduced for precision |
+| R1 (RB) | X | Short hop aerial |
+| L2 (LT @ 88%) | L (17% analog) | Light shield |
+| R2 (RT @ 55%) | L+R | Quit combo |
+| Left Stick | 85% sensitivity | Precision movement |
 
 **Key Features:**
 - Light shield at 17% on L trigger
@@ -113,38 +113,65 @@ Competitive Super Smash Bros. Melee mapping:
 Mario Kart Wii optimized:
 
 | USB Input | GameCube Output | Notes |
-|-----------|----------------|-------|
-| L2 (LT) | L + R Digital | Drift |
-| R2 (RT) | (none) | |
-| L1 (LB) | (none) | |
-| R1 (RB) | Z | Item |
+|-----------|-----------------|-------|
+| L1 (LB) | D-Up | Wheelies/tricks |
+| R1 (RB) | R (full analog) | Drift |
+| R2 (RT) | Z (instant) | Item throw |
+| Other | Same as Default | |
 
 ### Fighting Profile
 
 2D fighting game layout:
 
-| USB Input | GameCube Output |
-|-----------|----------------|
-| B1 (A) | A | Light punch |
-| B2 (B) | B | Light kick |
-| B3 (X) | Y | Medium punch |
-| B4 (Y) | X | Medium kick |
-| L1 (LB) | L | Heavy punch |
-| R1 (RB) | R | Heavy kick |
+| USB Input | GameCube Output | Notes |
+|-----------|-----------------|-------|
+| L1 (LB) | C-Up | Macro input |
+| R1 (RB) | Z | |
+| Right Stick | Disabled | Prevents accidental input |
+| Other | Same as Default | |
 
 ## Hardware Requirements
 
-- **Board**: Adafruit KB2040 (default), also supports Pico, QT Py, Waveshare RP2040-Zero
+- **Board**: Adafruit KB2040 (default), Pico, QT Py, Waveshare
 - **Clock**: 130MHz (overclocked for joybus timing)
-- **Protocol**: GameCube joybus via PIO (timing-critical)
-- **Connector**: GameCube controller cable (cut and solder to board pins)
+- **Protocol**: GameCube joybus via PIO
+- **Connector**: GameCube controller cable
 
-## Special Notes
+### GameCube Controller Cable Pinout
 
-- **Profile persistence**: Uses last 4KB of flash memory (~100K write cycles)
-- **Flash writes**: Debounced 5 seconds after profile change to reduce wear
-- **Dual-core**: Core 0 handles USB input, Core 1 runs joybus protocol
-- **Timing**: Joybus requires precise timing - flash writes pause Core 1 briefly (~100ms)
+```
+Pin 1: VCC (5V)
+Pin 2: Data (bidirectional)
+Pin 3: GND
+Pin 4: GND
+Pin 6: 3.3V (optional, some boards)
+```
+
+**Connection:**
+- Data pin → RP2040 GPIO (configurable)
+- Share ground with RP2040
+- 5V for power
+
+## Technical Details
+
+### Profile Persistence
+
+- Uses last 4KB of flash memory
+- Debounced 5 seconds after profile change (reduces wear)
+- Approximately 100K write cycles available
+- Survives firmware updates (by design)
+
+### Dual-Core Architecture
+
+- **Core 0**: USB polling, input processing, main loop
+- **Core 1**: Joybus protocol (timing-critical)
+
+### Joybus Protocol
+
+- 130MHz clock required for timing accuracy
+- Bidirectional single-wire protocol
+- ~6μs bit period
+- Uses joybus-pio library
 
 ## Troubleshooting
 
@@ -156,7 +183,7 @@ Mario Kart Wii optimized:
 **Rumble not working:**
 - Only compatible controllers support rumble
 - Check USB power supply (rumble requires more current)
-- Some controllers need initialization time
+- Use powered USB hub for multiple controllers
 
 **Profile not saving:**
 - Wait 5 seconds after profile change for flash write
@@ -167,6 +194,11 @@ Mario Kart Wii optimized:
 - Press Scroll Lock or F14 key
 - Check LED indicator
 - Some keyboards may not be compatible
+
+**Stick drift or incorrect calibration:**
+- GameCube expects centered at 128
+- USB controllers are auto-calibrated
+- Check for physical stick drift
 
 ## Product Links
 

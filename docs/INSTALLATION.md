@@ -8,18 +8,23 @@ Purchase ready-to-use adapters at [controlleradapter.com](https://controlleradap
 - [USB-2-PCE](https://controlleradapter.com/products/usb-2-pce) - PCEngine/TurboGrafx-16
 - [GC USB](https://controlleradapter.com/products/gc-usb) - GameCube/Wii
 - [NUON USB](https://controlleradapter.com/products/nuon-usb) - Nuon DVD Players
+- [USB-2-3DO](https://controlleradapter.com/products/usb-2-3do) - 3DO Interactive Multiplayer
 
 ## Downloading Firmware
 
 1. Go to [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases)
 2. Download the latest `.uf2` file for your product:
-   - `USB2PCE_usbretro_vX.X.X.uf2` - PCEngine adapter
-   - `GCUSB_usbretro_vX.X.X.uf2` - GameCube adapter
-   - `NUONUSB_usbretro_vX.X.X.uf2` - Nuon adapter
+   - `usb2pce_usbretro_pce.uf2` - PCEngine adapter
+   - `usb2gc_usbretro_ngc.uf2` - GameCube adapter
+   - `usb2nuon_usbretro_nuon.uf2` - Nuon adapter
+   - `usb23do_usbretro_3do.uf2` - 3DO adapter
+   - `usb2loopy_usbretro_loopy.uf2` - Casio Loopy adapter (experimental)
 
 ## Flashing Instructions
 
-### USB-2-PCE / NUON USB (Standard Method)
+### Standard Method (Most Adapters)
+
+Works for: USB-2-PCE, NUON USB, USB-2-3DO, USB-2-Loopy
 
 1. **Prepare adapter**
    - Disconnect adapter from console
@@ -54,7 +59,7 @@ The GC USB adapter automatically enters bootloader mode when powered on without 
    - A drive named `RPI-RP2` should appear
 
 3. **Flash firmware**
-   - Drag and drop `GCUSB_usbretro_vX.X.X.uf2` onto the `RPI-RP2` drive
+   - Drag and drop `.uf2` onto the `RPI-RP2` drive
    - Wait for file to copy
    - Drive will automatically eject
 
@@ -108,17 +113,39 @@ The GC USB adapter automatically enters bootloader mode when powered on without 
 ## LED Status Indicators
 
 **During normal operation:**
-- 🟢 **Solid Green** - No controllers connected
-- 🔵 **Solid Blue** - 1 controller connected
-- 🟣 **Purple** - 2 controllers connected
-- 🔴 **Red** - 3+ controllers connected
+- **Solid Green** - No controllers connected
+- **Solid Blue** - 1 controller connected
+- **Purple** - 2 controllers connected
+- **Red** - 3+ controllers connected
 
-**During profile change (GameCube only):**
-- 🟡 **Yellow flash** - Profile changed
+**During profile change:**
+- **Yellow flash** - Profile changed
 - Controller will also rumble if supported
 
 **Bootloader mode:**
 - No LED (RPI-RP2 drive appears on computer)
+
+## Profile Switching
+
+Several adapters support switchable button mapping profiles:
+
+### GameCube (USB2GC)
+- Hold **Select** for 2 seconds
+- Then press **D-Pad Up/Down** to cycle profiles
+- Profiles: Default, SNES, SSBM, MKWii, Fighting
+- See [GameCube docs](consoles/GAMECUBE.md) for details
+
+### 3DO (USB23DO)
+- Hold **Select** for 2 seconds
+- Then press **D-Pad Up/Down** to cycle profiles
+- Profiles: Default, Fighting, Shooter
+- See [3DO docs](consoles/3DO.md) for details
+
+### Nuon (USB2Nuon)
+- **In-Game Reset (IGR)**: Hold L1+R1+Start+Select
+  - Tap: Stop button (return to menu)
+  - Hold 2 seconds: Power button (power off player)
+- See [Nuon docs](consoles/NUON.md) for details
 
 ## Verifying Firmware Version
 
@@ -145,7 +172,7 @@ To reset adapter to default settings:
 1. Flash the latest firmware (this resets all settings)
 2. Or manually clear flash memory (developers only - requires recompile)
 
-**Note**: GameCube adapters store profile selection in flash. Reflashing firmware does **not** erase saved profile (by design). To reset profile to default, switch to profile 0 (Up on D-Pad during profile change).
+**Note**: Adapters with profiles store profile selection in flash. Reflashing firmware does **not** erase saved profile (by design). To reset profile to default, switch to profile 0 (Up on D-Pad during profile change).
 
 ## Getting Help
 

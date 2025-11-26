@@ -1,12 +1,12 @@
 # Hardware Compatibility
 
-Complete list of supported USB input devices and RP2040 boards.
+Complete list of supported USB input devices, RP2040 boards, and console outputs.
 
 ## Supported USB Input Devices
 
 ### USB Controllers
 
-#### Xbox Controllers ✅
+#### Xbox Controllers
 - Xbox Original (Duke/S-Controller)
 - Xbox 360 (wired and wireless with adapter)
 - Xbox One (all revisions)
@@ -17,7 +17,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - Rumble feedback
 - X-input protocol
 
-#### PlayStation Controllers ✅
+#### PlayStation Controllers
 - PlayStation Classic Controller
 - DualShock 3 (PS3)
 - DualShock 4 (PS4)
@@ -27,9 +27,9 @@ Complete list of supported USB input devices and RP2040 boards.
 - Full button and analog support
 - Rumble feedback (DS3/DS4/DS5)
 - Touchpad button (DS4/DS5)
-- Gyro/accelerometer (not yet supported)
+- Adaptive trigger threshold (DualSense)
 
-#### Nintendo Controllers ✅
+#### Nintendo Controllers
 - **Switch Pro Controller** - Full support with rumble
 - **Joy-Con Grip** - Dual Joy-Cons in grip mode
 - **Joy-Con Single** - Individual Joy-Con support
@@ -41,17 +41,17 @@ Complete list of supported USB input devices and RP2040 boards.
 - Capture button support
 - Home button support
 
-#### 8BitDo Controllers ✅
+#### 8BitDo Controllers
 
 **Wireless Controllers:**
 - PCEngine 2.4g Controller
 - M30 2.4g Controller (Genesis/Mega Drive)
 - M30 Bluetooth Controller
-- NeoGeo Controller (untested)
+- NeoGeo Controller
 
 **USB Adapters:**
-- Wireless USB Adapter (Grey/Red) ✅
-- Wireless USB Adapter 2 (Black/Red) ✅
+- Wireless USB Adapter (Grey/Red)
+- Wireless USB Adapter 2 (Black/Red)
 
 **Features:**
 - Full button support
@@ -59,7 +59,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - Turbo functionality
 - Mode switching
 
-#### Other Supported Controllers ✅
+#### Other Supported Controllers
 - **Logitech Wingman Action Pad** - Classic PC gamepad
 - **Sega Astrocity Mini Controller** - Arcade stick
 - **Hori Pokken Tournament Controller** - Fight stick
@@ -68,7 +68,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - **Generic DirectInput Controllers** - Most D-input gamepads
 - **Generic HID Gamepads** - Standard USB HID joysticks
 
-### USB Keyboards ✅
+### USB Keyboards
 
 **All standard USB HID keyboards supported:**
 - Full key mapping to controller buttons
@@ -76,7 +76,6 @@ Complete list of supported USB input devices and RP2040 boards.
 - Arrow keys → D-Pad
 - WASD → Left stick
 - Space/Enter → Action buttons
-- Number keys → Profile switching (GameCube)
 
 **Tested Keyboards:**
 - Apple Magic Keyboard
@@ -84,7 +83,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - Generic USB keyboards
 - Mechanical keyboards (Cherry MX, etc.)
 
-### USB Mice ✅
+### USB Mice
 
 **All standard USB HID mice supported:**
 - Optical mice
@@ -92,21 +91,22 @@ Complete list of supported USB input devices and RP2040 boards.
 - Gaming mice with high DPI
 - Trackballs
 
-**Functionality:**
+**Functionality by Console:**
 - PCEngine: Mouse emulation (Afterburner II, Darius Plus)
 - Nuon: Spinner emulation (Tempest 3000)
+- 3DO: Mouse emulation (native 3DO mouse protocol)
 - GameCube: Mouse → stick emulation
-- Movement → Analog stick or spinner
-- Buttons → Controller buttons
 
 **Not Supported:**
 - Scroll wheel (ignored)
 - Extra mouse buttons (buttons 4+)
 
-### USB Hubs ✅
+### USB Hubs
 
 **Multi-player support via USB hubs:**
-- Up to 5 simultaneous devices
+- Up to 8 simultaneous devices (3DO)
+- Up to 5 simultaneous devices (PCEngine)
+- Up to 4 simultaneous devices (Loopy, GameCube)
 - Any standard USB 2.0 hub
 - Powered hubs recommended for 4+ devices
 
@@ -120,15 +120,67 @@ Complete list of supported USB input devices and RP2040 boards.
 - Some controllers require more power (rumble)
 - Use powered hub for 3+ high-power devices
 
+## Supported Console Outputs
+
+### PCEngine / TurboGrafx-16
+
+- **Players**: Up to 5 via multitap
+- **Input Types**: Controller, Mouse
+- **Features**: 2/3/6-button modes, Turbo buttons
+- **Protocol**: PIO-based scanning
+- **Documentation**: [PCENGINE.md](consoles/PCENGINE.md)
+
+### GameCube / Wii
+
+- **Players**: 1 (per adapter)
+- **Input Types**: Controller, Keyboard
+- **Features**: Profiles, Rumble, Copilot mode
+- **Protocol**: Joybus via PIO (130MHz clock required)
+- **Documentation**: [GAMECUBE.md](consoles/GAMECUBE.md)
+
+### Nuon DVD Players
+
+- **Players**: 1
+- **Input Types**: Controller, Spinner (mouse)
+- **Features**: Spinner mode, In-Game Reset (IGR)
+- **Protocol**: Polyface serial via PIO
+- **Documentation**: [NUON.md](consoles/NUON.md)
+
+### 3DO Interactive Multiplayer
+
+- **Players**: Up to 8 via PBUS daisy chain
+- **Input Types**: Controller, Joystick, Mouse
+- **Features**: Extension passthrough, Profiles
+- **Protocol**: PBUS serial via PIO
+- **Documentation**: [3DO.md](consoles/3DO.md)
+
+### Casio Loopy
+
+- **Players**: Up to 4
+- **Input Types**: Controller
+- **Features**: Basic controller support
+- **Protocol**: PIO-based
+- **Status**: Experimental
+- **Documentation**: [LOOPY.md](consoles/LOOPY.md)
+
+### Xbox One S (Internal Mod)
+
+- **Players**: Multiple via USB hub
+- **Input Types**: Controller
+- **Features**: USB passthrough to Xbox One
+- **Protocol**: I2C to Xbox One controller chip
+- **Status**: Hardware mod required
+- **Documentation**: [XBOXONE.md](consoles/XBOXONE.md)
+
 ## Supported RP2040 Boards
 
-### Adafruit KB2040 ✅ (Recommended)
+### Adafruit KB2040 (Recommended)
 
-**Default board for all products**
+**Default board for most products**
 
 - **Features**: USB-C, 21 GPIO pins, boot button, WS2812 RGB LED
 - **Form Factor**: Pro Micro compatible (1.3" × 0.7")
-- **Products**: USB2PCE, GCUSB, NUONUSB
+- **Products**: USB2PCE, USB2GC, USB2Nuon, USB23DO, USB2Loopy
 - **Purchase**: [Adafruit](https://www.adafruit.com/product/5302)
 
 **Why KB2040?**
@@ -138,7 +190,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - Widely available
 - Good GPIO breakout
 
-### Raspberry Pi Pico ✅
+### Raspberry Pi Pico
 
 - **Features**: Micro-USB, 26 GPIO pins, boot button
 - **Form Factor**: Unique Pico layout (2.1" × 0.8")
@@ -151,11 +203,11 @@ Complete list of supported USB input devices and RP2040 boards.
 - More GPIO available
 - Lower cost than KB2040
 
-### Adafruit QT Py RP2040 ✅
+### Adafruit QT Py RP2040
 
 - **Features**: USB-C, 11 GPIO pins, boot button, WS2812 RGB LED
 - **Form Factor**: Tiny (1" × 0.7")
-- **Products**: XboxOne (internal mod), experimental builds
+- **Products**: USB2XB1 (Xbox One internal mod)
 - **Purchase**: [Adafruit](https://www.adafruit.com/product/4900)
 
 **Use Cases:**
@@ -167,7 +219,7 @@ Complete list of supported USB input devices and RP2040 boards.
 - Fewer GPIO pins (11 vs 21)
 - Harder to solder (smaller pads)
 
-### Waveshare RP2040-Zero ✅
+### Waveshare RP2040-Zero
 
 - **Features**: USB-C, 20 GPIO pins, boot/reset buttons, WS2812 RGB LED
 - **Form Factor**: Ultra-compact (0.9" × 0.7")
@@ -179,11 +231,6 @@ Complete list of supported USB input devices and RP2040 boards.
 - USB-C connector
 - Built-in RGB LED
 - Castellated edges for embedding
-
-**Considerations:**
-- Very small (harder to work with)
-- Limited availability
-- Newer to ecosystem
 
 ## Board Comparison
 
@@ -222,39 +269,7 @@ Complete list of supported USB input devices and RP2040 boards.
 
 ## DIY Hardware
 
-### PCEngine Adapter
-
-**Hardware requirements:**
-- PCEngine controller port (8-pin DIN)
-- RP2040 board (KB2040 recommended)
-- Level shifters (if needed for 3.3V ↔ 5V)
-- Power regulation circuitry
-
-### GameCube Adapter
-
-**Controller Cable Pinout:**
-```
-Pin 1: VCC (5V)
-Pin 2: Data
-Pin 3: GND
-Pin 4: GND
-Pin 6: 3.3V (optional)
-```
-
-**Connection:**
-- Data pin → RP2040 GPIO (configurable)
-- Share ground with RP2040
-
-### Nuon Adapter
-
-**Custom protocol:**
-- Requires level shifting (3.3V ↔ 5V)
-- Bidirectional data line
-- See `src/console/nuon/` for PIO code
-
-## Building Your Own
-
-### Required Components
+### General Requirements
 
 1. **RP2040 Board** (KB2040 recommended)
 2. **USB Cable** (USB-C or Micro-USB)
@@ -263,30 +278,22 @@ Pin 6: 3.3V (optional)
 5. **Soldering Iron** and solder
 6. **Optional**: Level shifters, resistors, capacitors
 
-### Tools Needed
+### Console-Specific Pinouts
 
-- Soldering iron (temperature controlled)
-- Multimeter
-- Wire strippers
-- Heat shrink tubing
-- Hot glue gun (for strain relief)
-
-### Assembly Tips
-
-1. **Test before soldering** - Breadboard connections first
-2. **Use solid core wire** - Easier to solder and more reliable
-3. **Label everything** - Makes debugging easier
-4. **Strain relief** - Hot glue or zip ties on cables
-5. **Check continuity** - Test with multimeter before powering on
+See individual console documentation for pinouts:
+- [PCEngine Pinout](consoles/PCENGINE.md#pin-configuration)
+- [GameCube Pinout](consoles/GAMECUBE.md#hardware-requirements)
+- [Nuon Pinout](consoles/NUON.md#hardware-requirements)
+- [3DO Pinout](consoles/3DO.md#hardware-requirements)
 
 ### Common Mistakes
 
-- ❌ Reversed power polarity
-- ❌ Wrong voltage (5V vs 3.3V)
-- ❌ Cold solder joints
-- ❌ Crossed data lines
-- ❌ Missing pullup resistors
-- ❌ Incorrect GPIO pin assignments
+- Reversed power polarity
+- Wrong voltage (5V vs 3.3V)
+- Cold solder joints
+- Crossed data lines
+- Missing pullup resistors
+- Incorrect GPIO pin assignments
 
 ## Where to Buy
 
@@ -301,8 +308,9 @@ Pin 6: 3.3V (optional)
 
 - [Controller Adapter](https://controlleradapter.com/) - Ready-to-use products
   - USB2PCE
-  - GCUSB
-  - NUONUSB
+  - USB2GC (GCUSB)
+  - USB2Nuon (NUONUSB)
+  - USB23DO
 
 ### Console Connectors
 
