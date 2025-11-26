@@ -124,6 +124,9 @@ set(COMMON_SOURCES
     # USB Host - X-input Protocol
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
 
+    # USB Host - Unified layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/usbh.c
+
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
 

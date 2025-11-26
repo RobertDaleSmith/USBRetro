@@ -17,24 +17,20 @@
 #include "core/services/players/manager.h"
 #include "core/services/hotkey/hotkey.h"
 
-
 // Output interface abstraction
 #include "core/output_interface.h"
 
+// USB host layer (HID + X-input handling)
+#include "usb/usbh/usbh.h"
+
 // App provides output interface (replaces compile-time selection in output.c)
 extern const OutputInterface* app_get_output_interface(void);
-
-extern void hid_init(void);
-extern void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t test);
-extern void xinput_task(uint8_t rumble);
 
 extern void neopixel_init(void);
 extern void neopixel_task(int pat);
 
 extern void feedback_init(void);
 extern void feedback_task(void);
-extern uint8_t feedback_get_rumble(void);
-extern uint8_t feedback_get_player_led(uint8_t player_count);
 
 extern void players_init(void);
 
@@ -72,34 +68,11 @@ static void __not_in_flash_func(process_signals)(void)
     // Generic service used by all consoles with profiles (3DO, GameCube, etc.)
     flash_task();
 
-    // Get output interface for console-specific feedback
-    const OutputInterface* output = app_get_output_interface();
-
-    // Combine console rumble with profile indicator rumble
-    uint8_t console_rumble = (output->get_rumble) ? output->get_rumble() : 0;
-    uint8_t combined_rumble = console_rumble | feedback_get_rumble();
-
-    // Get player LED value (combines console LED with profile indicator)
-    uint8_t console_led = (output->get_player_led) ? output->get_player_led() : 0;
-    uint8_t player_led = feedback_get_player_led(playersCount) | console_led;
-
-    // Get adaptive trigger threshold from output interface (DualSense L2/R2)
-    // Output device provides threshold from its active profile
-    uint8_t trigger_threshold = (output->get_trigger_threshold) ? output->get_trigger_threshold() : 0;
-
-    // test pattern counter (managed by application layer)
-    static uint8_t test_counter = 0;
-    if (is_fun) test_counter++;
-
-    // xinput rumble task
-    xinput_task(combined_rumble);
-
-#if CFG_TUH_HID
-    // hid_device rumble/led task
-    hid_task(combined_rumble, player_led, trigger_threshold, test_counter);
-#endif
+    // USB host feedback task (rumble, LEDs, triggers for HID and X-input)
+    usbh_task();
 
     // Console-specific periodic task (if needed)
+    const OutputInterface* output = app_get_output_interface();
     if (output->task) {
       output->task();
     }
@@ -118,7 +91,7 @@ int main(void)
   // Pause briefly for stability before starting USB activity
   sleep_ms(250);
 
-  hid_init(); // init hid device interfaces
+  usbh_init(); // init USB host layer (HID device registry)
 
   tusb_init(); // init tinyusb for usb host input
 
