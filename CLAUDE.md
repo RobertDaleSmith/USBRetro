@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-USBRetro is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to retro console protocols (PCEngine, GameCube, Nuon, Xbox One, Loopy). It uses TinyUSB for USB host functionality and RP2040's PIO (Programmable I/O) for console-specific timing-critical protocols.
+USBRetro is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to retro console protocols (PCEngine, GameCube, Nuon, Xbox One, Loopy, 3DO). It uses TinyUSB for USB host functionality and RP2040's PIO (Programmable I/O) for console-specific timing-critical protocols.
 
 ## Build Commands
 
@@ -28,7 +28,7 @@ make all
 make clean
 ```
 
-Output files are created in `releases/` directory with product names (e.g., `USB2PCE_usbretro_pce.uf2`).
+Output files are created in `releases/` directory with product names (e.g., `usb2pce_usbretro_pce.uf2`).
 
 ### Product Build Matrix
 
@@ -38,319 +38,279 @@ Output files are created in `releases/` directory with product names (e.g., `USB
 | GCUSB | KB2040 | GameCube | `make gcusb` |
 | NUON USB | KB2040 | Nuon | `make nuonusb` |
 | Xbox Adapter | QT Py | Xbox One | `make xboxadapter` |
-
-### Build by Console Only (defaults to KB2040)
-
-```bash
-make pce      # PCEngine/TurboGrafx-16
-make ngc      # GameCube/Wii (requires 130MHz clock)
-make xb1      # Xbox One (uses QT Py board)
-make nuon     # Nuon DVD Players
-make loopy    # Casio Loopy
-```
+| USB23DO | KB2040 | 3DO | `make usb23do` |
+| SNES23DO | KB2040 | SNES→3DO | `make snes23do` |
+| USB2Loopy | KB2040 | Casio Loopy | `make usb2loopy` |
 
 ### Initial Setup (One-Time)
 
-1. Install ARM toolchain (macOS):
 ```bash
 brew install --cask gcc-arm-embedded
 export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
-```
-
-2. Clone USBRetro and initialize submodules:
-```bash
 cd ~/git
 git clone https://github.com/RobertDaleSmith/usbretro.git
 cd usbretro
 make init  # Initializes pico-sdk 2.2.0 and TinyUSB 0.19.0
 ```
 
-**Note:** TinyUSB is a top-level submodule (not nested in pico-sdk) to keep pico-sdk clean. The Makefile automatically sets `PICO_TINYUSB_PATH` to point to the external TinyUSB.
-
-### Rebuilding After Code Changes
-
-The Makefile automatically cleans and rebuilds when switching boards. Just run:
-```bash
-make <product>    # e.g., make usb2pce
-```
-
-For manual control:
-```bash
-make clean        # Remove all build artifacts
-make fullclean    # Reset to fresh clone state (removes all untracked files)
-```
-
 ## Architecture
 
-### Multi-Console Build System
+### Repository Structure
 
-USBRetro uses compile-time configuration to build different firmware variants from a shared codebase:
-
-- **Build Targets**: Each console has a separate CMake executable target (`usbretro_pce`, `usbretro_ngc`, etc.) defined in `src/CMakeLists.txt`
-- **Compile Definitions**: Console-specific code is conditionally compiled using `CONFIG_PCE`, `CONFIG_NGC`, `CONFIG_XB1`, `CONFIG_NUON`, `CONFIG_LOOPY`
-- **Common Sources**: All console variants share the same USB input processing code (in `common/` and `devices/`)
-- **Console Modules**: Each console has its own directory under `console/` with protocol-specific implementation
-- **Board Selection**: Board-specific scripts (`src/build_*.sh`) set `PICO_BOARD` environment variable before CMake runs
+```
+src/
+├── main.c                      # Entry point, main loop
+├── CMakeLists.txt              # Build configuration
+├── core/                       # Shared firmware infrastructure
+│   ├── buttons.h               # Canonical USBR_BUTTON_* definitions
+│   ├── input_event.h           # Unified input event structure
+│   ├── output_interface.h      # Console output abstraction
+│   ├── router/                 # Input→Output routing system
+│   │   ├── router.c/h          # SIMPLE/MERGE/BROADCAST modes
+│   └── services/
+│       ├── players/            # Player slot management + feedback
+│       │   ├── manager.c/h     # Slot assignment (SHIFT/FIXED modes)
+│       │   └── feedback.c/h    # Rumble/LED feedback patterns
+│       ├── profile/            # Button remapping profiles
+│       │   └── profile.c/h     # Profile switching, flash persistence
+│       ├── codes/              # Sequence detection (Konami code, etc.)
+│       ├── hotkeys/            # Button combo detection (hold/tap)
+│       ├── leds/               # NeoPixel LED control
+│       │   └── ws2812.c/h      # WS2812 driver
+│       └── storage/            # Flash persistence
+│           └── flash.c/h       # Settings storage
+├── apps/                       # Product configurations
+│   ├── usb2pce/               # USB→PCEngine
+│   ├── usb2gc/                # USB→GameCube
+│   ├── usb2nuon/              # USB→Nuon
+│   ├── usb23do/               # USB→3DO
+│   ├── usb2loopy/             # USB→Casio Loopy
+│   ├── usb2xb1/               # USB→Xbox One
+│   └── snes23do/              # SNES→3DO (native host input)
+├── usb/
+│   ├── usbh/                   # USB Host layer
+│   │   ├── usbh.c/h           # Unified USB host (HID + X-input)
+│   │   ├── hid/               # HID protocol stack
+│   │   │   ├── hid.c          # HID report handling
+│   │   │   ├── hid_registry.c # Device driver registry
+│   │   │   └── devices/       # Device drivers
+│   │   │       ├── generic/   # Generic HID (gamepad, mouse, keyboard)
+│   │   │       └── vendors/   # Vendor-specific (Sony, Nintendo, etc.)
+│   │   └── xinput/            # X-input protocol
+│   └── usbd/                   # USB Device (placeholder)
+├── native/
+│   ├── device/                 # Console output protocols (we emulate devices)
+│   │   ├── pcengine/          # PCEngine multitap (PIO)
+│   │   ├── gamecube/          # GameCube joybus (PIO)
+│   │   ├── nuon/              # Nuon polyface (PIO)
+│   │   ├── 3do/               # 3DO controller (PIO)
+│   │   ├── loopy/             # Casio Loopy (PIO)
+│   │   └── xboxone/           # Xbox One I2C passthrough
+│   └── host/                   # Native controller input (we emulate console)
+│       └── snes/              # SNES controller reading
+└── lib/                        # External libraries (submodules)
+    ├── pico-sdk/              # Raspberry Pi Pico SDK (2.2.0)
+    ├── tinyusb/               # TinyUSB (0.19.0)
+    ├── tusb_xinput/           # X-input support
+    └── joybus-pio/            # GameCube/N64 joybus
+```
 
 ### Core Data Flow
 
-1. **USB Input** (Core 0): TinyUSB host stack polls USB devices via `tuh_task()` in `main.c:process_signals()`
-2. **Device Processing**: Device-specific drivers (in `devices/`) parse reports and call `post_globals()`
-3. **Player State**: `post_globals()` updates the global `players[]` array (defined in `common/players.c`)
-4. **Console Output** (Core 1): Console-specific code reads `players[]` and outputs to the retro console protocol
-
-**Key Point:** The `players[]` array is the bridge between USB input (Core 0) and console output (Core 1). Device drivers write to it, console code reads from it.
-
-### Player Management System
-
-**Fixed-Slot Assignment** (no shifting on disconnect):
-
-- `players[]` array has `MAX_PLAYERS` slots (default 5)
-- Empty slots marked with `dev_addr == -1`
-- When a controller connects, it fills the first available slot
-- When a controller disconnects, its slot is marked empty but not shifted
-- Remaining players stay in their original slots (prevents mid-game position changes)
-
-**Functions:**
-- `add_player()`: Finds first empty slot, assigns USB device to it
-- `find_player_index()`: Looks up player by `dev_addr` + `instance`
-- `remove_players_by_address()`: Marks slot as empty, resets to neutral state
-- `playersCount`: Tracks highest occupied slot + 1 (not necessarily active player count)
-
-**Example:**
 ```
-Initial:
-players[0] = Xbox (dev_addr=1)
-players[1] = PS4 (dev_addr=2)
-players[2] = Switch (dev_addr=3)
-
-Xbox disconnects:
-players[0] = (empty, dev_addr=-1)  ← neutral state
-players[1] = PS4 (dev_addr=2)      ← stays in slot 1
-players[2] = Switch (dev_addr=3)   ← stays in slot 2
-
-New controller reconnects:
-players[0] = New controller        ← fills first empty slot
+Input Sources                    Router                      Output Targets
+─────────────                    ──────                      ──────────────
+USB HID ──────┐                                              ┌──→ PCEngine
+USB X-input ──┼──→ router_submit_input() ──→ router ──→ ────┼──→ GameCube
+Native SNES ──┘                              │               └──→ 3DO, etc.
+                                             │
+                                    profile_apply()
+                                    (button remapping)
 ```
 
-This behavior is critical for multi-port outputs (e.g., 4-port GameCube implementation).
+1. **Input**: USB drivers or native host drivers submit events via `router_submit_input()`
+2. **Routing**: Router distributes to outputs based on mode (SIMPLE, MERGE, BROADCAST)
+3. **Profile**: Console output code calls `profile_apply()` for button remapping
+4. **Output**: Console-specific code reads via `router_get_output()` and outputs to hardware
 
-### Device Driver System
+### Key Abstractions
 
-USBRetro uses a registry pattern for controller support:
+#### input_event_t (`core/input_event.h`)
+Unified input structure for all device types:
+```c
+typedef struct {
+    uint8_t dev_addr;           // USB device address
+    int8_t instance;            // Instance number
+    input_device_type_t type;   // GAMEPAD, MOUSE, KEYBOARD, etc.
+    uint32_t buttons;           // Button bitmap (USBR_BUTTON_*)
+    uint8_t analog[8];          // Analog axes (0-255, centered at 128)
+    int8_t delta_x, delta_y;    // Mouse deltas
+    // ... more fields
+} input_event_t;
+```
 
-- **DeviceInterface**: Function pointer struct defined in `devices/device_interface.h`
-- **Device Registry**: Array of device interfaces in `devices/device_registry.c`
-- **Detection**: Devices are matched by VID/PID via `is_device()` or descriptor parsing via `check_descriptor()`
-- **Processing**: Each device implements `process()` to parse USB reports and `task()` for periodic operations (e.g., rumble)
+#### OutputInterface (`core/output_interface.h`)
+Console output abstraction - each console implements:
+```c
+typedef struct {
+    const char* name;
+    void (*init)(void);
+    void (*core1_entry)(void);      // Runs on Core 1
+    void (*task)(void);             // Periodic task on Core 0
+    uint8_t (*get_rumble)(void);
+    uint8_t (*get_player_led)(void);
+    // Profile system accessors
+    uint8_t (*get_profile_count)(void);
+    uint8_t (*get_active_profile)(void);
+    void (*set_active_profile)(uint8_t index);
+    const char* (*get_profile_name)(uint8_t index);
+} OutputInterface;
+```
 
-When adding a new controller:
-1. Create `devices/new_controller.c` and `devices/new_controller.h`
-2. Implement the `DeviceInterface` functions
-3. Add controller to `device_registry.c` enum and registration
-4. Add source file to `COMMON_SOURCES` in `CMakeLists.txt`
+#### Router Modes (`core/router/router.h`)
+- **SIMPLE**: 1:1 mapping (USB device N → output slot N)
+- **MERGE**: All inputs merged to single output (Nuon single-port)
+- **BROADCAST**: All inputs sent to all outputs
+
+### Apps Layer
+
+Each product has an app in `apps/<product>/` that configures:
+- Router mode and routing
+- Player slot management (SHIFT vs FIXED mode)
+- Profile definitions (button remapping)
+
+Example app structure:
+```
+apps/usb2gc/
+├── app.c           # app_init() - configures router, players, profiles
+├── app.h           # Version, config constants
+├── app_config.h    # Build-time configuration
+└── profiles.h      # Profile definitions (button maps)
+```
+
+### Profile System
+
+Profiles provide button remapping with:
+- Multiple named profiles per console
+- SELECT + D-pad Up/Down to cycle (after 2s hold)
+- Visual feedback (NeoPixel blinks)
+- Haptic feedback (rumble pulses)
+- Flash persistence
+
+Consoles without `profiles.h` pass buttons through unchanged.
+
+### Services
+
+| Service | Purpose |
+|---------|---------|
+| `players/` | Player slot assignment, feedback patterns |
+| `profile/` | Button remapping, profile switching |
+| `codes/` | Button sequence detection (cheat codes) |
+| `hotkeys/` | Button combo detection (hold/tap/release) |
+| `leds/` | NeoPixel LED control |
+| `storage/` | Flash persistence for settings |
+
+### Dual-Core Architecture
+
+- **Core 0**: Main loop (`process_signals()`) - USB polling, tasks, LED updates
+- **Core 1**: Console output protocol timing (launched via `multicore_launch_core1()`)
 
 ### PIO State Machines
 
 Console protocols use RP2040 PIO for precise timing:
-
-- **PCEngine**: 3 PIO programs (`plex.pio`, `clock.pio`, `select.pio`) handle multitap scanning
-- **GameCube**: Uses external `joybus-pio` library for bidirectional joybus protocol
-- **Nuon**: `polyface_read.pio` and `polyface_send.pio` handle Nuon's serial protocol
-- **Loopy**: `loopy.pio` handles Casio Loopy protocol
-
-PIO headers are auto-generated by CMake via `pico_generate_pio_header()`. The `.pio` assembly files define timing-critical bit-banging protocols.
-
-**PIO Resource Limits:**
-- RP2040 has 2 PIO blocks (PIO0, PIO1)
-- 4 state machines per PIO block (8 total)
-- 32 instruction memory slots per PIO block
-- Programs can share instruction memory if loaded once
-
-### Dual-Core Architecture
-
-- **Core 0**: Runs `process_signals()` infinite loop handling USB polling, LED updates, and console-specific tasks
-- **Core 1**: Launched by console-specific code (e.g., `gamecube.c`, `pcengine.c`) to handle output protocol timing
-
-Console modules call `multicore_launch_core1()` with their output function, which continuously reads the `players[]` array.
-
-**Synchronization:**
-- No mutexes used (would introduce latency)
-- Atomic reads/writes via proper memory barriers
-- Some consoles use `output_exclude` flag for atomic multi-field updates
-
-### Button Mapping
-
-USBRetro uses an intermediate button representation:
-
-1. **Input Stage**: Device drivers map controller-specific buttons → USBRetro buttons (defined as `USBR_BUTTON_*` in `globals.h`)
-2. **Storage**: Stored in `players[].global_buttons` and `players[].output_*` fields
-3. **Output Stage**: Console code maps USBRetro buttons → console-specific outputs
-
-**Button State Fields:**
-- `global_buttons`: Raw button state from USB device
-- `altern_buttons`: Alternative/secondary button state (e.g., Joy-Con Grip's second controller)
-- `output_buttons`: Combined/processed buttons (`global_buttons & altern_buttons`)
-
-See README.md for complete input/output mapping tables.
-
-### Console-Specific Post Functions
-
-Each console implements these critical functions:
-
-```c
-void post_globals(uint8_t dev_addr, int8_t instance, uint32_t buttons,
-                  uint8_t analog_1x, uint8_t analog_1y,
-                  uint8_t analog_2x, uint8_t analog_2y,
-                  uint8_t analog_l, uint8_t analog_r,
-                  uint32_t keys, uint8_t quad_x);
-
-void post_mouse_globals(uint8_t dev_addr, int8_t instance, uint16_t buttons,
-                        uint8_t delta_x, uint8_t delta_y, uint8_t quad_x);
-```
-
-These functions:
-- Update the `players[]` array with input data
-- Handle device registration (calls `add_player()` on first button press)
-- Apply console-specific button mappings
-- Trigger output updates (e.g., PCEngine calls `update_output()`)
-
-**Important:** Device drivers are console-agnostic. They call `post_globals()` which is implemented differently for each console variant.
-
-### Memory Considerations
-
-- Functions marked `__not_in_flash_func` are kept in SRAM (not XIP flash) for performance
-- Used for timing-critical code like `process_signals()` and `post_globals()`
-- RP2040 has limited SRAM (~264KB), so use sparingly
-- Flash read latency can cause timing jitter in console protocols
-
-### External Dependencies
-
-Submodules are managed in `.gitmodules`:
-
-- **pico-sdk** (`src/lib/pico-sdk`): Raspberry Pi Pico SDK (pinned to 2.2.0)
-- **TinyUSB** (`src/lib/tinyusb`): USB host stack (pinned to 0.19.0, external to pico-sdk)
-- **tusb_xinput** (`src/lib/tusb_xinput`): X-input controller support
-- **joybus-pio** (`src/lib/joybus-pio`): GameCube/N64 joybus protocol (used by NGC builds)
-
-**External TinyUSB Setup:**
-- TinyUSB is a top-level submodule (not nested in pico-sdk)
-- `PICO_TINYUSB_PATH` environment variable points to `src/lib/tinyusb`
-- Keeps pico-sdk clean (no modified content in submodule)
+- **PCEngine**: `plex.pio`, `clock.pio`, `select.pio` (multitap scanning)
+- **GameCube**: `joybus.pio` (bidirectional joybus)
+- **Nuon**: `polyface_read.pio`, `polyface_send.pio`
+- **3DO**: `sampling.pio`, `output.pio`
+- **Loopy**: `loopy.pio`
 
 ## Development Workflow
 
 ### Adding a New Console
 
-1. Create `src/console/<consolename>/` directory
-2. Implement console protocol (PIO programs if timing-critical)
-3. Implement `post_globals()` and `post_mouse_globals()` functions
-4. Add console-specific `core1_entry()` for output protocol
-5. Add CMake target in `src/CMakeLists.txt`:
-   - Define executable: `add_executable(usbretro_<consolename>)`
-   - Add compile definition: `target_compile_definitions(usbretro_<consolename> PRIVATE CONFIG_<CONSOLENAME>=1)`
-   - Link sources and libraries
-6. Create board-specific build script if needed
-7. Add Makefile target for easy building
+1. Create `src/native/device/<console>/` with:
+   - `<console>_device.c/h` - Protocol implementation
+   - `<console>_buttons.h` - Button aliases for readability
+   - `.pio` files if timing-critical
 
-### Adding a New USB Device
+2. Implement OutputInterface:
+   ```c
+   const OutputInterface <console>_output_interface = {
+       .name = "<Console>",
+       .init = <console>_init,
+       .core1_entry = core1_entry,  // or NULL
+       .task = <console>_task,      // or NULL
+       // ... profile accessors if using profiles
+   };
+   ```
 
-1. Create `src/devices/<devicename>.c` and `.h`
-2. Implement `DeviceInterface` functions:
-   - `is_device()`: VID/PID matching
-   - `check_descriptor()`: Descriptor parsing (if needed)
-   - `init()`: Device initialization
-   - `process()`: Parse USB reports, call `post_globals()`
-   - `disconnect()`: Cleanup
-   - `task()`: Periodic operations (optional)
-3. Add to `device_registry.c` enum and registration
-4. Add source file to `COMMON_SOURCES` in `CMakeLists.txt`
-5. Test with real hardware
+3. Create `src/apps/usb2<console>/` with:
+   - `app.c` - Router/player/profile configuration
+   - `app.h`, `app_config.h`
+   - `profiles.h` (optional)
 
-### Debugging
+4. Add to `CMakeLists.txt`:
+   - `add_executable(usbretro_<console>)`
+   - `target_compile_definitions(...PRIVATE CONFIG_<CONSOLE>=1)`
+   - Source files and includes
 
-**UART Debug Output** (if enabled):
-- UART pins: 12=TX, 13=RX (configurable per board)
-- Set `CFG_TUSB_DEBUG` level in code
-- Use `printf()` statements (avoid in timing-critical sections)
+5. Add Makefile target
 
-**LED Feedback:**
-- WS2812 RGB LED support via `ws2812.c`
-- Player number indicators via `PLAYER_LEDS[]` array
-- Console-specific LED patterns
+### Adding a New USB Device Driver
+
+1. Create `src/usb/usbh/hid/devices/vendors/<vendor>/<device>.c/h`
+
+2. Implement HID device interface:
+   ```c
+   bool <device>_is_device(uint16_t vid, uint16_t pid);
+   void <device>_init(uint8_t dev_addr, uint8_t instance);
+   void <device>_process(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+   void <device>_disconnect(uint8_t dev_addr, uint8_t instance);
+   void <device>_task(uint8_t dev_addr, uint8_t instance, uint8_t rumble, uint8_t leds);
+   ```
+
+3. Register in `hid_registry.c`
+
+4. Add to `COMMON_SOURCES` in `CMakeLists.txt`
+
+### Button Mapping
+
+USBRetro uses canonical button definitions (`core/buttons.h`):
+```c
+#define USBR_BUTTON_B1 0x00020  // A/Cross
+#define USBR_BUTTON_B2 0x00010  // B/Circle
+#define USBR_BUTTON_B3 0x02000  // X/Square
+#define USBR_BUTTON_B4 0x01000  // Y/Triangle
+#define USBR_BUTTON_L1 0x04000  // LB/L1
+#define USBR_BUTTON_R1 0x08000  // RB/R1
+#define USBR_BUTTON_S1 0x00040  // Back/Select
+#define USBR_BUTTON_S2 0x00080  // Start
+// ... etc
+```
+
+Buttons are **active-low** (0 = pressed, 1 = released).
 
 ## Common Pitfalls
 
-- **Don't shift players array on disconnect** - Use fixed slots to prevent mid-game position changes
-- **Avoid mutexes in timing-critical paths** - Use lock-free synchronization where possible
-- **GameCube requires 130MHz overclock** - Set in `ngc_init()` via `set_sys_clock_khz(130000, true)`
-- **PIO programs have 32 instruction limit** - Optimize carefully or split into multiple programs
-- **Flash XIP adds latency** - Use `__not_in_flash_func` for timing-critical code
-- **USB device addresses change on reconnect** - Don't rely on `dev_addr` for persistent identification
-- **Empty player slots must be checked** - Always check `players[i].dev_addr == -1` before accessing
+- **Buttons are active-low** - Check with `(buttons & USBR_BUTTON_X) == 0` for pressed
+- **GameCube requires 130MHz** - Set via `set_sys_clock_khz(130000, true)`
+- **PIO has 32 instruction limit** - Optimize or split programs
+- **Use `__not_in_flash_func`** - For timing-critical code to avoid XIP latency
+- **Player slots** - SHIFT mode shifts on disconnect, FIXED mode preserves positions
+- **Profile passthrough** - NULL profile or empty button_map passes through unchanged
+
+## External Dependencies
+
+Submodules in `src/lib/`:
+- **pico-sdk** (2.2.0): Raspberry Pi Pico SDK
+- **tinyusb** (0.19.0): USB host stack (external to pico-sdk)
+- **tusb_xinput**: X-input controller support
+- **joybus-pio**: GameCube/N64 joybus protocol
+- **SNESpad**: SNES controller reading (for native host)
 
 ## CI/CD
 
-**GitHub Actions** (`.github/workflows/build.yml`):
-- Builds firmware for all boards on push to `main`
-- Uses Docker for consistent build environment
-- Matrix builds: `rpi_pico`, `ada_qtpy`, `ada_kb2040`
-- Creates releases on version bump (manual trigger via workflow_dispatch)
-- Artifacts named with commit hash for dev builds
-- Release artifacts named with version number
-
-**Docker** (`Dockerfile`):
-- Debian Bookworm base image
-- Pre-installs ARM toolchain and build dependencies
-- Runs `make init` to pin pico-sdk and TinyUSB versions
-- Used by both CI and local development
-
-## Repository Structure
-
-```
-USBRetro/
-├── src/
-│   ├── main.c                    # Entry point, USB polling loop
-│   ├── CMakeLists.txt            # Build configuration for all console variants
-│   ├── common/                   # Shared code across all consoles
-│   │   ├── players.c/h          # Player management (fixed-slot array)
-│   │   ├── globals.h            # USBRetro button definitions
-│   │   ├── codes.c/h            # Cheat code detection
-│   │   └── ws2812.c/h/.pio      # RGB LED support
-│   ├── devices/                  # USB device drivers
-│   │   ├── device_registry.c    # Device registration and routing
-│   │   ├── device_interface.h   # Device driver interface
-│   │   ├── hid_*.c              # Generic HID support
-│   │   └── <vendor>_<device>.c  # Vendor-specific drivers
-│   ├── console/                  # Console-specific implementations
-│   │   ├── pcengine/            # PCEngine protocol + PIO programs
-│   │   ├── gamecube/            # GameCube protocol (uses joybus-pio)
-│   │   ├── nuon/                # Nuon protocol + PIO programs
-│   │   ├── xboxone/             # Xbox One I2C passthrough
-│   │   └── loopy/               # Casio Loopy protocol + PIO programs
-│   ├── lib/                      # External libraries (submodules)
-│   │   ├── pico-sdk/            # Raspberry Pi Pico SDK (2.2.0)
-│   │   ├── tinyusb/             # TinyUSB (0.19.0, external)
-│   │   ├── tusb_xinput/         # X-input controller support
-│   │   └── joybus-pio/          # GameCube/N64 joybus protocol
-│   └── build_*.sh               # Board-specific build scripts
-├── Makefile                      # Top-level build system
-├── Dockerfile                    # Docker build environment
-├── .github/workflows/build.yml  # CI/CD pipeline
-├── docs/                         # Documentation
-│   ├── images/                  # Project images
-│   ├── BUILD.md                 # Developer build guide
-│   ├── INSTALLATION.md          # User flashing guide
-│   ├── HARDWARE.md              # Hardware compatibility
-│   ├── consoles/                # Console-specific docs
-│   │   ├── GAMECUBE.md
-│   │   ├── PCENGINE.md
-│   │   ├── NUON.md
-│   │   └── XBOXONE.md
-│   └── protocols/               # Protocol documentation
-│       ├── README.md
-│       ├── NUON_POLYFACE.md
-│       ├── PCENGINE.md
-│       └── GAMECUBE_JOYBUS.md
-└── README.md                     # Project overview
-```
+GitHub Actions (`.github/workflows/build.yml`):
+- Builds all products on push to `main`
+- Docker-based for consistency
+- Artifacts in `releases/` directory
