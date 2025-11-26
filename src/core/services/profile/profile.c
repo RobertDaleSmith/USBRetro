@@ -232,13 +232,17 @@ void profile_check_switch_combo(uint32_t buttons)
     }
 
     // Select is held
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
     if (!select_was_held) {
-        // Select just pressed - start timer
-        select_hold_start = to_ms_since_boot(get_absolute_time());
+        // Select just pressed - start timer and reset D-pad state
+        select_hold_start = current_time;
         select_was_held = true;
+        dpad_up_was_pressed = dpad_up_pressed;    // Capture current D-pad state
+        dpad_down_was_pressed = dpad_down_pressed;
+        return;  // Don't process D-pad on the same frame SELECT is pressed
     }
 
-    uint32_t current_time = to_ms_since_boot(get_absolute_time());
     uint32_t select_hold_duration = current_time - select_hold_start;
 
     // Check if initial 2-second hold period has elapsed
@@ -267,6 +271,12 @@ void profile_check_switch_combo(uint32_t buttons)
         initial_trigger_done = true;
     }
     dpad_down_was_pressed = dpad_down_pressed;
+}
+
+bool profile_switch_combo_active(void)
+{
+    // Combo is active when Select has been held long enough
+    return select_was_held && initial_trigger_done;
 }
 
 // ============================================================================
@@ -364,6 +374,15 @@ void profile_apply(const profile_t* profile,
                    uint8_t l2, uint8_t r2,
                    profile_output_t* output)
 {
+    // Suppress combo buttons when profile switch is active
+    // This prevents Select + D-pad from being output during switching
+    if (profile_switch_combo_active()) {
+        // Set combo buttons to "released" (active-low: released = bit set)
+        input_buttons |= USBR_BUTTON_S1;   // Select
+        input_buttons |= USBR_BUTTON_DU;   // D-pad Up
+        input_buttons |= USBR_BUTTON_DD;   // D-pad Down
+    }
+
     // Initialize output with passthrough values
     memset(output, 0, sizeof(profile_output_t));
     output->buttons = input_buttons;  // Start with passthrough

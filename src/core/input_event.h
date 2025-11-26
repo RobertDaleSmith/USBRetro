@@ -116,6 +116,9 @@ typedef struct {
 static inline void init_input_event(input_event_t* event) {
     memset(event, 0, sizeof(input_event_t));
 
+    // Buttons are active-low (0 = pressed), so 0xFFFFFFFF = all released
+    event->buttons = 0xFFFFFFFF;
+
     // Set analog axes to centered position (128 = neutral)
     for (int i = 0; i < 8; i++) {
         event->analog[i] = 128;

@@ -36,6 +36,22 @@ static mouse_accumulator_t mouse_accumulators[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPU
 static instance_merge_t instance_merges[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
 
 // ============================================================================
+// MERGE_BLEND STATE - Per-device input tracking for proper blending
+// ============================================================================
+
+#define MAX_BLEND_DEVICES 8  // Max devices to track for blending
+
+typedef struct {
+    uint8_t dev_addr;
+    int8_t instance;
+    bool active;
+    input_event_t state;
+} blend_device_state_t;
+
+// Per-output blend state (tracks each device's contribution)
+static blend_device_state_t blend_devices[MAX_OUTPUTS][MAX_BLEND_DEVICES];
+
+// ============================================================================
 // ROUTING TABLE (Phase 6)
 // ============================================================================
 
@@ -85,6 +101,14 @@ void router_init(const router_config_t* config) {
             instance_merges[output][player].active = false;
             instance_merges[output][player].instance_count = 0;
             instance_merges[output][player].root_instance = 0;
+        }
+
+        // Initialize blend device tracking
+        for (uint8_t i = 0; i < MAX_BLEND_DEVICES; i++) {
+            blend_devices[output][i].active = false;
+            blend_devices[output][i].dev_addr = 0;
+            blend_devices[output][i].instance = -1;
+            init_input_event(&blend_devices[output][i].state);
         }
     }
 
@@ -366,35 +390,78 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
             break;
 
         case MERGE_BLEND: {
-            // OR button states together from all inputs
-            // Buttons are active-low, so AND them (pressed = 0)
-            output_state_t* out = &router_outputs[output][0];
+            // Blend button states together from ALL active devices
+            // 1. Update this device's state in blend_devices[]
+            // 2. Re-blend all active devices into output
 
-            // Blend buttons (AND for active-low)
-            out->current_state.buttons &= transformed.buttons;
-
-            // Blend keys (OR for active-high)
-            out->current_state.keys |= transformed.keys;
-
-            // Analog: use whichever is furthest from center (128)
-            for (int i = 0; i < 6; i++) {
-                int8_t cur_delta = (int8_t)(out->current_state.analog[i] - 128);
-                int8_t new_delta = (int8_t)(transformed.analog[i] - 128);
-
-                // Take the value with larger absolute deviation from center
-                if (abs(new_delta) > abs(cur_delta)) {
-                    out->current_state.analog[i] = transformed.analog[i];
+            // Find or create slot for this device
+            int slot = -1;
+            for (int i = 0; i < MAX_BLEND_DEVICES; i++) {
+                if (blend_devices[output][i].active &&
+                    blend_devices[output][i].dev_addr == transformed.dev_addr &&
+                    blend_devices[output][i].instance == transformed.instance) {
+                    slot = i;
+                    break;
+                }
+            }
+            if (slot < 0) {
+                // Find empty slot
+                for (int i = 0; i < MAX_BLEND_DEVICES; i++) {
+                    if (!blend_devices[output][i].active) {
+                        slot = i;
+                        blend_devices[output][i].active = true;
+                        blend_devices[output][i].dev_addr = transformed.dev_addr;
+                        blend_devices[output][i].instance = transformed.instance;
+                        break;
+                    }
                 }
             }
 
-            // Mouse deltas: accumulate
-            out->current_state.delta_x += transformed.delta_x;
-            out->current_state.delta_y += transformed.delta_y;
+            if (slot >= 0) {
+                // Update this device's state
+                blend_devices[output][slot].state = transformed;
 
-            // Keep other fields from latest event
-            out->current_state.dev_addr = transformed.dev_addr;
-            out->current_state.instance = transformed.instance;
-            out->current_state.type = transformed.type;
+                // Now re-blend ALL active devices
+                output_state_t* out = &router_outputs[output][0];
+
+                // Start with neutral state (all buttons released)
+                init_input_event(&out->current_state);
+
+                // Blend all active devices
+                bool first = true;
+                for (int i = 0; i < MAX_BLEND_DEVICES; i++) {
+                    if (!blend_devices[output][i].active) continue;
+
+                    input_event_t* dev = &blend_devices[output][i].state;
+
+                    // Buttons: AND together (active-low, 0 = pressed)
+                    out->current_state.buttons &= dev->buttons;
+
+                    // Keys: OR together (active-high)
+                    out->current_state.keys |= dev->keys;
+
+                    // Analog: use furthest from center
+                    for (int j = 0; j < 6; j++) {
+                        int8_t cur_delta = (int8_t)(out->current_state.analog[j] - 128);
+                        int8_t dev_delta = (int8_t)(dev->analog[j] - 128);
+                        if (abs(dev_delta) > abs(cur_delta)) {
+                            out->current_state.analog[j] = dev->analog[j];
+                        }
+                    }
+
+                    // Mouse deltas: accumulate from all
+                    out->current_state.delta_x += dev->delta_x;
+                    out->current_state.delta_y += dev->delta_y;
+
+                    // Use metadata from first active device
+                    if (first) {
+                        out->current_state.dev_addr = dev->dev_addr;
+                        out->current_state.instance = dev->instance;
+                        out->current_state.type = dev->type;
+                        first = false;
+                    }
+                }
+            }
             break;
         }
 
@@ -569,8 +636,19 @@ void router_set_active_outputs(output_target_t* outputs, uint8_t count) {
 }
 
 output_target_t router_get_primary_output(void) {
-    if (active_output_count == 0) return OUTPUT_TARGET_NONE;
-    return active_outputs[0];
+    // First check active_outputs (used by BROADCAST mode)
+    if (active_output_count > 0) {
+        return active_outputs[0];
+    }
+
+    // Fall back to first active route's output (used by SIMPLE/MERGE modes)
+    for (uint8_t i = 0; i < MAX_ROUTES; i++) {
+        if (routing_table[i].active) {
+            return routing_table[i].output;
+        }
+    }
+
+    return OUTPUT_TARGET_NONE;
 }
 
 // ============================================================================

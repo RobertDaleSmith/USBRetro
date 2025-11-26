@@ -550,6 +550,10 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
   const input_event_t* event = router_get_output(OUTPUT_TARGET_3DO, player_index);
   if (!event) return;  // No input for this player slot
 
+  // Skip slots without an actual controller attached
+  // INPUT_TYPE_NONE means no USB device connected to this slot
+  if (event->type == INPUT_TYPE_NONE) return;
+
   uint32_t buttons = event->buttons;
   uint8_t ax = event->analog[ANALOG_X];   // Left stick X
   uint8_t ay = event->analog[ANALOG_Y];   // Left stick Y
