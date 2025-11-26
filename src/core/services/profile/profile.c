@@ -11,6 +11,7 @@
 // External dependencies (feedback and visual indication)
 #include "core/services/leds/ws2812.h"
 #include "core/services/players/feedback.h"
+#include "core/feedback.h"
 
 // Flash storage
 #include "core/services/storage/flash.h"
@@ -22,17 +23,33 @@
 // Configuration
 static const profile_config_t* config = NULL;
 
-// Active index per output target
+// Legacy: Active index per output target (for backwards compatibility)
 static uint8_t active_index[MAX_OUTPUT_TARGETS] = {0};
 
-// Profile switch combo state
-static uint32_t select_hold_start = 0;
-static bool select_was_held = false;
-static bool dpad_up_was_pressed = false;
-static bool dpad_down_was_pressed = false;
-static bool dpad_left_was_pressed = false;
-static bool dpad_right_was_pressed = false;
-static bool initial_trigger_done = false;
+// Per-player profile state
+static player_profile_state_t player_profiles[MAX_PLAYERS] = {0};
+
+// Per-player switch combo state
+typedef struct {
+    uint32_t select_hold_start;
+    bool select_was_held;
+    bool dpad_up_was_pressed;
+    bool dpad_down_was_pressed;
+    bool dpad_left_was_pressed;
+    bool dpad_right_was_pressed;
+    bool initial_trigger_done;
+} player_combo_state_t;
+
+static player_combo_state_t player_combo[MAX_PLAYERS] = {0};
+
+// Legacy combo state (player 0)
+#define select_hold_start       player_combo[0].select_hold_start
+#define select_was_held         player_combo[0].select_was_held
+#define dpad_up_was_pressed     player_combo[0].dpad_up_was_pressed
+#define dpad_down_was_pressed   player_combo[0].dpad_down_was_pressed
+#define dpad_left_was_pressed   player_combo[0].dpad_left_was_pressed
+#define dpad_right_was_pressed  player_combo[0].dpad_right_was_pressed
+#define initial_trigger_done    player_combo[0].initial_trigger_done
 
 // Timing constants
 static const uint32_t INITIAL_HOLD_TIME_MS = 2000;  // Must hold 2 seconds for first trigger
@@ -40,6 +57,7 @@ static const uint32_t INITIAL_HOLD_TIME_MS = 2000;  // Must hold 2 seconds for f
 // Callbacks
 static uint8_t (*get_player_count)(void) = NULL;
 static profile_switch_callback_t on_switch_callback = NULL;
+static profile_player_switch_callback_t on_player_switch_callback = NULL;
 static output_mode_callback_t on_output_mode_callback = NULL;
 
 // ============================================================================
@@ -108,6 +126,11 @@ void profile_set_player_count_callback(uint8_t (*callback)(void))
 void profile_set_switch_callback(profile_switch_callback_t callback)
 {
     on_switch_callback = callback;
+}
+
+void profile_set_player_switch_callback(profile_player_switch_callback_t callback)
+{
+    on_player_switch_callback = callback;
 }
 
 void profile_set_output_mode_callback(output_mode_callback_t callback)
@@ -207,7 +230,180 @@ void profile_cycle_prev(output_target_t output)
 }
 
 // ============================================================================
-// PROFILE SWITCH COMBO DETECTION
+// PER-PLAYER PROFILE API
+// ============================================================================
+
+const profile_t* profile_get_active_for_player(output_target_t output, uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return NULL;
+
+    const profile_set_t* set = get_profile_set(output);
+    if (!set || set->profile_count == 0) {
+        return NULL;
+    }
+
+    uint8_t idx = player_profiles[player_index].profile_index;
+    if (idx >= set->profile_count) {
+        idx = 0;
+    }
+
+    return &set->profiles[idx];
+}
+
+uint8_t profile_get_player_index(output_target_t output, uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return 0;
+    return player_profiles[player_index].profile_index;
+}
+
+void profile_set_player_active(output_target_t output, uint8_t player_index, uint8_t profile_index)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    const profile_set_t* set = get_profile_set(output);
+    if (!set || set->profile_count == 0 || profile_index >= set->profile_count) {
+        return;
+    }
+
+    player_profiles[player_index].profile_index = profile_index;
+    player_profiles[player_index].dirty = true;
+
+    // Also update legacy active_index for player 0 (backwards compatibility)
+    if (player_index == 0 && output >= 0 && output < MAX_OUTPUT_TARGETS) {
+        active_index[output] = profile_index;
+    }
+
+    // Notify callbacks
+    if (on_player_switch_callback) {
+        on_player_switch_callback(output, player_index, profile_index);
+    }
+    if (player_index == 0 && on_switch_callback) {
+        on_switch_callback(output, profile_index);
+    }
+
+    // Trigger per-player feedback using new feedback system
+    feedback_set_rumble(player_index, 192, 192);  // Rumble this player's controller
+    feedback_set_led_player(player_index, profile_index + 1);  // LED shows profile number
+
+    // Also trigger NeoPixel for visual indication (global)
+    neopixel_indicate_profile(profile_index);
+
+    // Save to flash (for now, just save player 0's profile)
+    if (player_index == 0) {
+        profile_save_to_flash(output);
+    }
+
+    const char* name = profile_get_name(output, profile_index);
+    printf("[profile] Player %d switched to: %s (output=%d)\n",
+           player_index, name ? name : "(unknown)", output);
+}
+
+void profile_cycle_player_next(output_target_t output, uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    uint8_t count = profile_get_count(output);
+    if (count == 0) return;
+
+    uint8_t current = player_profiles[player_index].profile_index;
+    uint8_t new_index = (current + 1) % count;
+    profile_set_player_active(output, player_index, new_index);
+}
+
+void profile_cycle_player_prev(output_target_t output, uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    uint8_t count = profile_get_count(output);
+    if (count == 0) return;
+
+    uint8_t current = player_profiles[player_index].profile_index;
+    uint8_t new_index = (current == 0) ? (count - 1) : (current - 1);
+    profile_set_player_active(output, player_index, new_index);
+}
+
+// ============================================================================
+// PER-PLAYER COMBO DETECTION
+// ============================================================================
+
+void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    output_target_t output = router_get_primary_output();
+    if (output == OUTPUT_TARGET_NONE) return;
+
+    player_combo_state_t* combo = &player_combo[player_index];
+
+    // Check button states (buttons are active-low in USBR format)
+    bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
+    bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
+    bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
+
+    // Select released - reset everything for this player
+    if (!select_held) {
+        combo->select_hold_start = 0;
+        combo->select_was_held = false;
+        combo->dpad_up_was_pressed = false;
+        combo->dpad_down_was_pressed = false;
+        combo->dpad_left_was_pressed = false;
+        combo->dpad_right_was_pressed = false;
+        combo->initial_trigger_done = false;
+        return;
+    }
+
+    // Select is held
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
+    if (!combo->select_was_held) {
+        combo->select_hold_start = current_time;
+        combo->select_was_held = true;
+        combo->dpad_up_was_pressed = dpad_up_pressed;
+        combo->dpad_down_was_pressed = dpad_down_pressed;
+        return;
+    }
+
+    uint32_t hold_duration = current_time - combo->select_hold_start;
+    bool can_trigger = combo->initial_trigger_done || (hold_duration >= INITIAL_HOLD_TIME_MS);
+
+    if (!can_trigger) return;
+
+    // Check if this player's feedback is still active
+    feedback_state_t* fb = feedback_get_state(player_index);
+    if (fb && fb->rumble.left > 0) {
+        return;  // Still rumbling from last switch
+    }
+
+    // D-pad Up - cycle profile forward
+    if (dpad_up_pressed && !combo->dpad_up_was_pressed) {
+        uint8_t count = profile_get_count(output);
+        if (count > 1) {
+            profile_cycle_player_next(output, player_index);
+            combo->initial_trigger_done = true;
+        }
+    }
+    combo->dpad_up_was_pressed = dpad_up_pressed;
+
+    // D-pad Down - cycle profile backward
+    if (dpad_down_pressed && !combo->dpad_down_was_pressed) {
+        uint8_t count = profile_get_count(output);
+        if (count > 1) {
+            profile_cycle_player_prev(output, player_index);
+            combo->initial_trigger_done = true;
+        }
+    }
+    combo->dpad_down_was_pressed = dpad_down_pressed;
+}
+
+bool profile_player_switch_combo_active(uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return false;
+    return player_combo[player_index].select_was_held &&
+           player_combo[player_index].initial_trigger_done;
+}
+
+// ============================================================================
+// LEGACY PROFILE SWITCH COMBO DETECTION
 // ============================================================================
 // SELECT + D-pad Up/Down to cycle profiles
 // Requires holding SELECT for 2 seconds before first switch

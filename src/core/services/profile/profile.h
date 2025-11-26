@@ -149,6 +149,20 @@ typedef struct {
 } profile_set_t;
 
 // ============================================================================
+// PER-PLAYER PROFILE STATE
+// ============================================================================
+// Each player can have their own active profile index
+
+#ifndef MAX_PLAYERS
+#define MAX_PLAYERS 5
+#endif
+
+typedef struct {
+    uint8_t profile_index;          // Active profile index for this player
+    bool dirty;                     // Profile changed, needs feedback
+} player_profile_state_t;
+
+// ============================================================================
 // PROFILE SYSTEM CONFIGURATION
 // ============================================================================
 
@@ -171,24 +185,57 @@ typedef struct {
 // Initialize profile system with configuration
 void profile_init(const profile_config_t* config);
 
-// Get active profile for an output target
+// Get active profile for an output target (legacy - uses player 0's profile)
 // Falls back to shared profiles if output-specific not defined
 // Returns NULL if no profiles configured
 const profile_t* profile_get_active(output_target_t output);
 
-// Get profile info
+// Get profile info (legacy - uses player 0)
 uint8_t profile_get_active_index(output_target_t output);
 uint8_t profile_get_count(output_target_t output);
 const char* profile_get_name(output_target_t output, uint8_t index);
 
-// Switch profiles (with feedback)
+// Switch profiles (legacy - affects player 0, with feedback)
 void profile_set_active(output_target_t output, uint8_t index);
 void profile_cycle_next(output_target_t output);
 void profile_cycle_prev(output_target_t output);
 
+// ============================================================================
+// PER-PLAYER PROFILE API
+// ============================================================================
+
+// Get active profile for a specific player
+// Returns NULL if player_index invalid or no profiles configured
+const profile_t* profile_get_active_for_player(output_target_t output, uint8_t player_index);
+
+// Get profile index for a specific player
+uint8_t profile_get_player_index(output_target_t output, uint8_t player_index);
+
+// Set profile for a specific player (with per-player feedback)
+void profile_set_player_active(output_target_t output, uint8_t player_index, uint8_t profile_index);
+void profile_cycle_player_next(output_target_t output, uint8_t player_index);
+void profile_cycle_player_prev(output_target_t output, uint8_t player_index);
+
+// Check for per-player profile switch combo
+// player_index: which player's buttons to check
+// buttons: that player's button state
+void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons);
+
+// Check if a specific player's switch combo is active
+bool profile_player_switch_combo_active(uint8_t player_index);
+
+// ============================================================================
+// CALLBACKS
+// ============================================================================
+
 // Set callback for when profile switches (device can update its own state)
+// Legacy: called for player 0 changes
 typedef void (*profile_switch_callback_t)(output_target_t output, uint8_t new_index);
 void profile_set_switch_callback(profile_switch_callback_t callback);
+
+// Set callback for per-player profile switches
+typedef void (*profile_player_switch_callback_t)(output_target_t output, uint8_t player_index, uint8_t new_index);
+void profile_set_player_switch_callback(profile_player_switch_callback_t callback);
 
 // Set player count callback (for feedback)
 void profile_set_player_count_callback(uint8_t (*callback)(void));
@@ -198,6 +245,10 @@ void profile_set_player_count_callback(uint8_t (*callback)(void));
 // Callback should return true if mode was changed (to trigger feedback)
 typedef bool (*output_mode_callback_t)(int8_t direction);
 void profile_set_output_mode_callback(output_mode_callback_t callback);
+
+// ============================================================================
+// LEGACY COMBO DETECTION (uses player 0)
+// ============================================================================
 
 // Check for profile switch combo (call from output device's update loop)
 // Uses primary output target for switching
