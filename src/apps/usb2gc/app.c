@@ -5,11 +5,24 @@
 // The firmware calls app_init() after core system initialization.
 
 #include "app.h"
+#include "profiles.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/services/profile/profile.h"
 #include "core/output_interface.h"
 #include "native/device/gamecube/gamecube_device.h"
 #include <stdio.h>
+
+// ============================================================================
+// APP PROFILE CONFIGURATION
+// ============================================================================
+
+static const profile_config_t app_profile_config = {
+    .output_profiles = {
+        [OUTPUT_TARGET_GAMECUBE] = &gc_profile_set,
+    },
+    .shared_profiles = NULL,
+};
 
 // ============================================================================
 // APP OUTPUT INTERFACE
@@ -55,15 +68,17 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    // Note: GameCube profiles are managed by gamecube_device.c
-    // Profile count and switching exposed via OutputInterface
-    const OutputInterface* output = app_get_output_interface();
-    uint8_t profile_count = output->get_profile_count ? output->get_profile_count() : 0;
+    // Initialize profile system with app-defined profiles
+    profile_init(&app_profile_config);
+
+    uint8_t profile_count = profile_get_count(OUTPUT_TARGET_GAMECUBE);
+    const char* active_name = profile_get_name(OUTPUT_TARGET_GAMECUBE,
+                                                profile_get_active_index(OUTPUT_TARGET_GAMECUBE));
 
     printf("[app:usb2gc] Initialization complete\n");
-    printf("[app:usb2gc]   Routing: %s\n", "MERGE_ALL (all USB → single GC port)");
+    printf("[app:usb2gc]   Routing: %s\n", "MERGE_BLEND (blend all USB → single GC port)");
     printf("[app:usb2gc]   Player slots: %d (FIXED mode for future 4-port)\n", MAX_PLAYER_SLOTS);
-    printf("[app:usb2gc]   Profiles: %d (device-managed)\n", profile_count);
+    printf("[app:usb2gc]   Profiles: %d (active: %s)\n", profile_count, active_name ? active_name : "none");
 }
 
 // ============================================================================

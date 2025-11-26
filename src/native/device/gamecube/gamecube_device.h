@@ -36,15 +36,15 @@
 // ============================================================================
 // GAMECUBE CONFIGURATION
 // ============================================================================
-// Button mapping and sensitivity settings have been moved to:
-//   src/console/gamecube/gamecube_config.h
+// Button mapping profiles are defined at the app level in:
+//   src/apps/usb2gc/profiles.h
 //
 // To customize button mapping, thresholds, or sensitivity:
-// 1. Edit gamecube_config.h to create/modify profiles
-// 2. Switch profiles at runtime by holding SELECT + START + L1 + R1 for 2 seconds
-// 3. Or change GC_DEFAULT_PROFILE_INDEX in gamecube_config.h and rebuild
+// 1. Edit profiles.h in your app to create/modify profiles
+// 2. Switch profiles at runtime by holding SELECT for 2 seconds, then D-pad Up/Down
 //
-// See gamecube_config.h for all available options and profiles.
+// The profile system uses USBR_BUTTON_* constants with GameCube-specific aliases
+// (GC_BUTTON_A, GC_BUTTON_B, etc.) for readable profile definitions.
 
 // Global variables
 extern PIO pio;

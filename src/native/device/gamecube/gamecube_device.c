@@ -1,7 +1,10 @@
-// gamecube.c
+// gamecube_device.c - GameCube Output Device
+//
+// Outputs controller data to GameCube via joybus protocol.
+// Uses the universal profile system for button remapping.
 
 #include "gamecube_device.h"
-#include "gamecube_config.h"
+#include "gamecube_buttons.h"
 #include "joybus.pio.h"
 #include "GamecubeConsole.h"
 #include "pico/bootrom.h"
@@ -10,6 +13,8 @@
 #include "tusb.h"
 #include "core/services/storage/flash.h"
 #include "core/services/profile/profile.h"
+#include "core/services/players/manager.h"
+#include "core/services/hotkey/hotkey.h"
 #include "core/router/router.h"
 
 // Declaration of global variables
@@ -25,67 +30,38 @@ static uint8_t gc_get_rumble(void) { return gc_rumble; }
 static uint8_t gc_get_kb_led(void) { return gc_kb_led; }
 
 // ============================================================================
-// PROFILE SYSTEM
+// PROFILE SYSTEM ACCESSORS (for OutputInterface)
 // ============================================================================
 
-// All available profiles (stored in flash, const = read-only)
-static const gc_profile_t profiles[GC_PROFILE_COUNT] = {
-    GC_PROFILE_DEFAULT,      // Profile 0
-    GC_PROFILE_SNES,         // Profile 1
-    GC_PROFILE_SSBM,         // Profile 2
-    GC_PROFILE_MKWII,        // Profile 3
-    GC_PROFILE_FIGHTING,     // Profile 4
-};
-
-// Profile names for core profile system
-static const char* const gc_profile_names[GC_PROFILE_COUNT] = {
-    "default", "snes", "ssbm", "mkwii", "fighting"
-};
-
-// Active profile pointer (4 bytes of RAM, points to flash data)
-static const gc_profile_t* active_profile = &profiles[GC_DEFAULT_PROFILE_INDEX];
-
-// Get the current active profile (for external access)
-gc_profile_t* get_active_profile(void) {
-    return (gc_profile_t*)active_profile;  // Cast away const for external access
-}
-
-// Callback when core profile system switches profiles
-static void gc_on_profile_switch(uint8_t new_index) {
-    active_profile = &profiles[new_index];
-    printf("GC profile: %s (%s)\n", active_profile->name, active_profile->description);
-}
-
-// Player count callback for profile feedback
 static uint8_t gc_get_player_count_for_profile(void) {
     return router_get_player_count(OUTPUT_TARGET_GAMECUBE);
 }
 
-// Profile system accessors for OutputInterface
-static uint8_t gc_get_profile_count(void) { return profile_get_count(); }
-static uint8_t gc_get_active_profile(void) { return profile_get_active_index(); }
+static uint8_t gc_get_profile_count(void) {
+    return profile_get_count(OUTPUT_TARGET_GAMECUBE);
+}
+
+static uint8_t gc_get_active_profile_index(void) {
+    return profile_get_active_index(OUTPUT_TARGET_GAMECUBE);
+}
 
 static void gc_set_active_profile(uint8_t index) {
-    profile_set_active(index);  // Delegates to core
+    profile_set_active(OUTPUT_TARGET_GAMECUBE, index);
 }
 
 static const char* gc_get_profile_name(uint8_t index) {
-    return profile_get_name(index);  // Delegates to core
+    return profile_get_name(OUTPUT_TARGET_GAMECUBE, index);
 }
 
 static uint8_t gc_get_trigger_threshold(void) {
-    // Return L2 threshold from active profile (used for DualSense adaptive triggers)
-    return active_profile->l2_threshold;
+    const profile_t* profile = profile_get_active(OUTPUT_TARGET_GAMECUBE);
+    return profile ? profile->l2_threshold : 128;
 }
 
 // ============================================================================
-// CONSOLE-LOCAL STATE (Phase 3: Router Migration)
+// CONSOLE-LOCAL STATE
 // ============================================================================
 
-#include "core/services/players/manager.h"
-#include "core/services/hotkey/hotkey.h"
-
-// Console-specific state (not input data from router)
 static struct {
     int button_mode;  // BUTTON_MODE_KB or BUTTON_MODE_3
 } gc_state = {
@@ -100,8 +76,6 @@ extern void GamecubeConsole_SetMode(GamecubeConsole* console, GamecubeMode mode)
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
-
-// Left stick sensitivity is now configured in gamecube.h via GC_LEFT_STICK_SENSITIVITY
 
 // Helper function to scale analog values relative to center (128)
 static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
@@ -155,8 +129,8 @@ void gc_kb_key_lookup_init()
   hid_to_gc_key[HID_KEY_0] = GC_KEY_0;
   hid_to_gc_key[HID_KEY_MINUS] = GC_KEY_MINUS;
   hid_to_gc_key[HID_KEY_EQUAL] = GC_KEY_CARET;
-  hid_to_gc_key[HID_KEY_GRAVE] = GC_KEY_YEN; // HID_KEY_KANJI3
-  hid_to_gc_key[HID_KEY_PRINT_SCREEN] = GC_KEY_AT; // hankaku/zenkaku HID_KEY_LANG5
+  hid_to_gc_key[HID_KEY_GRAVE] = GC_KEY_YEN;
+  hid_to_gc_key[HID_KEY_PRINT_SCREEN] = GC_KEY_AT;
   hid_to_gc_key[HID_KEY_BRACKET_LEFT] = GC_KEY_LEFTBRACKET;
   hid_to_gc_key[HID_KEY_SEMICOLON] = GC_KEY_SEMICOLON;
   hid_to_gc_key[HID_KEY_APOSTROPHE] = GC_KEY_COLON;
@@ -188,20 +162,19 @@ void gc_kb_key_lookup_init()
   hid_to_gc_key[HID_KEY_SHIFT_RIGHT] = GC_KEY_RIGHTSHIFT;
   hid_to_gc_key[HID_KEY_CONTROL_LEFT] = GC_KEY_LEFTCTRL;
   hid_to_gc_key[HID_KEY_ALT_LEFT] = GC_KEY_LEFTALT;
-  hid_to_gc_key[HID_KEY_GUI_LEFT] = GC_KEY_LEFTUNK1; // muhenkan HID_KEY_KANJI5
+  hid_to_gc_key[HID_KEY_GUI_LEFT] = GC_KEY_LEFTUNK1;
   hid_to_gc_key[HID_KEY_SPACE] = GC_KEY_SPACE;
-  hid_to_gc_key[HID_KEY_GUI_RIGHT] = GC_KEY_RIGHTUNK1; // henkan/zenkouho HID_KEY_KANJI4
-  hid_to_gc_key[HID_KEY_APPLICATION] = GC_KEY_RIGHTUNK2; // hiragana/katakana HID_KEY_LANG4
+  hid_to_gc_key[HID_KEY_GUI_RIGHT] = GC_KEY_RIGHTUNK1;
+  hid_to_gc_key[HID_KEY_APPLICATION] = GC_KEY_RIGHTUNK2;
   hid_to_gc_key[HID_KEY_ARROW_LEFT] = GC_KEY_LEFT;
   hid_to_gc_key[HID_KEY_ARROW_DOWN] = GC_KEY_DOWN;
   hid_to_gc_key[HID_KEY_ARROW_UP] = GC_KEY_UP;
   hid_to_gc_key[HID_KEY_ARROW_RIGHT] = GC_KEY_RIGHT;
   hid_to_gc_key[HID_KEY_ENTER] = GC_KEY_ENTER;
-  hid_to_gc_key[HID_KEY_HOME] = GC_KEY_HOME; // fn + up
-  hid_to_gc_key[HID_KEY_END] = GC_KEY_END; // fn + right
-  hid_to_gc_key[HID_KEY_PAGE_DOWN] = GC_KEY_PAGEDOWN; // fn + left
-  hid_to_gc_key[HID_KEY_PAGE_UP] = GC_KEY_PAGEUP; // fn + down
-  // hid_to_gc_key[HID_KEY_SCROLL_LOCK] = GC_KEY_SCROLLLOCK; // fn + insert
+  hid_to_gc_key[HID_KEY_HOME] = GC_KEY_HOME;
+  hid_to_gc_key[HID_KEY_END] = GC_KEY_END;
+  hid_to_gc_key[HID_KEY_PAGE_DOWN] = GC_KEY_PAGEDOWN;
+  hid_to_gc_key[HID_KEY_PAGE_UP] = GC_KEY_PAGEUP;
 }
 
 // init for gamecube communication
@@ -220,15 +193,8 @@ void ngc_init()
   // Initialize flash settings system
   flash_init();
 
-  // Initialize core profile system (handles flash load/save, switching, combos)
-  profile_init_simple(GC_PROFILE_COUNT, GC_DEFAULT_PROFILE_INDEX, gc_profile_names);
+  // Profile system is initialized by app - just set up callbacks
   profile_set_player_count_callback(gc_get_player_count_for_profile);
-  profile_set_switch_callback(gc_on_profile_switch);
-
-  // Update local profile pointer to match loaded index
-  uint8_t loaded_index = profile_get_active_index();
-  active_profile = &profiles[loaded_index];
-  printf("Loaded profile from flash: %s (%s)\n", active_profile->name, active_profile->description);
 
   // Ground gpio attatched to sheilding
   gpio_init(SHIELD_PIN_L);
@@ -263,6 +229,11 @@ void ngc_init()
   gc_kb_key_lookup_init();
   GamecubeConsole_init(&gc, GC_DATA_PIN, pio, sm, offset);
   gc_report = default_gc_report;
+
+  const profile_t* profile = profile_get_active(OUTPUT_TARGET_GAMECUBE);
+  if (profile) {
+    printf("[gc] Active profile: %s\n", profile->name);
+  }
 }
 
 uint8_t gc_kb_key_lookup(uint8_t hid_key)
@@ -281,7 +252,6 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center)
   }
 }
 
-//
 // core1_entry - inner-loop for the second core
 void __not_in_flash_func(core1_entry)(void)
 {
@@ -299,97 +269,51 @@ void __not_in_flash_func(core1_entry)(void)
     gc_kb_counter++;
     gc_kb_counter &= 15;
 
-    // TODO(Phase 3): Mouse motion handling needs refactoring for router architecture
-    // Mouse delta accumulation should be in console-local state, not players[]
-    // For now, disabled since GameCube MERGE mode primarily uses gamepads
-
     update_output();
-
-    // printf("MODE: %d\n", gc._reading_mode);
   }
 }
 
 // ============================================================================
-// BUTTON MAPPING
+// USBR → GAMECUBE BUTTON MAPPING
 // ============================================================================
+// Maps profile output (USBR format) to GameCube gc_report_t
 
-// Helper function to apply a button mapping to the report
-static inline void apply_button_mapping(gc_report_t* report, gc_button_output_t action, bool pressed)
+static void map_usbr_to_gc_report(const profile_output_t* output, gc_report_t* report)
 {
-  if (!pressed) return; // Button not pressed, nothing to do
+    uint32_t buttons = output->buttons;
 
-  switch (action)
-  {
-    case GC_BTN_A:
-      report->a = 1;
-      break;
-    case GC_BTN_B:
-      report->b = 1;
-      break;
-    case GC_BTN_X:
-      report->x = 1;
-      break;
-    case GC_BTN_Y:
-      report->y = 1;
-      break;
-    case GC_BTN_Z:
-      report->z = 1;
-      break;
-    case GC_BTN_START:
-      report->start = 1;
-      break;
-    case GC_BTN_DPAD_UP:
-      report->dpad_up = 1;
-      break;
-    case GC_BTN_DPAD_DOWN:
-      report->dpad_down = 1;
-      break;
-    case GC_BTN_DPAD_LEFT:
-      report->dpad_left = 1;
-      break;
-    case GC_BTN_DPAD_RIGHT:
-      report->dpad_right = 1;
-      break;
-    case GC_BTN_L:
-      report->l = 1;
-      break;
-    case GC_BTN_R:
-      report->r = 1;
-      break;
-    case GC_BTN_L_FULL:
-      report->l = 1;
-      report->l_analog = 255;
-      break;
-    case GC_BTN_R_FULL:
-      report->r = 1;
-      report->r_analog = 255;
-      break;
-    case GC_BTN_L_LIGHT:
-      // Light shield for SSBM - L analog at 1% (no digital)
-      if (report->l_analog < 1) {
-        report->l_analog = 1;
-      }
-      break;
-    case GC_BTN_C_UP:
-      report->cstick_y = 255;
-      break;
-    case GC_BTN_C_DOWN:
-      report->cstick_y = 0;
-      break;
-    case GC_BTN_C_LEFT:
-      report->cstick_x = 0;
-      break;
-    case GC_BTN_C_RIGHT:
-      report->cstick_x = 255;
-      break;
-    case GC_BTN_NONE:
-    default:
-      // No action
-      break;
-  }
+    // D-pad (always direct mapping)
+    report->dpad_up    = ((buttons & USBR_BUTTON_DU) == 0) ? 1 : 0;
+    report->dpad_down  = ((buttons & USBR_BUTTON_DD) == 0) ? 1 : 0;
+    report->dpad_left  = ((buttons & USBR_BUTTON_DL) == 0) ? 1 : 0;
+    report->dpad_right = ((buttons & USBR_BUTTON_DR) == 0) ? 1 : 0;
+
+    // Face buttons (USBR → GC mapping via aliases)
+    // GC_BUTTON_A = USBR_BUTTON_B1, GC_BUTTON_B = USBR_BUTTON_B2, etc.
+    report->a = ((buttons & GC_BUTTON_A) == 0) ? 1 : 0;
+    report->b = ((buttons & GC_BUTTON_B) == 0) ? 1 : 0;
+    report->x = ((buttons & GC_BUTTON_X) == 0) ? 1 : 0;
+    report->y = ((buttons & GC_BUTTON_Y) == 0) ? 1 : 0;
+
+    // Shoulder buttons
+    report->z = ((buttons & GC_BUTTON_Z) == 0) ? 1 : 0;
+    report->l = ((buttons & GC_BUTTON_L) == 0) ? 1 : 0;
+    report->r = ((buttons & GC_BUTTON_R) == 0) ? 1 : 0;
+
+    // Start
+    report->start = ((buttons & GC_BUTTON_START) == 0) ? 1 : 0;
+
+    // Analog sticks
+    report->stick_x = output->left_x;
+    report->stick_y = output->left_y;
+    report->cstick_x = output->right_x;
+    report->cstick_y = output->right_y;
+
+    // Trigger analog values
+    report->l_analog = output->l2_analog;
+    report->r_analog = output->r2_analog;
 }
 
-//
 // update_output - updates gc_report output data for output to GameCube
 void __not_in_flash_func(update_output)(void)
 {
@@ -414,176 +338,90 @@ void __not_in_flash_func(update_output)(void)
     new_report = default_gc_report;
   }
 
-  // Process input event (replaces multi-player loop since router already merges)
-  int32_t byte = (event->buttons & 0x3ffff);
+  // Handle keyboard mode toggle
   bool kbModeButtonPress = event->keys == HID_KEY_SCROLL_LOCK || event->keys == HID_KEY_F14;
-    if (kbModeButtonPress)
+  if (kbModeButtonPress)
+  {
+    if (!kbModeButtonHeld)
     {
-      if (!kbModeButtonHeld)
+      if (gc_state.button_mode != BUTTON_MODE_KB)
       {
-        if (gc_state.button_mode != BUTTON_MODE_KB)
-        {
-          gc_state.button_mode = BUTTON_MODE_KB;
-          GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
-          new_report = default_gc_kb_report;
-          gc_kb_led = 0x4;
-        }
-        else
-        {
-          gc_state.button_mode = BUTTON_MODE_3;
-          GamecubeConsole_SetMode(&gc, GamecubeMode_3);
-          new_report = default_gc_report;
-          gc_kb_led = 0;
-        }
+        gc_state.button_mode = BUTTON_MODE_KB;
+        GamecubeConsole_SetMode(&gc, GamecubeMode_KB);
+        new_report = default_gc_kb_report;
+        gc_kb_led = 0x4;
       }
-      kbModeButtonHeld = true;
-    }
-    else
-    {
-      kbModeButtonHeld = false;
-    }
-
-    if (gc_state.button_mode != BUTTON_MODE_KB)
-    {
-      // ======================================================================
-      // PROFILE-BASED BUTTON MAPPING
-      // All USBRetro buttons are mapped according to active_profile
-      // ======================================================================
-
-      // D-pad (always mapped directly)
-      new_report.dpad_up    |= ((byte & USBR_BUTTON_DU) == 0) ? 1 : 0;
-      new_report.dpad_right |= ((byte & USBR_BUTTON_DR) == 0) ? 1 : 0;
-      new_report.dpad_down  |= ((byte & USBR_BUTTON_DD) == 0) ? 1 : 0;
-      new_report.dpad_left  |= ((byte & USBR_BUTTON_DL) == 0) ? 1 : 0;
-
-      // Face buttons (B1-B4) - profile configurable
-      apply_button_mapping(&new_report, active_profile->b1_button, (byte & USBR_BUTTON_B1) == 0);
-      apply_button_mapping(&new_report, active_profile->b2_button, (byte & USBR_BUTTON_B2) == 0);
-      apply_button_mapping(&new_report, active_profile->b3_button, (byte & USBR_BUTTON_B3) == 0);
-      apply_button_mapping(&new_report, active_profile->b4_button, (byte & USBR_BUTTON_B4) == 0);
-
-      // Shoulder buttons (L1/R1) - profile configurable
-      apply_button_mapping(&new_report, active_profile->l1_button, (byte & USBR_BUTTON_L1) == 0);
-      apply_button_mapping(&new_report, active_profile->r1_button, (byte & USBR_BUTTON_R1) == 0);
-
-      // System buttons (S1/S2) - profile configurable
-      apply_button_mapping(&new_report, active_profile->s1_button, (byte & USBR_BUTTON_S1) == 0);
-      apply_button_mapping(&new_report, active_profile->s2_button, (byte & USBR_BUTTON_S2) == 0);
-
-      // Stick buttons (L3/R3) - profile configurable
-      apply_button_mapping(&new_report, active_profile->l3_button, (byte & USBR_BUTTON_L3) == 0);
-      apply_button_mapping(&new_report, active_profile->r3_button, (byte & USBR_BUTTON_R3) == 0);
-
-      // Auxiliary buttons (A1/A2) - profile configurable
-      apply_button_mapping(&new_report, active_profile->a1_button, (byte & USBR_BUTTON_A1) == 0);
-      apply_button_mapping(&new_report, active_profile->a2_button, (byte & USBR_BUTTON_A2) == 0);
-
-      // Trigger behavior (L2/R2) - profile configurable
-      bool l2_pressed = ((byte & USBR_BUTTON_L2) == 0);
-      bool r2_pressed = ((byte & USBR_BUTTON_R2) == 0);
-
-      switch (active_profile->l2_behavior)
+      else
       {
-        case GC_TRIGGER_L_THRESHOLD:
-          if (l2_pressed) new_report.l = 1;
-          break;
-        case GC_TRIGGER_L_FULL:
-          if (l2_pressed) { new_report.l = 1; new_report.l_analog = 255; }
-          break;
-        case GC_TRIGGER_Z_INSTANT:
-          if (l2_pressed) new_report.z = 1;
-          break;
-        case GC_TRIGGER_L_CUSTOM:
-          // Custom L trigger - use profile-defined analog value + digital at threshold
-          if (active_profile->l2_analog_value > 0 && new_report.l_analog < active_profile->l2_analog_value) {
-            new_report.l_analog = active_profile->l2_analog_value;
-          }
-          if (l2_pressed) new_report.l = 1;
-          break;
-        default:
-          break;
-      }
-
-      switch (active_profile->r2_behavior)
-      {
-        case GC_TRIGGER_R_THRESHOLD:
-          if (r2_pressed) new_report.r = 1;
-          break;
-        case GC_TRIGGER_R_FULL:
-          if (r2_pressed) { new_report.r = 1; new_report.r_analog = 255; }
-          break;
-        case GC_TRIGGER_Z_INSTANT:
-          if (r2_pressed) new_report.z = 1;
-          break;
-        case GC_TRIGGER_R_CUSTOM:
-          // Custom R trigger - use profile-defined analog value + digital at threshold
-          if (active_profile->r2_analog_value > 0 && new_report.r_analog < active_profile->r2_analog_value) {
-            new_report.r_analog = active_profile->r2_analog_value;
-          }
-          if (r2_pressed) new_report.r = 1;
-          break;
-        case GC_TRIGGER_LR_BOTH:
-          // SSBM quit combo - R2 triggers both L and R digital buttons
-          if (r2_pressed) {
-            new_report.l = 1;
-            new_report.r = 1;
-          }
-          break;
-        default:
-          break;
-      }
-
-      // Analog sticks with profile-based sensitivity
-      new_report.stick_x    = scale_toward_center(event->analog[0], active_profile->left_stick_sensitivity, 128);
-      new_report.stick_y    = scale_toward_center(event->analog[1], active_profile->left_stick_sensitivity, 128);
-      new_report.cstick_x   = scale_toward_center(event->analog[2], active_profile->right_stick_sensitivity, 128);
-      new_report.cstick_y   = scale_toward_center(event->analog[3], active_profile->right_stick_sensitivity, 128);
-      new_report.l_analog   = event->analog[5];
-      new_report.r_analog   = event->analog[6];
-
-      // Keyboard-specific transforms for GameCube
-      if (event->type == INPUT_TYPE_KEYBOARD) {
-        // Scale keyboard analog values to GameCube's smaller range
-        // Keyboard outputs 64/128 intensity, GC needs ~28/78 range
-        const float gc_kb_scale = 0.61f;  // 78/128 ≈ 0.61
-        new_report.stick_x  = scale_toward_center(new_report.stick_x, gc_kb_scale, 128);
-        new_report.stick_y  = scale_toward_center(new_report.stick_y, gc_kb_scale, 128);
-        new_report.cstick_x = scale_toward_center(new_report.cstick_x, gc_kb_scale, 128);
-        new_report.cstick_y = scale_toward_center(new_report.cstick_y, gc_kb_scale, 128);
-
-        // A1 (Home/Ctrl+Alt+Del) → gc-swiss IGR combo (Select+D-down+B+R)
-        if ((byte & USBR_BUTTON_A1) == 0) {
-          new_report.dpad_down = 1;
-          new_report.b = 1;
-          new_report.r = 1;
-          // S1 already mapped via profile, but ensure it's pressed for IGR
-          apply_button_mapping(&new_report, GC_BTN_Z, true);  // Z acts as select equivalent
-        }
+        gc_state.button_mode = BUTTON_MODE_3;
+        GamecubeConsole_SetMode(&gc, GamecubeMode_3);
+        new_report = default_gc_report;
+        gc_kb_led = 0;
       }
     }
-    else
-    {
-      // Keyboard mode - input_event_t only has keys field, not individual keypress array
-      // For now, map the single key to all three slots (TODO: proper multi-key support)
-      uint8_t gc_key = gc_kb_key_lookup(event->keys);
-      new_report.keyboard.keypress[0] = gc_key;
-      new_report.keyboard.keypress[1] = GC_KEY_NOT_FOUND;
-      new_report.keyboard.keypress[2] = GC_KEY_NOT_FOUND;
-      new_report.keyboard.checksum = new_report.keyboard.keypress[0] ^
-                                    new_report.keyboard.keypress[1] ^
-                                    new_report.keyboard.keypress[2] ^ gc_kb_counter;
-      new_report.keyboard.counter = gc_kb_counter;
+    kbModeButtonHeld = true;
+  }
+  else
+  {
+    kbModeButtonHeld = false;
+  }
+
+  if (gc_state.button_mode != BUTTON_MODE_KB)
+  {
+    // ======================================================================
+    // PROFILE-BASED BUTTON MAPPING
+    // ======================================================================
+
+    // Get active profile and apply it
+    const profile_t* profile = profile_get_active(OUTPUT_TARGET_GAMECUBE);
+
+    profile_output_t output;
+    profile_apply(profile,
+                  event->buttons,
+                  event->analog[0], event->analog[1],  // left stick
+                  event->analog[2], event->analog[3],  // right stick
+                  event->analog[5], event->analog[6],  // triggers
+                  &output);
+
+    // Map profile output to GameCube report
+    map_usbr_to_gc_report(&output, &new_report);
+
+    // Keyboard-specific transforms for GameCube
+    if (event->type == INPUT_TYPE_KEYBOARD) {
+      // Scale keyboard analog values to GameCube's smaller range
+      const float gc_kb_scale = 0.61f;  // 78/128 ≈ 0.61
+      new_report.stick_x  = scale_toward_center(new_report.stick_x, gc_kb_scale, 128);
+      new_report.stick_y  = scale_toward_center(new_report.stick_y, gc_kb_scale, 128);
+      new_report.cstick_x = scale_toward_center(new_report.cstick_x, gc_kb_scale, 128);
+      new_report.cstick_y = scale_toward_center(new_report.cstick_y, gc_kb_scale, 128);
+
+      // A1 (Home/Ctrl+Alt+Del) → gc-swiss IGR combo (Select+D-down+B+R)
+      if ((event->buttons & USBR_BUTTON_A1) == 0) {
+        new_report.dpad_down = 1;
+        new_report.b = 1;
+        new_report.r = 1;
+        new_report.z = 1;  // Z acts as select equivalent for IGR
+      }
     }
+  }
+  else
+  {
+    // Keyboard mode
+    uint8_t gc_key = gc_kb_key_lookup(event->keys);
+    new_report.keyboard.keypress[0] = gc_key;
+    new_report.keyboard.keypress[1] = GC_KEY_NOT_FOUND;
+    new_report.keyboard.keypress[2] = GC_KEY_NOT_FOUND;
+    new_report.keyboard.checksum = new_report.keyboard.keypress[0] ^
+                                  new_report.keyboard.keypress[1] ^
+                                  new_report.keyboard.keypress[2] ^ gc_kb_counter;
+    new_report.keyboard.counter = gc_kb_counter;
+  }
 
   codes_task();
 
-  // Atomically update global report (prevents Core 1 from seeing partial updates)
+  // Atomically update global report
   gc_report = new_report;
-
 }
-
-// post_input_event removed - replaced by router architecture
-// Input flow: USB drivers → router_submit_input() → router → router_get_output() → update_output()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -591,18 +429,15 @@ void __not_in_flash_func(update_output)(void)
 
 #include "core/output_interface.h"
 
-// Get adaptive trigger threshold for DualSense L2/R2
-
 const OutputInterface gamecube_output_interface = {
     .name = "GameCube",
     .init = ngc_init,
     .core1_entry = core1_entry,
-    .task = NULL,  // GameCube doesn't need periodic task
+    .task = NULL,
     .get_rumble = gc_get_rumble,
     .get_player_led = gc_get_kb_led,
-    // Profile system
     .get_profile_count = gc_get_profile_count,
-    .get_active_profile = gc_get_active_profile,
+    .get_active_profile = gc_get_active_profile_index,
     .set_active_profile = gc_set_active_profile,
     .get_profile_name = gc_get_profile_name,
     .get_trigger_threshold = gc_get_trigger_threshold,

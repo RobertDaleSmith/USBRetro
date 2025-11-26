@@ -3,7 +3,7 @@
 // Adapted to USBRetro architecture
 
 #include "3do_device.h"
-#include "3do_config.h"
+#include "3do_buttons.h"
 #include "core/services/storage/flash.h"
 #include "core/services/players/feedback.h"
 #include "core/router/router.h"
@@ -21,29 +21,8 @@
 #endif
 
 // ============================================================================
-// PROFILE SYSTEM
+// PROFILE SYSTEM (Delegates to core profile service)
 // ============================================================================
-
-// All available profiles (stored in flash, const = read-only)
-static const tdo_profile_t profiles[TDO_PROFILE_COUNT] = {
-    TDO_PROFILE_DEFAULT,      // Profile 0
-    TDO_PROFILE_FIGHTING,     // Profile 1
-    TDO_PROFILE_SHOOTER,      // Profile 2
-};
-
-// Profile names for core profile system
-static const char* const tdo_profile_names[TDO_PROFILE_COUNT] = {
-    "default", "fighting", "shooter"
-};
-
-// Active profile pointer (4 bytes of RAM, points to flash data)
-static const tdo_profile_t* active_profile = &profiles[TDO_DEFAULT_PROFILE_INDEX];
-
-// Callback when core profile system switches profiles
-static void tdo_on_profile_switch(uint8_t new_index) {
-    active_profile = &profiles[new_index];
-    printf("3DO profile: %s (%s)\n", active_profile->name, active_profile->description);
-}
 
 // Player count callback for profile feedback
 static uint8_t tdo_get_player_count_for_profile(void) {
@@ -51,15 +30,20 @@ static uint8_t tdo_get_player_count_for_profile(void) {
 }
 
 // Profile system accessors for OutputInterface
-static uint8_t tdo_get_profile_count(void) { return profile_get_count(); }
-static uint8_t tdo_get_active_profile(void) { return profile_get_active_index(); }
+static uint8_t tdo_get_profile_count(void) {
+    return profile_get_count(OUTPUT_TARGET_3DO);
+}
+
+static uint8_t tdo_get_active_profile(void) {
+    return profile_get_active_index(OUTPUT_TARGET_3DO);
+}
 
 static void tdo_set_active_profile(uint8_t index) {
-    profile_set_active(index);  // Delegates to core
+    profile_set_active(OUTPUT_TARGET_3DO, index);
 }
 
 static const char* tdo_get_profile_name(uint8_t index) {
-    return profile_get_name(index);  // Delegates to core
+    return profile_get_name(OUTPUT_TARGET_3DO, index);
 }
 
 // PIO state machines
@@ -423,18 +407,15 @@ void _3do_init(void) {
   pio_gpio_init(pio1, DATA_OUT_PIN);
   pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
-  // Initialize core profile system (handles flash load/save, switching, combos)
-  profile_init_simple(TDO_PROFILE_COUNT, TDO_DEFAULT_PROFILE_INDEX, tdo_profile_names);
+  // Profile system is initialized by app_init() - we just set up the callback
   profile_set_player_count_callback(tdo_get_player_count_for_profile);
-  profile_set_switch_callback(tdo_on_profile_switch);
-
-  // Update local profile pointer to match loaded index
-  uint8_t loaded_index = profile_get_active_index();
-  active_profile = &profiles[loaded_index];
 
   #if CFG_TUSB_DEBUG >= 1
   printf("3DO protocol initialized successfully.\n");
-  printf("Active profile: %s (%s)\n", active_profile->name, active_profile->description);
+  const profile_t* active = profile_get_active(OUTPUT_TARGET_3DO);
+  if (active) {
+    printf("Active profile: %s (%s)\n", active->name, active->description);
+  }
   #endif
 
   // Note: Core1 is launched by main.c, not here
@@ -444,353 +425,43 @@ void _3do_init(void) {
 // Button Mapping Helpers
 //-----------------------------------------------------------------------------
 
-// Apply a joypad button mapping (returns 1 if pressed, 0 if not)
-static inline uint8_t apply_joypad_button(tdo_button_output_t action, uint32_t buttons)
+// Map USBR buttons (after profile remapping) to 3DO joypad report
+// Uses 3DO button aliases: TDO_BUTTON_A = USBR_BUTTON_B3, etc.
+static inline void map_usbr_to_3do_joypad(_3do_joypad_report* report, uint32_t buttons)
 {
-  bool is_pressed = false;
+    // USBR is active-low (0 = pressed), 3DO is active-HIGH (1 = pressed)
+    // 3DO button aliases map to USBR positions:
+    //   TDO_BUTTON_A = USBR_BUTTON_B3 (top)
+    //   TDO_BUTTON_B = USBR_BUTTON_B1 (middle)
+    //   TDO_BUTTON_C = USBR_BUTTON_B2 (bottom)
+    //   TDO_BUTTON_L = USBR_BUTTON_L1
+    //   TDO_BUTTON_R = USBR_BUTTON_R1
+    //   TDO_BUTTON_X = USBR_BUTTON_S1
+    //   TDO_BUTTON_P = USBR_BUTTON_S2
 
-  switch (action)
-  {
-    case TDO_BTN_A:
-    case TDO_BTN_B:
-    case TDO_BTN_C:
-    case TDO_BTN_X:
-    case TDO_BTN_L:
-    case TDO_BTN_R:
-    case TDO_BTN_P:
-      // Will be handled by caller
-      break;
-    case TDO_BTN_FIRE:
-    case TDO_BTN_NONE:
-    default:
-      break;
-  }
-
-  return is_pressed ? 1 : 0;
+    report->A = (buttons & TDO_BUTTON_A) == 0 ? 1 : 0;
+    report->B = (buttons & TDO_BUTTON_B) == 0 ? 1 : 0;
+    report->C = (buttons & TDO_BUTTON_C) == 0 ? 1 : 0;
+    report->L = (buttons & TDO_BUTTON_L) == 0 ? 1 : 0;
+    report->R = (buttons & TDO_BUTTON_R) == 0 ? 1 : 0;
+    report->X = (buttons & TDO_BUTTON_X) == 0 ? 1 : 0;
+    report->P = (buttons & TDO_BUTTON_P) == 0 ? 1 : 0;
 }
 
-// Apply profile button mappings to joypad report
-static inline void apply_joypad_profile(_3do_joypad_report* report, uint32_t buttons)
+// Map USBR buttons to 3DO joystick report (includes FIRE button)
+static inline void map_usbr_to_3do_joystick(_3do_joystick_report* report, uint32_t buttons)
 {
-  // Check each USBRetro button and apply profile mapping
-  // USBRetro active-low: button pressed = bit clear (0)
-  // 3DO output active-HIGH: button pressed = bit set (1)
+    // Same as joypad, plus FIRE on L2
+    report->A = (buttons & TDO_BUTTON_A) == 0 ? 1 : 0;
+    report->B = (buttons & TDO_BUTTON_B) == 0 ? 1 : 0;
+    report->C = (buttons & TDO_BUTTON_C) == 0 ? 1 : 0;
+    report->L = (buttons & TDO_BUTTON_L) == 0 ? 1 : 0;
+    report->R = (buttons & TDO_BUTTON_R) == 0 ? 1 : 0;
+    report->X = (buttons & TDO_BUTTON_X) == 0 ? 1 : 0;
+    report->P = (buttons & TDO_BUTTON_P) == 0 ? 1 : 0;
 
-  // B1
-  bool b1_pressed = (buttons & USBR_BUTTON_B1) == 0;
-  if (b1_pressed) {
-    switch (active_profile->joypad.b1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // B2
-  bool b2_pressed = (buttons & USBR_BUTTON_B2) == 0;
-  if (b2_pressed) {
-    switch (active_profile->joypad.b2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // B3
-  bool b3_pressed = (buttons & USBR_BUTTON_B3) == 0;
-  if (b3_pressed) {
-    switch (active_profile->joypad.b3_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // B4
-  bool b4_pressed = (buttons & USBR_BUTTON_B4) == 0;
-  if (b4_pressed) {
-    switch (active_profile->joypad.b4_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // L1
-  bool l1_pressed = (buttons & USBR_BUTTON_L1) == 0;
-  if (l1_pressed) {
-    switch (active_profile->joypad.l1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // L2
-  bool l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
-  if (l2_pressed) {
-    switch (active_profile->joypad.l2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // R1
-  bool r1_pressed = (buttons & USBR_BUTTON_R1) == 0;
-  if (r1_pressed) {
-    switch (active_profile->joypad.r1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // R2
-  bool r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
-  if (r2_pressed) {
-    switch (active_profile->joypad.r2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // S1
-  bool s1_pressed = (buttons & USBR_BUTTON_S1) == 0;
-  if (s1_pressed) {
-    switch (active_profile->joypad.s1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-
-  // S2
-  bool s2_pressed = (buttons & USBR_BUTTON_S2) == 0;
-  if (s2_pressed) {
-    switch (active_profile->joypad.s2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      default: break;
-    }
-  }
-}
-
-// Apply profile button mappings to joystick report
-static inline void apply_joystick_profile(_3do_joystick_report* report, uint32_t buttons)
-{
-  // Similar to joypad but includes FIRE button
-
-  // B1
-  bool b1_pressed = (buttons & USBR_BUTTON_B1) == 0;
-  if (b1_pressed) {
-    switch (active_profile->joystick.b1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // B2
-  bool b2_pressed = (buttons & USBR_BUTTON_B2) == 0;
-  if (b2_pressed) {
-    switch (active_profile->joystick.b2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // B3
-  bool b3_pressed = (buttons & USBR_BUTTON_B3) == 0;
-  if (b3_pressed) {
-    switch (active_profile->joystick.b3_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // B4
-  bool b4_pressed = (buttons & USBR_BUTTON_B4) == 0;
-  if (b4_pressed) {
-    switch (active_profile->joystick.b4_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // L1
-  bool l1_pressed = (buttons & USBR_BUTTON_L1) == 0;
-  if (l1_pressed) {
-    switch (active_profile->joystick.l1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // L2
-  bool l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
-  if (l2_pressed) {
-    switch (active_profile->joystick.l2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // R1
-  bool r1_pressed = (buttons & USBR_BUTTON_R1) == 0;
-  if (r1_pressed) {
-    switch (active_profile->joystick.r1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // R2
-  bool r2_pressed = (buttons & USBR_BUTTON_R2) == 0;
-  if (r2_pressed) {
-    switch (active_profile->joystick.r2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // S1
-  bool s1_pressed = (buttons & USBR_BUTTON_S1) == 0;
-  if (s1_pressed) {
-    switch (active_profile->joystick.s1_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
-
-  // S2
-  bool s2_pressed = (buttons & USBR_BUTTON_S2) == 0;
-  if (s2_pressed) {
-    switch (active_profile->joystick.s2_button) {
-      case TDO_BTN_A: report->A = 1; break;
-      case TDO_BTN_B: report->B = 1; break;
-      case TDO_BTN_C: report->C = 1; break;
-      case TDO_BTN_X: report->X = 1; break;
-      case TDO_BTN_L: report->L = 1; break;
-      case TDO_BTN_R: report->R = 1; break;
-      case TDO_BTN_P: report->P = 1; break;
-      case TDO_BTN_FIRE: report->FIRE = 1; break;
-      default: break;
-    }
-  }
+    // FIRE button mapped to L2 for joystick mode
+    report->FIRE = (buttons & USBR_BUTTON_L2) == 0 ? 1 : 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -885,27 +556,13 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
   uint8_t ay = event->analog[ANALOG_Y];   // Left stick Y
   uint8_t az = event->analog[ANALOG_Z];   // Right stick X
   uint8_t at = event->analog[ANALOG_RX];  // Right stick Y
+  uint8_t l2 = event->analog[ANALOG_RZ];    // L2 trigger (stored in RZ)
+  uint8_t r2 = event->analog[ANALOG_SLIDER]; // R2 trigger (stored in SLIDER)
 
-  // DEBUG: Log button state when S1 or B4 is pressed
-  static uint32_t debug_counter = 0;
-  static uint32_t last_buttons = 0;
-
-  // Only log when button state changes to reduce spam
-  if (buttons != last_buttons && ((buttons & USBR_BUTTON_S1) || (buttons & USBR_BUTTON_B4))) {
-    uint32_t s1_val = (buttons & USBR_BUTTON_S1);
-    uint32_t b4_val = (buttons & USBR_BUTTON_B4);
-    bool or_result = (s1_val || b4_val);
-
-    printf("[DEBUG] buttons=0x%08X | S1=0x%08X(%d) | B4=0x%08X(%d) | OR=%d\n",
-      buttons,
-      s1_val, s1_val ? 1 : 0,
-      b4_val, b4_val ? 1 : 0,
-      or_result ? 1 : 0
-    );
-    last_buttons = buttons;
-  } else if (!(buttons & (USBR_BUTTON_S1 | USBR_BUTTON_B4))) {
-    last_buttons = buttons;  // Reset tracking when both buttons released
-  }
+  // Apply profile remapping
+  const profile_t* profile = profile_get_active(OUTPUT_TARGET_3DO);
+  profile_output_t mapped;
+  profile_apply(profile, buttons, ax, ay, az, at, l2, r2, &mapped);
 
   // Determine if this is a flight stick (has significant analog input)
   // TODO: Add better heuristics or device-type detection
@@ -916,27 +573,27 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     _3do_joystick_report report = new_3do_joystick_report();
 
     // Map analog axes
-    report.analog1 = ax;
-    report.analog2 = ay;
-    report.analog3 = az;
-    report.analog4 = at;
+    report.analog1 = mapped.left_x;
+    report.analog2 = mapped.left_y;
+    report.analog3 = mapped.right_x;
+    report.analog4 = mapped.right_y;
 
-    // Apply profile-based button mappings for joystick mode
-    apply_joystick_profile(&report, buttons);
+    // Apply remapped buttons to joystick report
+    map_usbr_to_3do_joystick(&report, mapped.buttons);
 
-    // Map D-pad directly (not through profile system)
+    // Map D-pad directly (D-pad passes through profile unchanged)
     // USB active-low: 0 = pressed, 3DO active-HIGH: 1 = pressed
-    report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
-    report.right = (buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
-    report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
-    report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
+    report.left = (mapped.buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
+    report.right = (mapped.buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
+    report.up = (mapped.buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
+    report.down = (mapped.buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
     // If no digital D-pad pressed, use left analog stick
     if (report.left == 0 && report.right == 0 && report.up == 0 && report.down == 0) {
-      report.left = (ax < 64) ? 1 : 0;
-      report.right = (ax > 192) ? 1 : 0;
-      report.up = (ay > 192) ? 1 : 0;      // Inverted Y axis
-      report.down = (ay < 64) ? 1 : 0;     // Inverted Y axis
+      report.left = (mapped.left_x < 64) ? 1 : 0;
+      report.right = (mapped.left_x > 192) ? 1 : 0;
+      report.up = (mapped.left_y > 192) ? 1 : 0;      // Inverted Y axis
+      report.down = (mapped.left_y < 64) ? 1 : 0;     // Inverted Y axis
     }
 
     update_3do_joystick(report, player_index);
@@ -944,22 +601,22 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
     // Send joypad report
     _3do_joypad_report report = new_3do_joypad_report();
 
-    // Apply profile-based button mappings for joypad mode
-    apply_joypad_profile(&report, buttons);
+    // Apply remapped buttons to joypad report
+    map_usbr_to_3do_joypad(&report, mapped.buttons);
 
-    // Map D-pad directly (not through profile system)
+    // Map D-pad directly (D-pad passes through profile unchanged)
     // USB active-low: 0 = pressed, 3DO active-HIGH: 1 = pressed
-    report.left = (buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
-    report.right = (buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
-    report.up = (buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
-    report.down = (buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
+    report.left = (mapped.buttons & USBR_BUTTON_DL) == 0 ? 1 : 0;
+    report.right = (mapped.buttons & USBR_BUTTON_DR) == 0 ? 1 : 0;
+    report.up = (mapped.buttons & USBR_BUTTON_DU) == 0 ? 1 : 0;
+    report.down = (mapped.buttons & USBR_BUTTON_DD) == 0 ? 1 : 0;
 
     // If no digital D-pad pressed, use left analog stick
     if (report.left == 0 && report.right == 0 && report.up == 0 && report.down == 0) {
-      report.left = (ax < 64) ? 1 : 0;
-      report.right = (ax > 192) ? 1 : 0;
-      report.up = (ay > 192) ? 1 : 0;      // Inverted Y axis
-      report.down = (ay < 64) ? 1 : 0;     // Inverted Y axis
+      report.left = (mapped.left_x < 64) ? 1 : 0;
+      report.right = (mapped.left_x > 192) ? 1 : 0;
+      report.up = (mapped.left_y > 192) ? 1 : 0;      // Inverted Y axis
+      report.down = (mapped.left_y < 64) ? 1 : 0;     // Inverted Y axis
     }
 
     update_3do_joypad(report, player_index);

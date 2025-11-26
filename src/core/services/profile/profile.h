@@ -1,94 +1,74 @@
 // profile.h - Universal Profile System
 //
-// Provides a standardized profile structure that works across all output devices.
-// Each output device converts universal outputs to its native button format.
+// Provides a standardized profile structure for button remapping across all outputs.
+// Uses USBR_BUTTON_* constants for both input and output, with console-specific
+// aliases (GC_BUTTON_A, TDO_BUTTON_B, PCE_BUTTON_I, etc.) for readability.
 //
 // Architecture:
-//   Input Device → USBR_BUTTON_* → Profile Mapping → USBR_OUTPUT_* → Output Device → Native
+//   Input Device → USBR_BUTTON_* → Profile Mapping → USBR_BUTTON_* → Output Device → Console Native
 //
-// Profile switching is handled by core with visual/haptic feedback.
-// Profile definitions can be at app level or device level.
+// The profile system supports:
+//   - Simple 1:1 button remapping (B1 → B2)
+//   - Button to multiple buttons (R2 → L2 + R2)
+//   - Button to analog axis output (L1 → right stick up)
+//   - Button with analog value modifier (L1 → L2 digital + L2 analog at 255)
+//   - Trigger behavior configuration (passthrough, digital only, full press, etc.)
+//
+// Console devices interpret USBR outputs using their own knowledge of what
+// each button/analog means on their platform.
 
 #ifndef CORE_PROFILE_H
 #define CORE_PROFILE_H
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "core/buttons.h"  // USBR_BUTTON_* definitions
+#include "core/buttons.h"
+#include "core/router/router.h"
 
 // ============================================================================
-// UNIVERSAL OUTPUT SLOTS
+// ANALOG OUTPUT TARGETS
 // ============================================================================
-// These represent logical output positions that every output device maps
-// to its native buttons. This allows profiles to be portable across outputs.
+// For mapping buttons to analog outputs (e.g., C-stick directions)
 
 typedef enum {
-    USBR_OUT_NONE = 0,
+    ANALOG_TARGET_NONE = 0,
 
-    // Face buttons (physical layout positions)
-    USBR_OUT_B1,        // Primary action - bottom (GC:A, 3DO:B, PS:Cross, SNES:B)
-    USBR_OUT_B2,        // Secondary - right (GC:B, 3DO:C, PS:Circle, SNES:A)
-    USBR_OUT_B3,        // Tertiary - left (GC:Y, 3DO:A, PS:Square, SNES:Y)
-    USBR_OUT_B4,        // Quaternary - top (GC:X, 3DO:X, PS:Triangle, SNES:X)
+    // Left stick
+    ANALOG_TARGET_LX_MIN,       // Left stick X to 0
+    ANALOG_TARGET_LX_MAX,       // Left stick X to 255
+    ANALOG_TARGET_LY_MIN,       // Left stick Y to 0
+    ANALOG_TARGET_LY_MAX,       // Left stick Y to 255
 
-    // Shoulder buttons (digital)
-    USBR_OUT_L1,        // Left shoulder (GC:none, 3DO:L, PS:L1)
-    USBR_OUT_R1,        // Right shoulder (GC:Z, 3DO:R, PS:R1)
+    // Right stick (C-stick on GC)
+    ANALOG_TARGET_RX_MIN,       // Right stick X to 0 (GC: C-Left)
+    ANALOG_TARGET_RX_MAX,       // Right stick X to 255 (GC: C-Right)
+    ANALOG_TARGET_RY_MIN,       // Right stick Y to 0 (GC: C-Down)
+    ANALOG_TARGET_RY_MAX,       // Right stick Y to 255 (GC: C-Up)
 
-    // Triggers (directly output to L2/R2 - see trigger_behavior for analog handling)
-    USBR_OUT_L2,        // Left trigger digital (GC:L, PS:L2)
-    USBR_OUT_R2,        // Right trigger digital (GC:R, PS:R2)
+    // Triggers
+    ANALOG_TARGET_L2_FULL,      // L2 analog to 255
+    ANALOG_TARGET_R2_FULL,      // R2 analog to 255
+    ANALOG_TARGET_L2_CUSTOM,    // L2 analog to custom value (uses analog_value field)
+    ANALOG_TARGET_R2_CUSTOM,    // R2 analog to custom value (uses analog_value field)
 
-    // Combined shoulder+trigger (press outputs both digital states)
-    USBR_OUT_L1_L2,     // L1 + L2 together
-    USBR_OUT_R1_R2,     // R1 + R2 together
-    USBR_OUT_L2_R2,     // L2 + R2 together (SSBM quit combo)
+} analog_target_t;
 
-    // System buttons
-    USBR_OUT_S1,        // Select/Back/Share (3DO:X, GC:none)
-    USBR_OUT_S2,        // Start/Options (GC:Start, 3DO:P)
+// ============================================================================
+// BUTTON MAPPING ENTRY
+// ============================================================================
+// Maps one input button to output(s) - supports advanced mappings
 
-    // Stick clicks
-    USBR_OUT_L3,        // Left stick click
-    USBR_OUT_R3,        // Right stick click
-
-    // Auxiliary
-    USBR_OUT_A1,        // Guide/Home/PS button
-    USBR_OUT_A2,        // Capture/Touchpad
-
-    // D-pad directions (as button outputs)
-    USBR_OUT_DU,        // D-pad Up
-    USBR_OUT_DD,        // D-pad Down
-    USBR_OUT_DL,        // D-pad Left
-    USBR_OUT_DR,        // D-pad Right
-
-    // Right stick as buttons (C-stick directions for GC, or general use)
-    USBR_OUT_RS_UP,     // Right stick up (GC: C-Up)
-    USBR_OUT_RS_DOWN,   // Right stick down (GC: C-Down)
-    USBR_OUT_RS_LEFT,   // Right stick left (GC: C-Left)
-    USBR_OUT_RS_RIGHT,  // Right stick right (GC: C-Right)
-
-    // Full analog press (digital + analog forced to max)
-    USBR_OUT_L2_FULL,   // L2 digital + L2 analog at 255 (GC: L full press)
-    USBR_OUT_R2_FULL,   // R2 digital + R2 analog at 255 (GC: R full press)
-
-    // Light press (for SSBM light shield - analog at custom value)
-    USBR_OUT_L2_LIGHT,  // L2 analog at light value (uses l2_analog_value)
-    USBR_OUT_R2_LIGHT,  // R2 analog at light value (uses r2_analog_value)
-
-    // Device-specific extensions (output interprets these)
-    USBR_OUT_SPECIAL_1, // 3DO: Fire button (joystick mode)
-    USBR_OUT_SPECIAL_2, // Reserved
-    USBR_OUT_SPECIAL_3, // Reserved
-    USBR_OUT_SPECIAL_4, // Reserved
-
-    USBR_OUT_COUNT
-} usbr_output_t;
+typedef struct {
+    uint32_t input;             // USBR_BUTTON_* input (e.g., USBR_BUTTON_B1)
+    uint32_t output;            // USBR_BUTTON_* output(s) - can OR multiple buttons
+    analog_target_t analog;     // Optional analog output (0 = none)
+    uint8_t analog_value;       // Custom analog value for ANALOG_TARGET_*_CUSTOM
+} button_map_entry_t;
 
 // ============================================================================
 // TRIGGER BEHAVIOR
 // ============================================================================
-// How analog triggers (L2/R2) behave - separate from button mapping
+// How analog triggers (L2/R2) should behave
 
 typedef enum {
     TRIGGER_PASSTHROUGH = 0,    // Analog value passed through, digital at threshold
@@ -100,45 +80,20 @@ typedef enum {
 } trigger_behavior_t;
 
 // ============================================================================
-// UNIVERSAL BUTTON MAPPING
+// PROFILE STRUCTURE
 // ============================================================================
-// Maps each USBR_BUTTON_* input to a USBR_OUT_* output
 
-typedef struct {
-    // Face buttons
-    usbr_output_t b1;           // USBR_BUTTON_B1 → ?
-    usbr_output_t b2;           // USBR_BUTTON_B2 → ?
-    usbr_output_t b3;           // USBR_BUTTON_B3 → ?
-    usbr_output_t b4;           // USBR_BUTTON_B4 → ?
-
-    // Shoulder buttons
-    usbr_output_t l1;           // USBR_BUTTON_L1 → ?
-    usbr_output_t r1;           // USBR_BUTTON_R1 → ?
-
-    // System buttons
-    usbr_output_t s1;           // USBR_BUTTON_S1 (Select) → ?
-    usbr_output_t s2;           // USBR_BUTTON_S2 (Start) → ?
-
-    // Stick clicks
-    usbr_output_t l3;           // USBR_BUTTON_L3 → ?
-    usbr_output_t r3;           // USBR_BUTTON_R3 → ?
-
-    // Auxiliary
-    usbr_output_t a1;           // USBR_BUTTON_A1 (Guide) → ?
-    usbr_output_t a2;           // USBR_BUTTON_A2 (Capture) → ?
-} usbr_button_map_t;
-
-// ============================================================================
-// UNIVERSAL PROFILE STRUCTURE
-// ============================================================================
+#define MAX_BUTTON_MAPPINGS 24  // Max button mappings per profile
 
 typedef struct {
     // Identity
     const char* name;           // Short name (e.g., "default", "ssbm")
     const char* description;    // Human-readable description
 
-    // Button mappings (input → output)
-    usbr_button_map_t buttons;
+    // Button mappings (sparse - only non-default mappings needed)
+    // If a button isn't in this list, it passes through unchanged (input == output)
+    const button_map_entry_t* button_map;
+    uint8_t button_map_count;
 
     // Trigger configuration
     trigger_behavior_t l2_behavior;
@@ -155,85 +110,159 @@ typedef struct {
     // DualSense adaptive trigger feedback
     bool adaptive_triggers;
 
-} usbr_profile_t;
+} profile_t;
+
+// ============================================================================
+// PROFILE OUTPUT STATE
+// ============================================================================
+// Result of applying profile mapping to input - consumed by output devices
+
+typedef struct {
+    uint32_t buttons;           // Remapped button state (active-low)
+
+    // Analog outputs (can be modified by button mappings)
+    uint8_t left_x;
+    uint8_t left_y;
+    uint8_t right_x;
+    uint8_t right_y;
+    uint8_t l2_analog;
+    uint8_t r2_analog;
+
+    // Flags for analog overrides (buttons forced analog values)
+    bool left_x_override;
+    bool left_y_override;
+    bool right_x_override;
+    bool right_y_override;
+    bool l2_analog_override;
+    bool r2_analog_override;
+
+} profile_output_t;
+
+// ============================================================================
+// PROFILE SET (per output target)
+// ============================================================================
+
+typedef struct {
+    const profile_t* profiles;      // Array of profiles
+    uint8_t profile_count;          // Number of profiles
+    uint8_t default_index;          // Default profile index
+} profile_set_t;
+
+// ============================================================================
+// PROFILE SYSTEM CONFIGURATION
+// ============================================================================
+
+#define MAX_OUTPUT_TARGETS 8
+
+typedef struct {
+    // Profile sets indexed by output_target_t
+    // NULL means no profiles for that output (use passthrough)
+    const profile_set_t* output_profiles[MAX_OUTPUT_TARGETS];
+
+    // Shared profile set (used when output-specific not defined)
+    const profile_set_t* shared_profiles;
+
+} profile_config_t;
 
 // ============================================================================
 // PROFILE SYSTEM API
 // ============================================================================
 
-// Profile system configuration (provided by app/device)
-typedef struct {
-    const usbr_profile_t* profiles;     // Array of profiles
-    uint8_t profile_count;              // Number of profiles
-    uint8_t default_index;              // Default profile index
-} profile_config_t;
-
-// Initialize profile system with universal profile configuration
+// Initialize profile system with configuration
 void profile_init(const profile_config_t* config);
 
-// Initialize profile system in simple mode (device maintains its own profile structures)
-// Useful when device has complex/legacy profile format but wants core switching logic
-void profile_init_simple(uint8_t count, uint8_t default_index, const char* const* names);
+// Get active profile for an output target
+// Falls back to shared profiles if output-specific not defined
+// Returns NULL if no profiles configured
+const profile_t* profile_get_active(output_target_t output);
 
-// Set player count callback (output device provides this for feedback)
-void profile_set_player_count_callback(uint8_t (*callback)(void));
-
-// Set callback for when profile switches (device updates its own profile pointer)
-void profile_set_switch_callback(void (*callback)(uint8_t new_index));
-
-// Get current profile
-const usbr_profile_t* profile_get_active(void);
-uint8_t profile_get_active_index(void);
-uint8_t profile_get_count(void);
-const char* profile_get_name(uint8_t index);
+// Get profile info
+uint8_t profile_get_active_index(output_target_t output);
+uint8_t profile_get_count(output_target_t output);
+const char* profile_get_name(output_target_t output, uint8_t index);
 
 // Switch profiles (with feedback)
-void profile_set_active(uint8_t index);
-void profile_cycle_next(void);
-void profile_cycle_prev(void);
+void profile_set_active(output_target_t output, uint8_t index);
+void profile_cycle_next(output_target_t output);
+void profile_cycle_prev(output_target_t output);
+
+// Set callback for when profile switches (device can update its own state)
+typedef void (*profile_switch_callback_t)(output_target_t output, uint8_t new_index);
+void profile_set_switch_callback(profile_switch_callback_t callback);
+
+// Set player count callback (for feedback)
+void profile_set_player_count_callback(uint8_t (*callback)(void));
 
 // Check for profile switch combo (call from output device's update loop)
-// Returns true if combo triggered a profile switch
+// Uses primary output target for switching
 void profile_check_switch_combo(uint32_t buttons);
 
 // Load/save profile index from flash
-uint8_t profile_load_from_flash(uint8_t default_index);
-void profile_save_to_flash(void);
+uint8_t profile_load_from_flash(output_target_t output, uint8_t default_index);
+void profile_save_to_flash(output_target_t output);
 
 // ============================================================================
-// DEFAULT PROFILE MACROS
+// BUTTON MAPPING APPLICATION
 // ============================================================================
-// Helper macros to define common profile configurations
 
-// Standard 1:1 mapping (input matches output position)
-#define USBR_BUTTON_MAP_DEFAULT { \
-    .b1 = USBR_OUT_B1, \
-    .b2 = USBR_OUT_B2, \
-    .b3 = USBR_OUT_B3, \
-    .b4 = USBR_OUT_B4, \
-    .l1 = USBR_OUT_L1, \
-    .r1 = USBR_OUT_R1, \
-    .s1 = USBR_OUT_S1, \
-    .s2 = USBR_OUT_S2, \
-    .l3 = USBR_OUT_L3, \
-    .r3 = USBR_OUT_R3, \
-    .a1 = USBR_OUT_A1, \
-    .a2 = USBR_OUT_A2, \
-}
+// Apply profile to input event and get output state
+// This is the main function output devices call
+void profile_apply(const profile_t* profile,
+                   uint32_t input_buttons,
+                   uint8_t lx, uint8_t ly,
+                   uint8_t rx, uint8_t ry,
+                   uint8_t l2, uint8_t r2,
+                   profile_output_t* output);
 
-// Default profile with standard settings
-#define USBR_PROFILE_DEFAULT { \
-    .name = "default", \
-    .description = "Standard 1:1 mapping", \
-    .buttons = USBR_BUTTON_MAP_DEFAULT, \
+// Simple button-only mapping (for basic use cases)
+uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_buttons);
+
+// ============================================================================
+// HELPER MACROS FOR PROFILE DEFINITIONS
+// ============================================================================
+
+// Simple button remap: input → output
+#define MAP_BUTTON(in, out) \
+    { .input = (in), .output = (out), .analog = ANALOG_TARGET_NONE, .analog_value = 0 }
+
+// Button to multiple buttons: input → out1 | out2
+#define MAP_BUTTON_MULTI(in, out1, out2) \
+    { .input = (in), .output = ((out1) | (out2)), .analog = ANALOG_TARGET_NONE, .analog_value = 0 }
+
+// Button to button + analog: input → button + analog at value
+#define MAP_BUTTON_ANALOG(in, out, analog_tgt, value) \
+    { .input = (in), .output = (out), .analog = (analog_tgt), .analog_value = (value) }
+
+// Button to analog only: input → analog axis
+#define MAP_ANALOG_ONLY(in, analog_tgt) \
+    { .input = (in), .output = 0, .analog = (analog_tgt), .analog_value = 0 }
+
+// Button disabled: input → nothing
+#define MAP_DISABLED(in) \
+    { .input = (in), .output = 0, .analog = ANALOG_TARGET_NONE, .analog_value = 0 }
+
+// Standard trigger settings
+#define PROFILE_TRIGGERS_DEFAULT \
     .l2_behavior = TRIGGER_PASSTHROUGH, \
     .r2_behavior = TRIGGER_PASSTHROUGH, \
     .l2_threshold = 128, \
     .r2_threshold = 128, \
     .l2_analog_value = 0, \
-    .r2_analog_value = 0, \
+    .r2_analog_value = 0
+
+// Standard analog settings
+#define PROFILE_ANALOG_DEFAULT \
     .left_stick_sensitivity = 1.0f, \
-    .right_stick_sensitivity = 1.0f, \
+    .right_stick_sensitivity = 1.0f
+
+// Full default profile (passthrough)
+#define PROFILE_DEFAULT { \
+    .name = "default", \
+    .description = "Standard 1:1 mapping", \
+    .button_map = NULL, \
+    .button_map_count = 0, \
+    PROFILE_TRIGGERS_DEFAULT, \
+    PROFILE_ANALOG_DEFAULT, \
     .adaptive_triggers = false, \
 }
 

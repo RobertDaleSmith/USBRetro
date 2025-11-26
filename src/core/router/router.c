@@ -8,6 +8,7 @@
 #include "core/services/players/manager.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // ============================================================================
 // OUTPUT STATE (replaces players[] array)
@@ -336,44 +337,82 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
 
 // MERGE MODE: Multiple inputs → single output
 static inline void router_merge_mode(const input_event_t* event, output_target_t output) {
-    if (router_config.merge_all_inputs) {
-        // MERGE_ALL: Latest active input wins (current GCUSB behavior)
-        // All USB controllers merged to single output port
-
-        // Register player if not already registered (for LED and rumble support)
-        int player_index = find_player_index(event->dev_addr, event->instance);
-        if (player_index < 0) {
-            uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
-            if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
-                player_index = add_player(event->dev_addr, event->instance);
-                if (player_index >= 0) {
-                    printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
-                        player_index + 1, event->dev_addr, event->instance);
-                }
+    // Register player if not already registered (for LED and rumble support)
+    int player_index = find_player_index(event->dev_addr, event->instance);
+    if (player_index < 0) {
+        uint16_t buttons_pressed = (~(event->buttons | 0x800)) | event->keys;
+        if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
+            player_index = add_player(event->dev_addr, event->instance);
+            if (player_index >= 0) {
+                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
+                    player_index + 1, event->dev_addr, event->instance);
             }
         }
-
-        // Update output state for registered players (process all events, not just button presses)
-        if (player_index >= 0) {
-            // Create local copy for transformation
-            input_event_t transformed = *event;
-
-            // Apply transformations (mouse-to-analog, instance merging, etc.)
-            apply_transformations(&transformed, output, 0);  // Always player 0 in merge mode
-
-            // Store transformed event (atomic write)
-            router_outputs[output][0].current_state = transformed;
-            router_outputs[output][0].updated = true;
-            router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;  // Default for now
-        }
-    } else {
-        // MERGE_PRIORITY: High priority input wins, low priority fallback
-        // Used by Super3D0USB (USB priority, SNES fallback)
-
-        // TODO: Implement priority-based merging
-        // For now, use simple pass-through
-        router_simple_mode(event, output);
     }
+
+    // Only process if player is registered
+    if (player_index < 0) return;
+
+    // Create local copy for transformation
+    input_event_t transformed = *event;
+
+    // Apply transformations (mouse-to-analog, instance merging, etc.)
+    apply_transformations(&transformed, output, 0);  // Always player 0 in merge mode
+
+    switch (router_config.merge_mode) {
+        case MERGE_ALL:
+            // Latest active input wins (overwrites previous state)
+            router_outputs[output][0].current_state = transformed;
+            break;
+
+        case MERGE_BLEND: {
+            // OR button states together from all inputs
+            // Buttons are active-low, so AND them (pressed = 0)
+            output_state_t* out = &router_outputs[output][0];
+
+            // Blend buttons (AND for active-low)
+            out->current_state.buttons &= transformed.buttons;
+
+            // Blend keys (OR for active-high)
+            out->current_state.keys |= transformed.keys;
+
+            // Analog: use whichever is furthest from center (128)
+            for (int i = 0; i < 6; i++) {
+                int8_t cur_delta = (int8_t)(out->current_state.analog[i] - 128);
+                int8_t new_delta = (int8_t)(transformed.analog[i] - 128);
+
+                // Take the value with larger absolute deviation from center
+                if (abs(new_delta) > abs(cur_delta)) {
+                    out->current_state.analog[i] = transformed.analog[i];
+                }
+            }
+
+            // Mouse deltas: accumulate
+            out->current_state.delta_x += transformed.delta_x;
+            out->current_state.delta_y += transformed.delta_y;
+
+            // Keep other fields from latest event
+            out->current_state.dev_addr = transformed.dev_addr;
+            out->current_state.instance = transformed.instance;
+            out->current_state.type = transformed.type;
+            break;
+        }
+
+        case MERGE_PRIORITY:
+            // High priority input wins, low priority fallback
+            // Used by Super3D0USB (USB priority, SNES fallback)
+            // Check if this source has higher priority than current
+            if (router_outputs[output][0].source <= INPUT_SOURCE_USB_HOST) {
+                // USB has highest priority (0), always wins
+                router_outputs[output][0].current_state = transformed;
+            }
+            // Lower priority sources only update if no USB input active
+            // TODO: Track activity timeout for priority fallback
+            break;
+    }
+
+    router_outputs[output][0].updated = true;
+    router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;
 }
 
 // Main input submission function (called by input drivers)
@@ -417,25 +456,47 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
             break;
 
         case ROUTING_MODE_BROADCAST:
-            // TODO: Implement broadcast mode (Phase 7)
-            router_simple_mode(event, output);
+            // Broadcast: 1:N - single input to multiple outputs
+            // Used for multi-output products (e.g., USB → GC + USB Device + BLE)
+            if (active_output_count > 0) {
+                // Route to all active outputs
+                for (uint8_t i = 0; i < active_output_count; i++) {
+                    router_simple_mode(event, active_outputs[i]);
+                }
+            } else {
+                // No active outputs configured, fall back to first route
+                router_simple_mode(event, output);
+            }
             break;
 
         case ROUTING_MODE_CONFIGURABLE:
-            // Phase 6: Use routing table for N:M mapping
+            // N:M configurable routing - full flexibility
+            // Each route can specify: input filters, output target, player slot
             {
                 route_entry_t matches[MAX_ROUTES];
                 uint8_t match_count = router_find_routes(event, matches, MAX_ROUTES);
 
                 if (match_count == 0) {
-                    // No routes found - fall back to compile-time output
+                    // No routes found - fall back to first configured route
                     router_simple_mode(event, output);
                 } else {
                     // Route to all matching outputs
                     for (uint8_t i = 0; i < match_count; i++) {
-                        // Use the routing mode specified for this output
-                        // For now, use simple mode for each route
-                        router_simple_mode(event, matches[i].output);
+                        output_target_t target = matches[i].output;
+                        uint8_t target_player = matches[i].output_player_id;
+
+                        if (target_player != 0xFF && target_player < MAX_PLAYERS_PER_OUTPUT) {
+                            // Fixed player slot assignment
+                            input_event_t transformed = *event;
+                            apply_transformations(&transformed, target, target_player);
+
+                            router_outputs[target][target_player].current_state = transformed;
+                            router_outputs[target][target_player].updated = true;
+                            router_outputs[target][target_player].source = INPUT_SOURCE_USB_HOST;
+                        } else {
+                            // Auto-assign player slot (standard behavior)
+                            router_simple_mode(event, target);
+                        }
                     }
                 }
             }

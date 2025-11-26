@@ -5,11 +5,24 @@
 // The firmware calls app_init() after core system initialization.
 
 #include "app.h"
+#include "profiles.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/services/profile/profile.h"
 #include "core/output_interface.h"
 #include "native/device/3do/3do_device.h"
 #include <stdio.h>
+
+// ============================================================================
+// APP PROFILE CONFIGURATION
+// ============================================================================
+
+static const profile_config_t app_profile_config = {
+    .output_profiles = {
+        [OUTPUT_TARGET_3DO] = &tdo_profile_set,
+    },
+    .shared_profiles = NULL,
+};
 
 // ============================================================================
 // APP OUTPUT INTERFACE
@@ -55,13 +68,17 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
-    // Note: 3DO profiles are managed by 3do_device.c using its own profile system
-    // (stored in 3do_config.h). The universal profile system is not used for 3DO.
+    // Initialize profile system with app-defined profiles
+    profile_init(&app_profile_config);
+
+    uint8_t profile_count = profile_get_count(OUTPUT_TARGET_3DO);
+    const char* active_name = profile_get_name(OUTPUT_TARGET_3DO,
+                                                profile_get_active_index(OUTPUT_TARGET_3DO));
 
     printf("[app:usb23do] Initialization complete\n");
     printf("[app:usb23do]   Routing: %s\n", "SIMPLE (USB → 3DO PBUS 1:1)");
     printf("[app:usb23do]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
     printf("[app:usb23do]   Mouse support: enabled\n");
     printf("[app:usb23do]   Extension passthrough: enabled (native 3DO controllers)\n");
-    printf("[app:usb23do]   Profile switching: enabled (SELECT+2sec, D-pad Up/Down)\n");
+    printf("[app:usb23do]   Profiles: %d (active: %s)\n", profile_count, active_name ? active_name : "none");
 }

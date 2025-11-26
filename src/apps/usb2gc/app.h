@@ -36,8 +36,8 @@
 // ROUTING CONFIGURATION
 // ============================================================================
 #define ROUTING_MODE ROUTING_MODE_MERGE
-#define MERGE_MODE MERGE_ALL               // Merge all USB inputs (current behavior)
-#define MAX_ROUTES 4
+#define MERGE_MODE MERGE_BLEND             // Blend all USB inputs (OR buttons together)
+#define APP_MAX_ROUTES 4                   // App-specific route limit (router uses MAX_ROUTES)
 
 // Input transformations
 #define TRANSFORM_FLAGS (TRANSFORM_MOUSE_TO_ANALOG)  // Mouse → analog stick

@@ -529,7 +529,7 @@ typedef enum {
 - Multi-modal feedback: NeoPixel LED blinks, rumble pulses, player LEDs light up
 
 **Method 2: Flash default**
-- Edit `GC_DEFAULT_PROFILE_INDEX` in `gamecube_config.h`
+- Edit `default_index` in `apps/usb2gc/profiles.h`
 - Rebuild firmware
 
 ### Flash Persistence
