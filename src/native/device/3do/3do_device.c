@@ -976,7 +976,7 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
 
 #include "core/output_interface.h"
 
-const OutputInterface threedooutput_interface = {
+const OutputInterface tdo_output_interface = {
     .name = "3DO",
     .init = _3do_init,
     .core1_entry = core1_entry,

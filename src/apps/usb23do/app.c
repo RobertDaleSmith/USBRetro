@@ -16,11 +16,11 @@
 // ============================================================================
 
 // Provide output interface for firmware to use
-extern const OutputInterface threedooutput_interface;
+extern const OutputInterface tdo_output_interface;
 
 const OutputInterface* app_get_output_interface(void)
 {
-    return &threedooutput_interface;
+    return &tdo_output_interface;
 }
 
 // ============================================================================

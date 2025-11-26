@@ -16,7 +16,7 @@
 // ============================================================================
 
 // Base 3DO output interface
-extern const OutputInterface threedooutput_interface;
+extern const OutputInterface tdo_output_interface;
 
 // Wrapper task that polls SNES input AND runs 3DO output task
 static void snes23do_task(void)
@@ -25,8 +25,8 @@ static void snes23do_task(void)
     snes_host_task();
 
     // Run 3DO output task (if any)
-    if (threedooutput_interface.task) {
-        threedooutput_interface.task();
+    if (tdo_output_interface.task) {
+        tdo_output_interface.task();
     }
 }
 
@@ -51,7 +51,7 @@ static OutputInterface runtime_interface;
 const OutputInterface* app_get_output_interface(void)
 {
     // Copy 3DO interface as base
-    runtime_interface = threedooutput_interface;
+    runtime_interface = tdo_output_interface;
 
     // Override name and task
     runtime_interface.name = "SNES23DO";
