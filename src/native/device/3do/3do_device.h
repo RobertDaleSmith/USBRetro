@@ -158,7 +158,7 @@ void setup_3do_dma_output(void);
 void setup_3do_dma_input(void);
 void on_pio0_irq(void);
 
-void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_3do_report)(uint8_t player_index);
 
 // post_globals() and post_mouse_globals() removed - replaced by router architecture

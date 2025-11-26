@@ -72,7 +72,7 @@ void mcp4728_set_config(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8
 void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8_t pd_mode);
 void i2c_slave_handler(i2c_inst_t *i2c, i2c_slave_event_t event);
 
-void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_output)(void);
 
 #endif // XBOXONE_DEVICE_H

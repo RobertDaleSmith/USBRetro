@@ -34,7 +34,7 @@ static void snes23do_task(void)
 static const OutputInterface snes23do_output_interface = {
     .name = "SNES23DO",
     .init = NULL,  // 3DO init called separately, SNES init in app_init
-    .core1_entry = NULL,  // Set dynamically from 3DO interface
+    .core1_task = NULL,  // Set dynamically from 3DO interface
     .task = snes23do_task,  // Our wrapper task
     .get_rumble = NULL,
     .get_player_led = NULL,

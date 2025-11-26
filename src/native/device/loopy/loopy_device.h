@@ -54,7 +54,7 @@ extern uint sm1, sm2, sm3; // sm1 = ROW0, sm2 = ROW1, sm3 = ROW2
 
 // Function declarations
 void loopy_init(void);
-void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_output)(void);
 
 #endif // LOOPY_DEVICE_H

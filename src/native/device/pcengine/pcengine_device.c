@@ -137,11 +137,11 @@ void pce_task()
 //
 
 //
-// core1_entry - inner-loop for the second core
+// core1_task - inner-loop for the second core
 //             - when the "CLR" line is de-asserted, set lock flag
 //               protecting the output state machine from inconsistent data
 //
-void __not_in_flash_func(core1_entry)(void)
+void __not_in_flash_func(core1_task)(void)
 {
   static bool rx_bit = 0;
 
@@ -361,7 +361,7 @@ void __not_in_flash_func(update_output)(void)
 const OutputInterface pcengine_output_interface = {
     .name = "PCEngine",
     .init = pce_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = pce_task,  // PCEngine needs periodic scan detection task
     .get_rumble = NULL,
     .get_player_led = NULL,

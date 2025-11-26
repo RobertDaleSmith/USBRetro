@@ -75,9 +75,9 @@ void loopy_init()
 }
 
 //
-// core1_entry - inner-loop for the second core
+// core1_task - inner-loop for the second core
 //
-void __not_in_flash_func(core1_entry)(void)
+void __not_in_flash_func(core1_task)(void)
 {
   static bool rx_bit = 0;
 
@@ -305,7 +305,7 @@ void __not_in_flash_func(update_output)(void)
 }
 
 // post_input_event removed - replaced by router architecture
-// Input flow: USB drivers → router_submit_input() → router → router_get_output() → core1_entry()
+// Input flow: USB drivers → router_submit_input() → router → router_get_output() → core1_task()
 
 // ============================================================================
 // OUTPUT INTERFACE
@@ -333,7 +333,7 @@ static const char* loopy_get_profile_name(uint8_t index) {
 const OutputInterface loopy_output_interface = {
     .name = "Loopy",
     .init = loopy_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = NULL,  // Loopy doesn't need periodic task
     .get_rumble = NULL,
     .get_player_led = NULL,

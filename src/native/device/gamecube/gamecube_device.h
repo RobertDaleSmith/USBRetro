@@ -52,7 +52,7 @@ extern PIO pio;
 // Function declarations
 void ngc_init(void);
 
-void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_output)(void);
 
 #endif // GAMECUBE_DEVICE_H

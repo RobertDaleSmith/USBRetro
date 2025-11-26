@@ -33,7 +33,7 @@ static void uart_led_handler(uint8_t player_index, uint8_t pattern,
 static const OutputInterface uart_output_interface = {
     .name = "UART Bridge",
     .init = uart_output_init,
-    .core1_entry = NULL,            // No core1 needed
+    .core1_task = NULL,            // No core1 needed
     .task = uart_output_task,
     .get_rumble = uart_output_get_rumble,
     .get_player_led = uart_output_get_player_led,

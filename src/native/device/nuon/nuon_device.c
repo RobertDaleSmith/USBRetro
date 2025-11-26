@@ -232,8 +232,8 @@ void nuon_task()
 }
 
 //
-// core1_entry - inner-loop for the second core
-void __not_in_flash_func(core1_entry)(void)
+// core1_task - inner-loop for the second core
+void __not_in_flash_func(core1_task)(void)
 {
   uint64_t packet = 0;
   uint16_t state = 0;
@@ -527,7 +527,7 @@ static const char* nuon_get_profile_name(uint8_t index) {
 const OutputInterface nuon_output_interface = {
     .name = "Nuon",
     .init = nuon_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = nuon_task,  // Nuon needs periodic soft reset task
     .get_rumble = NULL,
     .get_player_led = NULL,

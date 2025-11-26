@@ -13,8 +13,8 @@ typedef struct {
     const char* name;                                      // Output name (e.g., "GameCube", "USB Device (XInput)")
 
     void (*init)(void);                                    // Initialize output hardware/protocol
-    void (*core1_entry)(void);                             // Core1 entry point (NULL if not needed)
-    void (*task)(void);                                    // Periodic task (NULL if not needed)
+    void (*task)(void);                                    // Core 0 periodic task (NULL if not needed)
+    void (*core1_task)(void);                              // Core 1 loop for timing-critical output (NULL if not needed)
 
     // Feedback to USB input devices (rumble, LEDs)
     uint8_t (*get_rumble)(void);                           // Get rumble state (0-255), NULL = no rumble

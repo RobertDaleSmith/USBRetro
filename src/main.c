@@ -35,8 +35,8 @@ extern const OutputInterface* app_get_output_interface(void);
 // Cached output interface (set once at startup)
 static const OutputInterface* output = NULL;
 
-// Main loop - pinned in SRAM for consistent timing
-static void __not_in_flash_func(process_signals)(void)
+// Core 0 main loop - pinned in SRAM for consistent timing
+static void __not_in_flash_func(core0_main)(void)
 {
   while (1)
   {
@@ -68,11 +68,11 @@ int main(void)
   output = app_get_output_interface();
   output->init();
 
-  if (output->core1_entry) {
-    multicore_launch_core1(output->core1_entry);
+  if (output->core1_task) {
+    multicore_launch_core1(output->core1_task);
   }
 
-  process_signals();
+  core0_main();
 
   return 0;
 }

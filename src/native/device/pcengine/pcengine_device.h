@@ -54,7 +54,7 @@ extern uint sm1, sm2, sm3; // sm1 = plex; sm2 = clock, sm3 = select
 void pce_init(void);
 void pce_task(void);
 void turbo_init(void);
-void __not_in_flash_func(core1_entry)(void);
+void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_output)(void);
 
 #endif // PCENGINE_DEVICE_H

@@ -252,8 +252,8 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center)
   }
 }
 
-// core1_entry - inner-loop for the second core
-void __not_in_flash_func(core1_entry)(void)
+// core1_task - inner-loop for the second core
+void __not_in_flash_func(core1_task)(void)
 {
   // Initialize Core 1 for safe flash writes (required for flash_safe_execute)
   flash_safe_execute_core_init();
@@ -432,7 +432,7 @@ void __not_in_flash_func(update_output)(void)
 const OutputInterface gamecube_output_interface = {
     .name = "GameCube",
     .init = ngc_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = NULL,
     .get_rumble = gc_get_rumble,
     .get_player_led = gc_get_kb_led,

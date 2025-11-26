@@ -153,8 +153,8 @@ void mcp4728_power_down(i2c_inst_t *i2c, uint8_t address, uint8_t channel, uint8
 }
 
 //
-// core1_entry - inner-loop for the second core
-void __not_in_flash_func(core1_entry)(void)
+// core1_task - inner-loop for the second core
+void __not_in_flash_func(core1_task)(void)
 {
   while (1)
   {
@@ -269,7 +269,7 @@ static const char* xb1_get_profile_name(uint8_t index) {
 const OutputInterface xboxone_output_interface = {
     .name = "Xbox One",
     .init = xb1_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = NULL,  // Xbox One doesn't need periodic task
     .get_rumble = NULL,
     .get_player_led = NULL,

@@ -790,7 +790,7 @@ void _3do_task() {
 // Core1 Entry Point
 //-----------------------------------------------------------------------------
 
-void __not_in_flash_func(core1_entry)(void) {
+void __not_in_flash_func(core1_task)(void) {
   // Core1 can be used for periodic tasks if needed
   // For 3DO, most work is done in the interrupt handler
   while (1) {
@@ -923,7 +923,7 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
 const OutputInterface tdo_output_interface = {
     .name = "3DO",
     .init = _3do_init,
-    .core1_entry = core1_entry,
+    .core1_task = core1_task,
     .task = _3do_task,  // 3DO needs periodic polling and extension controller detection
     .get_rumble = NULL,  // 3DO doesn't have rumble
     .get_player_led = NULL,  // 3DO doesn't override player LED
