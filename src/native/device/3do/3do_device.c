@@ -7,8 +7,8 @@
 #include "core/services/storage/flash.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
-#include "core/services/profile/profile.h"
-#include "core/services/players/feedback.h"
+#include "core/services/profiles/profile.h"
+#include "core/services/profiles/profile_indicator.h"
 #include "core/services/leds/ws2812.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
@@ -296,7 +296,7 @@ static bool tdo_output_mode_switch_callback(int8_t direction) {
   // Trigger feedback (mode 1 = silly, mode 0 = normal)
   uint8_t mode_index = (output_mode == TDO_MODE_SILLY) ? 1 : 0;
   uint8_t player_count = router_get_player_count(OUTPUT_TARGET_3DO);
-  feedback_trigger(mode_index, player_count);
+  profile_indicator_trigger(mode_index, player_count);
   neopixel_indicate_profile(mode_index);
 
   return true;

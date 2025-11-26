@@ -49,6 +49,7 @@ CONSOLE_xb1 := usbretro_xb1
 CONSOLE_nuon := usbretro_nuon
 CONSOLE_loopy := usbretro_loopy
 CONSOLE_snes3do := usbretro_snes3do
+CONSOLE_uart := usbretro_uart
 
 # App definitions: APP_name = board console output_name
 # Naming convention: usb2<console> for all apps
@@ -59,9 +60,10 @@ APP_usb2xb1 := qtpy xb1 usb2xb1
 APP_usb2loopy := kb2040 loopy usb2loopy
 APP_usb23do := rp2040zero 3do usb23do
 APP_snes23do := rp2040zero snes3do snes23do
+APP_usb2uart := kb2040 uart usb2uart
 
 # All apps
-APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do
+APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart
 
 # Stable apps for release (mature enough for public release)
 RELEASE_APPS := usb2pce usb2gc usb2nuon
@@ -94,6 +96,7 @@ help:
 	@echo "  make usb2loopy     - Build usb2loopy (KB2040 + Loopy)"
 	@echo "  make usb23do       - Build usb23do (RP2040 Zero + 3DO)"
 	@echo "  make snes23do      - Build snes23do (RP2040 Zero + SNES->3DO)"
+	@echo "  make usb2uart      - Build usb2uart (KB2040 + UART ESP32 bridge)"
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
 	@echo "  make all           - Build all apps"
@@ -110,6 +113,7 @@ help:
 	@echo "  make flash-usb2loopy - Flash usb2loopy firmware"
 	@echo "  make flash-usb23do - Flash usb23do firmware"
 	@echo "  make flash-snes23do - Flash snes23do firmware"
+	@echo "  make flash-usb2uart - Flash usb2uart firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
 	@echo "  make pce           - Build PCEngine firmware"
@@ -185,6 +189,10 @@ usb23do:
 .PHONY: snes23do
 snes23do:
 	$(call build_app,snes23do)
+
+.PHONY: usb2uart
+usb2uart:
+	$(call build_app,usb2uart)
 
 # Legacy aliases for backward compatibility
 .PHONY: gcusb nuonusb xboxadapter 3dousb
@@ -324,6 +332,10 @@ flash-usb23do:
 .PHONY: flash-snes23do
 flash-snes23do:
 	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_snes23do))_$(CONSOLE_$(word 2,$(APP_snes23do))).uf2
+
+.PHONY: flash-usb2uart
+flash-usb2uart:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2uart))_$(CONSOLE_$(word 2,$(APP_usb2uart))).uf2
 
 # Legacy flash aliases
 .PHONY: flash-gcusb flash-nuonusb flash-xboxadapter flash-3dousb

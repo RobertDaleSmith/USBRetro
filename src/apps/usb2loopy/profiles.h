@@ -15,7 +15,7 @@
 #ifndef USB2LOOPY_PROFILES_H
 #define USB2LOOPY_PROFILES_H
 
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "native/device/loopy/loopy_buttons.h"
 
 // ============================================================================

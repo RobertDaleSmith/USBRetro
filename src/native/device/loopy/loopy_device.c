@@ -10,7 +10,7 @@
 // Console-local state (not input data)
 #include "core/router/router.h"
 #include "core/services/codes/codes.h"
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "core/uart.h"
 
 PIO pio;

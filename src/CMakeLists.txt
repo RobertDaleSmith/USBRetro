@@ -25,6 +25,7 @@ add_executable(usbretro_nuon) # For the usbretro_nuon target
 add_executable(usbretro_loopy) # For the usbretro_loopy target
 add_executable(usbretro_3do) # For the usbretro_3do target
 add_executable(usbretro_snes3do) # For the usbretro_snes3do target (Super3D0USB)
+add_executable(usbretro_uart) # For the usbretro_uart target (USB2UART ESP32 bridge)
 
 if (PICO_BOARD STREQUAL "pico")
     message(STATUS "PICO_BOARD is '${PICO_BOARD}', applying RPI_PICO_BUILD definition for usbretro_pce.")
@@ -38,6 +39,7 @@ target_compile_definitions(usbretro_nuon PRIVATE CONFIG_NUON=1)
 target_compile_definitions(usbretro_loopy PRIVATE CONFIG_LOOPY=1)
 target_compile_definitions(usbretro_3do PRIVATE CONFIG_3DO=1)
 target_compile_definitions(usbretro_snes3do PRIVATE CONFIG_SNES3DO=1)
+target_compile_definitions(usbretro_uart PRIVATE CONFIG_UART=1)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
@@ -46,6 +48,7 @@ target_compile_options(usbretro_nuon PRIVATE -O3) # Set optimization level to O3
 target_compile_options(usbretro_loopy PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_3do PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_snes3do PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_uart PRIVATE -O3) # Set optimization level to O3 for your_target
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
@@ -60,6 +63,7 @@ pico_add_extra_outputs(usbretro_nuon)
 pico_add_extra_outputs(usbretro_loopy)
 pico_add_extra_outputs(usbretro_3do)
 pico_add_extra_outputs(usbretro_snes3do)
+pico_add_extra_outputs(usbretro_uart)
 
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/clock.pio )
@@ -79,11 +83,11 @@ pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/core/services/le
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/sampling.pio )
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/output.pio )
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/ws2812.pio )
+pico_generate_pio_header(usbretro_uart ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/ws2812.pio )
 
 ## SET TARGE SOURCES
 set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/leds/ws2812.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/feedback.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/flash.c
     # output.c removed - apps now provide output interface via app_get_output_interface()
 
@@ -91,7 +95,9 @@ set(COMMON_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/codes/codes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/hotkeys/hotkeys.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/manager.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/profile/profile.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/feedback.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/profiles/profile.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/profiles/profile_indicator.c
 
     # Core Router System
     ${CMAKE_CURRENT_SOURCE_DIR}/core/router/router.c
@@ -185,6 +191,13 @@ target_sources(usbretro_snes3do PUBLIC # For SNES23DO (SNES→3DO)
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/snes23do/app.c
 )
 
+target_sources(usbretro_uart PUBLIC # For UART (USB→UART ESP32 bridge)
+    ${COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart/uart_device.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2uart/app.c
+)
+
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -238,6 +251,13 @@ target_include_directories(usbretro_snes3do PUBLIC # FOR SNES23DO
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src
 )
 
+target_include_directories(usbretro_uart PUBLIC # FOR UART
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart
+)
+
 ## SET TARGET LINK LIBS
 set(COMMON_LIBRARIES
     pico_stdlib
@@ -281,4 +301,9 @@ target_link_libraries(usbretro_3do PRIVATE # FOR 3DO
 target_link_libraries(usbretro_snes3do PRIVATE # FOR SNES23DO
     ${COMMON_LIBRARIES}
     hardware_dma
+)
+
+target_link_libraries(usbretro_uart PRIVATE # FOR UART
+    ${COMMON_LIBRARIES}
+    hardware_uart
 )

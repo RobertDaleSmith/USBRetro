@@ -17,7 +17,7 @@
 #ifndef USB2XB1_PROFILES_H
 #define USB2XB1_PROFILES_H
 
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "native/device/xboxone/xboxone_buttons.h"
 
 // ============================================================================

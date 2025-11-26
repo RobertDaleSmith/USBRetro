@@ -10,8 +10,8 @@
 
 // External dependencies (feedback and visual indication)
 #include "core/services/leds/ws2812.h"
+#include "core/services/profiles/profile_indicator.h"
 #include "core/services/players/feedback.h"
-#include "core/feedback.h"
 
 // Flash storage
 #include "core/services/storage/flash.h"
@@ -31,25 +31,25 @@ static player_profile_state_t player_profiles[MAX_PLAYERS] = {0};
 
 // Per-player switch combo state
 typedef struct {
-    uint32_t select_hold_start;
-    bool select_was_held;
-    bool dpad_up_was_pressed;
-    bool dpad_down_was_pressed;
-    bool dpad_left_was_pressed;
-    bool dpad_right_was_pressed;
-    bool initial_trigger_done;
+    uint32_t p_select_hold_start;
+    bool p_select_was_held;
+    bool p_dpad_up_was_pressed;
+    bool p_dpad_down_was_pressed;
+    bool p_dpad_left_was_pressed;
+    bool p_dpad_right_was_pressed;
+    bool p_initial_trigger_done;
 } player_combo_state_t;
 
 static player_combo_state_t player_combo[MAX_PLAYERS] = {0};
 
 // Legacy combo state (player 0)
-#define select_hold_start       player_combo[0].select_hold_start
-#define select_was_held         player_combo[0].select_was_held
-#define dpad_up_was_pressed     player_combo[0].dpad_up_was_pressed
-#define dpad_down_was_pressed   player_combo[0].dpad_down_was_pressed
-#define dpad_left_was_pressed   player_combo[0].dpad_left_was_pressed
-#define dpad_right_was_pressed  player_combo[0].dpad_right_was_pressed
-#define initial_trigger_done    player_combo[0].initial_trigger_done
+#define select_hold_start       player_combo[0].p_select_hold_start
+#define select_was_held         player_combo[0].p_select_was_held
+#define dpad_up_was_pressed     player_combo[0].p_dpad_up_was_pressed
+#define dpad_down_was_pressed   player_combo[0].p_dpad_down_was_pressed
+#define dpad_left_was_pressed   player_combo[0].p_dpad_left_was_pressed
+#define dpad_right_was_pressed  player_combo[0].p_dpad_right_was_pressed
+#define initial_trigger_done    player_combo[0].p_initial_trigger_done
 
 // Timing constants
 static const uint32_t INITIAL_HOLD_TIME_MS = 2000;  // Must hold 2 seconds for first trigger
@@ -200,7 +200,7 @@ void profile_set_active(output_target_t output, uint8_t index)
     neopixel_indicate_profile(index);
 
     uint8_t player_count = get_player_count ? get_player_count() : 0;
-    feedback_trigger(index, player_count);
+    profile_indicator_trigger(index, player_count);
 
     // Save to flash
     profile_save_to_flash(output);
@@ -342,29 +342,29 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
 
     // Select released - reset everything for this player
     if (!select_held) {
-        combo->select_hold_start = 0;
-        combo->select_was_held = false;
-        combo->dpad_up_was_pressed = false;
-        combo->dpad_down_was_pressed = false;
-        combo->dpad_left_was_pressed = false;
-        combo->dpad_right_was_pressed = false;
-        combo->initial_trigger_done = false;
+        combo->p_select_hold_start = 0;
+        combo->p_select_was_held = false;
+        combo->p_dpad_up_was_pressed = false;
+        combo->p_dpad_down_was_pressed = false;
+        combo->p_dpad_left_was_pressed = false;
+        combo->p_dpad_right_was_pressed = false;
+        combo->p_initial_trigger_done = false;
         return;
     }
 
     // Select is held
     uint32_t current_time = to_ms_since_boot(get_absolute_time());
 
-    if (!combo->select_was_held) {
-        combo->select_hold_start = current_time;
-        combo->select_was_held = true;
-        combo->dpad_up_was_pressed = dpad_up_pressed;
-        combo->dpad_down_was_pressed = dpad_down_pressed;
+    if (!combo->p_select_was_held) {
+        combo->p_select_hold_start = current_time;
+        combo->p_select_was_held = true;
+        combo->p_dpad_up_was_pressed = dpad_up_pressed;
+        combo->p_dpad_down_was_pressed = dpad_down_pressed;
         return;
     }
 
-    uint32_t hold_duration = current_time - combo->select_hold_start;
-    bool can_trigger = combo->initial_trigger_done || (hold_duration >= INITIAL_HOLD_TIME_MS);
+    uint32_t hold_duration = current_time - combo->p_select_hold_start;
+    bool can_trigger = combo->p_initial_trigger_done || (hold_duration >= INITIAL_HOLD_TIME_MS);
 
     if (!can_trigger) return;
 
@@ -375,31 +375,31 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
     }
 
     // D-pad Up - cycle profile forward
-    if (dpad_up_pressed && !combo->dpad_up_was_pressed) {
+    if (dpad_up_pressed && !combo->p_dpad_up_was_pressed) {
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_player_next(output, player_index);
-            combo->initial_trigger_done = true;
+            combo->p_initial_trigger_done = true;
         }
     }
-    combo->dpad_up_was_pressed = dpad_up_pressed;
+    combo->p_dpad_up_was_pressed = dpad_up_pressed;
 
     // D-pad Down - cycle profile backward
-    if (dpad_down_pressed && !combo->dpad_down_was_pressed) {
+    if (dpad_down_pressed && !combo->p_dpad_down_was_pressed) {
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_player_prev(output, player_index);
-            combo->initial_trigger_done = true;
+            combo->p_initial_trigger_done = true;
         }
     }
-    combo->dpad_down_was_pressed = dpad_down_pressed;
+    combo->p_dpad_down_was_pressed = dpad_down_pressed;
 }
 
 bool profile_player_switch_combo_active(uint8_t player_index)
 {
     if (player_index >= MAX_PLAYERS) return false;
-    return player_combo[player_index].select_was_held &&
-           player_combo[player_index].initial_trigger_done;
+    return player_combo[player_index].p_select_was_held &&
+           player_combo[player_index].p_initial_trigger_done;
 }
 
 // ============================================================================
@@ -461,7 +461,7 @@ void profile_check_switch_combo(uint32_t buttons)
     }
 
     // Don't allow switching while feedback is still active
-    if (neopixel_is_indicating() || feedback_is_active()) {
+    if (neopixel_is_indicating() || profile_indicator_is_active()) {
         return;
     }
 

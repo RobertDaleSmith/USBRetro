@@ -60,6 +60,12 @@ static route_entry_t routing_table[MAX_ROUTES];
 static uint8_t route_count = 0;
 
 // ============================================================================
+// OUTPUT TAPS (Push-based notification)
+// ============================================================================
+
+static router_tap_callback_t output_taps[MAX_OUTPUTS] = {NULL};
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -356,6 +362,11 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         router_outputs[output][player_index].current_state = transformed;
         router_outputs[output][player_index].updated = true;
         router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;  // Default for now
+
+        // Notify tap if registered (for push-based outputs like UART)
+        if (output_taps[output]) {
+            output_taps[output](output, player_index, &transformed);
+        }
     }
 }
 
@@ -480,6 +491,11 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
 
     router_outputs[output][0].updated = true;
     router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;
+
+    // Notify tap if registered (for push-based outputs like UART)
+    if (output_taps[output]) {
+        output_taps[output](output, 0, &router_outputs[output][0].current_state);
+    }
 }
 
 // Main input submission function (called by input drivers)
@@ -560,6 +576,11 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
                             router_outputs[target][target_player].current_state = transformed;
                             router_outputs[target][target_player].updated = true;
                             router_outputs[target][target_player].source = INPUT_SOURCE_USB_HOST;
+
+                            // Notify tap if registered
+                            if (output_taps[target]) {
+                                output_taps[target](target, target_player, &transformed);
+                            }
                         } else {
                             // Auto-assign player slot (standard behavior)
                             router_simple_mode(event, target);
@@ -649,6 +670,18 @@ output_target_t router_get_primary_output(void) {
     }
 
     return OUTPUT_TARGET_NONE;
+}
+
+// ============================================================================
+// OUTPUT TAPS
+// ============================================================================
+
+void router_set_tap(output_target_t output, router_tap_callback_t callback) {
+    if (output >= 0 && output < MAX_OUTPUTS) {
+        output_taps[output] = callback;
+        printf("[router] Tap %s for output %d\n",
+               callback ? "registered" : "unregistered", output);
+    }
 }
 
 // ============================================================================

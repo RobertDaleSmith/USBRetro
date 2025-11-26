@@ -4,7 +4,7 @@
 #include "nuon_buttons.h"
 #include "core/services/codes/codes.h"
 #include "core/services/hotkeys/hotkeys.h"
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include <math.h>
 
 PIO pio;

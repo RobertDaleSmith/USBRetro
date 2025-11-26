@@ -1,161 +1,181 @@
-// feedback.c - Profile switching feedback management
+// feedback.c
+// USBRetro canonical feedback implementation
 //
-// Manages rumble and player LED feedback when switching profiles.
-// Note: NeoPixel LED blinking is handled separately in ws2812.c
+// Manages per-player feedback state that device drivers read and apply
+// to their specific hardware.
 
 #include "core/services/players/feedback.h"
 #include "core/services/players/manager.h"
-#include "pico/stdlib.h"
-#include <stdint.h>
-#include <stdbool.h>
+#include <string.h>
 
-// Profile indicator state
-static volatile uint8_t profile_to_indicate = 0;
+// ============================================================================
+// INTERNAL STATE
+// ============================================================================
 
-// Rumble pattern state
-static volatile uint8_t rumble_blinks_remaining = 0;
-static volatile bool rumble_is_on = false;
-static absolute_time_t rumble_state_change_time;
+static feedback_state_t feedback_states[MAX_PLAYERS];
+static bool initialized = false;
 
-// Player LED pattern state
-static volatile uint8_t player_led_blinks_remaining = 0;
-static volatile bool player_led_is_on = false;
-static volatile uint8_t stored_player_count = 0;  // Store player count to restore after blinking
-static absolute_time_t player_led_state_change_time;
+// Default player colors (PS4/DualSense style)
+static const uint8_t player_colors[4][3] = {
+    {0x00, 0x00, 0xFF},  // Player 1: Blue
+    {0xFF, 0x00, 0x00},  // Player 2: Red
+    {0x00, 0xFF, 0x00},  // Player 3: Green
+    {0xFF, 0x00, 0xFF},  // Player 4: Pink/Magenta
+};
 
-// Timing constants - all synchronized for visual/haptic/LED feedback
-#define RUMBLE_OFF_TIME_US 200000   // 200ms rumble off (matches NeoPixel OFF)
-#define RUMBLE_ON_TIME_US 100000    // 100ms rumble on (matches NeoPixel ON)
-
-// Player LED timing constants (synchronized with NeoPixel and rumble timing)
-#define PLAYER_LED_OFF_TIME_US 200000  // 200ms LED off (this is what we count)
-#define PLAYER_LED_ON_TIME_US 100000   // 100ms LED on (brief flash between OFF blinks)
+// ============================================================================
+// PUBLIC API
+// ============================================================================
 
 void feedback_init(void)
 {
-    profile_to_indicate = 0;
+    memset(feedback_states, 0, sizeof(feedback_states));
 
-    rumble_blinks_remaining = 0;
-    rumble_is_on = false;
+    // Initialize all players with default LED state
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        feedback_states[i].led.brightness = 255;
+        feedback_states[i].led.pattern = FEEDBACK_LED_NONE;
+    }
 
-    player_led_blinks_remaining = 0;
-    player_led_is_on = false;
-    stored_player_count = 0;
+    initialized = true;
 }
 
-// Trigger profile indicator rumble and player LED patterns
-void feedback_trigger(uint8_t profile_index, uint8_t player_count)
+feedback_state_t* feedback_get_state(uint8_t player_index)
 {
-    // Only trigger if not already active
-    if (rumble_blinks_remaining == 0 && player_led_blinks_remaining == 0) {
-        profile_to_indicate = profile_index;
+    if (player_index >= MAX_PLAYERS) return NULL;
+    return &feedback_states[player_index];
+}
 
-        // Trigger rumble pattern (profile 0 = 1 pulse, etc.)
-        rumble_blinks_remaining = profile_index + 1;
-        rumble_is_on = true;  // Start with rumble ON
-        rumble_state_change_time = get_absolute_time();
+void feedback_set_rumble(uint8_t player_index, uint8_t left, uint8_t right)
+{
+    if (player_index >= MAX_PLAYERS) return;
 
-        // Trigger player LED pattern - blink N times between OFF and profile LED (N = profile_index + 1)
-        player_led_blinks_remaining = profile_index + 1;
-        player_led_is_on = false;  // Start with all LEDs OFF
-        stored_player_count = player_count;  // Store player count to restore after blinking
-        player_led_state_change_time = get_absolute_time();
+    feedback_state_t* state = &feedback_states[player_index];
+
+    if (state->rumble.left != left || state->rumble.right != right) {
+        state->rumble.left = left;
+        state->rumble.right = right;
+        state->rumble_dirty = true;
     }
 }
 
-// Get current rumble value for profile indicator (0 = off, 255 = on)
-uint8_t feedback_get_rumble(void)
+void feedback_set_rumble_ext(uint8_t player_index, const feedback_rumble_t* rumble)
 {
-    return rumble_is_on ? 255 : 0;
+    if (player_index >= MAX_PLAYERS || rumble == NULL) return;
+
+    feedback_state_t* state = &feedback_states[player_index];
+
+    if (memcmp(&state->rumble, rumble, sizeof(feedback_rumble_t)) != 0) {
+        state->rumble = *rumble;
+        state->rumble_dirty = true;
+    }
 }
 
-// Get current player LED value for profile indicator
-// Returns the LED bitmask from PLAYER_LEDS array
-uint8_t feedback_get_player_led(uint8_t player_count)
+void feedback_set_led_player(uint8_t player_index, uint8_t player_num)
 {
-    // If profile indicator is active, return the blinking pattern
-    if (player_led_blinks_remaining > 0) {
-        if (player_led_is_on) {
-            // LED on - show player LED N where N = profile_index + 1
-            // Profile 0 uses LED1, profile 1 uses LED2, etc.
-            return PLAYER_LEDS[profile_to_indicate + 1];
-        } else {
-            // LED off - all LEDs off
-            return PLAYER_LEDS[0];
-        }
+    if (player_index >= MAX_PLAYERS) return;
+
+    feedback_state_t* state = &feedback_states[player_index];
+
+    // Set player indicator pattern
+    uint8_t pattern = FEEDBACK_LED_NONE;
+    if (player_num >= 1 && player_num <= 4) {
+        pattern = (1 << (player_num - 1));  // PLAYER1=0x01, PLAYER2=0x02, etc.
     }
 
-    // Normal operation - show player number
-    return PLAYER_LEDS[player_count];
+    // Set RGB color based on player number
+    uint8_t r = 0, g = 0, b = 0;
+    if (player_num >= 1 && player_num <= 4) {
+        r = player_colors[player_num - 1][0];
+        g = player_colors[player_num - 1][1];
+        b = player_colors[player_num - 1][2];
+    }
+
+    if (state->led.pattern != pattern ||
+        state->led.r != r || state->led.g != g || state->led.b != b) {
+        state->led.pattern = pattern;
+        state->led.r = r;
+        state->led.g = g;
+        state->led.b = b;
+        state->led_dirty = true;
+    }
 }
 
-// Check if profile indicator is currently active
-bool feedback_is_active(void)
+void feedback_set_led_rgb(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b)
 {
-    return (rumble_blinks_remaining > 0 || player_led_blinks_remaining > 0);
+    if (player_index >= MAX_PLAYERS) return;
+
+    feedback_state_t* state = &feedback_states[player_index];
+
+    if (state->led.r != r || state->led.g != g || state->led.b != b) {
+        state->led.r = r;
+        state->led.g = g;
+        state->led.b = b;
+        state->led_dirty = true;
+    }
 }
 
-// Get the player index to display (overrides actual player index during indication)
-// This allows device drivers to naturally show profile indicator without modification
-int8_t feedback_get_display_player_index(int8_t actual_player_index)
+void feedback_set_led(uint8_t player_index, const feedback_led_t* led)
 {
-    // If player LED indicator is active, override the player index
-    if (player_led_blinks_remaining > 0) {
-        if (player_led_is_on) {
-            // LED on - show profile index (0-3)
-            return profile_to_indicate;
-        } else {
-            // LED off - return -1 to show all LEDs off
-            return -1;
-        }
-    }
+    if (player_index >= MAX_PLAYERS || led == NULL) return;
 
-    // Normal operation - return actual player index
-    return actual_player_index;
+    feedback_state_t* state = &feedback_states[player_index];
+
+    if (memcmp(&state->led, led, sizeof(feedback_led_t)) != 0) {
+        state->led = *led;
+        state->led_dirty = true;
+    }
 }
 
-// Update profile indicator state machines (called from main loop)
-void feedback_task(void)
+void feedback_set_trigger(uint8_t player_index, bool left, const feedback_trigger_t* trigger)
 {
-    absolute_time_t current_time = get_absolute_time();
+    if (player_index >= MAX_PLAYERS || trigger == NULL) return;
 
-    // Handle rumble pattern state machine (runs independently, must run every loop)
-    if (rumble_blinks_remaining > 0) {
-        int64_t rumble_time_in_state = absolute_time_diff_us(rumble_state_change_time, current_time);
+    feedback_state_t* state = &feedback_states[player_index];
+    feedback_trigger_t* target = left ? &state->left_trigger : &state->right_trigger;
 
-        if (rumble_is_on) {
-            // Rumble is ON, check if it's time to turn OFF
-            if (rumble_time_in_state >= RUMBLE_ON_TIME_US) {
-                rumble_is_on = false;
-                rumble_blinks_remaining--;
-                rumble_state_change_time = current_time;
-            }
-        } else {
-            // Rumble is OFF, check if we need another pulse
-            if (rumble_time_in_state >= RUMBLE_OFF_TIME_US && rumble_blinks_remaining > 0) {
-                rumble_is_on = true;
-                rumble_state_change_time = current_time;
-            }
-        }
+    if (memcmp(target, trigger, sizeof(feedback_trigger_t)) != 0) {
+        *target = *trigger;
+        state->triggers_dirty = true;
+    }
+}
+
+void feedback_clear(uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    feedback_state_t* state = &feedback_states[player_index];
+
+    // Clear rumble
+    if (state->rumble.left != 0 || state->rumble.right != 0 ||
+        state->rumble.left_trigger != 0 || state->rumble.right_trigger != 0) {
+        memset(&state->rumble, 0, sizeof(feedback_rumble_t));
+        state->rumble_dirty = true;
     }
 
-    // Handle player LED pattern state machine (runs independently, must run every loop)
-    if (player_led_blinks_remaining > 0) {
-        int64_t player_led_time_in_state = absolute_time_diff_us(player_led_state_change_time, current_time);
-
-        if (player_led_is_on) {
-            // LED is ON (showing player number), check if it's time to turn OFF
-            if (player_led_time_in_state >= PLAYER_LED_ON_TIME_US) {
-                player_led_is_on = false;
-                player_led_blinks_remaining--;
-                player_led_state_change_time = current_time;
-            }
-        } else {
-            // LED is OFF (all off), check if we need another blink
-            if (player_led_time_in_state >= PLAYER_LED_OFF_TIME_US && player_led_blinks_remaining > 0) {
-                player_led_is_on = true;
-                player_led_state_change_time = current_time;
-            }
-        }
+    // Clear LED (but keep brightness)
+    uint8_t brightness = state->led.brightness;
+    if (state->led.pattern != FEEDBACK_LED_NONE ||
+        state->led.r != 0 || state->led.g != 0 || state->led.b != 0) {
+        memset(&state->led, 0, sizeof(feedback_led_t));
+        state->led.brightness = brightness;
+        state->led_dirty = true;
     }
+
+    // Clear triggers
+    if (state->left_trigger.mode != TRIGGER_MODE_OFF ||
+        state->right_trigger.mode != TRIGGER_MODE_OFF) {
+        memset(&state->left_trigger, 0, sizeof(feedback_trigger_t));
+        memset(&state->right_trigger, 0, sizeof(feedback_trigger_t));
+        state->triggers_dirty = true;
+    }
+}
+
+void feedback_clear_dirty(uint8_t player_index)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    feedback_states[player_index].rumble_dirty = false;
+    feedback_states[player_index].led_dirty = false;
+    feedback_states[player_index].triggers_dirty = false;
 }

@@ -8,6 +8,7 @@
 #include "core/router/router.h"
 #include "core/input_event.h"
 #include "core/services/players/manager.h"
+#include "core/services/profiles/profile.h"
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "pico/stdlib.h"
@@ -29,8 +30,9 @@ static volatile uint8_t tx_queue_head = 0;
 static volatile uint8_t tx_queue_tail = 0;
 
 // Previous state for change detection
-static uint32_t prev_buttons[UART_HOST_MAX_PLAYERS];
-static uint8_t prev_analog[UART_HOST_MAX_PLAYERS][6];
+#define UART_MAX_PLAYERS 8  // Maximum players tracked by UART device
+static uint32_t prev_buttons[UART_MAX_PLAYERS];
+static uint8_t prev_analog[UART_MAX_PLAYERS][6];
 
 // Receive state machine (for feedback packets)
 typedef enum {
@@ -316,7 +318,7 @@ void uart_device_queue_input(const input_event_t* event, uint8_t player_index)
 {
     if (!initialized) return;
     if (device_mode == UART_DEVICE_MODE_OFF) return;
-    if (player_index >= UART_HOST_MAX_PLAYERS) return;
+    if (player_index >= UART_MAX_PLAYERS) return;
 
     // Check for change if in ON_CHANGE mode
     if (device_mode == UART_DEVICE_MODE_ON_CHANGE) {

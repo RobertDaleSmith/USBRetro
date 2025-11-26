@@ -16,7 +16,7 @@
 #ifndef USB23DO_PROFILES_H
 #define USB23DO_PROFILES_H
 
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "native/device/3do/3do_buttons.h"
 
 // ============================================================================

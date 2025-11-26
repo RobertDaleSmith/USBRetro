@@ -7,7 +7,7 @@
 #include "tusb.h"
 #include "core/output_interface.h"
 #include "core/services/players/manager.h"
-#include "core/services/players/feedback.h"
+#include "core/services/profiles/profile_indicator.h"
 #include "core/services/codes/codes.h"
 
 // HID protocol handlers
@@ -32,11 +32,11 @@ void usbh_task(void)
 
     // Combine console rumble with profile indicator rumble
     uint8_t console_rumble = (output->get_rumble) ? output->get_rumble() : 0;
-    uint8_t combined_rumble = console_rumble | feedback_get_rumble();
+    uint8_t combined_rumble = console_rumble | profile_indicator_get_rumble();
 
     // Get player LED value (combines console LED with profile indicator)
     uint8_t console_led = (output->get_player_led) ? output->get_player_led() : 0;
-    uint8_t player_led = feedback_get_player_led(playersCount) | console_led;
+    uint8_t player_led = profile_indicator_get_player_led(playersCount) | console_led;
 
     // Get adaptive trigger threshold from output interface (DualSense L2/R2)
     uint8_t trigger_threshold = (output->get_trigger_threshold) ? output->get_trigger_threshold() : 0;

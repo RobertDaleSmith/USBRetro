@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "core/feedback.h"
+#include "core/services/players/feedback.h"
 
 // ============================================================================
 // LEGACY DEVICE OUTPUT CONFIG (deprecated - use feedback_state_t instead)

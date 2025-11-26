@@ -4,7 +4,7 @@
 #include "core/services/players/manager.h"
 #include "usb/usbh/hid/hid_utils.h"
 #include "usb/usbh/hid/hid_registry.h"
-#include "core/services/players/feedback.h"
+#include "core/services/profiles/profile_indicator.h"
 
 // #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
@@ -56,7 +56,7 @@ void hid_task(uint8_t rumble, uint8_t leds, uint8_t trigger_threshold, uint8_t t
       case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
         {
           // Override player_index during profile indication for all controllers
-          int8_t display_player_index = feedback_get_display_player_index(player_index);
+          int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
 
           // Build device output configuration
           device_output_config_t config = {

@@ -4,7 +4,7 @@
 // Configurable player slot management supporting both SHIFT and FIXED modes.
 
 #include "manager.h"
-#include "feedback.h"
+#include "core/services/profiles/profile_indicator.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -61,7 +61,7 @@ void players_init(void)
   playersCount = 0;
 
   // Initialize feedback subsystem (rumble and player LED patterns)
-  feedback_init();
+  profile_indicator_init();
 }
 
 // Initialize with custom configuration
@@ -93,7 +93,7 @@ void players_init_with_config(const player_config_t* config)
   playersCount = 0;
 
   // Initialize feedback subsystem (rumble and player LED patterns)
-  feedback_init();
+  profile_indicator_init();
 }
 
 // ============================================================================
@@ -103,7 +103,7 @@ void players_init_with_config(const player_config_t* config)
 void players_task(void)
 {
   // Run feedback state machine (rumble and player LED patterns)
-  feedback_task();
+  profile_indicator_task();
 }
 
 // ============================================================================

@@ -12,7 +12,7 @@
 #include "pico/flash.h"
 #include "tusb.h"
 #include "core/services/storage/flash.h"
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "core/services/players/manager.h"
 #include "core/services/codes/codes.h"
 #include "core/router/router.h"

@@ -8,7 +8,7 @@
 #include "profiles.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
-#include "core/services/profile/profile.h"
+#include "core/services/profiles/profile.h"
 #include "core/output_interface.h"
 #include "native/device/nuon/nuon_device.h"
 #include <stdio.h>

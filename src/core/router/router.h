@@ -51,6 +51,7 @@ typedef enum {
     OUTPUT_TARGET_LOOPY,
     OUTPUT_TARGET_USB_DEVICE,
     OUTPUT_TARGET_BLE_PERIPHERAL,
+    OUTPUT_TARGET_UART,             // UART bridge to ESP32/other MCU
 } output_target_t;
 
 // ============================================================================
@@ -83,7 +84,7 @@ typedef struct {
 // ROUTER CONFIGURATION
 // ============================================================================
 
-#define MAX_OUTPUTS 8
+#define MAX_OUTPUTS 9
 #define MAX_PLAYERS_PER_OUTPUT 8
 
 typedef struct {
@@ -178,6 +179,21 @@ void router_set_active_outputs(output_target_t* outputs, uint8_t count);
 // Get primary active output (first in active outputs list)
 // Returns OUTPUT_TARGET_NONE if no outputs configured
 output_target_t router_get_primary_output(void);
+
+// ============================================================================
+// OUTPUT TAP (Push-based notification)
+// ============================================================================
+// For outputs that need push notification (UART, BLE) instead of polling
+
+// Tap callback - called when router updates output state
+// output: which output target
+// player_index: which player slot (0-based)
+// event: the updated input event
+typedef void (*router_tap_callback_t)(output_target_t output, uint8_t player_index,
+                                       const input_event_t* event);
+
+// Set tap callback for an output (NULL to disable)
+void router_set_tap(output_target_t output, router_tap_callback_t callback);
 
 // ============================================================================
 // INTERNAL STATE (exposed for debugging, don't modify directly)
