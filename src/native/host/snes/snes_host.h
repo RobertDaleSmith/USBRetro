@@ -3,14 +3,13 @@
 // Polls native SNES/NES controllers via the SNESpad library and submits
 // input events to the router. Supports SNES controllers, NES controllers,
 // SNES mouse, and Xband keyboard.
-//
-// Used by Super3D0USB to read native SNES controllers for 3DO output.
 
 #ifndef SNES_HOST_H
 #define SNES_HOST_H
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "native/host/host_interface.h"
 
 // ============================================================================
 // CONFIGURATION
@@ -62,5 +61,12 @@ int8_t snes_host_get_device_type(uint8_t port);
 
 // Check if any SNES controller is connected
 bool snes_host_is_connected(void);
+
+// ============================================================================
+// HOST INTERFACE
+// ============================================================================
+
+// SNES host interface (implements HostInterface pattern)
+extern const HostInterface snes_host_interface;
 
 #endif // SNES_HOST_H
