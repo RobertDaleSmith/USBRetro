@@ -7,6 +7,8 @@
 #include "core/services/storage/flash.h"
 #include "core/router/router.h"
 #include "core/services/profile/profile.h"
+#include "core/services/players/feedback.h"
+#include "core/services/leds/ws2812.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
@@ -58,6 +60,9 @@ uint8_t controller_buffer[201];
 
 // Extension controller tracking
 static uint8_t extension_controller_count = 0;
+
+// Output mode (normal vs silly pad for arcade)
+static tdo_output_mode_t output_mode = TDO_MODE_NORMAL;
 
 // Get total controller count (USB + extension)
 uint8_t get_total_3do_controller_count(void) {
@@ -243,6 +248,53 @@ _3do_mouse_report new_3do_mouse_report(void) {
   return report;
 }
 
+_3do_silly_report new_3do_silly_report(void) {
+  _3do_silly_report report;
+  // Initialize to 0 to ensure clean state
+  memset(&report, 0, sizeof(report));
+  report.id = 0xC0;  // Silly control pad ID
+  return report;
+}
+
+//-----------------------------------------------------------------------------
+// Mode Management
+//-----------------------------------------------------------------------------
+
+tdo_output_mode_t tdo_get_output_mode(void) {
+  return output_mode;
+}
+
+void tdo_set_output_mode(tdo_output_mode_t mode) {
+  output_mode = mode;
+  #if CFG_TUSB_DEBUG >= 1
+  printf("[3DO] Output mode set to: %s\n", mode == TDO_MODE_SILLY ? "SILLY" : "NORMAL");
+  #endif
+}
+
+void tdo_toggle_output_mode(void) {
+  if (output_mode == TDO_MODE_NORMAL) {
+    tdo_set_output_mode(TDO_MODE_SILLY);
+  } else {
+    tdo_set_output_mode(TDO_MODE_NORMAL);
+  }
+}
+
+// Callback for D-pad Left/Right output mode switching
+// direction: -1 = left (previous), +1 = right (next)
+// Returns true if mode changed
+static bool tdo_output_mode_switch_callback(int8_t direction) {
+  (void)direction;  // Only 2 modes, direction doesn't matter
+  tdo_toggle_output_mode();
+
+  // Trigger feedback (mode 1 = silly, mode 0 = normal)
+  uint8_t mode_index = (output_mode == TDO_MODE_SILLY) ? 1 : 0;
+  uint8_t player_count = router_get_player_count(OUTPUT_TARGET_3DO);
+  feedback_trigger(mode_index, player_count);
+  neopixel_indicate_profile(mode_index);
+
+  return true;
+}
+
 //-----------------------------------------------------------------------------
 // Extension Controller Detection
 //-----------------------------------------------------------------------------
@@ -352,6 +404,16 @@ void update_3do_mouse(_3do_mouse_report report, uint8_t instance) {
   max_usb_controller = (max_usb_controller < (instance + 1)) ? (instance + 1) : max_usb_controller;
 }
 
+void update_3do_silly(_3do_silly_report report, uint8_t instance) {
+  if (instance >= MAX_PLAYERS) return;
+
+  memcpy(&current_reports[instance][0], &report, sizeof(_3do_silly_report));
+  report_sizes[instance] = 2;  // Silly pad is 2 bytes
+  device_attached[instance] = true;
+
+  max_usb_controller = (max_usb_controller < (instance + 1)) ? (instance + 1) : max_usb_controller;
+}
+
 //-----------------------------------------------------------------------------
 // Initialization
 //-----------------------------------------------------------------------------
@@ -406,8 +468,9 @@ void _3do_init(void) {
   pio_gpio_init(pio1, DATA_OUT_PIN);
   pio_sm_set_consecutive_pindirs(pio1, sm_output, DATA_OUT_PIN, 1, true);
 
-  // Profile system is initialized by app_init() - we just set up the callback
+  // Profile system is initialized by app_init() - we just set up the callbacks
   profile_set_player_count_callback(tdo_get_player_count_for_profile);
+  profile_set_output_mode_callback(tdo_output_mode_switch_callback);
 
   #if CFG_TUSB_DEBUG >= 1
   printf("3DO protocol initialized successfully.\n");
@@ -520,7 +583,7 @@ void _3do_task() {
     update_3do_report(i);
   }
 
-  // Check for profile switching combo (delegated to core)
+  // Check for profile/mode switching combo (delegated to core)
   const input_event_t* event = router_get_output(OUTPUT_TARGET_3DO, 0);
   if (event) {
     profile_check_switch_combo(event->buttons);
@@ -566,6 +629,31 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
   const profile_t* profile = profile_get_active(OUTPUT_TARGET_3DO);
   profile_output_t mapped;
   profile_apply(profile, buttons, ax, ay, az, at, l2, r2, &mapped);
+
+  // Check if silly pad mode is enabled
+  if (output_mode == TDO_MODE_SILLY) {
+    // Silly control pad mode for arcade JAMMA integration
+    _3do_silly_report report = new_3do_silly_report();
+
+    // Map buttons to arcade functions
+    // USB active-low: 0 = pressed, 3DO active-HIGH: 1 = pressed
+    // Player 1: Select = Coin, Start = Start
+    // Player 2: L1 = Coin, R1 = Start
+    // Service: L1 + R1 together
+    if (player_index == 0) {
+      report.p1_coin = (mapped.buttons & USBR_BUTTON_S1) == 0 ? 1 : 0;   // Select = P1 Coin
+      report.p1_start = (mapped.buttons & USBR_BUTTON_S2) == 0 ? 1 : 0;  // Start = P1 Start
+      report.p2_coin = (mapped.buttons & USBR_BUTTON_L1) == 0 ? 1 : 0;   // L1 = P2 Coin
+      report.p2_start = (mapped.buttons & USBR_BUTTON_R1) == 0 ? 1 : 0;  // R1 = P2 Start
+      // Service = L2 + R2 together
+      bool l2_pressed = (mapped.buttons & USBR_BUTTON_L2) == 0;
+      bool r2_pressed = (mapped.buttons & USBR_BUTTON_R2) == 0;
+      report.service = (l2_pressed && r2_pressed) ? 1 : 0;
+    }
+
+    update_3do_silly(report, player_index);
+    return;
+  }
 
   // Determine if this is a flight stick (has significant analog input)
   // TODO: Add better heuristics or device-type detection

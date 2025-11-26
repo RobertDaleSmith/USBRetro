@@ -102,13 +102,38 @@ typedef struct {
   uint8_t dx_low;         // X delta lower 8 bits
 } __attribute__((packed)) _3do_mouse_report;
 
+// 3DO Silly Control Pad Report (2 bytes / 16 bits)
+// Used for arcade JAMMA integration (Orbatak, etc.)
+// ID: 0xC0 0x00
+typedef struct {
+  // LSB byte - ID 0xC0
+  uint8_t id;             // Device ID (0xC0)
+
+  // MSB byte - Button data
+  uint8_t service   : 1;  // Service button (bit 0)
+  uint8_t unused1   : 1;  // Unused (bit 1)
+  uint8_t p2_start  : 1;  // Player 2 Start (bit 2)
+  uint8_t unused2   : 1;  // Unused (bit 3)
+  uint8_t p2_coin   : 1;  // Player 2 Coin (bit 4)
+  uint8_t unused3   : 1;  // Unused (bit 5)
+  uint8_t p1_start  : 1;  // Player 1 Start (bit 6)
+  uint8_t p1_coin   : 1;  // Player 1 Coin (bit 7)
+} __attribute__((packed)) _3do_silly_report;
+
 // Controller type enumeration
 typedef enum {
   CONTROLLER_NONE = 0,
   CONTROLLER_JOYPAD,
   CONTROLLER_JOYSTICK,
   CONTROLLER_MOUSE,
+  CONTROLLER_SILLY,     // Arcade JAMMA silly pad
 } controller_type_3do;
+
+// 3DO output mode (toggleable via hotkey)
+typedef enum {
+  TDO_MODE_NORMAL = 0,  // Normal joypad/joystick output
+  TDO_MODE_SILLY,       // Silly control pad (arcade JAMMA)
+} tdo_output_mode_t;
 
 // Declaration of global variables
 extern PIO pio;
@@ -137,10 +162,17 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index);
 _3do_joypad_report new_3do_joypad_report(void);
 _3do_joystick_report new_3do_joystick_report(void);
 _3do_mouse_report new_3do_mouse_report(void);
+_3do_silly_report new_3do_silly_report(void);
 
 // Report update functions
 void update_3do_joypad(_3do_joypad_report report, uint8_t instance);
 void update_3do_joystick(_3do_joystick_report report, uint8_t instance);
 void update_3do_mouse(_3do_mouse_report report, uint8_t instance);
+void update_3do_silly(_3do_silly_report report, uint8_t instance);
+
+// Mode management
+tdo_output_mode_t tdo_get_output_mode(void);
+void tdo_set_output_mode(tdo_output_mode_t mode);
+void tdo_toggle_output_mode(void);
 
 #endif // THREEDOH

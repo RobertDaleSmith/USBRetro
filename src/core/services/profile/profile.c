@@ -30,6 +30,8 @@ static uint32_t select_hold_start = 0;
 static bool select_was_held = false;
 static bool dpad_up_was_pressed = false;
 static bool dpad_down_was_pressed = false;
+static bool dpad_left_was_pressed = false;
+static bool dpad_right_was_pressed = false;
 static bool initial_trigger_done = false;
 
 // Timing constants
@@ -38,6 +40,7 @@ static const uint32_t INITIAL_HOLD_TIME_MS = 2000;  // Must hold 2 seconds for f
 // Callbacks
 static uint8_t (*get_player_count)(void) = NULL;
 static profile_switch_callback_t on_switch_callback = NULL;
+static output_mode_callback_t on_output_mode_callback = NULL;
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -105,6 +108,11 @@ void profile_set_player_count_callback(uint8_t (*callback)(void))
 void profile_set_switch_callback(profile_switch_callback_t callback)
 {
     on_switch_callback = callback;
+}
+
+void profile_set_output_mode_callback(output_mode_callback_t callback)
+{
+    on_output_mode_callback = callback;
 }
 
 const profile_t* profile_get_active(output_target_t output)
@@ -210,9 +218,6 @@ void profile_check_switch_combo(uint32_t buttons)
     output_target_t output = router_get_primary_output();
     if (output == OUTPUT_TARGET_NONE) return;
 
-    uint8_t count = profile_get_count(output);
-    if (count <= 1) return;
-
     uint8_t player_count = get_player_count ? get_player_count() : 0;
     if (player_count == 0) return;  // No controllers connected
 
@@ -220,6 +225,8 @@ void profile_check_switch_combo(uint32_t buttons)
     bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
     bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
     bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
+    bool dpad_left_pressed = ((buttons & USBR_BUTTON_DL) == 0);
+    bool dpad_right_pressed = ((buttons & USBR_BUTTON_DR) == 0);
 
     // Select released - reset everything
     if (!select_held) {
@@ -227,6 +234,8 @@ void profile_check_switch_combo(uint32_t buttons)
         select_was_held = false;
         dpad_up_was_pressed = false;
         dpad_down_was_pressed = false;
+        dpad_left_was_pressed = false;
+        dpad_right_was_pressed = false;
         initial_trigger_done = false;
         return;
     }
@@ -238,8 +247,10 @@ void profile_check_switch_combo(uint32_t buttons)
         // Select just pressed - start timer and reset D-pad state
         select_hold_start = current_time;
         select_was_held = true;
-        dpad_up_was_pressed = dpad_up_pressed;    // Capture current D-pad state
+        dpad_up_was_pressed = dpad_up_pressed;      // Capture current D-pad state
         dpad_down_was_pressed = dpad_down_pressed;
+        dpad_left_was_pressed = dpad_left_pressed;
+        dpad_right_was_pressed = dpad_right_pressed;
         return;  // Don't process D-pad on the same frame SELECT is pressed
     }
 
@@ -258,19 +269,45 @@ void profile_check_switch_combo(uint32_t buttons)
         return;
     }
 
-    // D-pad Up - cycle forward on rising edge
+    // D-pad Up - cycle profile forward on rising edge
     if (dpad_up_pressed && !dpad_up_was_pressed) {
-        profile_cycle_next(output);
-        initial_trigger_done = true;
+        uint8_t count = profile_get_count(output);
+        if (count > 1) {
+            profile_cycle_next(output);
+            initial_trigger_done = true;
+        }
     }
     dpad_up_was_pressed = dpad_up_pressed;
 
-    // D-pad Down - cycle backward on rising edge
+    // D-pad Down - cycle profile backward on rising edge
     if (dpad_down_pressed && !dpad_down_was_pressed) {
-        profile_cycle_prev(output);
-        initial_trigger_done = true;
+        uint8_t count = profile_get_count(output);
+        if (count > 1) {
+            profile_cycle_prev(output);
+            initial_trigger_done = true;
+        }
     }
     dpad_down_was_pressed = dpad_down_pressed;
+
+    // D-pad Left - cycle output mode backward on rising edge
+    if (dpad_left_pressed && !dpad_left_was_pressed) {
+        if (on_output_mode_callback) {
+            if (on_output_mode_callback(-1)) {
+                initial_trigger_done = true;
+            }
+        }
+    }
+    dpad_left_was_pressed = dpad_left_pressed;
+
+    // D-pad Right - cycle output mode forward on rising edge
+    if (dpad_right_pressed && !dpad_right_was_pressed) {
+        if (on_output_mode_callback) {
+            if (on_output_mode_callback(+1)) {
+                initial_trigger_done = true;
+            }
+        }
+    }
+    dpad_right_was_pressed = dpad_right_pressed;
 }
 
 bool profile_switch_combo_active(void)
@@ -381,6 +418,8 @@ void profile_apply(const profile_t* profile,
         input_buttons |= USBR_BUTTON_S1;   // Select
         input_buttons |= USBR_BUTTON_DU;   // D-pad Up
         input_buttons |= USBR_BUTTON_DD;   // D-pad Down
+        input_buttons |= USBR_BUTTON_DL;   // D-pad Left
+        input_buttons |= USBR_BUTTON_DR;   // D-pad Right
     }
 
     // Initialize output with passthrough values
