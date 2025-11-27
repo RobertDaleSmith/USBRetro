@@ -27,15 +27,19 @@ const InputInterface** app_get_input_interfaces(uint8_t* count)
 }
 
 // ============================================================================
-// APP OUTPUT INTERFACE
+// APP OUTPUT INTERFACES
 // ============================================================================
 
-// Base 3DO output interface
 extern const OutputInterface tdo_output_interface;
 
-const OutputInterface* app_get_output_interface(void)
+static const OutputInterface* output_interfaces[] = {
+    &tdo_output_interface,
+};
+
+const OutputInterface** app_get_output_interfaces(uint8_t* count)
 {
-    return &tdo_output_interface;
+    *count = sizeof(output_interfaces) / sizeof(output_interfaces[0]);
+    return output_interfaces;
 }
 
 // ============================================================================

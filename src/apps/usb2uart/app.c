@@ -48,6 +48,7 @@ static void uart_led_handler(uint8_t player_index, uint8_t pattern,
 // Output interface for UART bridge
 static const OutputInterface uart_output_interface = {
     .name = "UART Bridge",
+    .target = OUTPUT_TARGET_UART,
     .init = uart_output_init,
     .core1_task = NULL,            // No core1 needed
     .task = uart_output_task,
@@ -60,9 +61,14 @@ static const OutputInterface uart_output_interface = {
     .get_trigger_threshold = NULL,
 };
 
-const OutputInterface* app_get_output_interface(void)
+static const OutputInterface* output_interfaces[] = {
+    &uart_output_interface,
+};
+
+const OutputInterface** app_get_output_interfaces(uint8_t* count)
 {
-    return &uart_output_interface;
+    *count = sizeof(output_interfaces) / sizeof(output_interfaces[0]);
+    return output_interfaces;
 }
 
 // ============================================================================

@@ -155,6 +155,7 @@ bool usbd_send_report(uint8_t player_index)
 
 const OutputInterface usbd_output_interface = {
     .name = "USB",
+    .target = OUTPUT_TARGET_USB_DEVICE,
     .init = usbd_init,
     .task = usbd_task,
     .core1_task = usbd_core1_task,

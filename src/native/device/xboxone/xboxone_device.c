@@ -268,6 +268,7 @@ static const char* xb1_get_profile_name(uint8_t index) {
 
 const OutputInterface xboxone_output_interface = {
     .name = "Xbox One",
+    .target = OUTPUT_TARGET_XBOXONE,
     .init = xb1_init,
     .core1_task = core1_task,
     .task = NULL,  // Xbox One doesn't need periodic task

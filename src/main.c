@@ -30,11 +30,12 @@
 
 // App layer (linked per-product)
 extern void app_init(void);
-extern const OutputInterface* app_get_output_interface(void);
+extern const OutputInterface** app_get_output_interfaces(uint8_t* count);
 extern const InputInterface** app_get_input_interfaces(uint8_t* count);
 
 // Cached interfaces (set once at startup)
-static const OutputInterface* output = NULL;
+static const OutputInterface** outputs = NULL;
+static uint8_t output_count = 0;
 static const InputInterface** inputs = NULL;
 static uint8_t input_count = 0;
 
@@ -54,8 +55,11 @@ static void __not_in_flash_func(core0_main)(void)
       }
     }
 
-    if (output->task) {
-      output->task();
+    // Run all output interface tasks
+    for (uint8_t i = 0; i < output_count; i++) {
+      if (outputs[i] && outputs[i]->task) {
+        outputs[i]->task();
+      }
     }
   }
 }
@@ -82,13 +86,23 @@ int main(void)
     }
   }
 
-  // Get and initialize output interface from app
-  output = app_get_output_interface();
-  printf("[usbretro] Initializing output: %s\n", output->name);
-  output->init();
+  // Get and initialize output interfaces from app
+  outputs = app_get_output_interfaces(&output_count);
+  for (uint8_t i = 0; i < output_count; i++) {
+    if (outputs[i] && outputs[i]->init) {
+      printf("[usbretro] Initializing output: %s\n", outputs[i]->name);
+      outputs[i]->init();
+    }
+  }
 
-  if (output->core1_task) {
-    multicore_launch_core1(output->core1_task);
+  // Launch core1 task from first output that has one
+  // Note: Only one output can use core1 (RP2040 has 2 cores)
+  for (uint8_t i = 0; i < output_count; i++) {
+    if (outputs[i] && outputs[i]->core1_task) {
+      printf("[usbretro] Launching core1 for: %s\n", outputs[i]->name);
+      multicore_launch_core1(outputs[i]->core1_task);
+      break;  // Only one core1 task possible
+    }
   }
 
   core0_main();

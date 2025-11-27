@@ -7,10 +7,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "core/input_event.h"
+#include "core/router/router.h"
 
 // Output interface - abstracts different output types (native consoles, USB device, BLE, etc.)
 typedef struct {
     const char* name;                                      // Output name (e.g., "GameCube", "USB Device (XInput)")
+    output_target_t target;                                // Router target type for routing table
 
     void (*init)(void);                                    // Initialize output hardware/protocol
     void (*task)(void);                                    // Core 0 periodic task (NULL if not needed)
@@ -30,6 +32,9 @@ typedef struct {
     // Input device feedback (from current profile)
     uint8_t (*get_trigger_threshold)(void);                // Get L2/R2 threshold for adaptive triggers, NULL = 0
 } OutputInterface;
+
+// Maximum outputs per app (native console + USB device + BLE + UART)
+#define MAX_OUTPUT_INTERFACES 4
 
 // Active output interface (set at compile-time, selected in common/output.c)
 extern const OutputInterface* active_output;

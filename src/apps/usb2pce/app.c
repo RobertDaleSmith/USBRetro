@@ -28,15 +28,19 @@ const InputInterface** app_get_input_interfaces(uint8_t* count)
 }
 
 // ============================================================================
-// APP OUTPUT INTERFACE
+// APP OUTPUT INTERFACES
 // ============================================================================
 
-// Provide output interface for firmware to use
 extern const OutputInterface pcengine_output_interface;
 
-const OutputInterface* app_get_output_interface(void)
+static const OutputInterface* output_interfaces[] = {
+    &pcengine_output_interface,
+};
+
+const OutputInterface** app_get_output_interfaces(uint8_t* count)
 {
-    return &pcengine_output_interface;
+    *count = sizeof(output_interfaces) / sizeof(output_interfaces[0]);
+    return output_interfaces;
 }
 
 // ============================================================================

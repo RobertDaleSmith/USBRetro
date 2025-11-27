@@ -526,6 +526,7 @@ static const char* nuon_get_profile_name(uint8_t index) {
 
 const OutputInterface nuon_output_interface = {
     .name = "Nuon",
+    .target = OUTPUT_TARGET_NUON,
     .init = nuon_init,
     .core1_task = core1_task,
     .task = nuon_task,  // Nuon needs periodic soft reset task

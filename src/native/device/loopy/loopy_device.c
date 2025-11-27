@@ -332,6 +332,7 @@ static const char* loopy_get_profile_name(uint8_t index) {
 
 const OutputInterface loopy_output_interface = {
     .name = "Loopy",
+    .target = OUTPUT_TARGET_LOOPY,
     .init = loopy_init,
     .core1_task = core1_task,
     .task = NULL,  // Loopy doesn't need periodic task

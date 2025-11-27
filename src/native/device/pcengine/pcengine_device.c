@@ -360,6 +360,7 @@ void __not_in_flash_func(update_output)(void)
 
 const OutputInterface pcengine_output_interface = {
     .name = "PCEngine",
+    .target = OUTPUT_TARGET_PCENGINE,
     .init = pce_init,
     .core1_task = core1_task,
     .task = pce_task,  // PCEngine needs periodic scan detection task

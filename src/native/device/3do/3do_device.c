@@ -922,6 +922,7 @@ void __not_in_flash_func(update_3do_report)(uint8_t player_index) {
 
 const OutputInterface tdo_output_interface = {
     .name = "3DO",
+    .target = OUTPUT_TARGET_3DO,
     .init = _3do_init,
     .core1_task = core1_task,
     .task = _3do_task,  // 3DO needs periodic polling and extension controller detection

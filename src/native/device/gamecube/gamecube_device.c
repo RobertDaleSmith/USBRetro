@@ -431,6 +431,7 @@ void __not_in_flash_func(update_output)(void)
 
 const OutputInterface gamecube_output_interface = {
     .name = "GameCube",
+    .target = OUTPUT_TARGET_GAMECUBE,
     .init = ngc_init,
     .core1_task = core1_task,
     .task = NULL,
