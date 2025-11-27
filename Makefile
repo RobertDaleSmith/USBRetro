@@ -52,6 +52,7 @@ CONSOLE_loopy := usbretro_loopy
 CONSOLE_snes3do := usbretro_snes3do
 CONSOLE_uart := usbretro_uart
 CONSOLE_usb := usbretro_usb
+CONSOLE_snes2usb := usbretro_snes2usb
 
 # App definitions: APP_name = board console output_name
 # Naming convention: usb2<console> for all apps
@@ -64,9 +65,10 @@ APP_usb23do := rp2040zero 3do usb23do
 APP_snes23do := rp2040zero snes3do snes23do
 APP_usb2uart := kb2040 uart usb2uart
 APP_usb2usb := feather_usbhost usb usb2usb
+APP_snes2usb := kb2040 snes2usb snes2usb
 
 # All apps
-APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb
+APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb snes2usb
 
 # Stable apps for release (mature enough for public release)
 RELEASE_APPS := usb2pce usb2gc usb2nuon
@@ -101,6 +103,7 @@ help:
 	@echo "  make snes23do      - Build snes23do (RP2040 Zero + SNES->3DO)"
 	@echo "  make usb2uart      - Build usb2uart (KB2040 + UART ESP32 bridge)"
 	@echo "  make usb2usb       - Build usb2usb (Feather USB Host + USB HID gamepad)"
+	@echo "  make snes2usb      - Build snes2usb (KB2040 + SNES→USB HID gamepad)"
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
 	@echo "  make all           - Build all apps"
@@ -119,6 +122,7 @@ help:
 	@echo "  make flash-snes23do - Flash snes23do firmware"
 	@echo "  make flash-usb2uart - Flash usb2uart firmware"
 	@echo "  make flash-usb2usb - Flash usb2usb firmware"
+	@echo "  make flash-snes2usb - Flash snes2usb firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
 	@echo "  make pce           - Build PCEngine firmware"
@@ -202,6 +206,10 @@ usb2uart:
 .PHONY: usb2usb
 usb2usb:
 	$(call build_app,usb2usb)
+
+.PHONY: snes2usb
+snes2usb:
+	$(call build_app,snes2usb)
 
 # Console-only targets (defaults to KB2040)
 .PHONY: 3do
@@ -342,6 +350,10 @@ flash-usb2uart:
 .PHONY: flash-usb2usb
 flash-usb2usb:
 	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2usb))_$(CONSOLE_$(word 2,$(APP_usb2usb))).uf2
+
+.PHONY: flash-snes2usb
+flash-snes2usb:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_snes2usb))_$(CONSOLE_$(word 2,$(APP_snes2usb))).uf2
 
 # Internal flash helper
 .PHONY: _flash

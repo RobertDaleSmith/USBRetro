@@ -26,7 +26,11 @@
 #include "core/services/players/manager.h"
 #include "core/services/leds/leds.h"
 #include "core/services/storage/storage.h"
+
+// USB host is optional (not needed for native-input apps like snes2usb)
+#ifndef DISABLE_USB_HOST
 #include "usb/usbh/usbh.h"
+#endif
 
 // App layer (linked per-product)
 extern void app_init(void);
@@ -43,7 +47,10 @@ static void __not_in_flash_func(core0_main)(void)
     leds_task();
     players_task();
     storage_task();
+
+#ifndef DISABLE_USB_HOST
     usbh_task();
+#endif
 
     if (output->task) {
       output->task();
@@ -59,7 +66,9 @@ int main(void)
 
   sleep_ms(250);  // Brief pause for stability
 
+#ifndef DISABLE_USB_HOST
   usbh_init();
+#endif
   leds_init();
   storage_init();
   players_init();

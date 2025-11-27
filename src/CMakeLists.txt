@@ -27,6 +27,7 @@ add_executable(usbretro_3do) # For the usbretro_3do target
 add_executable(usbretro_snes3do) # For the usbretro_snes3do target (Super3D0USB)
 add_executable(usbretro_uart) # For the usbretro_uart target (USB2UART ESP32 bridge)
 add_executable(usbretro_usb) # For the usbretro_usb target (USB2USB HID gamepad output)
+add_executable(usbretro_snes2usb) # For the usbretro_snes2usb target (SNES→USB HID gamepad)
 
 if (PICO_BOARD STREQUAL "pico")
     message(STATUS "PICO_BOARD is '${PICO_BOARD}', applying RPI_PICO_BUILD definition for usbretro_pce.")
@@ -42,6 +43,7 @@ target_compile_definitions(usbretro_3do PRIVATE CONFIG_3DO=1)
 target_compile_definitions(usbretro_snes3do PRIVATE CONFIG_SNES3DO=1)
 target_compile_definitions(usbretro_uart PRIVATE CONFIG_UART=1)
 target_compile_definitions(usbretro_usb PRIVATE CONFIG_USB=1)
+target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
@@ -52,6 +54,7 @@ target_compile_options(usbretro_3do PRIVATE -O3) # Set optimization level to O3 
 target_compile_options(usbretro_snes3do PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_uart PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_usb PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_snes2usb PRIVATE -O3) # Set optimization level to O3 for your_target
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
@@ -68,6 +71,7 @@ pico_add_extra_outputs(usbretro_3do)
 pico_add_extra_outputs(usbretro_snes3do)
 pico_add_extra_outputs(usbretro_uart)
 pico_add_extra_outputs(usbretro_usb)
+pico_add_extra_outputs(usbretro_snes2usb)
 
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/clock.pio )
@@ -89,9 +93,12 @@ pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/native/devic
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_uart ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
+pico_generate_pio_header(usbretro_snes2usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 
-## SET TARGE SOURCES
-set(COMMON_SOURCES
+## SET TARGET SOURCES
+
+# Core sources (no USB host - used by native-input apps like snes2usb)
+set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/leds/leds.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/leds/neopixel/ws2812.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/storage.c
@@ -108,7 +115,11 @@ set(COMMON_SOURCES
     # Core Router System
     ${CMAKE_CURRENT_SOURCE_DIR}/core/router/router.c
 
-    # USB Host - HID Protocol Stack
+    ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+)
+
+# USB Host sources (HID + X-input drivers)
+set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/hid_registry.c
@@ -137,8 +148,12 @@ set(COMMON_SOURCES
 
     # USB Host - Unified layer
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/usbh.c
+)
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+# Common sources for most apps (core + USB host)
+set(COMMON_SOURCES
+    ${CORE_SOURCES}
+    ${USB_HOST_SOURCES}
 )
 
 target_sources(usbretro_pce PUBLIC # For PCE
@@ -209,6 +224,16 @@ target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )
 
+target_sources(usbretro_snes2usb PUBLIC # For SNES2USB (SNES→USB HID gamepad)
+    ${CORE_SOURCES}  # No USB host - uses native SNES input
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    # Native SNES host driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/snes/snes_host.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src/snespad.c
+    # Phase 5: App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/snes2usb/app.c
+)
+
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -276,6 +301,15 @@ target_include_directories(usbretro_usb PUBLIC # FOR USB
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
 )
 
+target_include_directories(usbretro_snes2usb PUBLIC # FOR SNES2USB
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/snes2usb
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/snes
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src
+)
+
 ## SET TARGET LINK LIBS
 set(COMMON_LIBRARIES
     pico_stdlib
@@ -327,6 +361,11 @@ target_link_libraries(usbretro_uart PRIVATE # FOR UART
 )
 
 target_link_libraries(usbretro_usb PRIVATE # FOR USB (dual-role: host + device)
+    ${COMMON_LIBRARIES}
+    tinyusb_device
+)
+
+target_link_libraries(usbretro_snes2usb PRIVATE # FOR SNES2USB (SNES input, USB device output)
     ${COMMON_LIBRARIES}
     tinyusb_device
 )
