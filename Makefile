@@ -40,6 +40,7 @@ BOARD_SCRIPT_pico := boards/build_rpi_pico.sh
 BOARD_SCRIPT_kb2040 := boards/build_ada_kb2040.sh
 BOARD_SCRIPT_qtpy := boards/build_ada_qtpy.sh
 BOARD_SCRIPT_rp2040zero := boards/build_waveshare_rp2040_zero.sh
+BOARD_SCRIPT_feather_usbhost := boards/build_ada_feather_usbhost.sh
 
 # Console targets (cmake target names)
 CONSOLE_3do := usbretro_3do
@@ -50,6 +51,7 @@ CONSOLE_nuon := usbretro_nuon
 CONSOLE_loopy := usbretro_loopy
 CONSOLE_snes3do := usbretro_snes3do
 CONSOLE_uart := usbretro_uart
+CONSOLE_usb := usbretro_usb
 
 # App definitions: APP_name = board console output_name
 # Naming convention: usb2<console> for all apps
@@ -61,9 +63,10 @@ APP_usb2loopy := kb2040 loopy usb2loopy
 APP_usb23do := rp2040zero 3do usb23do
 APP_snes23do := rp2040zero snes3do snes23do
 APP_usb2uart := kb2040 uart usb2uart
+APP_usb2usb := feather_usbhost usb usb2usb
 
 # All apps
-APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart
+APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb
 
 # Stable apps for release (mature enough for public release)
 RELEASE_APPS := usb2pce usb2gc usb2nuon
@@ -97,6 +100,7 @@ help:
 	@echo "  make usb23do       - Build usb23do (RP2040 Zero + 3DO)"
 	@echo "  make snes23do      - Build snes23do (RP2040 Zero + SNES->3DO)"
 	@echo "  make usb2uart      - Build usb2uart (KB2040 + UART ESP32 bridge)"
+	@echo "  make usb2usb       - Build usb2usb (Feather USB Host + USB HID gamepad)"
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
 	@echo "  make all           - Build all apps"
@@ -114,6 +118,7 @@ help:
 	@echo "  make flash-usb23do - Flash usb23do firmware"
 	@echo "  make flash-snes23do - Flash snes23do firmware"
 	@echo "  make flash-usb2uart - Flash usb2uart firmware"
+	@echo "  make flash-usb2usb - Flash usb2usb firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
 	@echo "  make pce           - Build PCEngine firmware"
@@ -193,6 +198,10 @@ snes23do:
 .PHONY: usb2uart
 usb2uart:
 	$(call build_app,usb2uart)
+
+.PHONY: usb2usb
+usb2usb:
+	$(call build_app,usb2usb)
 
 # Console-only targets (defaults to KB2040)
 .PHONY: 3do
@@ -329,6 +338,10 @@ flash-snes23do:
 .PHONY: flash-usb2uart
 flash-usb2uart:
 	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2uart))_$(CONSOLE_$(word 2,$(APP_usb2uart))).uf2
+
+.PHONY: flash-usb2usb
+flash-usb2usb:
+	@$(MAKE) --no-print-directory _flash FLASH_FILE=$(RELEASE_DIR)/$(word 3,$(APP_usb2usb))_$(CONSOLE_$(word 2,$(APP_usb2usb))).uf2
 
 # Internal flash helper
 .PHONY: _flash

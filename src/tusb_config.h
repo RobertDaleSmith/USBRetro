@@ -39,10 +39,18 @@
   #error CFG_TUSB_MCU must be defined
 #endif
 
-#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
-  #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_HOST | OPT_MODE_HIGH_SPEED)
+// Dual-role USB configuration (host + device)
+#ifdef CONFIG_USB
+  // Device mode on RHPORT0, Host mode on RHPORT1
+  #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_DEVICE
+  #define CFG_TUSB_RHPORT1_MODE       OPT_MODE_HOST
 #else
-  #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_HOST
+  // Host-only mode for existing console implementations
+  #if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
+    #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_HOST | OPT_MODE_HIGH_SPEED)
+  #else
+    #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_HOST
+  #endif
 #endif
 
 #ifndef CFG_TUSB_OS
@@ -96,6 +104,23 @@
 //------------- HID -------------//
 #define CFG_TUH_HID_EPIN_BUFSIZE    64
 #define CFG_TUH_HID_EPOUT_BUFSIZE   64
+
+//--------------------------------------------------------------------
+// USB DEVICE CONFIGURATION (CONFIG_USB builds only)
+//--------------------------------------------------------------------
+
+#ifdef CONFIG_USB
+  // Device configuration
+  #define CFG_TUD_ENDPOINT0_SIZE    64
+  #define CFG_TUD_HID               4   // Up to 4 HID gamepads
+  #define CFG_TUD_CDC               0   // Virtual COM port (future: config)
+  #define CFG_TUD_MSC               0   // No mass storage
+  #define CFG_TUD_MIDI              0   // No MIDI
+  #define CFG_TUD_VENDOR            0   // No vendor-specific
+
+  // HID buffer sizes
+  #define CFG_TUD_HID_EP_BUFSIZE    64
+#endif
 
 #ifdef __cplusplus
  }
