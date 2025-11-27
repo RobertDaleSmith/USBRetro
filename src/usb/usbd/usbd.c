@@ -95,19 +95,12 @@ void usbd_init(void)
 
 void usbd_task(void)
 {
-    // Nothing to do on core 0 - device task runs on core 1
-}
+    // TinyUSB device task - runs from core0 main loop
+    tud_task();
 
-void __not_in_flash_func(usbd_core1_task)(void)
-{
-    while (1) {
-        // TinyUSB device task
-        tud_task();
-
-        // Send HID report if device is ready
-        if (tud_hid_ready()) {
-            usbd_send_report(0);  // Player 1
-        }
+    // Send HID report if device is ready
+    if (tud_hid_ready()) {
+        usbd_send_report(0);  // Player 1
     }
 }
 
@@ -158,7 +151,7 @@ const OutputInterface usbd_output_interface = {
     .target = OUTPUT_TARGET_USB_DEVICE,
     .init = usbd_init,
     .task = usbd_task,
-    .core1_task = usbd_core1_task,
+    .core1_task = NULL,  // Runs from core0 task - doesn't need dedicated core
     .get_rumble = NULL,  // TODO: Implement rumble from USB host
     .get_player_led = NULL,
     .get_profile_count = NULL,

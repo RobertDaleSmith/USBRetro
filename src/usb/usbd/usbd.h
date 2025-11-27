@@ -57,7 +57,6 @@ typedef enum {
 // Function declarations
 void usbd_init(void);
 void usbd_task(void);
-void usbd_core1_task(void);
 bool usbd_send_report(uint8_t player_index);
 
 // Output interface for app integration
