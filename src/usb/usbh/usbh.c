@@ -54,3 +54,16 @@ void tuh_umount_cb(uint8_t dev_addr)
     // Reset test mode when device disconnects
     codes_reset_test_mode();
 }
+
+//--------------------------------------------------------------------+
+// Input Interface
+//--------------------------------------------------------------------+
+
+const InputInterface usbh_input_interface = {
+    .name = "USB Host",
+    .source = INPUT_SOURCE_USB_HOST,
+    .init = usbh_init,
+    .task = usbh_task,
+    .is_connected = NULL,       // TODO: Track connected device count
+    .get_device_count = NULL,   // TODO: Return connected device count
+};

@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "native/host/host_interface.h"
+#include "core/input_interface.h"
 
 // ============================================================================
 // CONFIGURATION
@@ -71,5 +72,8 @@ bool snes_host_is_connected(void);
 
 // SNES host interface (implements HostInterface pattern)
 extern const HostInterface snes_host_interface;
+
+// SNES input interface (implements InputInterface pattern for app declaration)
+extern const InputInterface snes_input_interface;
 
 #endif // SNES_HOST_H

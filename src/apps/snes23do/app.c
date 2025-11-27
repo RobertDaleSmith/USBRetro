@@ -6,58 +6,36 @@
 #include "app.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "native/device/3do/3do_device.h"
 #include "native/host/snes/snes_host.h"
 #include <stdio.h>
 
 // ============================================================================
-// APP OUTPUT INTERFACE (wraps 3DO interface + SNES host polling)
+// APP INPUT INTERFACES
+// ============================================================================
+
+static const InputInterface* input_interfaces[] = {
+    &snes_input_interface,
+};
+
+const InputInterface** app_get_input_interfaces(uint8_t* count)
+{
+    *count = sizeof(input_interfaces) / sizeof(input_interfaces[0]);
+    return input_interfaces;
+}
+
+// ============================================================================
+// APP OUTPUT INTERFACE
 // ============================================================================
 
 // Base 3DO output interface
 extern const OutputInterface tdo_output_interface;
 
-// Wrapper task that polls SNES input AND runs 3DO output task
-static void snes23do_task(void)
-{
-    // Poll native SNES controller input
-    snes_host_task();
-
-    // Run 3DO output task (if any)
-    if (tdo_output_interface.task) {
-        tdo_output_interface.task();
-    }
-}
-
-// Wrapped output interface with SNES polling in task
-static const OutputInterface snes23do_output_interface = {
-    .name = "SNES23DO",
-    .init = NULL,  // 3DO init called separately, SNES init in app_init
-    .core1_task = NULL,  // Set dynamically from 3DO interface
-    .task = snes23do_task,  // Our wrapper task
-    .get_rumble = NULL,
-    .get_player_led = NULL,
-    .get_profile_count = NULL,
-    .get_active_profile = NULL,
-    .set_active_profile = NULL,
-    .get_profile_name = NULL,
-    .get_trigger_threshold = NULL,
-};
-
-// Runtime-assembled interface (copies 3DO interface, overrides task)
-static OutputInterface runtime_interface;
-
 const OutputInterface* app_get_output_interface(void)
 {
-    // Copy 3DO interface as base
-    runtime_interface = tdo_output_interface;
-
-    // Override name and task
-    runtime_interface.name = "SNES23DO";
-    runtime_interface.task = snes23do_task;
-
-    return &runtime_interface;
+    return &tdo_output_interface;
 }
 
 // ============================================================================

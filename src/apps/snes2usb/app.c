@@ -6,38 +6,33 @@
 #include "app.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "usb/usbd/usbd.h"
 #include "native/host/snes/snes_host.h"
 #include <stdio.h>
 
 // ============================================================================
-// APP OUTPUT INTERFACE (wraps USB interface + SNES host polling)
+// APP INPUT INTERFACES
 // ============================================================================
 
-// Wrapper task that polls SNES input AND runs USB output task
-static void snes2usb_task(void)
-{
-    // Poll native SNES controller input
-    snes_host_task();
+static const InputInterface* input_interfaces[] = {
+    &snes_input_interface,
+};
 
-    // Run USB device output task (if any)
-    usbd_task();
+const InputInterface** app_get_input_interfaces(uint8_t* count)
+{
+    *count = sizeof(input_interfaces) / sizeof(input_interfaces[0]);
+    return input_interfaces;
 }
 
-// Runtime-assembled interface (copies USB interface, overrides task)
-static OutputInterface runtime_interface;
+// ============================================================================
+// APP OUTPUT INTERFACE
+// ============================================================================
 
 const OutputInterface* app_get_output_interface(void)
 {
-    // Copy USB device interface as base
-    runtime_interface = usbd_output_interface;
-
-    // Override name and task
-    runtime_interface.name = "SNES2USB";
-    runtime_interface.task = snes2usb_task;
-
-    return &runtime_interface;
+    return &usbd_output_interface;
 }
 
 // ============================================================================

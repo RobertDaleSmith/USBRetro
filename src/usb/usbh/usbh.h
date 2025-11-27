@@ -7,6 +7,7 @@
 #define USBH_H
 
 #include <stdint.h>
+#include "core/input_interface.h"
 
 // Initialize USB host layer (HID registry, etc.)
 void usbh_init(void);
@@ -14,5 +15,8 @@ void usbh_init(void);
 // Process USB host feedback tasks (rumble, LEDs, trigger thresholds)
 // Combines console feedback with profile indicator feedback internally
 void usbh_task(void);
+
+// USB host input interface (implements InputInterface pattern)
+extern const InputInterface usbh_input_interface;
 
 #endif // USBH_H

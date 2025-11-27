@@ -79,6 +79,9 @@ static uint32_t map_nes_to_usbr(const snespad_t* pad)
 
 void snes_host_init(void)
 {
+    // Skip if already initialized (app may have called init_pins with custom config)
+    if (initialized) return;
+
     snes_host_init_pins(SNES_PIN_CLOCK, SNES_PIN_LATCH, SNES_PIN_DATA0,
                         SNES_PIN_DATA1, SNES_PIN_IOBIT);
 }
@@ -233,4 +236,28 @@ const HostInterface snes_host_interface = {
     .is_connected = snes_host_is_connected,
     .get_device_type = snes_host_get_device_type,
     .get_port_count = snes_host_get_port_count,
+};
+
+// ============================================================================
+// INPUT INTERFACE (for app declaration)
+// ============================================================================
+
+static uint8_t snes_get_device_count(void)
+{
+    uint8_t count = 0;
+    for (int i = 0; i < SNES_MAX_PORTS; i++) {
+        if (snes_pads[i].type != SNESPAD_NONE) {
+            count++;
+        }
+    }
+    return count;
+}
+
+const InputInterface snes_input_interface = {
+    .name = "SNES",
+    .source = INPUT_SOURCE_NATIVE_SNES,
+    .init = snes_host_init,
+    .task = snes_host_task,
+    .is_connected = snes_host_is_connected,
+    .get_device_count = snes_get_device_count,
 };

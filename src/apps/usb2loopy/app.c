@@ -9,8 +9,10 @@
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
 #include "core/services/profiles/profile.h"
+#include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "native/device/loopy/loopy_device.h"
+#include "usb/usbh/usbh.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -23,6 +25,20 @@ static const profile_config_t app_profile_config = {
     },
     .shared_profiles = NULL,
 };
+
+// ============================================================================
+// APP INPUT INTERFACES
+// ============================================================================
+
+static const InputInterface* input_interfaces[] = {
+    &usbh_input_interface,
+};
+
+const InputInterface** app_get_input_interfaces(uint8_t* count)
+{
+    *count = sizeof(input_interfaces) / sizeof(input_interfaces[0]);
+    return input_interfaces;
+}
 
 // ============================================================================
 // APP OUTPUT INTERFACE
