@@ -1,5 +1,6 @@
 // hid_descriptors.h - Generic HID gamepad descriptors
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Robert Dale Smith
 // Standard HID gamepad (16 buttons, 4 axes, 2 triggers, dpad)
 
 #ifndef HID_DESCRIPTORS_H

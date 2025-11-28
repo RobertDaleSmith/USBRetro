@@ -1,5 +1,6 @@
 // usbd.h - USB device output
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Robert Dale Smith
 
 #ifndef USBD_H
 #define USBD_H

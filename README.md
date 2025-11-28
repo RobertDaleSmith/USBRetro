@@ -165,3 +165,5 @@ USBRetro uses a modular architecture:
 Copyright 2021-2025 Robert Dale Smith (ControllerAdapter.com)
 
 Licensed under the Apache License, Version 2.0 - see [LICENSE](LICENSE) for details.
+
+**Trademark:** The USBRetro name and branding require permission for commercial use. See [TRADEMARK.md](TRADEMARK.md) for details.

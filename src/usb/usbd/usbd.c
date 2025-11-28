@@ -1,10 +1,9 @@
 // usbd.c - USB device output
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024 Robert Dale Smith
 //
 // Implements USB device mode for USBRetro, enabling the adapter to emulate
 // a gamepad for USB-capable consoles. Uses TinyUSB device stack.
-//
-// Based on GP2040-CE gamepad architecture (MIT License).
 
 #include "usbd.h"
 #include "descriptors/hid_descriptors.h"
