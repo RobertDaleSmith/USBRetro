@@ -1,6 +1,6 @@
 // usbh.c - USB Host Layer
 //
-// Provides unified USB host handling across HID and X-input protocols.
+// Provides unified USB host handling across HID, X-input, and Bluetooth protocols.
 // Device drivers read per-player feedback state from feedback_get_state().
 
 #include "usbh.h"
@@ -15,6 +15,11 @@ extern void hid_task(void);
 
 // X-input protocol handlers
 extern void xinput_task(void);
+
+// BTD (Bluetooth Dongle) protocol handlers
+#if CFG_TUH_BTD
+#include "btd/btd.h"
+#endif
 
 void usbh_init(void)
 {
@@ -33,6 +38,10 @@ void usbh_task(void)
 
 #if CFG_TUH_HID
     hid_task();
+#endif
+
+#if CFG_TUH_BTD
+    btd_task();
 #endif
 }
 

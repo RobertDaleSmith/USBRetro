@@ -1,5 +1,6 @@
 // xinput.c - X-input protocol handler (TinyUSB X-input host callbacks)
 #include "tusb.h"
+#include "host/usbh_pvt.h"
 #include "core/buttons.h"
 #include "core/services/players/manager.h"
 #include "core/services/players/feedback.h"
@@ -7,19 +8,59 @@
 #include "xinput_host.h"
 #include "core/input_event.h"
 
+// BTD driver for Bluetooth dongles
+#if CFG_TUH_BTD
+#include "usb/usbh/btd/btd.h"
+#endif
+
 uint32_t buttons;
 int last_player_count = 0; // used by xboxone
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
 //--------------------------------------------------------------------+
+// Custom USB Host Drivers
+//--------------------------------------------------------------------+
+
+#if CFG_TUH_XINPUT || CFG_TUH_BTD
+#include <string.h>
+
+// Count how many drivers we have
+enum {
+    CUSTOM_DRIVER_COUNT = 0
+#if CFG_TUH_XINPUT
+    + 1
+#endif
+#if CFG_TUH_BTD
+    + 1
+#endif
+};
+
+// Static storage for driver array (not const so we can memcpy into it)
+static uint8_t custom_driver_storage[CUSTOM_DRIVER_COUNT * sizeof(usbh_class_driver_t)];
+static bool drivers_initialized = false;
+
+usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count) {
+    if (!drivers_initialized) {
+        usbh_class_driver_t* drivers = (usbh_class_driver_t*)custom_driver_storage;
+        int idx = 0;
+#if CFG_TUH_XINPUT
+        memcpy(&drivers[idx++], &usbh_xinput_driver, sizeof(usbh_class_driver_t));
+#endif
+#if CFG_TUH_BTD
+        memcpy(&drivers[idx++], &usbh_btd_driver, sizeof(usbh_class_driver_t));
+#endif
+        drivers_initialized = true;
+    }
+    *driver_count = CUSTOM_DRIVER_COUNT;
+    return (usbh_class_driver_t const*)custom_driver_storage;
+}
+#endif
+
+//--------------------------------------------------------------------+
 // USB X-input
 //--------------------------------------------------------------------+
 #if CFG_TUH_XINPUT
-usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count){
-    *driver_count = 1;
-    return &usbh_xinput_driver;
-}
 
 void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_interface_t const* xid_itf, uint16_t len)
 {

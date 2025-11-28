@@ -97,6 +97,7 @@
 #define CFG_TUH_MSC                 0
 #define CFG_TUH_VENDOR              0
 #define CFG_TUH_XINPUT              (5*CFG_TUH_DEVICE_MAX)
+#define CFG_TUH_BTD                 1  // Bluetooth dongle support (1 dongle max)
 
 // max device support (excluding hub device): 1 hub typically has 4 ports
 #define CFG_TUH_DEVICE_MAX          (5*CFG_TUH_HUB + 1)

@@ -1,0 +1,330 @@
+// bthid.c - Bluetooth HID Layer Implementation
+// Handles Bluetooth HID devices and routes reports to device-specific drivers
+
+#include "bthid.h"
+#include "bt/transport/bt_transport.h"
+#include <string.h>
+#include <stdio.h>
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+#define BTHID_MAX_DRIVERS       8   // Max registered drivers
+
+// ============================================================================
+// STATIC DATA
+// ============================================================================
+
+static bthid_device_t devices[BTHID_MAX_DEVICES];
+static const bthid_driver_t* drivers[BTHID_MAX_DRIVERS];
+static uint8_t driver_count = 0;
+
+// ============================================================================
+// FORWARD DECLARATIONS
+// ============================================================================
+
+static bthid_device_t* find_or_create_device(uint8_t conn_index);
+static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod);
+static bthid_device_type_t classify_device(const uint8_t* class_of_device);
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+void bthid_init(void)
+{
+    memset(devices, 0, sizeof(devices));
+    driver_count = 0;
+    printf("[BTHID] Initialized\n");
+}
+
+// ============================================================================
+// DRIVER REGISTRATION
+// ============================================================================
+
+void bthid_register_driver(const bthid_driver_t* driver)
+{
+    if (driver_count < BTHID_MAX_DRIVERS) {
+        drivers[driver_count++] = driver;
+        printf("[BTHID] Registered driver: %s\n", driver->name);
+    } else {
+        printf("[BTHID] Driver registry full, cannot add: %s\n", driver->name);
+    }
+}
+
+// ============================================================================
+// TASK
+// ============================================================================
+
+void bthid_task(void)
+{
+    // Run device driver tasks
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (devices[i].active && devices[i].driver) {
+            const bthid_driver_t* drv = (const bthid_driver_t*)devices[i].driver;
+            if (drv->task) {
+                drv->task(&devices[i]);
+            }
+        }
+    }
+}
+
+// ============================================================================
+// DEVICE MANAGEMENT
+// ============================================================================
+
+static bthid_device_t* find_or_create_device(uint8_t conn_index)
+{
+    // Look for existing device
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (devices[i].active && devices[i].conn_index == conn_index) {
+            return &devices[i];
+        }
+    }
+
+    // Find free slot
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (!devices[i].active) {
+            memset(&devices[i], 0, sizeof(devices[i]));
+            devices[i].active = true;
+            devices[i].conn_index = conn_index;
+            devices[i].player_index = 0xFF;  // Unassigned
+            return &devices[i];
+        }
+    }
+
+    return NULL;
+}
+
+static void remove_device(uint8_t conn_index)
+{
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (devices[i].active && devices[i].conn_index == conn_index) {
+            if (devices[i].driver) {
+                const bthid_driver_t* drv = (const bthid_driver_t*)devices[i].driver;
+                if (drv->disconnect) {
+                    drv->disconnect(&devices[i]);
+                }
+            }
+            memset(&devices[i], 0, sizeof(devices[i]));
+            printf("[BTHID] Device removed from slot %d\n", i);
+            break;
+        }
+    }
+}
+
+bthid_device_t* bthid_get_device(uint8_t conn_index)
+{
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (devices[i].active && devices[i].conn_index == conn_index) {
+            return &devices[i];
+        }
+    }
+    return NULL;
+}
+
+uint8_t bthid_get_device_count(void)
+{
+    uint8_t count = 0;
+    for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
+        if (devices[i].active) {
+            count++;
+        }
+    }
+    return count;
+}
+
+// ============================================================================
+// DRIVER MATCHING
+// ============================================================================
+
+static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod)
+{
+    // First try registered drivers
+    for (int i = 0; i < driver_count; i++) {
+        if (drivers[i]->match && drivers[i]->match(name, cod)) {
+            return drivers[i];
+        }
+    }
+    return NULL;
+}
+
+static bthid_device_type_t classify_device(const uint8_t* class_of_device)
+{
+    if (!class_of_device) {
+        return BTHID_DEVICE_UNKNOWN;
+    }
+
+    // Class of Device format:
+    // cod[0]: Minor Device Class + Format Type
+    // cod[1]: Major Service Class (low byte) + Major Device Class
+    // cod[2]: Major Service Class (high byte)
+
+    uint8_t major_class = (class_of_device[1] >> 0) & 0x1F;
+    uint8_t minor_class = (class_of_device[0] >> 2) & 0x3F;
+
+    // Major class 0x05 = Peripheral
+    if (major_class == 0x05) {
+        // Minor class bits 7-6 indicate device type
+        uint8_t peripheral_type = (minor_class >> 4) & 0x03;
+
+        switch (peripheral_type) {
+            case 0x01:  // Keyboard
+                return BTHID_DEVICE_KEYBOARD;
+            case 0x02:  // Pointing device
+                return BTHID_DEVICE_MOUSE;
+            case 0x03:  // Combo keyboard/pointing
+                return BTHID_DEVICE_KEYBOARD;
+            default:
+                break;
+        }
+
+        // Check minor bits 5-0 for gamepad/joystick
+        uint8_t device_subtype = minor_class & 0x0F;
+        if (device_subtype == 0x01) {
+            return BTHID_DEVICE_JOYSTICK;
+        } else if (device_subtype == 0x02) {
+            return BTHID_DEVICE_GAMEPAD;
+        }
+    }
+
+    return BTHID_DEVICE_UNKNOWN;
+}
+
+// ============================================================================
+// TRANSPORT CALLBACKS
+// Override weak implementations in bt_transport.c
+// ============================================================================
+
+void bt_on_hid_ready(uint8_t conn_index)
+{
+    printf("[BTHID] HID ready on connection %d\n", conn_index);
+
+    const bt_connection_t* conn = bt_get_connection(conn_index);
+    if (!conn) {
+        return;
+    }
+
+    bthid_device_t* device = find_or_create_device(conn_index);
+    if (!device) {
+        printf("[BTHID] No free device slots\n");
+        return;
+    }
+
+    // Copy device info
+    memcpy(device->bd_addr, conn->bd_addr, 6);
+    strncpy(device->name, conn->name, BTHID_MAX_NAME_LEN - 1);
+    device->name[BTHID_MAX_NAME_LEN - 1] = '\0';
+    device->type = classify_device(conn->class_of_device);
+
+    char addr_str[18];
+    sprintf(addr_str, "%02X:%02X:%02X:%02X:%02X:%02X",
+            device->bd_addr[5], device->bd_addr[4], device->bd_addr[3],
+            device->bd_addr[2], device->bd_addr[1], device->bd_addr[0]);
+
+    printf("[BTHID] Device: %s (%s), type=%d\n",
+           device->name[0] ? device->name : "Unknown",
+           addr_str, device->type);
+
+    // Find matching driver
+    const bthid_driver_t* driver = find_driver(device->name, conn->class_of_device);
+    if (driver) {
+        printf("[BTHID] Using driver: %s\n", driver->name);
+        device->driver = driver;
+        if (driver->init) {
+            driver->init(device);
+        }
+    } else {
+        printf("[BTHID] No specific driver found, using generic\n");
+        // TODO: Use generic gamepad driver
+    }
+}
+
+void bt_on_disconnect(uint8_t conn_index)
+{
+    printf("[BTHID] Disconnect on connection %d\n", conn_index);
+    remove_device(conn_index);
+}
+
+void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
+{
+    if (len < 1) {
+        return;
+    }
+
+    bthid_device_t* device = bthid_get_device(conn_index);
+    if (!device) {
+        printf("[BTHID] Report for unknown device on conn %d\n", conn_index);
+        return;
+    }
+
+    // Parse HID transaction header
+    uint8_t header = data[0];
+    uint8_t trans_type = header & 0xF0;
+    uint8_t param = header & 0x0F;
+
+    switch (trans_type) {
+        case BTHID_TRANS_DATA: {
+            // Data report - param indicates report type
+            uint8_t report_type = param;
+            const uint8_t* report_data = data + 1;
+            uint16_t report_len = len - 1;
+
+            if (report_type == BTHID_REPORT_TYPE_INPUT) {
+                // Input report - route to driver
+                if (device->driver) {
+                    const bthid_driver_t* drv = (const bthid_driver_t*)device->driver;
+                    if (drv->process_report) {
+                        drv->process_report(device, report_data, report_len);
+                    }
+                }
+            }
+            break;
+        }
+
+        case BTHID_TRANS_HANDSHAKE:
+            printf("[BTHID] Handshake: result=%d\n", param);
+            break;
+
+        default:
+            printf("[BTHID] Unhandled transaction: 0x%02X\n", trans_type);
+            break;
+    }
+}
+
+// ============================================================================
+// OUTPUT REPORTS
+// ============================================================================
+
+bool bthid_send_output_report(uint8_t conn_index, uint8_t report_id,
+                               const uint8_t* data, uint16_t len)
+{
+    uint8_t buf[64];
+    if (len + 2 > sizeof(buf)) {
+        return false;
+    }
+
+    // Build DATA | OUTPUT header
+    buf[0] = BTHID_TRANS_DATA | BTHID_REPORT_TYPE_OUTPUT;
+    buf[1] = report_id;
+    memcpy(&buf[2], data, len);
+
+    return bt_send_interrupt(conn_index, buf, len + 2);
+}
+
+bool bthid_send_feature_report(uint8_t conn_index, uint8_t report_id,
+                                const uint8_t* data, uint16_t len)
+{
+    uint8_t buf[64];
+    if (len + 2 > sizeof(buf)) {
+        return false;
+    }
+
+    // Build SET_REPORT | FEATURE header
+    buf[0] = BTHID_TRANS_SET_REPORT | BTHID_REPORT_TYPE_FEATURE;
+    buf[1] = report_id;
+    memcpy(&buf[2], data, len);
+
+    return bt_send_control(conn_index, buf, len + 2);
+}

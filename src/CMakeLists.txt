@@ -146,6 +146,25 @@ set(USB_HOST_SOURCES
     # USB Host - X-input Protocol
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
 
+    # USB Host - Bluetooth Dongle (BTD) Protocol
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_linkkey.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/l2cap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
+
+    # Bluetooth Transport Layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport_usb.c
+
+    # Bluetooth HID Layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/bthid.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/bthid_registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/generic/bthid_gamepad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/sony/ds4_bt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/sony/ds5_bt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/nintendo/switch_pro_bt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_bt.c
+
     # USB Host - Unified layer
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/usbh.c
 )

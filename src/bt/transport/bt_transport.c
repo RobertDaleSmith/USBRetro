@@ -1,0 +1,41 @@
+// bt_transport.c - Bluetooth Transport Manager
+// Manages the active transport and provides weak callback defaults
+
+#include "bt_transport.h"
+#include <stdio.h>
+
+// ============================================================================
+// ACTIVE TRANSPORT
+// ============================================================================
+
+const bt_transport_t* bt_transport = NULL;
+
+void bt_init(const bt_transport_t* transport)
+{
+    bt_transport = transport;
+
+    if (bt_transport && bt_transport->init) {
+        printf("[BT] Initializing transport: %s\n", bt_transport->name);
+        bt_transport->init();
+    }
+}
+
+// ============================================================================
+// WEAK CALLBACK IMPLEMENTATIONS
+// Override in BTHID layer
+// ============================================================================
+
+__attribute__((weak)) void bt_on_hid_ready(uint8_t conn_index)
+{
+    printf("[BT] HID ready on connection %d (weak handler)\n", conn_index);
+}
+
+__attribute__((weak)) void bt_on_disconnect(uint8_t conn_index)
+{
+    printf("[BT] Disconnected connection %d (weak handler)\n", conn_index);
+}
+
+__attribute__((weak)) void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
+{
+    printf("[BT] HID report on connection %d: %d bytes (weak handler)\n", conn_index, len);
+}

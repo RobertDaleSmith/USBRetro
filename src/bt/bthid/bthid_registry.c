@@ -1,0 +1,34 @@
+// bthid_registry.c - BTHID Driver Registration
+// Registers all Bluetooth HID device drivers
+
+#include "bthid_registry.h"
+#include "bthid.h"
+
+// Include all BT HID drivers
+#include "devices/generic/bthid_gamepad.h"
+#include "devices/vendors/sony/ds4_bt.h"
+#include "devices/vendors/sony/ds5_bt.h"
+#include "devices/vendors/nintendo/switch_pro_bt.h"
+#include "devices/vendors/microsoft/xbox_bt.h"
+
+void bthid_registry_init(void)
+{
+    // Initialize BTHID layer
+    bthid_init();
+
+    // Register vendor-specific drivers first (higher priority)
+    // Order matters - first match wins
+
+    // Sony controllers
+    ds4_bt_register();
+    ds5_bt_register();
+
+    // Nintendo controllers
+    switch_pro_bt_register();
+
+    // Microsoft controllers
+    xbox_bt_register();
+
+    // Generic gamepad driver (fallback, lowest priority)
+    bthid_gamepad_register();
+}
