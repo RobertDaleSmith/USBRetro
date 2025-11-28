@@ -16,7 +16,7 @@
 
 // String descriptors
 #define USB_STRING_MANUFACTURER  "USBRetro"
-#define USB_STRING_PRODUCT       "USB Gamepad Adapter"
+#define USB_STRING_PRODUCT       "USBR (DInput)"
 #define USB_STRING_SERIAL        "000000000001"
 
 // HID Interface number

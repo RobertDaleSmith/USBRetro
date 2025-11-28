@@ -8,8 +8,8 @@
 
 #include <stdint.h>
 
-// HID Report Descriptor for Generic Gamepad (GP2040-CE compatible)
-// 14 buttons, 4 axes (2 sticks), 1 dpad (hat switch)
+// HID Report Descriptor for Generic Gamepad (GP2040-CE compatible, PS3 support)
+// 14 buttons, 4 axes (2 sticks), 1 dpad (hat switch), 12 pressure axes (PS3)
 static const uint8_t hid_report_descriptor[] = {
     0x05, 0x01,        // Usage Page (Generic Desktop Ctrls)
     0x09, 0x05,        // Usage (Game Pad)
@@ -51,18 +51,50 @@ static const uint8_t hid_report_descriptor[] = {
     0x95, 0x04,        //   Report Count (4)
     0x81, 0x02,        //   Input (Data,Var,Abs)
 
+    // PS3 pressure axes (Vendor Specific) - 12 bytes
+    // D-pad: right, left, up, down
+    // Buttons: triangle, circle, cross, square, L1, R1, L2, R2
+    0x06, 0x00, 0xFF,  //   Usage Page (Vendor Specific 0xFF00)
+    0x09, 0x20,        //   Usage (0x20) - D-pad Right pressure
+    0x09, 0x21,        //   Usage (0x21) - D-pad Left pressure
+    0x09, 0x22,        //   Usage (0x22) - D-pad Up pressure
+    0x09, 0x23,        //   Usage (0x23) - D-pad Down pressure
+    0x09, 0x24,        //   Usage (0x24) - Triangle pressure
+    0x09, 0x25,        //   Usage (0x25) - Circle pressure
+    0x09, 0x26,        //   Usage (0x26) - Cross pressure
+    0x09, 0x27,        //   Usage (0x27) - Square pressure
+    0x09, 0x28,        //   Usage (0x28) - L1 pressure
+    0x09, 0x29,        //   Usage (0x29) - R1 pressure
+    0x09, 0x2A,        //   Usage (0x2A) - L2 pressure
+    0x09, 0x2B,        //   Usage (0x2B) - R2 pressure
+    0x95, 0x0C,        //   Report Count (12)
+    0x81, 0x02,        //   Input (Data,Var,Abs)
+
     0xC0,              // End Collection
 };
 
 // HID Report structure (matches descriptor above)
-// 7 bytes total: 14 buttons + 2 padding + 4-bit hat + 4-bit padding + 4 axes
+// 19 bytes total: buttons + hat + sticks + PS3 pressure
 typedef struct __attribute__((packed)) {
-    uint16_t buttons;   // 14 buttons + 2 padding bits (B1-B4, L1-R1, L2-R2, S1-S2, L3-R3, A1-A2)
-    uint8_t  hat;       // D-pad: low 4 bits = hat (0-7, 8=center), high 4 bits = padding
-    uint8_t  lx;        // Left stick X (0-255, 128 = center)
-    uint8_t  ly;        // Left stick Y (0-255, 128 = center)
-    uint8_t  rx;        // Right stick X (0-255, 128 = center)
-    uint8_t  ry;        // Right stick Y (0-255, 128 = center)
+    uint16_t buttons;       // 14 buttons + 2 padding bits
+    uint8_t  hat;           // D-pad: low 4 bits = hat (0-7, 8=center), high 4 bits = padding
+    uint8_t  lx;            // Left stick X (0-255, 128 = center)
+    uint8_t  ly;            // Left stick Y (0-255, 128 = center)
+    uint8_t  rx;            // Right stick X (0-255, 128 = center)
+    uint8_t  ry;            // Right stick Y (0-255, 128 = center)
+    // PS3 pressure axes (vendor specific)
+    uint8_t  pressure_dpad_right;
+    uint8_t  pressure_dpad_left;
+    uint8_t  pressure_dpad_up;
+    uint8_t  pressure_dpad_down;
+    uint8_t  pressure_triangle;  // B4
+    uint8_t  pressure_circle;    // B2
+    uint8_t  pressure_cross;     // B1
+    uint8_t  pressure_square;    // B3
+    uint8_t  pressure_l1;
+    uint8_t  pressure_r1;
+    uint8_t  pressure_l2;
+    uint8_t  pressure_r2;
 } usbretro_hid_report_t;
 
 // D-pad / Hat Switch values

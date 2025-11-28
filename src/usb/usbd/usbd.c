@@ -121,7 +121,8 @@ bool usbd_send_report(uint8_t player_index)
 
     if (event) {
         // Convert input event to HID report
-        hid_report.buttons = convert_buttons(event->buttons);
+        uint16_t buttons = convert_buttons(event->buttons);
+        hid_report.buttons = buttons;
         hid_report.hat = convert_dpad_to_hat(event->buttons);
 
         // Analog sticks (input_event uses 0-255, HID uses 0-255)
@@ -129,9 +130,24 @@ bool usbd_send_report(uint8_t player_index)
         hid_report.ly = event->analog[ANALOG_Y];
         hid_report.rx = event->analog[ANALOG_Z];
         hid_report.ry = event->analog[ANALOG_RZ];
+
+        // PS3 pressure axes (0x00 = released, 0xFF = fully pressed)
+        uint32_t pressed = ~event->buttons;
+        hid_report.pressure_dpad_right = (pressed & USBR_BUTTON_DR) ? 0xFF : 0x00;
+        hid_report.pressure_dpad_left  = (pressed & USBR_BUTTON_DL) ? 0xFF : 0x00;
+        hid_report.pressure_dpad_up    = (pressed & USBR_BUTTON_DU) ? 0xFF : 0x00;
+        hid_report.pressure_dpad_down  = (pressed & USBR_BUTTON_DD) ? 0xFF : 0x00;
+        hid_report.pressure_triangle   = (buttons & USB_GAMEPAD_MASK_B4) ? 0xFF : 0x00;
+        hid_report.pressure_circle     = (buttons & USB_GAMEPAD_MASK_B2) ? 0xFF : 0x00;
+        hid_report.pressure_cross      = (buttons & USB_GAMEPAD_MASK_B1) ? 0xFF : 0x00;
+        hid_report.pressure_square     = (buttons & USB_GAMEPAD_MASK_B3) ? 0xFF : 0x00;
+        hid_report.pressure_l1         = (buttons & USB_GAMEPAD_MASK_L1) ? 0xFF : 0x00;
+        hid_report.pressure_r1         = (buttons & USB_GAMEPAD_MASK_R1) ? 0xFF : 0x00;
+        hid_report.pressure_l2         = (buttons & USB_GAMEPAD_MASK_L2) ? 0xFF : 0x00;
+        hid_report.pressure_r2         = (buttons & USB_GAMEPAD_MASK_R2) ? 0xFF : 0x00;
     } else {
         // No input - send neutral state
-        hid_report.buttons = 0;
+        memset(&hid_report, 0, sizeof(hid_report));
         hid_report.hat = HID_HAT_CENTER;
         hid_report.lx = 128;
         hid_report.ly = 128;
