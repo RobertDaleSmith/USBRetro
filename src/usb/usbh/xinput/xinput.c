@@ -102,8 +102,8 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
                 ((p->wButtons & XINPUT_GAMEPAD_Y)              ? USBR_BUTTON_B4 : 0) |
                 ((p->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER)  ? USBR_BUTTON_L1 : 0) |
                 ((p->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? USBR_BUTTON_R1 : 0) |
-                ((analog_l > 100)                              ? USBR_BUTTON_L2 : 0) |
-                ((analog_r > 100)                              ? USBR_BUTTON_R2 : 0) |
+                ((analog_l > 16)                               ? USBR_BUTTON_L2 : 0) |
+                ((analog_r > 16)                               ? USBR_BUTTON_R2 : 0) |
                 ((p->wButtons & XINPUT_GAMEPAD_BACK)           ? USBR_BUTTON_S1 : 0) |
                 ((p->wButtons & XINPUT_GAMEPAD_START)          ? USBR_BUTTON_S2 : 0) |
                 ((p->wButtons & XINPUT_GAMEPAD_LEFT_THUMB)     ? USBR_BUTTON_L3 : 0) |
