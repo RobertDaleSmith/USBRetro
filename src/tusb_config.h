@@ -133,7 +133,7 @@
 
   // CDC buffer sizes
   #define CFG_TUD_CDC_RX_BUFSIZE    256
-  #define CFG_TUD_CDC_TX_BUFSIZE    256
+  #define CFG_TUD_CDC_TX_BUFSIZE    1024
   #define CFG_TUD_CDC_EP_BUFSIZE    64
 #endif
 

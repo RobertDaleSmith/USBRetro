@@ -55,6 +55,9 @@ void btd_init(void)
 // BTD TASK (Main Loop)
 // ============================================================================
 
+// Heartbeat counter for debug
+static uint32_t btd_task_counter = 0;
+
 void btd_task(void)
 {
     // Handle link key flash saves (debounced)
@@ -62,6 +65,20 @@ void btd_task(void)
 
     if (!btd_ctx.dongle_connected) {
         return;
+    }
+
+    // Heartbeat every ~5 seconds (assuming 1ms task rate)
+    btd_task_counter++;
+    if (btd_task_counter % 5000 == 0 && btd_ctx.state == BTD_STATE_RUNNING) {
+        printf("[BTD] Scanning... (evt_pending=%d)\n", btd_ctx.evt_pending);
+    }
+
+    // Re-queue event endpoint if not pending (polling model like USB Host Shield)
+    if (!btd_ctx.evt_pending) {
+        btd_ctx.evt_pending = true;
+        // Clear buffer to avoid processing stale data
+        memset(btd_ctx.evt_buf, 0, sizeof(btd_ctx.evt_buf));
+        usbh_edpt_xfer(btd_ctx.dev_addr, btd_ctx.ep_evt, btd_ctx.evt_buf, sizeof(btd_ctx.evt_buf));
     }
 
     // Run state machine
@@ -72,6 +89,10 @@ void btd_task(void)
 // STATE MACHINE
 // ============================================================================
 
+// Counter for init delay (like USB Host Shield's hci_num_reset_loops)
+static uint16_t init_delay_counter = 0;
+#define BTD_INIT_DELAY_LOOPS 100  // Wait this many task loops before starting
+
 static void btd_state_machine(void)
 {
     // Don't send new commands if we're waiting for a response
@@ -81,6 +102,12 @@ static void btd_state_machine(void)
 
     switch (btd_ctx.state) {
         case BTD_STATE_INIT:
+            // Wait for dongle to stabilize after enumeration (like USB Host Shield)
+            if (init_delay_counter < BTD_INIT_DELAY_LOOPS) {
+                init_delay_counter++;
+                return;
+            }
+            init_delay_counter = 0;
             printf("[BTD] Starting initialization...\n");
             btd_hci_reset();
             btd_ctx.state = BTD_STATE_RESET;
@@ -102,13 +129,18 @@ static void btd_state_machine(void)
             btd_hci_read_buffer_size();
             break;
 
+        case BTD_STATE_SET_EVENT_MASK:
+            btd_hci_set_event_mask();
+            break;
+
         case BTD_STATE_WRITE_NAME:
             btd_hci_write_local_name("USBRetro BT");
             break;
 
         case BTD_STATE_WRITE_COD:
-            // Class of Device: Major=Computer, Minor=Desktop
-            btd_hci_write_class_of_device(0x000104);
+            // Class of Device: Major=Peripheral (0x05), Minor=Gamepad (0x08)
+            // Matches USB Host Shield - some controllers may be picky about this
+            btd_hci_write_class_of_device(0x000508);
             break;
 
         case BTD_STATE_WRITE_SSP:
@@ -118,6 +150,11 @@ static void btd_state_machine(void)
         case BTD_STATE_WRITE_SCAN:
             // Enable inquiry scan + page scan for pairing
             btd_hci_write_scan_enable(HCI_SCAN_INQUIRY_AND_PAGE);
+            break;
+
+        case BTD_STATE_INQUIRY:
+            // Start scanning for nearby Bluetooth devices
+            btd_hci_inquiry();
             break;
 
         case BTD_STATE_RUNNING:
@@ -176,11 +213,13 @@ bool btd_send_hci_cmd(uint16_t opcode, const uint8_t* params, uint8_t param_len)
     };
 
     btd_ctx.pending_cmd = 1;
+    btd_ctx.pending_opcode = opcode;
 
     bool result = tuh_control_xfer(&xfer);
     if (!result) {
         printf("[BTD] Failed to send HCI command 0x%04X\n", opcode);
         btd_ctx.pending_cmd = 0;
+        btd_ctx.pending_opcode = 0;
     }
 
     return result;
@@ -212,6 +251,53 @@ bool btd_hci_read_buffer_size(void)
 {
     printf("[BTD] Sending HCI_Read_Buffer_Size\n");
     return btd_send_hci_cmd(HCI_READ_BUFFER_SIZE, NULL, 0);
+}
+
+bool btd_hci_set_event_mask(void)
+{
+    printf("[BTD] Sending HCI_Set_Event_Mask\n");
+    // Event mask from USB Host Shield - enables most events including connection events
+    // Bits enable: Inquiry Complete, Inquiry Result, Connection Complete,
+    // Connection Request, Disconnection Complete, Auth Complete, Remote Name,
+    // Encryption Change, PIN Request, Link Key Request, Link Key Notification,
+    // Command Complete, Command Status, and many more
+    uint8_t event_mask[8] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1F, 0xFF, 0x00
+    };
+    return btd_send_hci_cmd(HCI_SET_EVENT_MASK, event_mask, 8);
+}
+
+bool btd_hci_inquiry(void)
+{
+    printf("[BTD] Sending HCI_Inquiry (scanning for devices...)\n");
+    hci_inquiry_params_t params = {
+        .lap = {0x33, 0x8B, 0x9E},  // GIAC (General Inquiry Access Code)
+        .inquiry_length = 0x30,     // 48 * 1.28s = 61.44 seconds (max, like USB Host Shield)
+        .num_responses = 0x00       // Unlimited responses
+    };
+    return btd_send_hci_cmd(HCI_INQUIRY, (uint8_t*)&params, sizeof(params));
+}
+
+bool btd_hci_inquiry_cancel(void)
+{
+    printf("[BTD] Sending HCI_Inquiry_Cancel\n");
+    return btd_send_hci_cmd(HCI_INQUIRY_CANCEL, NULL, 0);
+}
+
+bool btd_hci_create_connection(const uint8_t* bd_addr, uint8_t page_scan_rep_mode, uint16_t clock_offset)
+{
+    char addr_str[18];
+    btd_bd_addr_to_str(bd_addr, addr_str);
+    printf("[BTD] Creating connection to %s\n", addr_str);
+
+    hci_create_conn_params_t params;
+    memcpy(params.bd_addr, bd_addr, 6);
+    params.packet_type = 0xCC18;  // DM1, DH1, DM3, DH3, DM5, DH5
+    params.page_scan_rep_mode = page_scan_rep_mode;
+    params.reserved = 0;
+    params.clock_offset = clock_offset | 0x8000;  // Set clock offset valid bit
+    params.allow_role_switch = 0x01;  // Allow role switch
+    return btd_send_hci_cmd(HCI_CREATE_CONNECTION, (uint8_t*)&params, sizeof(params));
 }
 
 bool btd_hci_write_local_name(const char* name)
@@ -376,7 +462,15 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
     switch (evt->event_code) {
         case HCI_EVENT_COMMAND_COMPLETE: {
             const hci_event_cmd_complete_t* cc = (const hci_event_cmd_complete_t*)evt->params;
-            btd_ctx.pending_cmd = 0;
+
+            // Only process if this is the response we're waiting for
+            if (cc->opcode != btd_ctx.pending_opcode) {
+                // Stale or duplicate event, ignore
+                return;
+            }
+
+            btd_ctx.pending_cmd = 0;  // Command completed, allow next
+            btd_ctx.pending_opcode = 0;
 
             printf("[BTD] Command Complete: opcode=0x%04X\n", cc->opcode);
 
@@ -419,9 +513,14 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                         printf("[BTD] ACL MTU: %d, Credits: %d\n",
                                btd_ctx.acl_mtu, btd_ctx.acl_credits);
                     }
-                    btd_ctx.state = BTD_STATE_WRITE_NAME;
+                    btd_ctx.state = BTD_STATE_SET_EVENT_MASK;
                     break;
                 }
+
+                case HCI_SET_EVENT_MASK:
+                    printf("[BTD] Event mask set\n");
+                    btd_ctx.state = BTD_STATE_WRITE_NAME;
+                    break;
 
                 case HCI_WRITE_LOCAL_NAME:
                     btd_ctx.state = BTD_STATE_WRITE_COD;
@@ -437,8 +536,20 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
 
                 case HCI_WRITE_SCAN_ENABLE:
                     btd_ctx.scan_enabled = true;
+                    printf("[BTD] Scan enabled - starting device discovery\n");
+                    // Start ACL endpoint now that initialization is done
+                    printf("[BTD] Starting ACL IN endpoint 0x%02X\n", btd_ctx.ep_acl_in);
+                    if (!usbh_edpt_xfer(btd_ctx.dev_addr, btd_ctx.ep_acl_in,
+                                       btd_ctx.acl_in_buf, sizeof(btd_ctx.acl_in_buf))) {
+                        printf("[BTD] Failed to start ACL endpoint!\n");
+                    }
+                    // Start inquiry to find nearby devices
+                    btd_ctx.state = BTD_STATE_INQUIRY;
+                    break;
+
+                case HCI_INQUIRY_CANCEL:
+                    // Inquiry was cancelled, go to running state
                     btd_ctx.state = BTD_STATE_RUNNING;
-                    printf("[BTD] Initialization complete - Ready for connections\n");
                     break;
             }
             break;
@@ -446,11 +557,113 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
 
         case HCI_EVENT_COMMAND_STATUS: {
             const hci_event_cmd_status_t* cs = (const hci_event_cmd_status_t*)evt->params;
+            // Only process if this is the response we're waiting for
+            if (cs->opcode != btd_ctx.pending_opcode && btd_ctx.pending_opcode != 0) {
+                // Stale or duplicate event, ignore
+                return;
+            }
+            btd_ctx.pending_cmd = 0;  // Command acknowledged, allow next
+            btd_ctx.pending_opcode = 0;
             if (cs->status != HCI_SUCCESS) {
                 printf("[BTD] Command Status error: 0x%02X for opcode 0x%04X\n",
                        cs->status, cs->opcode);
+                // If inquiry failed, go to running state anyway
+                if (cs->opcode == HCI_INQUIRY) {
+                    btd_ctx.state = BTD_STATE_RUNNING;
+                }
+            } else if (cs->opcode == HCI_INQUIRY) {
+                printf("[BTD] Inquiry started - searching for devices...\n");
+                // Move to running state - inquiry results come as events
+                btd_ctx.state = BTD_STATE_RUNNING;
+            } else if (cs->opcode == HCI_CREATE_CONNECTION) {
+                printf("[BTD] Connection attempt started\n");
             }
-            btd_ctx.pending_cmd = 0;
+            break;
+        }
+
+        case HCI_EVENT_INQUIRY_COMPLETE: {
+            printf("[BTD] Inquiry complete - restarting scan\n");
+            // Restart inquiry to keep scanning for devices
+            btd_ctx.state = BTD_STATE_INQUIRY;
+            break;
+        }
+
+        case HCI_EVENT_INQUIRY_RESULT: {
+            // Standard inquiry result (may contain multiple devices)
+            uint8_t num_responses = evt->params[0];
+            const hci_inquiry_result_t* results = (const hci_inquiry_result_t*)&evt->params[1];
+            printf("[BTD] Inquiry result: %d device(s)\n", num_responses);
+
+            for (int i = 0; i < num_responses; i++) {
+                char addr_str[18];
+                btd_bd_addr_to_str(results[i].bd_addr, addr_str);
+                uint8_t major_class = (results[i].class_of_device[1] & 0x1F);
+                printf("[BTD] Device %d: %s, COD: %02X%02X%02X (major=%d)\n",
+                       i, addr_str,
+                       results[i].class_of_device[2],
+                       results[i].class_of_device[1],
+                       results[i].class_of_device[0],
+                       major_class);
+
+                // Try to connect to any device for now (debug)
+                printf("[BTD] Attempting connection...\n");
+                btd_hci_inquiry_cancel();  // Stop inquiry
+                btd_hci_create_connection(results[i].bd_addr,
+                                         results[i].page_scan_rep_mode,
+                                         results[i].clock_offset);
+                return;  // Only connect to first device found
+            }
+            break;
+        }
+
+        case HCI_EVENT_INQUIRY_RESULT_WITH_RSSI: {
+            // Inquiry result with RSSI (may contain multiple devices)
+            uint8_t num_responses = evt->params[0];
+            const hci_inquiry_result_rssi_t* results = (const hci_inquiry_result_rssi_t*)&evt->params[1];
+            printf("[BTD] Inquiry result (RSSI): %d device(s)\n", num_responses);
+
+            for (int i = 0; i < num_responses; i++) {
+                char addr_str[18];
+                btd_bd_addr_to_str(results[i].bd_addr, addr_str);
+                uint8_t major_class = (results[i].class_of_device[1] & 0x1F);
+                printf("[BTD] Device %d: %s, COD: %02X%02X%02X (major=%d), RSSI: %d\n",
+                       i, addr_str,
+                       results[i].class_of_device[2],
+                       results[i].class_of_device[1],
+                       results[i].class_of_device[0],
+                       major_class,
+                       results[i].rssi);
+
+                // Try to connect to any device for now (debug)
+                printf("[BTD] Attempting connection...\n");
+                btd_hci_inquiry_cancel();  // Stop inquiry
+                btd_hci_create_connection(results[i].bd_addr,
+                                         results[i].page_scan_rep_mode,
+                                         results[i].clock_offset);
+                return;  // Only connect to first device found
+            }
+            break;
+        }
+
+        case HCI_EVENT_EXTENDED_INQUIRY_RESULT: {
+            const hci_event_extended_inquiry_result_t* eir = (const hci_event_extended_inquiry_result_t*)evt->params;
+            char addr_str[18];
+            btd_bd_addr_to_str(eir->bd_addr, addr_str);
+            uint8_t major_class = (eir->class_of_device[1] & 0x1F);
+            printf("[BTD] Device (EIR): %s, COD: %02X%02X%02X (major=%d), RSSI: %d\n",
+                   addr_str,
+                   eir->class_of_device[2],
+                   eir->class_of_device[1],
+                   eir->class_of_device[0],
+                   major_class,
+                   eir->rssi);
+
+            // Try to connect to any device for now (debug)
+            printf("[BTD] Attempting connection...\n");
+            btd_hci_inquiry_cancel();  // Stop inquiry
+            btd_hci_create_connection(eir->bd_addr,
+                                     eir->page_scan_rep_mode,
+                                     eir->clock_offset);
             break;
         }
 
@@ -611,7 +824,9 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
         }
 
         default:
-            printf("[BTD] Unhandled event: 0x%02X\n", evt->event_code);
+            if (evt->event_code != 0x00) {  // Ignore empty/invalid events
+                printf("[BTD] Unhandled event: 0x%02X\n", evt->event_code);
+            }
             break;
     }
 }
@@ -720,7 +935,8 @@ void btd_print_state(void)
 {
     const char* state_names[] = {
         "INIT", "RESET", "READ_BD_ADDR", "READ_VERSION", "READ_BUFFER_SIZE",
-        "WRITE_NAME", "WRITE_COD", "WRITE_SSP", "WRITE_SCAN", "RUNNING", "ERROR"
+        "SET_EVENT_MASK", "WRITE_NAME", "WRITE_COD", "WRITE_SSP", "WRITE_SCAN",
+        "INQUIRY", "RUNNING", "ERROR"
     };
 
     printf("[BTD] State: %s\n", state_names[btd_ctx.state]);
@@ -754,6 +970,16 @@ bool btd_driver_open(uint8_t rhport, uint8_t dev_addr,
     if (itf->bInterfaceClass != USB_CLASS_WIRELESS_CTRL ||
         itf->bInterfaceSubClass != USB_SUBCLASS_RF ||
         itf->bInterfaceProtocol != USB_PROTOCOL_BLUETOOTH) {
+        return false;
+    }
+
+    // Only claim Interface 0 (HCI). Skip other BT interfaces (SCO, etc.)
+    if (itf->bInterfaceNumber != 0) {
+        return false;
+    }
+
+    // Only handle one dongle at a time
+    if (btd_ctx.dongle_connected) {
         return false;
     }
 
@@ -807,17 +1033,17 @@ bool btd_driver_set_config(uint8_t dev_addr, uint8_t itf_num)
 
     printf("[BTD] Configuration set for dev_addr=%d\n", dev_addr);
 
+    // Reset state machine state
     btd_ctx.dongle_connected = true;
     btd_ctx.state = BTD_STATE_INIT;
+    btd_ctx.pending_cmd = 0;  // Ensure clean state
 
-    // Start receiving HCI events
-    usbh_edpt_xfer(dev_addr, btd_ctx.ep_evt, btd_ctx.evt_buf, sizeof(btd_ctx.evt_buf));
-
-    // Start receiving ACL data
-    usbh_edpt_xfer(dev_addr, btd_ctx.ep_acl_in, btd_ctx.acl_in_buf, sizeof(btd_ctx.acl_in_buf));
-
-    // Tell USBH we're done with enumeration
+    // Tell USBH we're done with enumeration FIRST
     usbh_driver_set_config_complete(dev_addr, btd_ctx.itf_num);
+
+    // Start receiving HCI events (ACL will be started after init completes)
+    btd_ctx.evt_pending = true;
+    usbh_edpt_xfer(dev_addr, btd_ctx.ep_evt, btd_ctx.evt_buf, sizeof(btd_ctx.evt_buf));
 
     return true;
 }
@@ -829,16 +1055,27 @@ bool btd_driver_xfer_cb(uint8_t dev_addr, uint8_t ep_addr,
 
     if (result != XFER_RESULT_SUCCESS) {
         printf("[BTD] Transfer failed on EP 0x%02X: result=%d\n", ep_addr, result);
+        if (ep_addr == btd_ctx.ep_evt) {
+            btd_ctx.evt_pending = false;  // Allow retry
+        }
         return false;
     }
 
     if (ep_addr == btd_ctx.ep_evt) {
         // HCI Event received
-        if (xferred_bytes > 0) {
-            btd_process_event(btd_ctx.evt_buf, xferred_bytes);
+        btd_ctx.evt_pending = false;  // Transfer completed, will be re-queued by btd_task
+
+        // Debug: show raw event data when in running state
+        if (btd_ctx.state == BTD_STATE_RUNNING && xferred_bytes > 0) {
+            printf("[BTD] Event: code=0x%02X len=%lu\n", btd_ctx.evt_buf[0], (unsigned long)xferred_bytes);
         }
-        // Continue receiving events
-        usbh_edpt_xfer(dev_addr, btd_ctx.ep_evt, btd_ctx.evt_buf, sizeof(btd_ctx.evt_buf));
+
+        // Only process if we got actual data with a valid event code
+        if (xferred_bytes >= 2 && btd_ctx.evt_buf[0] != 0x00) {
+            btd_process_event(btd_ctx.evt_buf, xferred_bytes);
+            // pending_cmd is cleared inside btd_process_event for Command Complete/Status
+        }
+        // If empty or invalid, don't clear pending_cmd - wait for real response
     }
     else if (ep_addr == btd_ctx.ep_acl_in) {
         // ACL data received
@@ -867,7 +1104,9 @@ void btd_driver_close(uint8_t dev_addr)
 
     btd_ctx.dongle_connected = false;
     btd_ctx.state = BTD_STATE_INIT;
+    btd_ctx.pending_cmd = 0;
     btd_ctx.num_connections = 0;
+    init_delay_counter = 0;  // Reset for next connection
 
     // Mark all connections as disconnected
     for (int i = 0; i < BTD_MAX_CONNECTIONS; i++) {

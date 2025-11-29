@@ -24,7 +24,7 @@
 // BUFFER SIZES
 // ============================================================================
 
-#define BTD_HCI_CMD_BUF_SIZE        64      // HCI command buffer
+#define BTD_HCI_CMD_BUF_SIZE        256     // HCI command buffer (must fit Write_Local_Name: 3+248)
 #define BTD_HCI_EVT_BUF_SIZE        64      // HCI event buffer
 #define BTD_ACL_BUF_SIZE            256     // ACL data buffer
 #define BTD_MAX_NAME_LEN            32      // Max device name length
@@ -45,10 +45,12 @@ typedef enum {
     BTD_STATE_READ_BD_ADDR,     // Reading local BD_ADDR
     BTD_STATE_READ_VERSION,     // Reading local version info
     BTD_STATE_READ_BUFFER_SIZE, // Reading buffer sizes
+    BTD_STATE_SET_EVENT_MASK,   // Set event mask (enable connection events)
     BTD_STATE_WRITE_NAME,       // Writing local name
     BTD_STATE_WRITE_COD,        // Writing class of device
     BTD_STATE_WRITE_SSP,        // Enable Simple Pairing
     BTD_STATE_WRITE_SCAN,       // Enable scan mode
+    BTD_STATE_INQUIRY,          // Scanning for nearby devices
     BTD_STATE_RUNNING,          // Ready for connections
     BTD_STATE_ERROR,            // Error state
 } btd_state_t;
@@ -102,6 +104,7 @@ typedef struct {
     // State machine
     btd_state_t state;
     uint8_t  pending_cmd;       // Waiting for command complete
+    uint16_t pending_opcode;    // Opcode we're waiting for
 
     // Connections
     btd_connection_t connections[BTD_MAX_CONNECTIONS];
@@ -117,6 +120,7 @@ typedef struct {
     bool     dongle_connected;
     bool     scan_enabled;
     bool     pairing_mode;
+    bool     evt_pending;       // Event endpoint transfer is pending
 } btd_t;
 
 // ============================================================================
@@ -159,6 +163,10 @@ bool btd_hci_reset(void);
 bool btd_hci_read_bd_addr(void);
 bool btd_hci_read_local_version(void);
 bool btd_hci_read_buffer_size(void);
+bool btd_hci_set_event_mask(void);
+bool btd_hci_inquiry(void);
+bool btd_hci_inquiry_cancel(void);
+bool btd_hci_create_connection(const uint8_t* bd_addr, uint8_t page_scan_rep_mode, uint16_t clock_offset);
 bool btd_hci_write_local_name(const char* name);
 bool btd_hci_write_class_of_device(uint32_t cod);
 bool btd_hci_write_scan_enable(uint8_t mode);
