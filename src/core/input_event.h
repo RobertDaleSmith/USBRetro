@@ -53,15 +53,27 @@ typedef enum {
 // ============================================================================
 // Analog Axis Indices (matches USB HID usage order)
 // ============================================================================
+//
+// INTERNAL Y-AXIS CONVENTION (IMPORTANT):
+// USBRetro uses gamepad convention internally: Y-axis UP = 255, DOWN = 0
+//   - 255 = stick pushed UP (positive Y)
+//   - 128 = centered (neutral)
+//   - 0   = stick pushed DOWN (negative Y)
+//
+// This matches XInput and most gamepad APIs. Note that USB HID uses the
+// opposite convention (0 = up, 255 = down, like screen coordinates).
+//
+// Input drivers receiving HID data must INVERT Y: analog_y = 255 - hid_y
+// Output drivers sending HID data must INVERT Y: hid_y = 255 - analog_y
 
 typedef enum {
-    ANALOG_X = 0,       // Left stick X / Flight stick X / Steering wheel
-    ANALOG_Y = 1,       // Left stick Y / Flight stick Y
-    ANALOG_Z = 2,       // Right stick X / Rudder / Twist
-    ANALOG_RX = 3,      // Right stick X (alt) / Throttle slider
+    ANALOG_X = 0,       // Left stick X (0=left, 128=center, 255=right)
+    ANALOG_Y = 1,       // Left stick Y (0=down, 128=center, 255=up) [INVERTED from HID]
+    ANALOG_Z = 2,       // Right stick X (0=left, 128=center, 255=right)
+    ANALOG_RX = 3,      // Right stick Y (0=down, 128=center, 255=up) [INVERTED from HID]
     ANALOG_RY = 4,      // Right stick Y (alt)
-    ANALOG_RZ = 5,      // Triggers / Brake pedal
-    ANALOG_SLIDER = 6,  // Throttle / Gas pedal
+    ANALOG_RZ = 5,      // Left trigger (0=released, 255=fully pressed)
+    ANALOG_SLIDER = 6,  // Right trigger (0=released, 255=fully pressed)
     ANALOG_DIAL = 7,    // Extra slider / Clutch pedal
 } analog_axis_index_t;
 

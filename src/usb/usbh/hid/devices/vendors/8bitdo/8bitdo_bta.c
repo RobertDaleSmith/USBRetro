@@ -89,9 +89,9 @@ void process_8bitdo_bta(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
                ((input_report.cap)    ? USBR_BUTTON_A2 : 0));
 
     uint8_t analog_1x = input_report.x1;
-    uint8_t analog_1y = (input_report.y1 == 0) ? 255 : 256 - input_report.y1;
+    uint8_t analog_1y = 255 - input_report.y1;
     uint8_t analog_2x = input_report.x2;
-    uint8_t analog_2y = (input_report.y2 == 0) ? 255 : 256 - input_report.y2;
+    uint8_t analog_2y = 255 - input_report.y2;
     uint8_t l2_trigger = input_report.l2_trigger;
     uint8_t r2_trigger = input_report.r2_trigger;
 
