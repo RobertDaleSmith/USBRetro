@@ -19,7 +19,7 @@
 #define USBR_BUTTON_L3 0x10000 // LS/L3
 #define USBR_BUTTON_R3 0x20000 // RS/R3
 #define USBR_BUTTON_A1 0x00400 // Guide/Home/PS
-#define USBR_BUTTON_A2 0x00000 // Capture/Touchpad
+#define USBR_BUTTON_A2 0x00800 // Capture/Touchpad
 
 // USBRetro Dpad Directions
 #define USBR_BUTTON_DU 0x00001 // Dpad Up

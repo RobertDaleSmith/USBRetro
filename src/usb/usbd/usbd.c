@@ -144,6 +144,14 @@ bool usbd_send_report(uint8_t player_index)
         hid_report.buttons = buttons;
         hid_report.hat = convert_dpad_to_hat(event->buttons);
 
+        // Debug: log A2 button state
+        static uint32_t last_buttons = 0;
+        if (event->buttons != last_buttons) {
+            printf("[usbd] buttons=0x%08lx hid=0x%04x A2=%d\n",
+                   event->buttons, buttons, (event->buttons & USBR_BUTTON_A2) ? 1 : 0);
+            last_buttons = event->buttons;
+        }
+
         // Analog sticks (input_event uses 0-255, HID Y-axis is inverted: 0=up, 255=down)
         hid_report.lx = event->analog[ANALOG_X];
         hid_report.ly = 255 - event->analog[ANALOG_Y];
