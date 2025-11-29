@@ -119,13 +119,22 @@
   // Device configuration
   #define CFG_TUD_ENDPOINT0_SIZE    64
   #define CFG_TUD_HID               4   // Up to 4 HID gamepads
-  #define CFG_TUD_CDC               0   // Virtual COM port (future: config)
+  // CDC configuration: 0=none, 1=data only, 2=data+debug
+  #ifndef USBR_CDC_DEBUG
+  #define USBR_CDC_DEBUG            1   // Default: debug enabled
+  #endif
+  #define CFG_TUD_CDC               (1 + USBR_CDC_DEBUG)  // 1=data, 2=data+debug
   #define CFG_TUD_MSC               0   // No mass storage
   #define CFG_TUD_MIDI              0   // No MIDI
   #define CFG_TUD_VENDOR            0   // No vendor-specific
 
   // HID buffer sizes
   #define CFG_TUD_HID_EP_BUFSIZE    64
+
+  // CDC buffer sizes
+  #define CFG_TUD_CDC_RX_BUFSIZE    256
+  #define CFG_TUD_CDC_TX_BUFSIZE    256
+  #define CFG_TUD_CDC_EP_BUFSIZE    64
 #endif
 
 #ifdef __cplusplus

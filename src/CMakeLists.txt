@@ -77,6 +77,8 @@ target_compile_definitions(usbretro_usb PRIVATE
     PICO_DEFAULT_PIO_USB_VBUSEN_PIN=18
     PICO_DEFAULT_PIO_USB_VBUSEN_STATE=1
     BOARD_TUH_RHPORT=1
+    # CDC debug: 1=enabled (dev), 0=disabled (prod)
+    USBR_CDC_DEBUG=1
 )
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 
@@ -274,6 +276,7 @@ target_sources(usbretro_uart PUBLIC # For UART (USB→UART ESP32 bridge)
 target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
     # Phase 5: App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )
@@ -281,6 +284,7 @@ target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
 target_sources(usbretro_snes2usb PUBLIC # For SNES2USB (SNES→USB HID gamepad)
     ${CORE_SOURCES}  # No USB host - uses native SNES input
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
     # Native SNES host driver
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/snes/snes_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src/snespad.c

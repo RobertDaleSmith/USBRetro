@@ -17,10 +17,6 @@
 // String descriptors
 #define USB_STRING_MANUFACTURER  "USBRetro"
 #define USB_STRING_PRODUCT       "USBR (DInput)"
-#define USB_STRING_SERIAL        "000000000001"
-
-// HID Interface number
-#define ITF_NUM_HID  0
 
 // Output modes (console types) - for future expansion
 typedef enum {

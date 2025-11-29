@@ -4,18 +4,26 @@
 //
 // Implements USB device mode for USBRetro, enabling the adapter to emulate
 // a gamepad for USB-capable consoles. Uses TinyUSB device stack.
+//
+// Composite device: HID gamepad + optional dual CDC (data + debug)
 
 #include "usbd.h"
 #include "descriptors/hid_descriptors.h"
+#include "cdc/cdc.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
 #include "core/buttons.h"
 #include "tusb.h"
+#include "pico/unique_id.h"
 #include <string.h>
 #include <stdio.h>
 
 // Current HID report
 static usbretro_hid_report_t hid_report;
+
+// Serial number from board unique ID (12 hex chars + null)
+#define USB_SERIAL_LEN 12
+static char usb_serial_str[USB_SERIAL_LEN + 1];
 
 // Current output mode
 static usb_output_mode_t output_mode = USB_OUTPUT_MODE_HID;
@@ -79,6 +87,13 @@ void usbd_init(void)
 {
     printf("[usbd] Initializing USB device output\n");
 
+    // Get unique board ID for USB serial number (first 12 chars)
+    char full_id[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
+    pico_get_unique_board_id_string(full_id, sizeof(full_id));
+    memcpy(usb_serial_str, full_id, USB_SERIAL_LEN);
+    usb_serial_str[USB_SERIAL_LEN] = '\0';
+    printf("[usbd] Serial: %s\n", usb_serial_str);
+
     // Initialize TinyUSB device stack
     tusb_rhport_init_t dev_init = {
         .role = TUSB_ROLE_DEVICE,
@@ -94,6 +109,9 @@ void usbd_init(void)
     hid_report.ry = 128;
     hid_report.hat = HID_HAT_CENTER;
 
+    // Initialize CDC subsystem
+    cdc_init();
+
     printf("[usbd] Initialization complete\n");
 }
 
@@ -101,6 +119,9 @@ void usbd_task(void)
 {
     // TinyUSB device task - runs from core0 main loop
     tud_task();
+
+    // Process CDC tasks
+    cdc_task();
 
     // Send HID report if device is ready
     if (tud_hid_ready()) {
@@ -179,14 +200,57 @@ const OutputInterface usbd_output_interface = {
 // TINYUSB DEVICE CALLBACKS
 // ============================================================================
 
-// Device descriptor
+// ============================================================================
+// INTERFACE AND ENDPOINT NUMBERS
+// ============================================================================
+
+// Interface numbers
+enum {
+    ITF_NUM_HID = 0,
+#if CFG_TUD_CDC >= 1
+    ITF_NUM_CDC_0,        // CDC 0 control interface (data port)
+    ITF_NUM_CDC_0_DATA,   // CDC 0 data interface
+#endif
+#if CFG_TUD_CDC >= 2
+    ITF_NUM_CDC_1,        // CDC 1 control interface (debug port)
+    ITF_NUM_CDC_1_DATA,   // CDC 1 data interface
+#endif
+    ITF_NUM_TOTAL
+};
+
+// Endpoint numbers
+#define EPNUM_HID           0x81
+
+#if CFG_TUD_CDC >= 1
+#define EPNUM_CDC_0_NOTIF   0x82
+#define EPNUM_CDC_0_OUT     0x03
+#define EPNUM_CDC_0_IN      0x83
+#endif
+
+#if CFG_TUD_CDC >= 2
+#define EPNUM_CDC_1_NOTIF   0x84
+#define EPNUM_CDC_1_OUT     0x05
+#define EPNUM_CDC_1_IN      0x85
+#endif
+
+// ============================================================================
+// DEVICE DESCRIPTOR
+// ============================================================================
+
 static const tusb_desc_device_t desc_device = {
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
     .bcdUSB             = 0x0200,  // USB 2.0
-    .bDeviceClass       = 0x00,    // Composite device
+#if CFG_TUD_CDC > 0
+    // Use IAD for composite device with CDC
+    .bDeviceClass       = TUSB_CLASS_MISC,
+    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
+#else
+    .bDeviceClass       = 0x00,
     .bDeviceSubClass    = 0x00,
     .bDeviceProtocol    = 0x00,
+#endif
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
     .idVendor           = USB_DEVICE_VENDOR_ID,
     .idProduct          = USB_DEVICE_PRODUCT_ID,
@@ -202,15 +266,28 @@ uint8_t const *tud_descriptor_device_cb(void)
     return (uint8_t const *)&desc_device;
 }
 
-// Configuration descriptor
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
-#define EPNUM_HID 0x81
+// ============================================================================
+// CONFIGURATION DESCRIPTOR
+// ============================================================================
+
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN + (CFG_TUD_CDC * TUD_CDC_DESC_LEN))
 
 static const uint8_t desc_configuration[] = {
     // Config: bus powered, max 100mA
-    TUD_CONFIG_DESCRIPTOR(1, 1, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
-    // Interface: HID gamepad
-    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, sizeof(hid_report_descriptor), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 1)
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+    // Interface 0: HID gamepad
+    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, sizeof(hid_report_descriptor), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 1),
+
+#if CFG_TUD_CDC >= 1
+    // CDC 0: Data port (commands, config)
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, EPNUM_CDC_0_NOTIF, 8, EPNUM_CDC_0_OUT, EPNUM_CDC_0_IN, 64),
+#endif
+
+#if CFG_TUD_CDC >= 2
+    // CDC 1: Debug port (logging)
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, EPNUM_CDC_1_NOTIF, 8, EPNUM_CDC_1_OUT, EPNUM_CDC_1_IN, 64),
+#endif
 };
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
@@ -219,32 +296,63 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
     return desc_configuration;
 }
 
-// String descriptors
-static const char *string_desc_arr[] = {
-    (const char[]){ 0x09, 0x04 },  // 0: Language (0x0409 = English)
-    USB_STRING_MANUFACTURER,        // 1: Manufacturer
-    USB_STRING_PRODUCT,             // 2: Product
-    USB_STRING_SERIAL,              // 3: Serial number
+// ============================================================================
+// STRING DESCRIPTORS
+// ============================================================================
+
+// String descriptor indices
+enum {
+    STRID_LANGID = 0,
+    STRID_MANUFACTURER,
+    STRID_PRODUCT,
+    STRID_SERIAL,
+#if CFG_TUD_CDC >= 1
+    STRID_CDC_DATA,
+#endif
+#if CFG_TUD_CDC >= 2
+    STRID_CDC_DEBUG,
+#endif
+    STRID_COUNT
 };
 
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 {
     (void)langid;
     static uint16_t _desc_str[32];
-
+    const char *str = NULL;
     uint8_t chr_count;
-    if (index == 0) {
-        memcpy(&_desc_str[1], string_desc_arr[0], 2);
-        chr_count = 1;
-    } else {
-        if (index >= sizeof(string_desc_arr) / sizeof(string_desc_arr[0])) {
-            return NULL;
-        }
 
-        const char *str = string_desc_arr[index];
+    switch (index) {
+        case STRID_LANGID:
+            _desc_str[1] = 0x0409;  // English
+            chr_count = 1;
+            break;
+        case STRID_MANUFACTURER:
+            str = USB_STRING_MANUFACTURER;
+            break;
+        case STRID_PRODUCT:
+            str = USB_STRING_PRODUCT;
+            break;
+        case STRID_SERIAL:
+            str = usb_serial_str;  // Dynamic from board unique ID
+            break;
+#if CFG_TUD_CDC >= 1
+        case STRID_CDC_DATA:
+            str = "USBR Data";
+            break;
+#endif
+#if CFG_TUD_CDC >= 2
+        case STRID_CDC_DEBUG:
+            str = "USBR Debug";
+            break;
+#endif
+        default:
+            return NULL;
+    }
+
+    if (str) {
         chr_count = strlen(str);
         if (chr_count > 31) chr_count = 31;
-
         for (uint8_t i = 0; i < chr_count; i++) {
             _desc_str[1 + i] = str[i];
         }
