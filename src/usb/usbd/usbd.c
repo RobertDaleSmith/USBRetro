@@ -575,12 +575,12 @@ static bool usbd_send_switch_report(uint8_t player_index)
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
     if (event) {
-        // Buttons (16-bit)
+        // Buttons (16-bit) - position-based mapping (matches GP2040-CE)
         switch_report.buttons = 0;
-        if (event->buttons & USBR_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_Y;  // Y
-        if (event->buttons & USBR_BUTTON_B2) switch_report.buttons |= SWITCH_MASK_B;  // B
-        if (event->buttons & USBR_BUTTON_B1) switch_report.buttons |= SWITCH_MASK_A;  // A
-        if (event->buttons & USBR_BUTTON_B3) switch_report.buttons |= SWITCH_MASK_X;  // X
+        if (event->buttons & USBR_BUTTON_B1) switch_report.buttons |= SWITCH_MASK_B;  // B1 (bottom) → B
+        if (event->buttons & USBR_BUTTON_B2) switch_report.buttons |= SWITCH_MASK_A;  // B2 (right)  → A
+        if (event->buttons & USBR_BUTTON_B3) switch_report.buttons |= SWITCH_MASK_Y;  // B3 (left)   → Y
+        if (event->buttons & USBR_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_X;  // B4 (top)    → X
         if (event->buttons & USBR_BUTTON_L1) switch_report.buttons |= SWITCH_MASK_L;  // L
         if (event->buttons & USBR_BUTTON_R1) switch_report.buttons |= SWITCH_MASK_R;  // R
         if (event->buttons & USBR_BUTTON_L2) switch_report.buttons |= SWITCH_MASK_ZL; // ZL
