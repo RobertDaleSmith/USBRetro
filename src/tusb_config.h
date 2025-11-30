@@ -126,6 +126,10 @@
   #define CFG_TUD_XID               1   // Enable XID class driver
   #define CFG_TUD_XID_EP_BUFSIZE    32  // XID endpoint buffer size
 
+  // Xbox 360 (XInput) mode support
+  #define CFG_TUD_XINPUT            1   // Enable XInput class driver
+  #define CFG_TUD_XINPUT_EP_BUFSIZE 32  // XInput endpoint buffer size
+
   // CDC configuration: 0=none, 1=data only, 2=data+debug
   #ifndef USBR_CDC_DEBUG
   #define USBR_CDC_DEBUG            1   // Default: debug enabled

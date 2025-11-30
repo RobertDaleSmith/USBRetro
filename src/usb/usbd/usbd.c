@@ -16,7 +16,11 @@
 #include "usbd.h"
 #include "descriptors/hid_descriptors.h"
 #include "descriptors/xbox_og_descriptors.h"
+#include "descriptors/xinput_descriptors.h"
+#include "descriptors/switch_descriptors.h"
+#include "descriptors/ps3_descriptors.h"
 #include "tud_xid.h"
+#include "tud_xinput.h"
 #include "cdc/cdc.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
@@ -42,6 +46,19 @@ static usbretro_hid_report_t hid_report;
 static xbox_og_in_report_t xid_report;
 static xbox_og_out_report_t xid_rumble;
 static bool xid_rumble_available = false;
+
+// Current XInput report (for Xbox 360 mode)
+static xinput_in_report_t xinput_report;
+static xinput_out_report_t xinput_output;
+static bool xinput_output_available = false;
+
+// Current Switch report (for Nintendo Switch mode)
+static switch_in_report_t switch_report;
+
+// Current PS3 report (for PlayStation 3 mode)
+static ps3_in_report_t ps3_report;
+static ps3_out_report_t ps3_output;
+static bool ps3_output_available = false;
 
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
@@ -165,8 +182,12 @@ bool usbd_set_mode(usb_output_mode_t mode)
         return false;
     }
 
-    // Only HID and Xbox Original are currently supported
-    if (mode != USB_OUTPUT_MODE_HID && mode != USB_OUTPUT_MODE_XBOX_ORIGINAL) {
+    // Supported modes: HID, Xbox OG, XInput, PS3, Switch
+    if (mode != USB_OUTPUT_MODE_HID &&
+        mode != USB_OUTPUT_MODE_XBOX_ORIGINAL &&
+        mode != USB_OUTPUT_MODE_XINPUT &&
+        mode != USB_OUTPUT_MODE_PS3 &&
+        mode != USB_OUTPUT_MODE_SWITCH) {
         printf("[usbd] Mode %d not yet supported\n", mode);
         return false;
     }
@@ -248,7 +269,10 @@ void usbd_init(void)
         if (flash_settings.usb_output_mode < USB_OUTPUT_MODE_COUNT) {
             // Only accept supported modes
             if (flash_settings.usb_output_mode == USB_OUTPUT_MODE_HID ||
-                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XINPUT ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS3 ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH) {
                 output_mode = (usb_output_mode_t)flash_settings.usb_output_mode;
                 printf("[usbd] Loaded mode from flash: %s\n", mode_names[output_mode]);
             } else {
@@ -280,24 +304,53 @@ void usbd_init(void)
     tusb_init(0, &dev_init);
 
     // Initialize reports based on mode
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        // Initialize XID report to neutral state
-        memset(&xid_report, 0, sizeof(xbox_og_in_report_t));
-        xid_report.reserved1 = 0x00;
-        xid_report.report_len = sizeof(xbox_og_in_report_t);
-        memset(&xid_rumble, 0, sizeof(xbox_og_out_report_t));
-    } else {
-        // Initialize HID report to neutral state
-        memset(&hid_report, 0, sizeof(usbretro_hid_report_t));
-        hid_report.lx = 128;  // Center
-        hid_report.ly = 128;
-        hid_report.rx = 128;
-        hid_report.ry = 128;
-        hid_report.hat = HID_HAT_CENTER;
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            // Initialize XID report to neutral state
+            memset(&xid_report, 0, sizeof(xbox_og_in_report_t));
+            xid_report.reserved1 = 0x00;
+            xid_report.report_len = sizeof(xbox_og_in_report_t);
+            memset(&xid_rumble, 0, sizeof(xbox_og_out_report_t));
+            break;
+
+        case USB_OUTPUT_MODE_XINPUT:
+            // Initialize XInput report to neutral state
+            memset(&xinput_report, 0, sizeof(xinput_in_report_t));
+            xinput_report.report_id = 0x00;
+            xinput_report.report_size = sizeof(xinput_in_report_t);
+            memset(&xinput_output, 0, sizeof(xinput_out_report_t));
+            break;
+
+        case USB_OUTPUT_MODE_SWITCH:
+            // Initialize Switch report to neutral state
+            memset(&switch_report, 0, sizeof(switch_in_report_t));
+            switch_report.hat = SWITCH_HAT_CENTER;
+            switch_report.lx = SWITCH_JOYSTICK_MID;
+            switch_report.ly = SWITCH_JOYSTICK_MID;
+            switch_report.rx = SWITCH_JOYSTICK_MID;
+            switch_report.ry = SWITCH_JOYSTICK_MID;
+            break;
+
+        case USB_OUTPUT_MODE_PS3:
+            // Initialize PS3 report to neutral state
+            ps3_init_report(&ps3_report);
+            memset(&ps3_output, 0, sizeof(ps3_out_report_t));
+            break;
+
+        case USB_OUTPUT_MODE_HID:
+        default:
+            // Initialize HID report to neutral state
+            memset(&hid_report, 0, sizeof(usbretro_hid_report_t));
+            hid_report.lx = 128;  // Center
+            hid_report.ly = 128;
+            hid_report.rx = 128;
+            hid_report.ry = 128;
+            hid_report.hat = HID_HAT_CENTER;
+            break;
     }
 
-    // Initialize CDC subsystem (only for HID mode)
-    if (output_mode != USB_OUTPUT_MODE_XBOX_ORIGINAL) {
+    // Initialize CDC subsystem (only for HID and Switch modes)
+    if (output_mode == USB_OUTPUT_MODE_HID || output_mode == USB_OUTPUT_MODE_SWITCH) {
         cdc_init();
     }
 
@@ -309,24 +362,53 @@ void usbd_task(void)
     // TinyUSB device task - runs from core0 main loop
     tud_task();
 
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        // Xbox OG mode: check for rumble updates
-        if (tud_xid_get_rumble(&xid_rumble)) {
-            xid_rumble_available = true;
-        }
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            // Xbox OG mode: check for rumble updates
+            if (tud_xid_get_rumble(&xid_rumble)) {
+                xid_rumble_available = true;
+            }
+            // Send XID report if ready
+            if (tud_xid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
 
-        // Send XID report if ready
-        if (tud_xid_ready()) {
-            usbd_send_report(0);  // Player 1
-        }
-    } else {
-        // HID mode: process CDC tasks
-        cdc_task();
+        case USB_OUTPUT_MODE_XINPUT:
+            // XInput mode: check for rumble/LED updates
+            if (tud_xinput_get_output(&xinput_output)) {
+                xinput_output_available = true;
+            }
+            // Send XInput report if ready
+            if (tud_xinput_ready()) {
+                usbd_send_report(0);
+            }
+            break;
 
-        // Send HID report if device is ready
-        if (tud_hid_ready()) {
-            usbd_send_report(0);  // Player 1
-        }
+        case USB_OUTPUT_MODE_SWITCH:
+            // Switch mode: process CDC tasks, send HID report
+            cdc_task();
+            if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_PS3:
+            // PS3 mode: send HID report (no CDC - PS3 doesn't use it)
+            if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_HID:
+        default:
+            // HID mode: process CDC tasks
+            cdc_task();
+            // Send HID report if device is ready
+            if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
     }
 }
 
@@ -412,8 +494,9 @@ static bool usbd_send_hid_report(uint8_t player_index)
         hid_report.pressure_square     = (buttons & USB_GAMEPAD_MASK_B3) ? 0xFF : 0x00;
         hid_report.pressure_l1         = (buttons & USB_GAMEPAD_MASK_L1) ? 0xFF : 0x00;
         hid_report.pressure_r1         = (buttons & USB_GAMEPAD_MASK_R1) ? 0xFF : 0x00;
-        hid_report.pressure_l2         = (buttons & USB_GAMEPAD_MASK_L2) ? 0xFF : 0x00;
-        hid_report.pressure_r2         = (buttons & USB_GAMEPAD_MASK_R2) ? 0xFF : 0x00;
+        // Use analog values for L2/R2 triggers (from DS3 pressure or other analog input)
+        hid_report.pressure_l2         = event->analog[ANALOG_RZ];      // Left trigger analog
+        hid_report.pressure_r2         = event->analog[ANALOG_SLIDER];  // Right trigger analog
     } else {
         // No input - send neutral state
         memset(&hid_report, 0, sizeof(hid_report));
@@ -427,28 +510,230 @@ static bool usbd_send_hid_report(uint8_t player_index)
     return tud_hid_report(0, &hid_report, sizeof(hid_report));
 }
 
+// Send XInput report (Xbox 360 mode)
+static bool usbd_send_xinput_report(uint8_t player_index)
+{
+    if (!tud_xinput_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Digital buttons byte 0 (DPAD, Start, Back, L3, R3)
+        xinput_report.buttons0 = 0;
+        if (event->buttons & USBR_BUTTON_DU) xinput_report.buttons0 |= XINPUT_BTN_DPAD_UP;
+        if (event->buttons & USBR_BUTTON_DD) xinput_report.buttons0 |= XINPUT_BTN_DPAD_DOWN;
+        if (event->buttons & USBR_BUTTON_DL) xinput_report.buttons0 |= XINPUT_BTN_DPAD_LEFT;
+        if (event->buttons & USBR_BUTTON_DR) xinput_report.buttons0 |= XINPUT_BTN_DPAD_RIGHT;
+        if (event->buttons & USBR_BUTTON_S2) xinput_report.buttons0 |= XINPUT_BTN_START;
+        if (event->buttons & USBR_BUTTON_S1) xinput_report.buttons0 |= XINPUT_BTN_BACK;
+        if (event->buttons & USBR_BUTTON_L3) xinput_report.buttons0 |= XINPUT_BTN_L3;
+        if (event->buttons & USBR_BUTTON_R3) xinput_report.buttons0 |= XINPUT_BTN_R3;
+
+        // Digital buttons byte 1 (LB, RB, Guide, A, B, X, Y)
+        xinput_report.buttons1 = 0;
+        if (event->buttons & USBR_BUTTON_L1) xinput_report.buttons1 |= XINPUT_BTN_LB;
+        if (event->buttons & USBR_BUTTON_R1) xinput_report.buttons1 |= XINPUT_BTN_RB;
+        if (event->buttons & USBR_BUTTON_A1) xinput_report.buttons1 |= XINPUT_BTN_GUIDE;
+        if (event->buttons & USBR_BUTTON_B1) xinput_report.buttons1 |= XINPUT_BTN_A;
+        if (event->buttons & USBR_BUTTON_B2) xinput_report.buttons1 |= XINPUT_BTN_B;
+        if (event->buttons & USBR_BUTTON_B3) xinput_report.buttons1 |= XINPUT_BTN_X;
+        if (event->buttons & USBR_BUTTON_B4) xinput_report.buttons1 |= XINPUT_BTN_Y;
+
+        // Analog triggers (0-255)
+        xinput_report.trigger_l = (event->buttons & USBR_BUTTON_L2) ? 0xFF : 0x00;
+        xinput_report.trigger_r = (event->buttons & USBR_BUTTON_R2) ? 0xFF : 0x00;
+
+        // Analog sticks (signed 16-bit, -32768 to +32767)
+        xinput_report.stick_lx = convert_axis_to_s16(event->analog[ANALOG_X]);
+        xinput_report.stick_ly = convert_axis_to_s16(event->analog[ANALOG_Y]);
+        xinput_report.stick_rx = convert_axis_to_s16(event->analog[ANALOG_Z]);
+        xinput_report.stick_ry = convert_axis_to_s16(event->analog[ANALOG_RX]);
+    } else {
+        // No input - send neutral state
+        xinput_report.buttons0 = 0;
+        xinput_report.buttons1 = 0;
+        xinput_report.trigger_l = 0;
+        xinput_report.trigger_r = 0;
+        xinput_report.stick_lx = 0;
+        xinput_report.stick_ly = 0;
+        xinput_report.stick_rx = 0;
+        xinput_report.stick_ry = 0;
+    }
+
+    return tud_xinput_send_report(&xinput_report);
+}
+
+// Send Switch report (Nintendo Switch mode)
+static bool usbd_send_switch_report(uint8_t player_index)
+{
+    if (!tud_hid_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Buttons (16-bit)
+        switch_report.buttons = 0;
+        if (event->buttons & USBR_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_Y;  // Y
+        if (event->buttons & USBR_BUTTON_B2) switch_report.buttons |= SWITCH_MASK_B;  // B
+        if (event->buttons & USBR_BUTTON_B1) switch_report.buttons |= SWITCH_MASK_A;  // A
+        if (event->buttons & USBR_BUTTON_B3) switch_report.buttons |= SWITCH_MASK_X;  // X
+        if (event->buttons & USBR_BUTTON_L1) switch_report.buttons |= SWITCH_MASK_L;  // L
+        if (event->buttons & USBR_BUTTON_R1) switch_report.buttons |= SWITCH_MASK_R;  // R
+        if (event->buttons & USBR_BUTTON_L2) switch_report.buttons |= SWITCH_MASK_ZL; // ZL
+        if (event->buttons & USBR_BUTTON_R2) switch_report.buttons |= SWITCH_MASK_ZR; // ZR
+        if (event->buttons & USBR_BUTTON_S1) switch_report.buttons |= SWITCH_MASK_MINUS;  // Minus
+        if (event->buttons & USBR_BUTTON_S2) switch_report.buttons |= SWITCH_MASK_PLUS;   // Plus
+        if (event->buttons & USBR_BUTTON_L3) switch_report.buttons |= SWITCH_MASK_L3;
+        if (event->buttons & USBR_BUTTON_R3) switch_report.buttons |= SWITCH_MASK_R3;
+        if (event->buttons & USBR_BUTTON_A1) switch_report.buttons |= SWITCH_MASK_HOME;
+        if (event->buttons & USBR_BUTTON_A2) switch_report.buttons |= SWITCH_MASK_CAPTURE;
+
+        // D-pad as hat switch
+        switch_report.hat = convert_dpad_to_hat(event->buttons);
+
+        // Analog sticks (0-255, inverted Y)
+        switch_report.lx = event->analog[ANALOG_X];
+        switch_report.ly = 255 - event->analog[ANALOG_Y];
+        switch_report.rx = event->analog[ANALOG_Z];
+        switch_report.ry = 255 - event->analog[ANALOG_RX];
+
+        switch_report.vendor = 0;
+    } else {
+        // No input - send neutral state
+        switch_report.buttons = 0;
+        switch_report.hat = SWITCH_HAT_CENTER;
+        switch_report.lx = SWITCH_JOYSTICK_MID;
+        switch_report.ly = SWITCH_JOYSTICK_MID;
+        switch_report.rx = SWITCH_JOYSTICK_MID;
+        switch_report.ry = SWITCH_JOYSTICK_MID;
+        switch_report.vendor = 0;
+    }
+
+    return tud_hid_report(0, &switch_report, sizeof(switch_report));
+}
+
+// Send PS3 report (PlayStation 3 DualShock 3 mode)
+static bool usbd_send_ps3_report(uint8_t player_index)
+{
+    if (!tud_hid_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Digital buttons byte 0
+        ps3_report.buttons[0] = 0;
+        if (event->buttons & USBR_BUTTON_S1) ps3_report.buttons[0] |= PS3_BTN_SELECT;
+        if (event->buttons & USBR_BUTTON_L3) ps3_report.buttons[0] |= PS3_BTN_L3;
+        if (event->buttons & USBR_BUTTON_R3) ps3_report.buttons[0] |= PS3_BTN_R3;
+        if (event->buttons & USBR_BUTTON_S2) ps3_report.buttons[0] |= PS3_BTN_START;
+        if (event->buttons & USBR_BUTTON_DU) ps3_report.buttons[0] |= PS3_BTN_DPAD_UP;
+        if (event->buttons & USBR_BUTTON_DR) ps3_report.buttons[0] |= PS3_BTN_DPAD_RIGHT;
+        if (event->buttons & USBR_BUTTON_DD) ps3_report.buttons[0] |= PS3_BTN_DPAD_DOWN;
+        if (event->buttons & USBR_BUTTON_DL) ps3_report.buttons[0] |= PS3_BTN_DPAD_LEFT;
+
+        // Digital buttons byte 1
+        ps3_report.buttons[1] = 0;
+        if (event->buttons & USBR_BUTTON_L2) ps3_report.buttons[1] |= PS3_BTN_L2;
+        if (event->buttons & USBR_BUTTON_R2) ps3_report.buttons[1] |= PS3_BTN_R2;
+        if (event->buttons & USBR_BUTTON_L1) ps3_report.buttons[1] |= PS3_BTN_L1;
+        if (event->buttons & USBR_BUTTON_R1) ps3_report.buttons[1] |= PS3_BTN_R1;
+        if (event->buttons & USBR_BUTTON_B4) ps3_report.buttons[1] |= PS3_BTN_TRIANGLE;
+        if (event->buttons & USBR_BUTTON_B2) ps3_report.buttons[1] |= PS3_BTN_CIRCLE;
+        if (event->buttons & USBR_BUTTON_B1) ps3_report.buttons[1] |= PS3_BTN_CROSS;
+        if (event->buttons & USBR_BUTTON_B3) ps3_report.buttons[1] |= PS3_BTN_SQUARE;
+
+        // Digital buttons byte 2 (PS button)
+        ps3_report.buttons[2] = 0;
+        if (event->buttons & USBR_BUTTON_A1) ps3_report.buttons[2] |= PS3_BTN_PS;
+
+        // Analog sticks (0-255, no inversion - PS3 uses raw values)
+        // Note: PS3 Y-axis: 0x00=up, 0xFF=down (same as raw HID)
+        ps3_report.lx = event->analog[ANALOG_X];
+        ps3_report.ly = event->analog[ANALOG_Y];
+        ps3_report.rx = event->analog[ANALOG_Z];
+        ps3_report.ry = event->analog[ANALOG_RX];
+
+        // Pressure-sensitive buttons (D-pad)
+        ps3_report.pressure_up    = (event->buttons & USBR_BUTTON_DU) ? 0xFF : 0x00;
+        ps3_report.pressure_right = (event->buttons & USBR_BUTTON_DR) ? 0xFF : 0x00;
+        ps3_report.pressure_down  = (event->buttons & USBR_BUTTON_DD) ? 0xFF : 0x00;
+        ps3_report.pressure_left  = (event->buttons & USBR_BUTTON_DL) ? 0xFF : 0x00;
+
+        // Pressure-sensitive buttons (triggers/bumpers)
+        // Use actual analog values for L2/R2, fall back to digital for L1/R1
+        ps3_report.pressure_l2 = event->analog[ANALOG_RZ];      // Left trigger analog
+        ps3_report.pressure_r2 = event->analog[ANALOG_SLIDER];  // Right trigger analog
+        ps3_report.pressure_l1 = (event->buttons & USBR_BUTTON_L1) ? 0xFF : 0x00;
+        ps3_report.pressure_r1 = (event->buttons & USBR_BUTTON_R1) ? 0xFF : 0x00;
+
+        // Pressure-sensitive buttons (face buttons)
+        ps3_report.pressure_triangle = (event->buttons & USBR_BUTTON_B4) ? 0xFF : 0x00;
+        ps3_report.pressure_circle   = (event->buttons & USBR_BUTTON_B2) ? 0xFF : 0x00;
+        ps3_report.pressure_cross    = (event->buttons & USBR_BUTTON_B1) ? 0xFF : 0x00;
+        ps3_report.pressure_square   = (event->buttons & USBR_BUTTON_B3) ? 0xFF : 0x00;
+    } else {
+        // No input - keep neutral state (already initialized)
+        ps3_report.buttons[0] = 0;
+        ps3_report.buttons[1] = 0;
+        ps3_report.buttons[2] = 0;
+        ps3_report.lx = PS3_JOYSTICK_MID;
+        ps3_report.ly = PS3_JOYSTICK_MID;
+        ps3_report.rx = PS3_JOYSTICK_MID;
+        ps3_report.ry = PS3_JOYSTICK_MID;
+        memset(&ps3_report.pressure_up, 0, 12);  // Clear all 12 pressure bytes
+    }
+
+    // Send full report including report_id
+    return tud_hid_report(0, &ps3_report, sizeof(ps3_report));
+}
+
 bool usbd_send_report(uint8_t player_index)
 {
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        return usbd_send_xid_report(player_index);
-    } else {
-        return usbd_send_hid_report(player_index);
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            return usbd_send_xid_report(player_index);
+        case USB_OUTPUT_MODE_XINPUT:
+            return usbd_send_xinput_report(player_index);
+        case USB_OUTPUT_MODE_SWITCH:
+            return usbd_send_switch_report(player_index);
+        case USB_OUTPUT_MODE_PS3:
+            return usbd_send_ps3_report(player_index);
+        case USB_OUTPUT_MODE_HID:
+        default:
+            return usbd_send_hid_report(player_index);
     }
 }
 
 // Get rumble value from USB host (for feedback to input controllers)
 static uint8_t usbd_get_rumble(void)
 {
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        // Xbox OG has two 16-bit motors - combine to single 8-bit value
-        // Take the stronger of the two motors and scale from 16-bit to 8-bit
-        // Always return current value (0 means stop rumble)
-        uint16_t max_rumble = (xid_rumble.rumble_l > xid_rumble.rumble_r)
-                              ? xid_rumble.rumble_l : xid_rumble.rumble_r;
-        return (uint8_t)(max_rumble >> 8);  // Scale 0-65535 to 0-255
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL: {
+            // Xbox OG has two 16-bit motors - combine to single 8-bit value
+            uint16_t max_rumble = (xid_rumble.rumble_l > xid_rumble.rumble_r)
+                                  ? xid_rumble.rumble_l : xid_rumble.rumble_r;
+            return (uint8_t)(max_rumble >> 8);  // Scale 0-65535 to 0-255
+        }
+        case USB_OUTPUT_MODE_XINPUT: {
+            // XInput has two 8-bit motors - take the stronger one
+            return (xinput_output.rumble_l > xinput_output.rumble_r)
+                   ? xinput_output.rumble_l : xinput_output.rumble_r;
+        }
+        case USB_OUTPUT_MODE_PS3: {
+            // PS3 has left (large) and right (small, on/off only) motors
+            return (ps3_output.rumble_left_force > 0) ? ps3_output.rumble_left_force :
+                   (ps3_output.rumble_right_on > 0) ? 0xFF : 0x00;
+        }
+        default:
+            // HID/Switch modes: no standard rumble protocol
+            return 0;
     }
-    // HID mode: no standard rumble protocol in HID gamepad
-    return 0;
 }
 
 // ============================================================================
@@ -538,11 +823,19 @@ static const tusb_desc_device_t desc_device_hid = {
 
 uint8_t const *tud_descriptor_device_cb(void)
 {
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        // Xbox OG descriptors are defined in xbox_og_descriptors.h
-        return (uint8_t const *)&xbox_og_device_descriptor;
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            return (uint8_t const *)&xbox_og_device_descriptor;
+        case USB_OUTPUT_MODE_XINPUT:
+            return (uint8_t const *)&xinput_device_descriptor;
+        case USB_OUTPUT_MODE_SWITCH:
+            return (uint8_t const *)&switch_device_descriptor;
+        case USB_OUTPUT_MODE_PS3:
+            return (uint8_t const *)&ps3_device_descriptor;
+        case USB_OUTPUT_MODE_HID:
+        default:
+            return (uint8_t const *)&desc_device_hid;
     }
-    return (uint8_t const *)&desc_device_hid;
 }
 
 // ============================================================================
@@ -573,11 +866,19 @@ static const uint8_t desc_configuration_hid[] = {
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
 {
     (void)index;
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        // Xbox OG config descriptor is defined in xbox_og_descriptors.h
-        return xbox_og_config_descriptor;
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            return xbox_og_config_descriptor;
+        case USB_OUTPUT_MODE_XINPUT:
+            return xinput_config_descriptor;
+        case USB_OUTPUT_MODE_SWITCH:
+            return switch_config_descriptor;
+        case USB_OUTPUT_MODE_PS3:
+            return ps3_config_descriptor;
+        case USB_OUTPUT_MODE_HID:
+        default:
+            return desc_configuration_hid;
     }
-    return desc_configuration_hid;
 }
 
 // ============================================================================
@@ -618,10 +919,28 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
             chr_count = 1;
             break;
         case STRID_MANUFACTURER:
-            str = USB_HID_MANUFACTURER;
+            // Mode-specific manufacturer
+            if (output_mode == USB_OUTPUT_MODE_XINPUT) {
+                str = XINPUT_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_SWITCH) {
+                str = SWITCH_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_PS3) {
+                str = PS3_MANUFACTURER;
+            } else {
+                str = USB_HID_MANUFACTURER;
+            }
             break;
         case STRID_PRODUCT:
-            str = USB_HID_PRODUCT;
+            // Mode-specific product
+            if (output_mode == USB_OUTPUT_MODE_XINPUT) {
+                str = XINPUT_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_SWITCH) {
+                str = SWITCH_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_PS3) {
+                str = PS3_PRODUCT;
+            } else {
+                str = USB_HID_PRODUCT;
+            }
             break;
         case STRID_SERIAL:
             str = usb_serial_str;  // Dynamic from board unique ID
@@ -657,15 +976,60 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf)
 {
     (void)itf;
+    // Return mode-specific HID report descriptor
+    if (output_mode == USB_OUTPUT_MODE_SWITCH) {
+        return switch_report_descriptor;
+    }
+    if (output_mode == USB_OUTPUT_MODE_PS3) {
+        return ps3_report_descriptor;
+    }
     return hid_report_descriptor;
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer, uint16_t reqlen)
 {
     (void)itf;
+
+    // PS3 feature reports
+    if (output_mode == USB_OUTPUT_MODE_PS3 && report_type == HID_REPORT_TYPE_FEATURE) {
+        uint16_t len = 0;
+        switch (report_id) {
+            case PS3_REPORT_ID_FEATURE_01:
+                len = sizeof(ps3_feature_01);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, ps3_feature_01, len);
+                return len;
+            case PS3_REPORT_ID_PAIRING: {
+                // Pairing info (0xF2) - return dummy BT addresses
+                static ps3_pairing_info_t pairing = {0};
+                len = sizeof(pairing);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, &pairing, len);
+                return len;
+            }
+            case PS3_REPORT_ID_FEATURE_EF:
+                len = sizeof(ps3_feature_ef);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, ps3_feature_ef, len);
+                return len;
+            case PS3_REPORT_ID_FEATURE_F7:
+                len = sizeof(ps3_feature_f7);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, ps3_feature_f7, len);
+                return len;
+            case PS3_REPORT_ID_FEATURE_F8:
+                len = sizeof(ps3_feature_f8);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, ps3_feature_f8, len);
+                return len;
+            default:
+                break;
+        }
+    }
+
+    // Default: return current input report
     (void)report_id;
     (void)report_type;
-
     uint16_t len = sizeof(usbretro_hid_report_t);
     if (reqlen < len) len = reqlen;
     memcpy(buffer, &hid_report, len);
@@ -675,26 +1039,39 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer, uint16_t bufsize)
 {
     (void)itf;
-    (void)report_id;
     (void)report_type;
+
+    // PS3 output report (rumble/LED)
+    if (output_mode == USB_OUTPUT_MODE_PS3 && bufsize >= sizeof(ps3_out_report_t)) {
+        memcpy(&ps3_output, buffer, sizeof(ps3_out_report_t));
+        ps3_output_available = true;
+        return;
+    }
+
+    (void)report_id;
     (void)buffer;
     (void)bufsize;
-    // TODO: Handle rumble feedback from USB host
 }
 
 // ============================================================================
-// XID CLASS DRIVER REGISTRATION
+// CUSTOM CLASS DRIVER REGISTRATION
 // ============================================================================
 
-// Register XID class driver when in Xbox Original mode
+// Register custom class drivers for vendor-specific modes
 usbd_class_driver_t const* usbd_app_driver_get_cb(uint8_t* driver_count)
 {
-    if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
-        *driver_count = 1;
-        return tud_xid_class_driver();
-    }
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            *driver_count = 1;
+            return tud_xid_class_driver();
 
-    // HID mode uses built-in HID class driver, no custom driver needed
-    *driver_count = 0;
-    return NULL;
+        case USB_OUTPUT_MODE_XINPUT:
+            *driver_count = 1;
+            return tud_xinput_class_driver();
+
+        default:
+            // HID/Switch modes use built-in HID class driver
+            *driver_count = 0;
+            return NULL;
+    }
 }

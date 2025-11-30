@@ -279,6 +279,7 @@ target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
     # Phase 5: App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )
@@ -287,6 +288,8 @@ target_sources(usbretro_snes2usb PUBLIC # For SNES2USB (SNES→USB HID gamepad)
     ${CORE_SOURCES}  # No USB host - uses native SNES input
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
     # Native SNES host driver
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/snes/snes_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/SNESpad/src/snespad.c

@@ -40,13 +40,26 @@ static void on_button_event(button_event_t event)
             sleep_ms(50);
             tud_task();
 
-            // Cycle to next mode
+            // Cycle to next mode: HID → XInput → PS3 → Switch → Xbox OG → HID
             usb_output_mode_t current = usbd_get_mode();
             usb_output_mode_t next;
-            if (current == USB_OUTPUT_MODE_HID) {
-                next = USB_OUTPUT_MODE_XBOX_ORIGINAL;
-            } else {
-                next = USB_OUTPUT_MODE_HID;
+            switch (current) {
+                case USB_OUTPUT_MODE_HID:
+                    next = USB_OUTPUT_MODE_XINPUT;
+                    break;
+                case USB_OUTPUT_MODE_XINPUT:
+                    next = USB_OUTPUT_MODE_PS3;
+                    break;
+                case USB_OUTPUT_MODE_PS3:
+                    next = USB_OUTPUT_MODE_SWITCH;
+                    break;
+                case USB_OUTPUT_MODE_SWITCH:
+                    next = USB_OUTPUT_MODE_XBOX_ORIGINAL;
+                    break;
+                case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+                default:
+                    next = USB_OUTPUT_MODE_HID;
+                    break;
             }
             printf("[app:usb2usb] Switching from %s to %s\n",
                    usbd_get_mode_name(current), usbd_get_mode_name(next));
