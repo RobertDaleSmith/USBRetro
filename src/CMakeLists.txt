@@ -142,6 +142,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/storage/flash.c
 
     # Core Services
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/button/button.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/codes/codes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/hotkeys/hotkeys.c
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/players/manager.c
@@ -277,6 +278,7 @@ target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
     ${COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
     # Phase 5: App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )

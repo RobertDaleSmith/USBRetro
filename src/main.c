@@ -30,6 +30,7 @@
 
 // App layer (linked per-product)
 extern void app_init(void);
+extern void app_task(void);
 extern const OutputInterface** app_get_output_interfaces(uint8_t* count);
 extern const InputInterface** app_get_input_interfaces(uint8_t* count);
 
@@ -47,6 +48,7 @@ static void __not_in_flash_func(core0_main)(void)
     leds_task();
     players_task();
     storage_task();
+    app_task();
 
     // Poll all input interfaces declared by the app
     for (uint8_t i = 0; i < input_count; i++) {

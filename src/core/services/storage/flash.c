@@ -6,7 +6,17 @@
 #include "hardware/sync.h"
 #include "pico/multicore.h"
 #include "pico/flash.h"
+#include "tusb.h"
 #include <string.h>
+#include <stdio.h>
+
+// Helper to flush debug output before critical sections
+static void flush_output(void)
+{
+    tud_task();
+    sleep_ms(20);
+    tud_task();
+}
 
 // Flash memory layout
 // - RP2040 flash is memory-mapped at XIP_BASE (0x10000000)
@@ -69,19 +79,41 @@ static void __no_inline_not_in_flash_func(flash_write_worker)(void* param)
 // Force immediate save (bypasses debouncing - use sparingly)
 void flash_save_now(const flash_t* settings)
 {
-    flash_t write_settings;
+    // Use static to ensure it persists during flash operations
+    static flash_t write_settings;
     memcpy(&write_settings, settings, sizeof(flash_t));
     write_settings.magic = SETTINGS_MAGIC;
 
-    // CRITICAL SECTION: Pause Core 1 and disable interrupts during flash write
-    // This safely handles dual-core flash writes without crashing Core 1
-    // Core 1 (GameCube joybus) will pause briefly (~100ms) during the write
-    uint32_t ints = save_and_disable_interrupts();
+    printf("[flash] Saving to flash at offset 0x%X...\n", FLASH_TARGET_OFFSET);
+    printf("[flash] magic=0x%08X, profile=%d, usb_mode=%d\n",
+           write_settings.magic, write_settings.active_profile_index,
+           write_settings.usb_output_mode);
+    flush_output();  // Flush debug output before flash operation
 
-    // Execute flash write with Core 1 safely paused
-    flash_safe_execute(flash_write_worker, &write_settings, UINT32_MAX);
+    // Try flash_safe_execute first (handles multicore safely)
+    int result = flash_safe_execute(flash_write_worker, &write_settings, UINT32_MAX);
 
-    restore_interrupts(ints);
+    if (result != PICO_OK) {
+        printf("[flash] flash_safe_execute failed (%d), trying direct write...\n", result);
+        flush_output();
+
+        // Fallback: direct flash write with interrupts disabled
+        // Safe when Core 1 is not running or not accessing flash
+        uint32_t ints = save_and_disable_interrupts();
+        flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+        flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t*)&write_settings, FLASH_PAGE_SIZE);
+        restore_interrupts(ints);
+
+        printf("[flash] Direct write complete\n");
+    } else {
+        printf("[flash] Write complete\n");
+    }
+
+    // Verify the write
+    const flash_t* verify = (const flash_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
+    printf("[flash] Verify: magic=0x%08X, profile=%d, usb_mode=%d\n",
+           verify->magic, verify->active_profile_index, verify->usb_output_mode);
+    flush_output();
 
     save_pending = false;
 }

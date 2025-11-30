@@ -3,13 +3,21 @@
 // Copyright 2024 Robert Dale Smith
 
 #include "cdc.h"
+#include "../usbd.h"
+#include "core/services/storage/flash.h"
 #include "tusb.h"
 #include "pico/stdio.h"
 #include "pico/stdio/driver.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #if CFG_TUD_CDC > 0
+
+// Command buffer for parsing incoming data
+#define CMD_BUFFER_SIZE 64
+static char cmd_buffer[CMD_BUFFER_SIZE];
+static uint8_t cmd_pos = 0;
 
 // Debug output enabled flag (runtime toggle)
 static bool debug_enabled = true;
@@ -75,10 +83,125 @@ void cdc_init(void)
 #endif
 }
 
+// Process a complete command line
+static void cdc_process_command(const char* cmd)
+{
+    char response[128];
+
+    // MODE? - Query current mode
+    if (strcmp(cmd, "MODE?") == 0) {
+        usb_output_mode_t mode = usbd_get_mode();
+        snprintf(response, sizeof(response), "MODE=%d (%s)\r\n",
+                 (int)mode, usbd_get_mode_name(mode));
+        cdc_data_write_str(response);
+    }
+    // MODE=N - Set mode by number
+    else if (strncmp(cmd, "MODE=", 5) == 0) {
+        const char* value = cmd + 5;
+        int mode_num = -1;
+
+        // Try parsing as number first
+        if (value[0] >= '0' && value[0] <= '9') {
+            mode_num = atoi(value);
+        }
+        // Try parsing mode names
+        else if (strcasecmp(value, "HID") == 0 || strcasecmp(value, "DINPUT") == 0) {
+            mode_num = USB_OUTPUT_MODE_HID;
+        }
+        else if (strcasecmp(value, "XOG") == 0 || strcasecmp(value, "XBOX_OG") == 0 ||
+                 strcasecmp(value, "XBOX") == 0) {
+            mode_num = USB_OUTPUT_MODE_XBOX_ORIGINAL;
+        }
+
+        if (mode_num >= 0 && mode_num < USB_OUTPUT_MODE_COUNT) {
+            usb_output_mode_t current = usbd_get_mode();
+            if ((usb_output_mode_t)mode_num == current) {
+                snprintf(response, sizeof(response), "OK: Already in mode %d (%s)\r\n",
+                         mode_num, usbd_get_mode_name((usb_output_mode_t)mode_num));
+                cdc_data_write_str(response);
+            } else {
+                snprintf(response, sizeof(response), "OK: Switching to mode %d (%s)...\r\n",
+                         mode_num, usbd_get_mode_name((usb_output_mode_t)mode_num));
+                cdc_data_write_str(response);
+                cdc_data_flush();
+                // This will trigger a device reset
+                usbd_set_mode((usb_output_mode_t)mode_num);
+            }
+        } else {
+            snprintf(response, sizeof(response), "ERR: Invalid mode '%s'\r\n", value);
+            cdc_data_write_str(response);
+        }
+    }
+    // MODES - List available modes
+    else if (strcmp(cmd, "MODES") == 0 || strcmp(cmd, "MODES?") == 0) {
+        cdc_data_write_str("Available modes:\r\n");
+        cdc_data_write_str("  0: HID (DInput) - default\r\n");
+        cdc_data_write_str("  1: Xbox Original (XID)\r\n");
+        cdc_data_write_str("  2: XInput (future)\r\n");
+        cdc_data_write_str("  3: PS3 (future)\r\n");
+        cdc_data_write_str("  4: PS4 (future)\r\n");
+        cdc_data_write_str("  5: Switch (future)\r\n");
+    }
+    // VERSION or VER? - Query firmware version
+    else if (strcmp(cmd, "VERSION") == 0 || strcmp(cmd, "VER?") == 0) {
+        cdc_data_write_str("USBRetro USB Device\r\n");
+    }
+    // FLASH? - Check raw flash contents
+    else if (strcmp(cmd, "FLASH?") == 0) {
+        flash_t flash_data;
+        if (flash_load(&flash_data)) {
+            snprintf(response, sizeof(response),
+                     "Flash: magic=0x%08X, profile=%d, usb_mode=%d\r\n",
+                     (unsigned int)flash_data.magic,
+                     flash_data.active_profile_index,
+                     flash_data.usb_output_mode);
+            cdc_data_write_str(response);
+        } else {
+            cdc_data_write_str("Flash: No valid data (magic mismatch)\r\n");
+        }
+    }
+    // HELP
+    else if (strcmp(cmd, "HELP") == 0 || strcmp(cmd, "?") == 0) {
+        cdc_data_write_str("Commands:\r\n");
+        cdc_data_write_str("  MODE?     - Query current output mode\r\n");
+        cdc_data_write_str("  MODE=N    - Set output mode (0-5 or name)\r\n");
+        cdc_data_write_str("  MODES     - List available modes\r\n");
+        cdc_data_write_str("  VERSION   - Show firmware version\r\n");
+        cdc_data_write_str("  HELP      - Show this help\r\n");
+    }
+    // Unknown command
+    else if (strlen(cmd) > 0) {
+        snprintf(response, sizeof(response), "ERR: Unknown command '%s'\r\n", cmd);
+        cdc_data_write_str(response);
+    }
+}
+
 void cdc_task(void)
 {
-    // TinyUSB handles CDC internally via tud_task()
-    // This function reserved for future rx processing
+    // Process incoming data on the data port
+    while (cdc_data_available() > 0) {
+        int32_t ch = cdc_data_read_byte();
+        if (ch < 0) break;
+
+        // Handle end of line (CR or LF)
+        if (ch == '\r' || ch == '\n') {
+            if (cmd_pos > 0) {
+                cmd_buffer[cmd_pos] = '\0';
+                cdc_process_command(cmd_buffer);
+                cmd_pos = 0;
+            }
+        }
+        // Handle backspace
+        else if (ch == '\b' || ch == 0x7F) {
+            if (cmd_pos > 0) {
+                cmd_pos--;
+            }
+        }
+        // Accumulate characters
+        else if (cmd_pos < CMD_BUFFER_SIZE - 1) {
+            cmd_buffer[cmd_pos++] = (char)ch;
+        }
+    }
 }
 
 // ============================================================================

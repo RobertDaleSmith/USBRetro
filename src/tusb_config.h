@@ -118,12 +118,20 @@
 #if defined(CONFIG_USB) || defined(DISABLE_USB_HOST)
   // Device configuration
   #define CFG_TUD_ENDPOINT0_SIZE    64
+
+  // Standard HID gamepad mode (default)
   #define CFG_TUD_HID               4   // Up to 4 HID gamepads
+
+  // Xbox Original (XID) mode support
+  #define CFG_TUD_XID               1   // Enable XID class driver
+  #define CFG_TUD_XID_EP_BUFSIZE    32  // XID endpoint buffer size
+
   // CDC configuration: 0=none, 1=data only, 2=data+debug
   #ifndef USBR_CDC_DEBUG
   #define USBR_CDC_DEBUG            1   // Default: debug enabled
   #endif
   #define CFG_TUD_CDC               (1 + USBR_CDC_DEBUG)  // 1=data, 2=data+debug
+
   #define CFG_TUD_MSC               0   // No mass storage
   #define CFG_TUD_MIDI              0   // No MIDI
   #define CFG_TUD_VENDOR            0   // No vendor-specific
