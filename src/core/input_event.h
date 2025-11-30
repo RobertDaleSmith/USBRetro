@@ -114,6 +114,12 @@ typedef struct {
                                 // Values: 0-7 = direction, 0xFF = centered
                                 // 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
 
+    // Chatpad / keyboard accessory (Xbox 360 Chatpad, etc.)
+    uint8_t chatpad[3];         // [0]=modifier, [1]=key1, [2]=key2
+                                // Modifier bits: see CHATPAD_MOD_* defines
+                                // Key values: see CHATPAD_KEY_* defines
+    bool has_chatpad;           // Chatpad data is valid
+
     // Controller capabilities
     uint8_t button_count;       // Number of face buttons (2, 3, 4, 6, etc.)
     bool has_rumble;            // Device supports rumble
@@ -140,6 +146,12 @@ static inline void init_input_event(input_event_t* event) {
     for (int i = 0; i < 4; i++) {
         event->hat[i] = 0xFF;
     }
+
+    // Clear chatpad data
+    event->chatpad[0] = 0;
+    event->chatpad[1] = 0;
+    event->chatpad[2] = 0;
+    event->has_chatpad = false;
 
     event->type = INPUT_TYPE_NONE;
     event->layout = LAYOUT_MODERN_4FACE;  // Default to modern 4-face (Xbox/PS/Switch style)

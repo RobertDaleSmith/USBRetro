@@ -13,9 +13,13 @@
 // Helper to flush debug output before critical sections
 static void flush_output(void)
 {
+#if CFG_TUD_ENABLED
     tud_task();
     sleep_ms(20);
     tud_task();
+#else
+    sleep_ms(20);
+#endif
 }
 
 // Flash memory layout

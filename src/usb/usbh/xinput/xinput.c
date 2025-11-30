@@ -1,11 +1,13 @@
 // xinput.c - X-input protocol handler (TinyUSB X-input host callbacks)
 #include "tusb.h"
 #include "host/usbh_pvt.h"
+#include "pico/time.h"
 #include "core/buttons.h"
 #include "core/services/players/manager.h"
 #include "core/services/players/feedback.h"
 #include "core/router/router.h"
 #include "xinput_host.h"
+#include "chatpad.h"
 #include "core/input_event.h"
 
 // BTD driver for Bluetooth dongles
@@ -15,6 +17,9 @@
 
 uint32_t buttons;
 int last_player_count = 0; // used by xboxone
+
+// Chatpad keepalive tracking (per device/instance)
+static uint32_t chatpad_last_keepalive[CFG_TUH_DEVICE_MAX][CFG_TUH_XINPUT];
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
@@ -118,7 +123,9 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
         .buttons = buttons,
         .button_count = 10,  // Xbox: A, B, X, Y, LB, RB, LT, RT, L3, R3
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
-        .keys = 0
+        .keys = 0,
+        .chatpad = {xid_itf->chatpad_data[0], xid_itf->chatpad_data[1], xid_itf->chatpad_data[2]},
+        .has_chatpad = xid_itf->chatpad_enabled && xid_itf->chatpad_inited
       };
       router_submit_input(&event);
     }
@@ -136,7 +143,14 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
     tuh_xinput_receive_report(dev_addr, instance);
     return;
   }
-  // tuh_xinput_init_chatpad(dev_addr, instance, true);
+
+  // Enable chatpad for Xbox 360 Wireless controllers
+  if (xinput_itf->type == XBOX360_WIRELESS)
+  {
+    tuh_xinput_init_chatpad(dev_addr, instance, true);
+    chatpad_last_keepalive[dev_addr][instance] = 0;  // Reset keepalive timer
+  }
+
   tuh_xinput_set_led(dev_addr, instance, 0, true);
   // tuh_xinput_set_rumble(dev_addr, instance, 0, 0, true);
   tuh_xinput_receive_report(dev_addr, instance);
@@ -161,18 +175,33 @@ void xinput_task(void)
   // Rumble only if controller connected
   if (!playersCount) return;
 
+  uint32_t now = to_ms_since_boot(get_absolute_time());
+
   // Update rumble/LED state for each xinput device
   for (int i = 0; i < playersCount; ++i)
   {
     if (players[i].dev_addr < 0) continue;  // Skip empty slots
+
+    uint8_t dev_addr = players[i].dev_addr;
+    uint8_t instance = players[i].instance;
 
     // Get per-player feedback state
     feedback_state_t* fb = feedback_get_state(i);
     uint8_t rumble = fb ? (fb->rumble.left > fb->rumble.right ? fb->rumble.left : fb->rumble.right) : 0;
 
     // TODO: throttle and only fire if device is xinput
-    tuh_xinput_set_led(players[i].dev_addr, players[i].instance, i+1, true);
-    tuh_xinput_set_rumble(players[i].dev_addr, players[i].instance, rumble, rumble, true);
+    tuh_xinput_set_led(dev_addr, instance, i+1, true);
+    tuh_xinput_set_rumble(dev_addr, instance, rumble, rumble, true);
+
+    // Chatpad keepalive (every ~1 second)
+    if (dev_addr < CFG_TUH_DEVICE_MAX && instance < CFG_TUH_XINPUT)
+    {
+      if (now - chatpad_last_keepalive[dev_addr][instance] >= XINPUT_CHATPAD_KEEPALIVE_MS)
+      {
+        tuh_xinput_chatpad_keepalive(dev_addr, instance);
+        chatpad_last_keepalive[dev_addr][instance] = now;
+      }
+    }
   }
 }
 

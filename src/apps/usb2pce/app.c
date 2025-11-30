@@ -80,3 +80,12 @@ void app_init(void)
     printf("[app:usb2pce]   Player slots: %d (SHIFT mode - players shift on disconnect)\n", MAX_PLAYER_SLOTS);
     printf("[app:usb2pce]   Mouse support: enabled (Populous)\n");
 }
+
+// ============================================================================
+// APP TASK (called in main loop)
+// ============================================================================
+
+void app_task(void)
+{
+    // No app-specific task work needed for usb2pce
+}

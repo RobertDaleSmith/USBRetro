@@ -64,5 +64,6 @@
 // APP INTERFACE (OS calls these)
 // ============================================================================
 void app_init(void);                    // Called after OS init
+void app_task(void);                    // Called in main loop (optional)
 
 #endif // APP_USB2PCE_H
