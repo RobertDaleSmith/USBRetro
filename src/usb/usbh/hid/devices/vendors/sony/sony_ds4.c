@@ -5,6 +5,7 @@
 #include "core/input_event.h"
 #include "pico/time.h"
 #include "app_config.h"
+#include <string.h>
 
 static uint16_t tpadLastPos;
 static bool tpadDragging;
@@ -23,6 +24,46 @@ typedef struct TU_ATTR_PACKED
 } ds4_device_t;
 
 static ds4_device_t ds4_devices[MAX_DEVICES] = { 0 };
+
+// ============================================================================
+// PS4 AUTH PASSTHROUGH STATE
+// ============================================================================
+
+// Auth buffer sizes
+#define DS4_AUTH_NONCE_SIZE      56   // Nonce data size (without report ID)
+#define DS4_AUTH_SIGNATURE_SIZE  56   // Signature data size
+#define DS4_AUTH_STATUS_SIZE     16   // Status report size
+#define DS4_AUTH_REPORT_SIZE     64   // Full report size with report ID
+
+// Auth passthrough state
+static struct {
+    ds4_auth_state_t state;
+    uint8_t dev_addr;           // DS4 device address for auth
+    uint8_t instance;           // DS4 instance for auth
+    bool ds4_available;         // Is a DS4 connected for auth?
+
+    // Nonce from console (to forward to DS4)
+    uint8_t nonce_buffer[DS4_AUTH_REPORT_SIZE];
+    uint16_t nonce_len;
+    bool nonce_pending;         // Nonce waiting to be sent
+    bool nonce_sent;            // Nonce has been sent to DS4
+
+    // Signature from DS4 (to return to console)
+    uint8_t signature_buffer[DS4_AUTH_REPORT_SIZE];
+    uint16_t signature_len;
+    bool signature_ready;       // Signature fetched from DS4
+
+    // Status from DS4
+    uint8_t status_buffer[DS4_AUTH_STATUS_SIZE];
+    bool status_pending;        // Status request pending
+    bool status_ready;          // Status fetched from DS4
+
+    // Timing
+    uint32_t last_poll_ms;      // Last time we polled DS4
+    uint8_t poll_count;         // Number of status polls
+    uint8_t nonce_page;         // Current nonce page (0-4, 5 pages total)
+    uint8_t signature_page;     // Current signature page being fetched
+} ds4_auth = { 0 };
 
 // check if device is Sony PlayStation 4 controllers
 bool is_sony_ds4(uint16_t vid, uint16_t pid) {
@@ -287,3 +328,221 @@ DeviceInterface sony_ds4_interface = {
   .task = task_sony_ds4,
   .unmount = unmount_sony_ds4,
 };
+
+// ============================================================================
+// PS4 AUTH PASSTHROUGH IMPLEMENTATION
+// ============================================================================
+
+// Called when a DS4 is mounted - register it for auth
+void ds4_auth_register(uint8_t dev_addr, uint8_t instance) {
+    if (!ds4_auth.ds4_available) {
+        ds4_auth.dev_addr = dev_addr;
+        ds4_auth.instance = instance;
+        ds4_auth.ds4_available = true;
+        ds4_auth.state = DS4_AUTH_STATE_IDLE;
+        TU_LOG1("[DS4 Auth] Registered DS4 at %d:%d for auth passthrough\r\n", dev_addr, instance);
+    }
+}
+
+// Called when a DS4 is unmounted - unregister it from auth
+void ds4_auth_unregister(uint8_t dev_addr, uint8_t instance) {
+    if (ds4_auth.ds4_available &&
+        ds4_auth.dev_addr == dev_addr &&
+        ds4_auth.instance == instance) {
+        ds4_auth.ds4_available = false;
+        ds4_auth.state = DS4_AUTH_STATE_IDLE;
+        TU_LOG1("[DS4 Auth] Unregistered DS4 from auth passthrough\r\n");
+    }
+}
+
+// Check if a DS4 is available for auth passthrough
+bool ds4_auth_is_available(void) {
+    return ds4_auth.ds4_available;
+}
+
+// Get the current auth state
+ds4_auth_state_t ds4_auth_get_state(void) {
+    return ds4_auth.state;
+}
+
+// Forward nonce from PS4 console to connected DS4
+bool ds4_auth_send_nonce(const uint8_t* data, uint16_t len) {
+    if (!ds4_auth.ds4_available) {
+        TU_LOG1("[DS4 Auth] No DS4 available for auth\r\n");
+        return false;
+    }
+
+    // Store nonce data for async sending
+    if (len > DS4_AUTH_REPORT_SIZE) len = DS4_AUTH_REPORT_SIZE;
+    memcpy(ds4_auth.nonce_buffer, data, len);
+    ds4_auth.nonce_len = len;
+    ds4_auth.nonce_pending = true;
+    ds4_auth.nonce_sent = false;
+    ds4_auth.signature_ready = false;
+    ds4_auth.status_ready = false;
+    ds4_auth.state = DS4_AUTH_STATE_NONCE_PENDING;
+
+    TU_LOG1("[DS4 Auth] Nonce received (%d bytes), queued for DS4\r\n", len);
+    return true;
+}
+
+// Get cached signature response (0xF1)
+uint16_t ds4_auth_get_signature(uint8_t* buffer, uint16_t max_len) {
+    if (!ds4_auth.signature_ready) {
+        // Return zeros if signature not ready
+        memset(buffer, 0, max_len);
+        return max_len;
+    }
+
+    uint16_t copy_len = ds4_auth.signature_len;
+    if (copy_len > max_len) copy_len = max_len;
+    memcpy(buffer, ds4_auth.signature_buffer, copy_len);
+    return copy_len;
+}
+
+// Get auth status (0xF2)
+uint16_t ds4_auth_get_status(uint8_t* buffer, uint16_t max_len) {
+    // Status report format:
+    // Byte 0: Sequence number
+    // Byte 1: Status (0x00 = busy, 0x10 = ready)
+    // Bytes 2-9: CRC or padding
+    // Rest: zeros
+
+    uint16_t copy_len = DS4_AUTH_STATUS_SIZE;
+    if (copy_len > max_len) copy_len = max_len;
+
+    if (ds4_auth.status_ready) {
+        // Return cached status from DS4
+        memcpy(buffer, ds4_auth.status_buffer, copy_len);
+    } else {
+        // Return "busy" status
+        memset(buffer, 0, copy_len);
+        buffer[1] = 0x00;  // Busy/not ready
+    }
+
+    return copy_len;
+}
+
+// Reset auth state (0xF3)
+void ds4_auth_reset(void) {
+    ds4_auth.state = DS4_AUTH_STATE_IDLE;
+    ds4_auth.nonce_pending = false;
+    ds4_auth.nonce_sent = false;
+    ds4_auth.signature_ready = false;
+    ds4_auth.status_ready = false;
+    ds4_auth.poll_count = 0;
+
+    if (ds4_auth.ds4_available) {
+        // Send reset to DS4
+        uint8_t reset_buf[8] = { 0 };
+        tuh_hid_set_report(ds4_auth.dev_addr, ds4_auth.instance,
+                           DS4_AUTH_REPORT_RESET, HID_REPORT_TYPE_FEATURE,
+                           reset_buf, sizeof(reset_buf));
+    }
+
+    TU_LOG1("[DS4 Auth] Auth state reset\r\n");
+}
+
+// TinyUSB callback for get_report completion
+void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
+                                    uint8_t report_id, uint8_t report_type,
+                                    uint16_t len) {
+    // Check if this is for our auth DS4
+    if (!ds4_auth.ds4_available ||
+        dev_addr != ds4_auth.dev_addr ||
+        idx != ds4_auth.instance) {
+        return;
+    }
+
+    if (report_type != HID_REPORT_TYPE_FEATURE) return;
+
+    if (report_id == DS4_AUTH_REPORT_SIGNATURE) {
+        // Signature response received
+        ds4_auth.signature_len = len;
+        ds4_auth.signature_ready = true;
+        ds4_auth.state = DS4_AUTH_STATE_READY;
+        TU_LOG1("[DS4 Auth] Signature received (%d bytes)\r\n", len);
+    }
+    else if (report_id == DS4_AUTH_REPORT_STATUS) {
+        // Status response received
+        ds4_auth.status_ready = true;
+
+        // Check if signing is complete (status byte 1 == 0x10 means ready)
+        if (ds4_auth.status_buffer[1] == 0x10) {
+            TU_LOG1("[DS4 Auth] DS4 signing complete, fetching signature\r\n");
+            // Request signature
+            tuh_hid_get_report(ds4_auth.dev_addr, ds4_auth.instance,
+                               DS4_AUTH_REPORT_SIGNATURE, HID_REPORT_TYPE_FEATURE,
+                               ds4_auth.signature_buffer, DS4_AUTH_REPORT_SIZE);
+        } else {
+            TU_LOG1("[DS4 Auth] DS4 still signing (status=0x%02X)\r\n",
+                    ds4_auth.status_buffer[1]);
+        }
+    }
+}
+
+// TinyUSB callback for set_report completion
+void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t idx,
+                                    uint8_t report_id, uint8_t report_type,
+                                    uint16_t len) {
+    // Check if this is for our auth DS4
+    if (!ds4_auth.ds4_available ||
+        dev_addr != ds4_auth.dev_addr ||
+        idx != ds4_auth.instance) {
+        return;
+    }
+
+    if (report_type != HID_REPORT_TYPE_FEATURE) return;
+
+    if (report_id == DS4_AUTH_REPORT_NONCE) {
+        // Nonce was sent successfully
+        ds4_auth.nonce_sent = true;
+        ds4_auth.nonce_pending = false;
+        ds4_auth.state = DS4_AUTH_STATE_SIGNING;
+        ds4_auth.poll_count = 0;
+        ds4_auth.last_poll_ms = to_ms_since_boot(get_absolute_time());
+        TU_LOG1("[DS4 Auth] Nonce sent to DS4, waiting for signing\r\n");
+    }
+}
+
+// Auth task - called from main loop to handle async operations
+void ds4_auth_task(void) {
+    if (!ds4_auth.ds4_available) return;
+
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // Send pending nonce
+    if (ds4_auth.nonce_pending && !ds4_auth.nonce_sent) {
+        bool result = tuh_hid_set_report(ds4_auth.dev_addr, ds4_auth.instance,
+                                         DS4_AUTH_REPORT_NONCE, HID_REPORT_TYPE_FEATURE,
+                                         ds4_auth.nonce_buffer, ds4_auth.nonce_len);
+        if (result) {
+            TU_LOG1("[DS4 Auth] Sending nonce to DS4...\r\n");
+        } else {
+            TU_LOG1("[DS4 Auth] Failed to send nonce\r\n");
+        }
+        // Mark as not pending even if failed to avoid retry spam
+        ds4_auth.nonce_pending = false;
+    }
+
+    // Poll for signing status
+    if (ds4_auth.state == DS4_AUTH_STATE_SIGNING) {
+        // Poll every 50ms
+        if (now - ds4_auth.last_poll_ms >= 50) {
+            ds4_auth.last_poll_ms = now;
+            ds4_auth.poll_count++;
+
+            // Request status from DS4
+            ds4_auth.status_ready = false;
+            tuh_hid_get_report(ds4_auth.dev_addr, ds4_auth.instance,
+                               DS4_AUTH_REPORT_STATUS, HID_REPORT_TYPE_FEATURE,
+                               ds4_auth.status_buffer, DS4_AUTH_STATUS_SIZE);
+
+            // Timeout after ~5 seconds
+            if (ds4_auth.poll_count > 100) {
+                TU_LOG1("[DS4 Auth] Signing timeout\r\n");
+                ds4_auth.state = DS4_AUTH_STATE_ERROR;
+            }
+        }
+    }
+}

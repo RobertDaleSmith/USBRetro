@@ -113,4 +113,51 @@ typedef struct TU_ATTR_PACKED {
 
 extern int16_t spinner;
 
+// ============================================================================
+// PS4 AUTH PASSTHROUGH
+// ============================================================================
+
+// Auth report IDs (matching PS4 console expectations)
+#define DS4_AUTH_REPORT_NONCE     0xF0  // Console sends nonce to controller
+#define DS4_AUTH_REPORT_SIGNATURE 0xF1  // Controller sends signature
+#define DS4_AUTH_REPORT_STATUS    0xF2  // Signing status
+#define DS4_AUTH_REPORT_RESET     0xF3  // Reset auth state
+
+// Auth passthrough state
+typedef enum {
+    DS4_AUTH_STATE_IDLE = 0,        // No auth in progress
+    DS4_AUTH_STATE_NONCE_PENDING,   // Nonce received, forwarding to DS4
+    DS4_AUTH_STATE_SIGNING,         // DS4 is signing
+    DS4_AUTH_STATE_READY,           // Signature ready
+    DS4_AUTH_STATE_ERROR            // Auth failed
+} ds4_auth_state_t;
+
+// Check if a DS4 is available for auth passthrough
+bool ds4_auth_is_available(void);
+
+// Get the current auth state
+ds4_auth_state_t ds4_auth_get_state(void);
+
+// Forward nonce from PS4 console to connected DS4
+// Called when usbd receives 0xF0 feature report
+bool ds4_auth_send_nonce(const uint8_t* data, uint16_t len);
+
+// Get cached signature response (0xF1)
+// Returns bytes copied, 0 if not ready
+uint16_t ds4_auth_get_signature(uint8_t* buffer, uint16_t max_len);
+
+// Get auth status (0xF2)
+// Returns status report data
+uint16_t ds4_auth_get_status(uint8_t* buffer, uint16_t max_len);
+
+// Reset auth state (0xF3)
+void ds4_auth_reset(void);
+
+// Auth task - called from main loop to handle async operations
+void ds4_auth_task(void);
+
+// Register/unregister DS4 for auth passthrough (called on mount/unmount)
+void ds4_auth_register(uint8_t dev_addr, uint8_t instance);
+void ds4_auth_unregister(uint8_t dev_addr, uint8_t instance);
+
 #endif

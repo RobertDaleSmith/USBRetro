@@ -29,6 +29,7 @@
 #include "core/buttons.h"
 #include "core/services/storage/flash.h"
 #include "core/services/button/button.h"
+#include "usb/usbh/hid/devices/vendors/sony/sony_ds4.h"
 #include "tusb.h"
 #include "device/usbd_pvt.h"
 #include "pico/unique_id.h"
@@ -1275,7 +1276,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
         }
     }
 
-    // PS4 feature reports (auth - placeholder for future passthrough)
+    // PS4 feature reports (auth passthrough to connected DS4)
     if (output_mode == USB_OUTPUT_MODE_PS4 && report_type == HID_REPORT_TYPE_FEATURE) {
         uint16_t len = 0;
         switch (report_id) {
@@ -1285,16 +1286,36 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 if (reqlen < len) len = reqlen;
                 memset(buffer, 0, len);
                 return len;
-            case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0
-            case PS4_REPORT_ID_AUTH_RESPONSE:   // 0xF1
-            case PS4_REPORT_ID_AUTH_STATUS:     // 0xF2
-            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3
-                // Auth reports - return placeholder (auth not implemented yet)
-                // These will need passthrough to authentic DS4 for full support
-                len = (report_id == PS4_REPORT_ID_AUTH_STATUS) ? 16 : 64;
+
+            case PS4_REPORT_ID_AUTH_RESPONSE:   // 0xF1 - Signature from DS4
+                // Get signature from DS4 passthrough
+                len = 64;
+                if (reqlen < len) len = reqlen;
+                if (ds4_auth_is_available()) {
+                    return ds4_auth_get_signature(buffer, len);
+                }
+                memset(buffer, 0, len);
+                return len;
+
+            case PS4_REPORT_ID_AUTH_STATUS:     // 0xF2 - Signing status
+                // Get auth status from DS4 passthrough
+                len = 16;
+                if (reqlen < len) len = reqlen;
+                if (ds4_auth_is_available()) {
+                    return ds4_auth_get_status(buffer, len);
+                }
+                // Return "busy" if no DS4
+                memset(buffer, 0, len);
+                buffer[1] = 0x00;  // Not ready
+                return len;
+
+            case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - handled in set_report
+            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - handled in set_report
+                len = (report_id == PS4_REPORT_ID_AUTH_PAYLOAD) ? 64 : 8;
                 if (reqlen < len) len = reqlen;
                 memset(buffer, 0, len);
                 return len;
+
             default:
                 break;
         }
@@ -1326,6 +1347,25 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         memcpy(&ps4_output, buffer, sizeof(ps4_out_report_t));
         ps4_output_available = true;
         return;
+    }
+
+    // PS4 auth feature reports
+    if (output_mode == USB_OUTPUT_MODE_PS4 && report_type == HID_REPORT_TYPE_FEATURE) {
+        switch (report_id) {
+            case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - Nonce from console
+                // Forward nonce to connected DS4
+                if (ds4_auth_is_available()) {
+                    ds4_auth_send_nonce(buffer, bufsize);
+                }
+                return;
+
+            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Reset auth
+                ds4_auth_reset();
+                return;
+
+            default:
+                break;
+        }
     }
 
     (void)report_id;
