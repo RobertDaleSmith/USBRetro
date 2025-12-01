@@ -20,6 +20,7 @@
 #include "descriptors/switch_descriptors.h"
 #include "descriptors/ps3_descriptors.h"
 #include "descriptors/psclassic_descriptors.h"
+#include "descriptors/ps4_descriptors.h"
 #include "tud_xid.h"
 #include "tud_xinput.h"
 #include "cdc/cdc.h"
@@ -63,6 +64,13 @@ static bool ps3_output_available = false;
 
 // Current PS Classic report (for PlayStation Classic mode)
 static psclassic_in_report_t psclassic_report;
+
+// Current PS4 report (for PlayStation 4 mode)
+// Using raw byte array to avoid bitfield packing issues across compilers
+static uint8_t ps4_report_buffer[64];
+static ps4_out_report_t ps4_output;
+static bool ps4_output_available = false;
+static uint8_t ps4_report_counter = 0;
 
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
@@ -187,11 +195,12 @@ bool usbd_set_mode(usb_output_mode_t mode)
         return false;
     }
 
-    // Supported modes: HID, Xbox OG, XInput, PS3, Switch, PS Classic
+    // Supported modes: HID, Xbox OG, XInput, PS3, PS4, Switch, PS Classic
     if (mode != USB_OUTPUT_MODE_HID &&
         mode != USB_OUTPUT_MODE_XBOX_ORIGINAL &&
         mode != USB_OUTPUT_MODE_XINPUT &&
         mode != USB_OUTPUT_MODE_PS3 &&
+        mode != USB_OUTPUT_MODE_PS4 &&
         mode != USB_OUTPUT_MODE_SWITCH &&
         mode != USB_OUTPUT_MODE_PSCLASSIC) {
         printf("[usbd] Mode %d not yet supported\n", mode);
@@ -269,6 +278,7 @@ void usbd_init(void)
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_XINPUT ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS3 ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS4 ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
                 output_mode = (usb_output_mode_t)flash_settings.usb_output_mode;
@@ -340,6 +350,24 @@ void usbd_init(void)
             psclassic_init_report(&psclassic_report);
             break;
 
+        case USB_OUTPUT_MODE_PS4:
+            // Initialize PS4 report to neutral state (raw buffer approach)
+            memset(ps4_report_buffer, 0, sizeof(ps4_report_buffer));
+            ps4_report_buffer[0] = 0x01;  // Report ID
+            ps4_report_buffer[1] = 0x80;  // LX center
+            ps4_report_buffer[2] = 0x80;  // LY center
+            ps4_report_buffer[3] = 0x80;  // RX center
+            ps4_report_buffer[4] = 0x80;  // RY center
+            ps4_report_buffer[5] = 0x08;  // D-pad center (bits 0-3), no buttons (bits 4-7)
+            // Bytes 6-7: no buttons pressed, counter 0
+            // Bytes 8-9: triggers at 0
+            // Touchpad fingers unpressed: byte 35 bit 7 = 1, byte 39 bit 7 = 1
+            ps4_report_buffer[35] = 0x80;  // touchpad p1 unpressed
+            ps4_report_buffer[39] = 0x80;  // touchpad p2 unpressed
+            memset(&ps4_output, 0, sizeof(ps4_out_report_t));
+            ps4_report_counter = 0;
+            break;
+
         case USB_OUTPUT_MODE_HID:
         default:
             // Initialize HID report to neutral state
@@ -377,6 +405,7 @@ void usbd_task(void)
             }
             break;
 
+#if CFG_TUD_XINPUT
         case USB_OUTPUT_MODE_XINPUT:
             // XInput mode: check for rumble/LED updates
             if (tud_xinput_get_output(&xinput_output)) {
@@ -387,6 +416,7 @@ void usbd_task(void)
                 usbd_send_report(0);
             }
             break;
+#endif
 
         case USB_OUTPUT_MODE_SWITCH:
             // Switch mode: process CDC tasks, send HID report
@@ -405,6 +435,13 @@ void usbd_task(void)
 
         case USB_OUTPUT_MODE_PSCLASSIC:
             // PS Classic mode: send HID report (no CDC)
+            if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_PS4:
+            // PS4 mode: send HID report (no CDC)
             if (tud_hid_ready()) {
                 usbd_send_report(0);
             }
@@ -520,6 +557,7 @@ static bool usbd_send_hid_report(uint8_t player_index)
     return tud_hid_report(0, &hid_report, sizeof(hid_report));
 }
 
+#if CFG_TUD_XINPUT
 // Send XInput report (Xbox 360 mode)
 static bool usbd_send_xinput_report(uint8_t player_index)
 {
@@ -574,6 +612,7 @@ static bool usbd_send_xinput_report(uint8_t player_index)
 
     return tud_xinput_send_report(&xinput_report);
 }
+#endif
 
 // Send Switch report (Nintendo Switch mode)
 static bool usbd_send_switch_report(uint8_t player_index)
@@ -752,19 +791,127 @@ static bool usbd_send_psclassic_report(uint8_t player_index)
     return tud_hid_report(0, &psclassic_report, sizeof(psclassic_report));
 }
 
+// Send PS4 report (PlayStation 4 DualShock 4 mode)
+// Uses raw byte array approach to avoid struct bitfield packing issues
+//
+// PS4 Report Layout (64 bytes):
+//   Byte 0:    Report ID (0x01)
+//   Byte 1:    Left stick X (0x00-0xFF, 0x80 center)
+//   Byte 2:    Left stick Y (0x00-0xFF, 0x80 center)
+//   Byte 3:    Right stick X (0x00-0xFF, 0x80 center)
+//   Byte 4:    Right stick Y (0x00-0xFF, 0x80 center)
+//   Byte 5:    D-pad (bits 0-3) + Square/Cross/Circle/Triangle (bits 4-7)
+//   Byte 6:    L1/R1/L2/R2/Share/Options/L3/R3 (bits 0-7)
+//   Byte 7:    PS (bit 0) + Touchpad (bit 1) + Counter (bits 2-7)
+//   Byte 8:    Left trigger analog (0x00-0xFF)
+//   Byte 9:    Right trigger analog (0x00-0xFF)
+//   Bytes 10-63: Timestamp, sensor data, touchpad data, padding
+static bool usbd_send_ps4_report(uint8_t player_index)
+{
+    if (!tud_hid_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Byte 0: Report ID
+        ps4_report_buffer[0] = 0x01;
+
+        // Bytes 1-4: Analog sticks
+        ps4_report_buffer[1] = event->analog[0];  // LX
+        ps4_report_buffer[2] = event->analog[1];  // LY
+        ps4_report_buffer[3] = event->analog[2];  // RX
+        ps4_report_buffer[4] = event->analog[3];  // RY
+
+        // Byte 5: D-pad (bits 0-3) + face buttons (bits 4-7)
+        uint8_t up = (event->buttons & USBR_BUTTON_DU) ? 1 : 0;
+        uint8_t down = (event->buttons & USBR_BUTTON_DD) ? 1 : 0;
+        uint8_t left = (event->buttons & USBR_BUTTON_DL) ? 1 : 0;
+        uint8_t right = (event->buttons & USBR_BUTTON_DR) ? 1 : 0;
+
+        uint8_t dpad;
+        if (up && right)        dpad = PS4_HAT_UP_RIGHT;
+        else if (up && left)    dpad = PS4_HAT_UP_LEFT;
+        else if (down && right) dpad = PS4_HAT_DOWN_RIGHT;
+        else if (down && left)  dpad = PS4_HAT_DOWN_LEFT;
+        else if (up)            dpad = PS4_HAT_UP;
+        else if (down)          dpad = PS4_HAT_DOWN;
+        else if (left)          dpad = PS4_HAT_LEFT;
+        else if (right)         dpad = PS4_HAT_RIGHT;
+        else                    dpad = PS4_HAT_CENTER;
+
+        uint8_t face_buttons = 0;
+        if (event->buttons & USBR_BUTTON_B3) face_buttons |= 0x10;  // Square
+        if (event->buttons & USBR_BUTTON_B1) face_buttons |= 0x20;  // Cross
+        if (event->buttons & USBR_BUTTON_B2) face_buttons |= 0x40;  // Circle
+        if (event->buttons & USBR_BUTTON_B4) face_buttons |= 0x80;  // Triangle
+
+        ps4_report_buffer[5] = dpad | face_buttons;
+
+        // Byte 6: Shoulder buttons + other buttons
+        uint8_t byte6 = 0;
+        if (event->buttons & USBR_BUTTON_L1) byte6 |= 0x01;  // L1
+        if (event->buttons & USBR_BUTTON_R1) byte6 |= 0x02;  // R1
+        if (event->buttons & USBR_BUTTON_L2) byte6 |= 0x04;  // L2 (digital)
+        if (event->buttons & USBR_BUTTON_R2) byte6 |= 0x08;  // R2 (digital)
+        if (event->buttons & USBR_BUTTON_S1) byte6 |= 0x10;  // Share
+        if (event->buttons & USBR_BUTTON_S2) byte6 |= 0x20;  // Options
+        if (event->buttons & USBR_BUTTON_L3) byte6 |= 0x40;  // L3
+        if (event->buttons & USBR_BUTTON_R3) byte6 |= 0x80;  // R3
+        ps4_report_buffer[6] = byte6;
+
+        // Byte 7: PS + Touchpad + Counter (6-bit)
+        uint8_t byte7 = 0;
+        if (event->buttons & USBR_BUTTON_A1) byte7 |= 0x01;  // PS button
+        if (event->buttons & USBR_BUTTON_A2) byte7 |= 0x02;  // Touchpad click
+        byte7 |= ((ps4_report_counter++ & 0x3F) << 2);       // Counter in bits 2-7
+        ps4_report_buffer[7] = byte7;
+
+        // Bytes 8-9: Analog triggers
+        // DS4 input driver maps: analog[5]=L2, analog[6]=R2
+        ps4_report_buffer[8] = event->analog[5];  // Left trigger
+        ps4_report_buffer[9] = event->analog[6];  // Right trigger
+
+        // Bytes 10-11: Timestamp (we can just increment)
+        // Bytes 12-63: Leave as initialized (sensor data, touchpad, padding)
+
+    } else {
+        // No input - reset to neutral state
+        ps4_report_buffer[0] = 0x01;  // Report ID
+        ps4_report_buffer[1] = 0x80;  // LX center
+        ps4_report_buffer[2] = 0x80;  // LY center
+        ps4_report_buffer[3] = 0x80;  // RX center
+        ps4_report_buffer[4] = 0x80;  // RY center
+        ps4_report_buffer[5] = PS4_HAT_CENTER;  // D-pad center, no buttons
+        ps4_report_buffer[6] = 0x00;  // No buttons
+        ps4_report_buffer[7] = ((ps4_report_counter++ & 0x3F) << 2);  // Just counter
+        ps4_report_buffer[8] = 0x00;  // L2 trigger
+        ps4_report_buffer[9] = 0x00;  // R2 trigger
+    }
+
+    // Send with report_id=0x01, letting TinyUSB prepend it
+    // Skip byte 0 of buffer (our report_id) and send 63 bytes of data
+    return tud_hid_report(0x01, &ps4_report_buffer[1], 63);
+}
+
 bool usbd_send_report(uint8_t player_index)
 {
     switch (output_mode) {
         case USB_OUTPUT_MODE_XBOX_ORIGINAL:
             return usbd_send_xid_report(player_index);
+#if CFG_TUD_XINPUT
         case USB_OUTPUT_MODE_XINPUT:
             return usbd_send_xinput_report(player_index);
+#endif
         case USB_OUTPUT_MODE_SWITCH:
             return usbd_send_switch_report(player_index);
         case USB_OUTPUT_MODE_PS3:
             return usbd_send_ps3_report(player_index);
         case USB_OUTPUT_MODE_PSCLASSIC:
             return usbd_send_psclassic_report(player_index);
+        case USB_OUTPUT_MODE_PS4:
+            return usbd_send_ps4_report(player_index);
         case USB_OUTPUT_MODE_HID:
         default:
             return usbd_send_hid_report(player_index);
@@ -781,15 +928,22 @@ static uint8_t usbd_get_rumble(void)
                                   ? xid_rumble.rumble_l : xid_rumble.rumble_r;
             return (uint8_t)(max_rumble >> 8);  // Scale 0-65535 to 0-255
         }
+#if CFG_TUD_XINPUT
         case USB_OUTPUT_MODE_XINPUT: {
             // XInput has two 8-bit motors - take the stronger one
             return (xinput_output.rumble_l > xinput_output.rumble_r)
                    ? xinput_output.rumble_l : xinput_output.rumble_r;
         }
+#endif
         case USB_OUTPUT_MODE_PS3: {
             // PS3 has left (large) and right (small, on/off only) motors
             return (ps3_output.rumble_left_force > 0) ? ps3_output.rumble_left_force :
                    (ps3_output.rumble_right_on > 0) ? 0xFF : 0x00;
+        }
+        case USB_OUTPUT_MODE_PS4: {
+            // PS4 has motor_left (large) and motor_right (small) 8-bit values
+            return (ps4_output.motor_left > ps4_output.motor_right)
+                   ? ps4_output.motor_left : ps4_output.motor_right;
         }
         default:
             // HID/Switch modes: no standard rumble protocol
@@ -895,6 +1049,8 @@ uint8_t const *tud_descriptor_device_cb(void)
             return (uint8_t const *)&ps3_device_descriptor;
         case USB_OUTPUT_MODE_PSCLASSIC:
             return (uint8_t const *)&psclassic_device_descriptor;
+        case USB_OUTPUT_MODE_PS4:
+            return (uint8_t const *)&ps4_device_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return (uint8_t const *)&desc_device_hid;
@@ -940,6 +1096,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
             return ps3_config_descriptor;
         case USB_OUTPUT_MODE_PSCLASSIC:
             return psclassic_config_descriptor;
+        case USB_OUTPUT_MODE_PS4:
+            return ps4_config_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return desc_configuration_hid;
@@ -993,6 +1151,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PS3_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
                 str = PSCLASSIC_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_PS4) {
+                str = PS4_MANUFACTURER;
             } else {
                 str = USB_HID_MANUFACTURER;
             }
@@ -1007,6 +1167,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PS3_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
                 str = PSCLASSIC_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_PS4) {
+                str = PS4_PRODUCT;
             } else {
                 str = USB_HID_PRODUCT;
             }
@@ -1055,6 +1217,9 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf)
     if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
         return psclassic_report_descriptor;
     }
+    if (output_mode == USB_OUTPUT_MODE_PS4) {
+        return ps4_report_descriptor;
+    }
     return hid_report_descriptor;
 }
 
@@ -1099,6 +1264,31 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
         }
     }
 
+    // PS4 feature reports (auth - placeholder for future passthrough)
+    if (output_mode == USB_OUTPUT_MODE_PS4 && report_type == HID_REPORT_TYPE_FEATURE) {
+        uint16_t len = 0;
+        switch (report_id) {
+            case PS4_REPORT_ID_FEATURE_03:
+                // Controller definition report - return minimal response
+                len = 48;
+                if (reqlen < len) len = reqlen;
+                memset(buffer, 0, len);
+                return len;
+            case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0
+            case PS4_REPORT_ID_AUTH_RESPONSE:   // 0xF1
+            case PS4_REPORT_ID_AUTH_STATUS:     // 0xF2
+            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3
+                // Auth reports - return placeholder (auth not implemented yet)
+                // These will need passthrough to authentic DS4 for full support
+                len = (report_id == PS4_REPORT_ID_AUTH_STATUS) ? 16 : 64;
+                if (reqlen < len) len = reqlen;
+                memset(buffer, 0, len);
+                return len;
+            default:
+                break;
+        }
+    }
+
     // Default: return current input report
     (void)report_id;
     (void)report_type;
@@ -1120,6 +1310,13 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         return;
     }
 
+    // PS4 output report (rumble/LED) - Report ID 5
+    if (output_mode == USB_OUTPUT_MODE_PS4 && report_id == PS4_REPORT_ID_OUTPUT && bufsize >= sizeof(ps4_out_report_t)) {
+        memcpy(&ps4_output, buffer, sizeof(ps4_out_report_t));
+        ps4_output_available = true;
+        return;
+    }
+
     (void)report_id;
     (void)buffer;
     (void)bufsize;
@@ -1137,9 +1334,11 @@ usbd_class_driver_t const* usbd_app_driver_get_cb(uint8_t* driver_count)
             *driver_count = 1;
             return tud_xid_class_driver();
 
+#if CFG_TUD_XINPUT
         case USB_OUTPUT_MODE_XINPUT:
             *driver_count = 1;
             return tud_xinput_class_driver();
+#endif
 
         default:
             // HID/Switch modes use built-in HID class driver

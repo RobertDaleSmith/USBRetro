@@ -478,12 +478,22 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     // Keys: OR together (active-high)
                     out->current_state.keys |= dev->keys;
 
-                    // Analog: use furthest from center
-                    for (int j = 0; j < 6; j++) {
-                        int8_t cur_delta = (int8_t)(out->current_state.analog[j] - 128);
-                        int8_t dev_delta = (int8_t)(dev->analog[j] - 128);
-                        if (abs(dev_delta) > abs(cur_delta)) {
-                            out->current_state.analog[j] = dev->analog[j];
+                    // Analog: use furthest from center for sticks (0-3)
+                    // and max value for triggers (5-6)
+                    for (int j = 0; j < 8; j++) {
+                        if (j == 4 || j == 7) continue;  // Skip unused slots
+                        if (j >= 5) {
+                            // Triggers (5=L2, 6=R2): use max value
+                            if (dev->analog[j] > out->current_state.analog[j]) {
+                                out->current_state.analog[j] = dev->analog[j];
+                            }
+                        } else {
+                            // Sticks (0-3): use furthest from center
+                            int8_t cur_delta = (int8_t)(out->current_state.analog[j] - 128);
+                            int8_t dev_delta = (int8_t)(dev->analog[j] - 128);
+                            if (abs(dev_delta) > abs(cur_delta)) {
+                                out->current_state.analog[j] = dev->analog[j];
+                            }
                         }
                     }
 

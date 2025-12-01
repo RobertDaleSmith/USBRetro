@@ -29,18 +29,15 @@ static void on_button_event(button_event_t event)
                    usbd_get_mode_name(usbd_get_mode()));
             break;
 
-        case BUTTON_EVENT_DOUBLE_CLICK:
-            printf("[app:usb2usb] Button double-click\n");
-            break;
-
-        case BUTTON_EVENT_HOLD:
-            printf("[app:usb2usb] Button hold - switching USB output mode...\n");
+        case BUTTON_EVENT_DOUBLE_CLICK: {
+            // Double-click to cycle USB output mode
+            printf("[app:usb2usb] Button double-click - switching USB output mode...\n");
             // Flush CDC and give USB stack time to transmit
             tud_task();
             sleep_ms(50);
             tud_task();
 
-            // Cycle to next mode: HID → XInput → PS3 → Switch → PS Classic → Xbox OG → HID
+            // Cycle to next mode: HID → XInput → PS3 → PS4 → Switch → PS Classic → Xbox OG → HID
             usb_output_mode_t current = usbd_get_mode();
             usb_output_mode_t next;
             switch (current) {
@@ -51,6 +48,9 @@ static void on_button_event(button_event_t event)
                     next = USB_OUTPUT_MODE_PS3;
                     break;
                 case USB_OUTPUT_MODE_PS3:
+                    next = USB_OUTPUT_MODE_PS4;
+                    break;
+                case USB_OUTPUT_MODE_PS4:
                     next = USB_OUTPUT_MODE_SWITCH;
                     break;
                 case USB_OUTPUT_MODE_SWITCH:
@@ -72,10 +72,7 @@ static void on_button_event(button_event_t event)
 
             usbd_set_mode(next);  // This will reset the device
             break;
-
-        case BUTTON_EVENT_RELEASE:
-            printf("[app:usb2usb] Button released after hold\n");
-            break;
+        }
 
         default:
             break;
@@ -149,7 +146,7 @@ void app_init(void)
     printf("[app:usb2usb] Initialization complete\n");
     printf("[app:usb2usb]   Routing: USB Host → USB Device (HID Gamepad)\n");
     printf("[app:usb2usb]   Player slots: %d\n", MAX_PLAYER_SLOTS);
-    printf("[app:usb2usb]   Hold button (GPIO7) for 1.5s to switch USB mode\n");
+    printf("[app:usb2usb]   Double-click button (GPIO7) to switch USB mode\n");
 }
 
 // ============================================================================

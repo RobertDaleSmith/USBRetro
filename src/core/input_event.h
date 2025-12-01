@@ -137,9 +137,15 @@ static inline void init_input_event(input_event_t* event) {
     // Buttons are active-high (1 = pressed), so 0x00000000 = all released
     event->buttons = 0x00000000;
 
-    // Set analog axes to centered position (128 = neutral)
+    // Set analog axes to appropriate defaults:
+    // - Sticks (0-3): centered at 128
+    // - Triggers (5-6): start at 0 (not pressed)
     for (int i = 0; i < 8; i++) {
-        event->analog[i] = 128;
+        if (i == 5 || i == 6) {
+            event->analog[i] = 0;  // Triggers: 0 = not pressed
+        } else {
+            event->analog[i] = 128;  // Sticks: 128 = centered
+        }
     }
 
     // Set hat switches to centered
