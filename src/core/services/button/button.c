@@ -26,6 +26,7 @@ static bool last_raw_state = false;     // Last debounced state
 static absolute_time_t last_change_time; // For debouncing
 static button_callback_t event_callback = NULL;
 static bool hold_event_fired = false;   // Track if hold event was already fired
+static bool double_click_fired = false; // Track if double-click was just fired
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -90,6 +91,7 @@ void button_init(void)
     last_raw_state = false;
     last_change_time = get_absolute_time();
     hold_event_fired = false;
+    double_click_fired = false;
 
     printf("[button] Initialized\n");
 }
@@ -105,6 +107,7 @@ button_event_t button_task(void)
                 // Button just pressed
                 press_time = get_absolute_time();
                 hold_event_fired = false;
+                double_click_fired = false;
                 state = STATE_PRESSED;
             }
             break;
@@ -115,7 +118,11 @@ button_event_t button_task(void)
                 uint32_t held = elapsed_ms(press_time);
                 release_time = get_absolute_time();
 
-                if (held < BUTTON_CLICK_MAX_MS) {
+                if (double_click_fired) {
+                    // Just completed a double-click, go back to idle
+                    // (don't wait for another click)
+                    state = STATE_IDLE;
+                } else if (held < BUTTON_CLICK_MAX_MS) {
                     // Short press - could be click or start of double-click
                     state = STATE_WAIT_DOUBLE;
                 } else {
@@ -141,6 +148,7 @@ button_event_t button_task(void)
                 // Second press - it's a double click!
                 press_time = get_absolute_time();
                 hold_event_fired = false;
+                double_click_fired = true;  // Mark that double-click was fired
                 event = fire_event(BUTTON_EVENT_DOUBLE_CLICK);
                 state = STATE_PRESSED;  // Track this press too (could become hold)
             } else {

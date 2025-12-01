@@ -19,6 +19,7 @@
 #include "descriptors/xinput_descriptors.h"
 #include "descriptors/switch_descriptors.h"
 #include "descriptors/ps3_descriptors.h"
+#include "descriptors/psclassic_descriptors.h"
 #include "tud_xid.h"
 #include "tud_xinput.h"
 #include "cdc/cdc.h"
@@ -60,6 +61,9 @@ static ps3_in_report_t ps3_report;
 static ps3_out_report_t ps3_output;
 static bool ps3_output_available = false;
 
+// Current PS Classic report (for PlayStation Classic mode)
+static psclassic_in_report_t psclassic_report;
+
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
 static char usb_serial_str[USB_SERIAL_LEN + 1];
@@ -76,6 +80,7 @@ static const char* mode_names[] = {
     [USB_OUTPUT_MODE_PS3] = "PS3",
     [USB_OUTPUT_MODE_PS4] = "PS4",
     [USB_OUTPUT_MODE_SWITCH] = "Switch",
+    [USB_OUTPUT_MODE_PSCLASSIC] = "PS Classic",
 };
 
 // ============================================================================
@@ -182,12 +187,13 @@ bool usbd_set_mode(usb_output_mode_t mode)
         return false;
     }
 
-    // Supported modes: HID, Xbox OG, XInput, PS3, Switch
+    // Supported modes: HID, Xbox OG, XInput, PS3, Switch, PS Classic
     if (mode != USB_OUTPUT_MODE_HID &&
         mode != USB_OUTPUT_MODE_XBOX_ORIGINAL &&
         mode != USB_OUTPUT_MODE_XINPUT &&
         mode != USB_OUTPUT_MODE_PS3 &&
-        mode != USB_OUTPUT_MODE_SWITCH) {
+        mode != USB_OUTPUT_MODE_SWITCH &&
+        mode != USB_OUTPUT_MODE_PSCLASSIC) {
         printf("[usbd] Mode %d not yet supported\n", mode);
         return false;
     }
@@ -222,17 +228,8 @@ bool usbd_set_mode(usb_output_mode_t mode)
 
     output_mode = mode;
 
-    // Wait for button release before resetting
-    // (holding boot button during reset enters bootloader)
-    printf("[usbd] Release button to reset...\n");
-    flush_debug_output();
-    #ifdef BUTTON_USER_GPIO
-    while (!gpio_get(BUTTON_USER_GPIO)) {
-        sleep_ms(10);
-        tud_task();  // Keep USB alive while waiting
-    }
-    sleep_ms(100);  // Brief debounce after release
-    #endif
+    // Brief delay to allow flash write to complete
+    sleep_ms(50);
 
     // Trigger device reset to re-enumerate with new descriptors
     printf("[usbd] Resetting device for re-enumeration...\n");
@@ -272,7 +269,8 @@ void usbd_init(void)
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_XINPUT ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS3 ||
-                flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH) {
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
                 output_mode = (usb_output_mode_t)flash_settings.usb_output_mode;
                 printf("[usbd] Loaded mode from flash: %s\n", mode_names[output_mode]);
             } else {
@@ -337,6 +335,11 @@ void usbd_init(void)
             memset(&ps3_output, 0, sizeof(ps3_out_report_t));
             break;
 
+        case USB_OUTPUT_MODE_PSCLASSIC:
+            // Initialize PS Classic report to neutral state
+            psclassic_init_report(&psclassic_report);
+            break;
+
         case USB_OUTPUT_MODE_HID:
         default:
             // Initialize HID report to neutral state
@@ -395,6 +398,13 @@ void usbd_task(void)
 
         case USB_OUTPUT_MODE_PS3:
             // PS3 mode: send HID report (no CDC - PS3 doesn't use it)
+            if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_PSCLASSIC:
+            // PS Classic mode: send HID report (no CDC)
             if (tud_hid_ready()) {
                 usbd_send_report(0);
             }
@@ -693,6 +703,55 @@ static bool usbd_send_ps3_report(uint8_t player_index)
     return tud_hid_report(0, &ps3_report, sizeof(ps3_report));
 }
 
+// Send PS Classic report (PlayStation Classic mode)
+static bool usbd_send_psclassic_report(uint8_t player_index)
+{
+    if (!tud_hid_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Start with centered D-pad
+        psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+
+        // D-pad encoding (uses specific values in upper bits)
+        uint8_t up = (event->buttons & USBR_BUTTON_DU) ? 1 : 0;
+        uint8_t down = (event->buttons & USBR_BUTTON_DD) ? 1 : 0;
+        uint8_t left = (event->buttons & USBR_BUTTON_DL) ? 1 : 0;
+        uint8_t right = (event->buttons & USBR_BUTTON_DR) ? 1 : 0;
+
+        if (up && right)      psclassic_report.buttons = PSCLASSIC_DPAD_UP_RIGHT;
+        else if (up && left)  psclassic_report.buttons = PSCLASSIC_DPAD_UP_LEFT;
+        else if (down && right) psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_RIGHT;
+        else if (down && left)  psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_LEFT;
+        else if (up)          psclassic_report.buttons = PSCLASSIC_DPAD_UP;
+        else if (down)        psclassic_report.buttons = PSCLASSIC_DPAD_DOWN;
+        else if (left)        psclassic_report.buttons = PSCLASSIC_DPAD_LEFT;
+        else if (right)       psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
+        else                  psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+
+        // Face buttons and shoulders
+        psclassic_report.buttons |=
+              (event->buttons & USBR_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
+            | (event->buttons & USBR_BUTTON_B2 ? PSCLASSIC_MASK_CIRCLE   : 0)
+            | (event->buttons & USBR_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
+            | (event->buttons & USBR_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
+            | (event->buttons & USBR_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
+            | (event->buttons & USBR_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
+            | (event->buttons & USBR_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
+            | (event->buttons & USBR_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
+            | (event->buttons & USBR_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
+            | (event->buttons & USBR_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
+    } else {
+        // No input - neutral state
+        psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+    }
+
+    return tud_hid_report(0, &psclassic_report, sizeof(psclassic_report));
+}
+
 bool usbd_send_report(uint8_t player_index)
 {
     switch (output_mode) {
@@ -704,6 +763,8 @@ bool usbd_send_report(uint8_t player_index)
             return usbd_send_switch_report(player_index);
         case USB_OUTPUT_MODE_PS3:
             return usbd_send_ps3_report(player_index);
+        case USB_OUTPUT_MODE_PSCLASSIC:
+            return usbd_send_psclassic_report(player_index);
         case USB_OUTPUT_MODE_HID:
         default:
             return usbd_send_hid_report(player_index);
@@ -832,6 +893,8 @@ uint8_t const *tud_descriptor_device_cb(void)
             return (uint8_t const *)&switch_device_descriptor;
         case USB_OUTPUT_MODE_PS3:
             return (uint8_t const *)&ps3_device_descriptor;
+        case USB_OUTPUT_MODE_PSCLASSIC:
+            return (uint8_t const *)&psclassic_device_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return (uint8_t const *)&desc_device_hid;
@@ -875,6 +938,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
             return switch_config_descriptor;
         case USB_OUTPUT_MODE_PS3:
             return ps3_config_descriptor;
+        case USB_OUTPUT_MODE_PSCLASSIC:
+            return psclassic_config_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return desc_configuration_hid;
@@ -926,6 +991,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = SWITCH_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_PS3) {
                 str = PS3_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
+                str = PSCLASSIC_MANUFACTURER;
             } else {
                 str = USB_HID_MANUFACTURER;
             }
@@ -938,6 +1005,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = SWITCH_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_PS3) {
                 str = PS3_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
+                str = PSCLASSIC_PRODUCT;
             } else {
                 str = USB_HID_PRODUCT;
             }
@@ -982,6 +1051,9 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf)
     }
     if (output_mode == USB_OUTPUT_MODE_PS3) {
         return ps3_report_descriptor;
+    }
+    if (output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
+        return psclassic_report_descriptor;
     }
     return hid_report_descriptor;
 }

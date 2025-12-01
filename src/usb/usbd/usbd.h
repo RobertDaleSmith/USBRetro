@@ -20,10 +20,11 @@
 typedef enum {
     USB_OUTPUT_MODE_HID = 0,            // Generic HID gamepad (DInput)
     USB_OUTPUT_MODE_XBOX_ORIGINAL,      // Original Xbox (XID protocol)
-    USB_OUTPUT_MODE_XINPUT,             // Xbox 360/One/Series (XInput) - future
-    USB_OUTPUT_MODE_PS3,                // PlayStation 3 (DInput/SixAxis) - current default
+    USB_OUTPUT_MODE_XINPUT,             // Xbox 360/One/Series (XInput)
+    USB_OUTPUT_MODE_PS3,                // PlayStation 3 (DInput/SixAxis)
     USB_OUTPUT_MODE_PS4,                // PlayStation 4 - future
-    USB_OUTPUT_MODE_SWITCH,             // Nintendo Switch (docked) - future
+    USB_OUTPUT_MODE_SWITCH,             // Nintendo Switch (docked)
+    USB_OUTPUT_MODE_PSCLASSIC,          // PlayStation Classic (PS1 Mini)
     USB_OUTPUT_MODE_COUNT
 } usb_output_mode_t;
 

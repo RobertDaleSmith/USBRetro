@@ -11,6 +11,29 @@
 #include <stdlib.h>
 
 // ============================================================================
+// AUTO-ASSIGN CONFIGURATION
+// ============================================================================
+
+// Threshold for analog stick movement to trigger player auto-assign
+// Value is distance from center (128). Range 0-127.
+// 50 means stick must move to < 78 or > 178 to trigger (about 40% deflection)
+#define ANALOG_ASSIGN_THRESHOLD 50
+
+// Check if any analog stick is moved beyond threshold
+// Returns true if left or right stick is deflected significantly
+static inline bool analog_beyond_threshold(const input_event_t* event) {
+    // Check left stick X/Y and right stick X/Y (first 4 analog axes)
+    for (int i = 0; i < 4; i++) {
+        int deflection = (int)event->analog[i] - 128;
+        if (deflection < 0) deflection = -deflection;  // abs()
+        if (deflection > ANALOG_ASSIGN_THRESHOLD) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ============================================================================
 // OUTPUT STATE (replaces players[] array)
 // ============================================================================
 
@@ -340,13 +363,15 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
     int player_index = find_player_index(event->dev_addr, event->instance);
 
     if (player_index < 0) {
-        // Check if any button pressed (auto-assign on first press, active-high)
+        // Check if any button pressed or analog stick moved beyond threshold
         uint32_t buttons_pressed = event->buttons | event->keys;
-        if (buttons_pressed) {
+        bool analog_active = analog_beyond_threshold(event);
+        if (buttons_pressed || analog_active) {
             player_index = add_player(event->dev_addr, event->instance);
             if (player_index >= 0) {
-                printf("[router] Player %d assigned (dev_addr=%d, instance=%d)\n",
-                    player_index + 1, event->dev_addr, event->instance);
+                printf("[router] Player %d assigned (dev_addr=%d, instance=%d, trigger=%s)\n",
+                    player_index + 1, event->dev_addr, event->instance,
+                    buttons_pressed ? "button" : "analog");
             }
         }
     }
@@ -376,11 +401,13 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
     int player_index = find_player_index(event->dev_addr, event->instance);
     if (player_index < 0) {
         uint32_t buttons_pressed = event->buttons | event->keys;
-        if (buttons_pressed || event->type == INPUT_TYPE_MOUSE) {
+        bool analog_active = analog_beyond_threshold(event);
+        if (buttons_pressed || analog_active || event->type == INPUT_TYPE_MOUSE) {
             player_index = add_player(event->dev_addr, event->instance);
             if (player_index >= 0) {
-                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
-                    player_index + 1, event->dev_addr, event->instance);
+                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d, trigger=%s)\n",
+                    player_index + 1, event->dev_addr, event->instance,
+                    buttons_pressed ? "button" : (analog_active ? "analog" : "mouse"));
             }
         }
     }
