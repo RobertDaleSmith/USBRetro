@@ -26,7 +26,7 @@ typedef struct TU_ATTR_PACKED
     uint8_t share  : 1;
     uint8_t option : 1;
     uint8_t dpad   : 4;
-    uint8_t ps     : 2;
+    uint8_t        : 2;  // Reserved padding
   };
 
   uint8_t counter; // +1 each report

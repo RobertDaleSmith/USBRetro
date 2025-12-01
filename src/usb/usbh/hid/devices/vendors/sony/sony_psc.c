@@ -40,7 +40,6 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
     if (psc_report.r2       ) TU_LOG1("R2 ");
     if (psc_report.share    ) TU_LOG1("Share ");
     if (psc_report.option   ) TU_LOG1("Option ");
-    if (psc_report.ps       ) TU_LOG1("PS ");
 
     TU_LOG1("\r\n");
 
@@ -62,10 +61,7 @@ void process_sony_psc(uint8_t dev_addr, uint8_t instance, uint8_t const* report,
                ((psc_report.l2)       ? USBR_BUTTON_L2 : 0) |
                ((psc_report.r2)       ? USBR_BUTTON_R2 : 0) |
                ((psc_report.share)    ? USBR_BUTTON_S1 : 0) |
-               ((psc_report.option)   ? USBR_BUTTON_S2 : 0) |
-               ((0)                   ? USBR_BUTTON_L3 : 0) |
-               ((0)                   ? USBR_BUTTON_R3 : 0) |
-               ((psc_report.ps)       ? USBR_BUTTON_A1 : 0));
+               ((psc_report.option)   ? USBR_BUTTON_S2 : 0));
 
     // add to accumulator and post to the state machine
     // if a scan from the host machine is ongoing, wait

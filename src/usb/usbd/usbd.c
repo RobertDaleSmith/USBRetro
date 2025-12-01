@@ -480,9 +480,12 @@ static bool usbd_send_xid_report(uint8_t player_index)
         xid_report.black = (event->buttons & USBR_BUTTON_L1) ? 0xFF : 0x00;  // L1 -> Black
         xid_report.white = (event->buttons & USBR_BUTTON_R1) ? 0xFF : 0x00;  // R1 -> White
 
-        // Analog triggers (use digital for now)
-        xid_report.trigger_l = (event->buttons & USBR_BUTTON_L2) ? 0xFF : 0x00;
-        xid_report.trigger_r = (event->buttons & USBR_BUTTON_R2) ? 0xFF : 0x00;
+        // Analog triggers (0-255)
+        // Use analog values, fall back to digital if analog is 0 but button pressed
+        xid_report.trigger_l = event->analog[ANALOG_RZ];
+        xid_report.trigger_r = event->analog[ANALOG_SLIDER];
+        if (xid_report.trigger_l == 0 && (event->buttons & USBR_BUTTON_L2)) xid_report.trigger_l = 0xFF;
+        if (xid_report.trigger_r == 0 && (event->buttons & USBR_BUTTON_R2)) xid_report.trigger_r = 0xFF;
 
         // Analog sticks (signed 16-bit, -32768 to +32767)
         xid_report.stick_lx = convert_axis_to_s16(event->analog[ANALOG_X]);
@@ -590,14 +593,18 @@ static bool usbd_send_xinput_report(uint8_t player_index)
         if (event->buttons & USBR_BUTTON_B4) xinput_report.buttons1 |= XINPUT_BTN_Y;
 
         // Analog triggers (0-255)
-        xinput_report.trigger_l = (event->buttons & USBR_BUTTON_L2) ? 0xFF : 0x00;
-        xinput_report.trigger_r = (event->buttons & USBR_BUTTON_R2) ? 0xFF : 0x00;
+        // Use analog values, fall back to digital if analog is 0 but button pressed
+        xinput_report.trigger_l = event->analog[ANALOG_RZ];
+        xinput_report.trigger_r = event->analog[ANALOG_SLIDER];
+        if (xinput_report.trigger_l == 0 && (event->buttons & USBR_BUTTON_L2)) xinput_report.trigger_l = 0xFF;
+        if (xinput_report.trigger_r == 0 && (event->buttons & USBR_BUTTON_R2)) xinput_report.trigger_r = 0xFF;
 
         // Analog sticks (signed 16-bit, -32768 to +32767)
+        // Y-axis inverted: input 0=down, XInput convention positive=up
         xinput_report.stick_lx = convert_axis_to_s16(event->analog[ANALOG_X]);
-        xinput_report.stick_ly = convert_axis_to_s16(event->analog[ANALOG_Y]);
+        xinput_report.stick_ly = -convert_axis_to_s16(event->analog[ANALOG_Y]);
         xinput_report.stick_rx = convert_axis_to_s16(event->analog[ANALOG_Z]);
-        xinput_report.stick_ry = convert_axis_to_s16(event->analog[ANALOG_RX]);
+        xinput_report.stick_ry = -convert_axis_to_s16(event->analog[ANALOG_RX]);
     } else {
         // No input - send neutral state
         xinput_report.buttons0 = 0;
@@ -701,12 +708,11 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         ps3_report.buttons[2] = 0;
         if (event->buttons & USBR_BUTTON_A1) ps3_report.buttons[2] |= PS3_BTN_PS;
 
-        // Analog sticks (0-255, no inversion - PS3 uses raw values)
-        // Note: PS3 Y-axis: 0x00=up, 0xFF=down (same as raw HID)
+        // Analog sticks (0-255, Y-axis inverted: input 0=down, output 0=up)
         ps3_report.lx = event->analog[ANALOG_X];
-        ps3_report.ly = event->analog[ANALOG_Y];
+        ps3_report.ly = 255 - event->analog[ANALOG_Y];
         ps3_report.rx = event->analog[ANALOG_Z];
-        ps3_report.ry = event->analog[ANALOG_RX];
+        ps3_report.ry = 255 - event->analog[ANALOG_RX];
 
         // Pressure-sensitive buttons (D-pad)
         ps3_report.pressure_up    = (event->buttons & USBR_BUTTON_DU) ? 0xFF : 0x00;
@@ -743,6 +749,10 @@ static bool usbd_send_ps3_report(uint8_t player_index)
 }
 
 // Send PS Classic report (PlayStation Classic mode)
+// GP2040-CE compatible 2-byte format:
+// Bits 0-9: 10 buttons
+// Bits 10-13: D-pad encoded
+// Bits 14-15: Padding
 static bool usbd_send_psclassic_report(uint8_t player_index)
 {
     if (!tud_hid_ready()) {
@@ -752,37 +762,38 @@ static bool usbd_send_psclassic_report(uint8_t player_index)
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
     if (event) {
-        // Start with centered D-pad
+        // Start with D-pad centered
         psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
 
-        // D-pad encoding (uses specific values in upper bits)
+        // D-pad encoding (bits 10-13)
         uint8_t up = (event->buttons & USBR_BUTTON_DU) ? 1 : 0;
         uint8_t down = (event->buttons & USBR_BUTTON_DD) ? 1 : 0;
         uint8_t left = (event->buttons & USBR_BUTTON_DL) ? 1 : 0;
         uint8_t right = (event->buttons & USBR_BUTTON_DR) ? 1 : 0;
 
-        if (up && right)      psclassic_report.buttons = PSCLASSIC_DPAD_UP_RIGHT;
-        else if (up && left)  psclassic_report.buttons = PSCLASSIC_DPAD_UP_LEFT;
+        if (up && right)        psclassic_report.buttons = PSCLASSIC_DPAD_UP_RIGHT;
+        else if (up && left)    psclassic_report.buttons = PSCLASSIC_DPAD_UP_LEFT;
         else if (down && right) psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_RIGHT;
         else if (down && left)  psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_LEFT;
-        else if (up)          psclassic_report.buttons = PSCLASSIC_DPAD_UP;
-        else if (down)        psclassic_report.buttons = PSCLASSIC_DPAD_DOWN;
-        else if (left)        psclassic_report.buttons = PSCLASSIC_DPAD_LEFT;
-        else if (right)       psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
-        else                  psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+        else if (up)            psclassic_report.buttons = PSCLASSIC_DPAD_UP;
+        else if (down)          psclassic_report.buttons = PSCLASSIC_DPAD_DOWN;
+        else if (left)          psclassic_report.buttons = PSCLASSIC_DPAD_LEFT;
+        else if (right)         psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
 
-        // Face buttons and shoulders
+        // Face buttons and shoulders (bits 0-9)
+        // Note: L1/R1 and L2/R2 swapped to match PS Classic bit layout
         psclassic_report.buttons |=
-              (event->buttons & USBR_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
+              (event->buttons & USBR_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
             | (event->buttons & USBR_BUTTON_B2 ? PSCLASSIC_MASK_CIRCLE   : 0)
+            | (event->buttons & USBR_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
             | (event->buttons & USBR_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
-            | (event->buttons & USBR_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
-            | (event->buttons & USBR_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
-            | (event->buttons & USBR_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
-            | (event->buttons & USBR_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
-            | (event->buttons & USBR_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
+            | (event->buttons & USBR_BUTTON_L1 ? PSCLASSIC_MASK_L2       : 0)
+            | (event->buttons & USBR_BUTTON_R1 ? PSCLASSIC_MASK_R2       : 0)
+            | (event->buttons & USBR_BUTTON_L2 ? PSCLASSIC_MASK_L1       : 0)
+            | (event->buttons & USBR_BUTTON_R2 ? PSCLASSIC_MASK_R1       : 0)
             | (event->buttons & USBR_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
             | (event->buttons & USBR_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
+
     } else {
         // No input - neutral state
         psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
@@ -818,11 +829,11 @@ static bool usbd_send_ps4_report(uint8_t player_index)
         // Byte 0: Report ID
         ps4_report_buffer[0] = 0x01;
 
-        // Bytes 1-4: Analog sticks
-        ps4_report_buffer[1] = event->analog[0];  // LX
-        ps4_report_buffer[2] = event->analog[1];  // LY
-        ps4_report_buffer[3] = event->analog[2];  // RX
-        ps4_report_buffer[4] = event->analog[3];  // RY
+        // Bytes 1-4: Analog sticks (Y-axis inverted: input 0=down, output 0=up)
+        ps4_report_buffer[1] = event->analog[0];          // LX
+        ps4_report_buffer[2] = 255 - event->analog[1];    // LY (inverted)
+        ps4_report_buffer[3] = event->analog[2];          // RX
+        ps4_report_buffer[4] = 255 - event->analog[3];    // RY (inverted)
 
         // Byte 5: D-pad (bits 0-3) + face buttons (bits 4-7)
         uint8_t up = (event->buttons & USBR_BUTTON_DU) ? 1 : 0;

@@ -26,10 +26,10 @@
 #define PSCLASSIC_ENDPOINT_SIZE 64
 
 // ============================================================================
-// BUTTON MASKS
+// BUTTON MASKS (16-bit report)
 // ============================================================================
 
-// Button report (16 bits total)
+// Button report layout:
 // Bits 0-9: Button states
 // Bits 10-13: D-pad encoded
 // Bits 14-15: Padding
@@ -42,11 +42,10 @@
 #define PSCLASSIC_MASK_R2         (1U <<  5)
 #define PSCLASSIC_MASK_L1         (1U <<  6)
 #define PSCLASSIC_MASK_R1         (1U <<  7)
-#define PSCLASSIC_MASK_START      (1U <<  8)
-#define PSCLASSIC_MASK_SELECT     (1U <<  9)
+#define PSCLASSIC_MASK_SELECT     (1U <<  8)
+#define PSCLASSIC_MASK_START      (1U <<  9)
 
-// D-pad encoding (uses upper bits)
-// These values are OR'd with button bits
+// D-pad encoding (bits 10-13)
 #define PSCLASSIC_DPAD_UP_LEFT    0x0000
 #define PSCLASSIC_DPAD_UP         0x0400
 #define PSCLASSIC_DPAD_UP_RIGHT   0x0800
@@ -58,7 +57,7 @@
 #define PSCLASSIC_DPAD_DOWN_RIGHT 0x2800
 
 // ============================================================================
-// REPORT STRUCTURE
+// REPORT STRUCTURE (2 bytes - GP2040-CE compatible)
 // ============================================================================
 
 typedef struct __attribute__((packed)) {
