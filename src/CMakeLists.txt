@@ -79,6 +79,10 @@ target_compile_definitions(usbretro_usb PRIVATE
     BOARD_TUH_RHPORT=1
     # CDC debug: 1=enabled (dev), 0=disabled (prod)
     USBR_CDC_DEBUG=1
+    # UART debug on GPIO 0 (TX) and GPIO 1 (RX) - UART0 pins
+    PICO_DEFAULT_UART=0
+    PICO_DEFAULT_UART_TX_PIN=0
+    PICO_DEFAULT_UART_RX_PIN=1
 )
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 
@@ -109,6 +113,9 @@ pico_add_extra_outputs(usbretro_snes3do)
 pico_add_extra_outputs(usbretro_uart)
 pico_add_extra_outputs(usbretro_usb)
 pico_add_extra_outputs(usbretro_snes2usb)
+
+# Enable UART stdio for usb2usb debugging (GPIO 0=TX, GPIO 1=RX)
+pico_enable_stdio_uart(usbretro_usb 1)
 
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio )
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/clock.pio )
