@@ -32,7 +32,9 @@
 #include "core/buttons.h"
 #include "core/services/storage/flash.h"
 #include "core/services/button/button.h"
+#ifndef DISABLE_USB_HOST
 #include "usb/usbh/hid/devices/vendors/sony/sony_ds4.h"
+#endif
 #include "tusb.h"
 #include "device/usbd_pvt.h"
 #include "pico/unique_id.h"
@@ -1488,9 +1490,11 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 // Get next signature page from DS4 passthrough (auto-incrementing)
                 len = 64;
                 if (reqlen < len) len = reqlen;
+#ifndef DISABLE_USB_HOST
                 if (ds4_auth_is_available()) {
                     return ds4_auth_get_next_signature(buffer, len);
                 }
+#endif
                 memset(buffer, 0, len);
                 return len;
 
@@ -1498,9 +1502,11 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 // Get auth status from DS4 passthrough
                 len = 16;
                 if (reqlen < len) len = reqlen;
+#ifndef DISABLE_USB_HOST
                 if (ds4_auth_is_available()) {
                     return ds4_auth_get_status(buffer, len);
                 }
+#endif
                 // Return "signing" status if no DS4 available
                 memset(buffer, 0, len);
                 buffer[1] = 0x10;  // 16 = signing/not ready
@@ -1513,9 +1519,11 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 return len;
 
             case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Return page size info
+#ifndef DISABLE_USB_HOST
                 // Reset auth state when console requests 0xF3 (per hid-remapper)
                 // This ensures signature_ready is false for new auth cycle
                 ds4_auth_reset();
+#endif
                 len = sizeof(ps4_feature_f3);
                 if (reqlen < len) len = reqlen;
                 memcpy(buffer, ps4_feature_f3, len);
@@ -1555,6 +1563,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     }
 
     // PS4 auth feature reports
+#ifndef DISABLE_USB_HOST
     if (output_mode == USB_OUTPUT_MODE_PS4 && report_type == HID_REPORT_TYPE_FEATURE) {
         switch (report_id) {
             case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - Nonce from console
@@ -1572,6 +1581,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
                 break;
         }
     }
+#endif
 
     (void)report_id;
     (void)buffer;
