@@ -359,7 +359,7 @@ void usbd_init(void)
             ps4_report_buffer[2] = 0x80;  // LY center
             ps4_report_buffer[3] = 0x80;  // RX center
             ps4_report_buffer[4] = 0x80;  // RY center
-            ps4_report_buffer[5] = 0x08;  // D-pad center (bits 0-3), no buttons (bits 4-7)
+            ps4_report_buffer[5] = PS4_HAT_NOTHING;  // D-pad neutral (0x0F), no buttons
             // Bytes 6-7: no buttons pressed, counter 0
             // Bytes 8-9: triggers at 0
             // Touchpad fingers unpressed: byte 35 bit 7 = 1, byte 39 bit 7 = 1
@@ -851,7 +851,7 @@ static bool usbd_send_ps4_report(uint8_t player_index)
         else if (down)          dpad = PS4_HAT_DOWN;
         else if (left)          dpad = PS4_HAT_LEFT;
         else if (right)         dpad = PS4_HAT_RIGHT;
-        else                    dpad = PS4_HAT_CENTER;
+        else                    dpad = PS4_HAT_NOTHING;
 
         uint8_t face_buttons = 0;
         if (event->buttons & USBR_BUTTON_B3) face_buttons |= 0x10;  // Square
@@ -895,7 +895,7 @@ static bool usbd_send_ps4_report(uint8_t player_index)
         ps4_report_buffer[2] = 0x80;  // LY center
         ps4_report_buffer[3] = 0x80;  // RX center
         ps4_report_buffer[4] = 0x80;  // RY center
-        ps4_report_buffer[5] = PS4_HAT_CENTER;  // D-pad center, no buttons
+        ps4_report_buffer[5] = PS4_HAT_NOTHING;  // D-pad neutral (0x0F), no buttons
         ps4_report_buffer[6] = 0x00;  // No buttons
         ps4_report_buffer[7] = ((ps4_report_counter++ & 0x3F) << 2);  // Just counter
         ps4_report_buffer[8] = 0x00;  // L2 trigger
@@ -1281,10 +1281,10 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
         uint16_t len = 0;
         switch (report_id) {
             case PS4_REPORT_ID_FEATURE_03:
-                // Controller definition report - return minimal response
-                len = 48;
+                // Controller definition report - return GP2040-CE compatible data
+                len = sizeof(ps4_feature_03);
                 if (reqlen < len) len = reqlen;
-                memset(buffer, 0, len);
+                memcpy(buffer, ps4_feature_03, len);
                 return len;
 
             case PS4_REPORT_ID_AUTH_RESPONSE:   // 0xF1 - Signature from DS4
@@ -1310,10 +1310,15 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 return len;
 
             case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - handled in set_report
-            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - handled in set_report
-                len = (report_id == PS4_REPORT_ID_AUTH_PAYLOAD) ? 64 : 8;
+                len = 64;
                 if (reqlen < len) len = reqlen;
                 memset(buffer, 0, len);
+                return len;
+
+            case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Return page size info
+                len = sizeof(ps4_feature_f3);
+                if (reqlen < len) len = reqlen;
+                memcpy(buffer, ps4_feature_f3, len);
                 return len;
 
             default:

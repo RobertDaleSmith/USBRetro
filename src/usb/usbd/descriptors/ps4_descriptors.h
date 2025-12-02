@@ -38,7 +38,7 @@
 #define PS4_HAT_DOWN_LEFT   0x05
 #define PS4_HAT_LEFT        0x06
 #define PS4_HAT_UP_LEFT     0x07
-#define PS4_HAT_CENTER      0x08  // Null state (outside 0-7 range)
+#define PS4_HAT_NOTHING     0x0F  // Null state - PS4 requires 0x0F, not 0x08
 
 // ============================================================================
 // BUTTON MASKS
@@ -180,7 +180,7 @@ static inline void ps4_init_report(ps4_in_report_t* report) {
     report->ly = PS4_JOYSTICK_MID;
     report->rx = PS4_JOYSTICK_MID;
     report->ry = PS4_JOYSTICK_MID;
-    report->dpad = PS4_HAT_CENTER;
+    report->dpad = PS4_HAT_NOTHING;  // 0x0F for neutral
     // Touchpad fingers unpressed
     report->touchpad.p1.unpressed = 1;
     report->touchpad.p2.unpressed = 1;
@@ -379,5 +379,24 @@ static const uint8_t ps4_config_descriptor[] = {
 #define PS4_REPORT_ID_AUTH_RESPONSE 0xF1  // Controller sends signature
 #define PS4_REPORT_ID_AUTH_STATUS   0xF2  // Signing state
 #define PS4_REPORT_ID_AUTH_RESET    0xF3  // Reset auth
+
+// ============================================================================
+// FEATURE REPORT DATA (from GP2040-CE)
+// ============================================================================
+
+// Controller definition report (0x03) - 48 bytes
+// Byte 4: 0x00 = PS4 controller, 0x07 = PS5 controller
+static const uint8_t ps4_feature_03[] = {
+    0x21, 0x27, 0x04, 0xcf, 0x00, 0x2c, 0x56,
+    0x08, 0x00, 0x3d, 0x00, 0xe8, 0x03, 0x04, 0x00,
+    0xff, 0x7f, 0x0d, 0x0d, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+// Auth reset report (0xF3) - nonce/response page sizes
+// Byte 0: padding, Byte 1: nonce page size (0x38=56), Byte 2: response page size (0x38=56)
+static const uint8_t ps4_feature_f3[] = { 0x00, 0x38, 0x38, 0x00, 0x00, 0x00, 0x00 };
 
 #endif // PS4_DESCRIPTORS_H
