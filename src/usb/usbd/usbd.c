@@ -21,8 +21,10 @@
 #include "descriptors/ps3_descriptors.h"
 #include "descriptors/psclassic_descriptors.h"
 #include "descriptors/ps4_descriptors.h"
+#include "descriptors/xbone_descriptors.h"
 #include "tud_xid.h"
 #include "tud_xinput.h"
+#include "tud_xbone.h"
 #include "cdc/cdc.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
@@ -73,6 +75,9 @@ static ps4_out_report_t ps4_output;
 static bool ps4_output_available = false;
 static uint8_t ps4_report_counter = 0;
 
+// Current Xbox One report (for Xbox One mode)
+static gip_input_report_t xbone_report;
+
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
 static char usb_serial_str[USB_SERIAL_LEN + 1];
@@ -90,6 +95,7 @@ static const char* mode_names[] = {
     [USB_OUTPUT_MODE_PS4] = "PS4",
     [USB_OUTPUT_MODE_SWITCH] = "Switch",
     [USB_OUTPUT_MODE_PSCLASSIC] = "PS Classic",
+    [USB_OUTPUT_MODE_XBONE] = "Xbox One",
 };
 
 // ============================================================================
@@ -196,14 +202,15 @@ bool usbd_set_mode(usb_output_mode_t mode)
         return false;
     }
 
-    // Supported modes: HID, Xbox OG, XInput, PS3, PS4, Switch, PS Classic
+    // Supported modes: HID, Xbox OG, XInput, PS3, PS4, Switch, PS Classic, Xbox One
     if (mode != USB_OUTPUT_MODE_HID &&
         mode != USB_OUTPUT_MODE_XBOX_ORIGINAL &&
         mode != USB_OUTPUT_MODE_XINPUT &&
         mode != USB_OUTPUT_MODE_PS3 &&
         mode != USB_OUTPUT_MODE_PS4 &&
         mode != USB_OUTPUT_MODE_SWITCH &&
-        mode != USB_OUTPUT_MODE_PSCLASSIC) {
+        mode != USB_OUTPUT_MODE_PSCLASSIC &&
+        mode != USB_OUTPUT_MODE_XBONE) {
         printf("[usbd] Mode %d not yet supported\n", mode);
         return false;
     }
@@ -281,7 +288,8 @@ void usbd_init(void)
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS3 ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS4 ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
-                flash_settings.usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC) {
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBONE) {
                 output_mode = (usb_output_mode_t)flash_settings.usb_output_mode;
                 printf("[usbd] Loaded mode from flash: %s\n", mode_names[output_mode]);
             } else {
@@ -369,6 +377,11 @@ void usbd_init(void)
             ps4_report_counter = 0;
             break;
 
+        case USB_OUTPUT_MODE_XBONE:
+            // Initialize Xbox One report to neutral state
+            memset(&xbone_report, 0, sizeof(gip_input_report_t));
+            break;
+
         case USB_OUTPUT_MODE_HID:
         default:
             // Initialize HID report to neutral state
@@ -444,6 +457,14 @@ void usbd_task(void)
         case USB_OUTPUT_MODE_PS4:
             // PS4 mode: send HID report (no CDC)
             if (tud_hid_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_XBONE:
+            // Xbox One mode: update driver and send report
+            tud_xbone_update();
+            if (xbone_is_powered_on() && tud_xbone_ready()) {
                 usbd_send_report(0);
             }
             break;
@@ -907,6 +928,64 @@ static bool usbd_send_ps4_report(uint8_t player_index)
     return tud_hid_report(0x01, &ps4_report_buffer[1], 63);
 }
 
+// Send Xbox One report (GIP protocol)
+static bool usbd_send_xbone_report(uint8_t player_index)
+{
+    if (!tud_xbone_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    // Clear report
+    memset(&xbone_report, 0, sizeof(gip_input_report_t));
+
+    if (event) {
+        // Buttons
+        xbone_report.a = (event->buttons & USBR_BUTTON_B1) ? 1 : 0;
+        xbone_report.b = (event->buttons & USBR_BUTTON_B2) ? 1 : 0;
+        xbone_report.x = (event->buttons & USBR_BUTTON_B3) ? 1 : 0;
+        xbone_report.y = (event->buttons & USBR_BUTTON_B4) ? 1 : 0;
+
+        xbone_report.left_shoulder = (event->buttons & USBR_BUTTON_L1) ? 1 : 0;
+        xbone_report.right_shoulder = (event->buttons & USBR_BUTTON_R1) ? 1 : 0;
+
+        xbone_report.back = (event->buttons & USBR_BUTTON_S1) ? 1 : 0;
+        xbone_report.start = (event->buttons & USBR_BUTTON_S2) ? 1 : 0;
+
+        xbone_report.guide = (event->buttons & USBR_BUTTON_A1) ? 1 : 0;
+        xbone_report.sync = (event->buttons & USBR_BUTTON_A2) ? 1 : 0;
+
+        xbone_report.left_thumb = (event->buttons & USBR_BUTTON_L3) ? 1 : 0;
+        xbone_report.right_thumb = (event->buttons & USBR_BUTTON_R3) ? 1 : 0;
+
+        xbone_report.dpad_up = (event->buttons & USBR_BUTTON_DU) ? 1 : 0;
+        xbone_report.dpad_down = (event->buttons & USBR_BUTTON_DD) ? 1 : 0;
+        xbone_report.dpad_left = (event->buttons & USBR_BUTTON_DL) ? 1 : 0;
+        xbone_report.dpad_right = (event->buttons & USBR_BUTTON_DR) ? 1 : 0;
+
+        // Triggers (0-1023)
+        // Map from analog (0-255) to Xbox One range (0-1023)
+        xbone_report.left_trigger = (uint16_t)event->analog[ANALOG_RZ] * 4;
+        xbone_report.right_trigger = (uint16_t)event->analog[ANALOG_SLIDER] * 4;
+
+        // Fallback to digital if analog is 0 but button pressed
+        if (xbone_report.left_trigger == 0 && (event->buttons & USBR_BUTTON_L2))
+            xbone_report.left_trigger = 1023;
+        if (xbone_report.right_trigger == 0 && (event->buttons & USBR_BUTTON_R2))
+            xbone_report.right_trigger = 1023;
+
+        // Analog sticks (signed 16-bit, -32768 to +32767)
+        // Y-axis inverted: input 0=down, output positive=up
+        xbone_report.left_stick_x = convert_axis_to_s16(event->analog[ANALOG_X]);
+        xbone_report.left_stick_y = -convert_axis_to_s16(event->analog[ANALOG_Y]);
+        xbone_report.right_stick_x = convert_axis_to_s16(event->analog[ANALOG_Z]);
+        xbone_report.right_stick_y = -convert_axis_to_s16(event->analog[ANALOG_RX]);
+    }
+
+    return tud_xbone_send_report(&xbone_report);
+}
+
 bool usbd_send_report(uint8_t player_index)
 {
     switch (output_mode) {
@@ -924,6 +1003,8 @@ bool usbd_send_report(uint8_t player_index)
             return usbd_send_psclassic_report(player_index);
         case USB_OUTPUT_MODE_PS4:
             return usbd_send_ps4_report(player_index);
+        case USB_OUTPUT_MODE_XBONE:
+            return usbd_send_xbone_report(player_index);
         case USB_OUTPUT_MODE_HID:
         default:
             return usbd_send_hid_report(player_index);
@@ -1063,6 +1144,8 @@ uint8_t const *tud_descriptor_device_cb(void)
             return (uint8_t const *)&psclassic_device_descriptor;
         case USB_OUTPUT_MODE_PS4:
             return (uint8_t const *)&ps4_device_descriptor;
+        case USB_OUTPUT_MODE_XBONE:
+            return (uint8_t const *)&xbone_device_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return (uint8_t const *)&desc_device_hid;
@@ -1110,6 +1193,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
             return psclassic_config_descriptor;
         case USB_OUTPUT_MODE_PS4:
             return ps4_config_descriptor;
+        case USB_OUTPUT_MODE_XBONE:
+            return xbone_config_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return desc_configuration_hid;
@@ -1142,6 +1227,42 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
     // Xbox OG has no string descriptors
     if (output_mode == USB_OUTPUT_MODE_XBOX_ORIGINAL) {
         return NULL;
+    }
+
+    // Xbox One uses custom string handling via vendor control requests
+    if (output_mode == USB_OUTPUT_MODE_XBONE) {
+        // Return basic descriptors - specialized ones handled in vendor callback
+        static uint16_t _xbone_str[32];
+        uint8_t xbone_chr_count;
+        const char* xbone_str = NULL;
+
+        switch (index) {
+            case 0:  // Language ID
+                _xbone_str[1] = 0x0409;
+                xbone_chr_count = 1;
+                break;
+            case 1:  // Manufacturer
+                xbone_str = XBONE_MANUFACTURER;
+                break;
+            case 2:  // Product
+                xbone_str = XBONE_PRODUCT;
+                break;
+            case 3:  // Serial
+                xbone_str = usb_serial_str;
+                break;
+            default:
+                return NULL;
+        }
+
+        if (xbone_str) {
+            xbone_chr_count = strlen(xbone_str);
+            if (xbone_chr_count > 31) xbone_chr_count = 31;
+            for (uint8_t i = 0; i < xbone_chr_count; i++) {
+                _xbone_str[1 + i] = xbone_str[i];
+            }
+        }
+        _xbone_str[0] = (TUSB_DESC_STRING << 8) | (2 * xbone_chr_count + 2);
+        return _xbone_str;
     }
 
     static uint16_t _desc_str[32];
@@ -1396,9 +1517,23 @@ usbd_class_driver_t const* usbd_app_driver_get_cb(uint8_t* driver_count)
             return tud_xinput_class_driver();
 #endif
 
+        case USB_OUTPUT_MODE_XBONE:
+            *driver_count = 1;
+            return tud_xbone_class_driver();
+
         default:
             // HID/Switch modes use built-in HID class driver
             *driver_count = 0;
             return NULL;
     }
+}
+
+// Vendor control request callback (for Xbox One Windows OS descriptors)
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                 tusb_control_request_t const* request)
+{
+    if (output_mode == USB_OUTPUT_MODE_XBONE) {
+        return tud_xbone_vendor_control_xfer_cb(rhport, stage, request);
+    }
+    return true;  // Accept by default for other modes
 }

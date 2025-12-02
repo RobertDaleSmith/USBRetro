@@ -37,7 +37,7 @@ static void on_button_event(button_event_t event)
             sleep_ms(50);
             tud_task();
 
-            // Cycle to next mode: HID → XInput → PS3 → PS4 → Switch → PS Classic → Xbox OG → HID
+            // Cycle to next mode: HID → XInput → PS3 → PS4 → Switch → PS Classic → Xbox OG → Xbox One → HID
             usb_output_mode_t current = usbd_get_mode();
             usb_output_mode_t next;
             switch (current) {
@@ -60,6 +60,9 @@ static void on_button_event(button_event_t event)
                     next = USB_OUTPUT_MODE_XBOX_ORIGINAL;
                     break;
                 case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+                    next = USB_OUTPUT_MODE_XBONE;
+                    break;
+                case USB_OUTPUT_MODE_XBONE:
                 default:
                     next = USB_OUTPUT_MODE_HID;
                     break;

@@ -1,0 +1,281 @@
+// xbone_auth.c - Xbox One Auth Dongle Host Driver
+// SPDX-License-Identifier: MIT
+// Based on GP2040-CE implementation (gp2040-ce.info)
+
+#include "xbone_auth.h"
+#include "usb/usbd/xgip_protocol.h"
+#include "usb/usbd/tud_xbone.h"
+#include "pico/time.h"
+#include "tusb.h"
+#include <string.h>
+#include <stdio.h>
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+#define REPORT_QUEUE_SIZE      16
+#define REPORT_QUEUE_INTERVAL  15  // ms
+
+// Power-on and rumble commands for dongle initialization
+static const uint8_t xb1_power_on[] = {
+    0x06, 0x62, 0x45, 0xb8, 0x77, 0x26, 0x2c, 0x55,
+    0x53, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f
+};
+static const uint8_t xb1_power_on_single[] = { 0x00 };
+static const uint8_t xb1_rumble_on[] = {
+    0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0xeb
+};
+
+// ============================================================================
+// STATE
+// ============================================================================
+
+typedef struct {
+    uint8_t report[64];
+    uint16_t len;
+} report_queue_item_t;
+
+static uint8_t xbone_dev_addr = 0;
+static uint8_t xbone_instance = 0;
+static bool dongle_ready = false;
+
+static xgip_t incoming_xgip;
+static xgip_t outgoing_xgip;
+
+// Report queue
+static report_queue_item_t report_queue[REPORT_QUEUE_SIZE];
+static uint8_t queue_head = 0;
+static uint8_t queue_tail = 0;
+static uint8_t queue_count = 0;
+static uint32_t last_report_queue_sent = 0;
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+static void queue_host_report(uint8_t* report, uint16_t len)
+{
+    if (queue_count >= REPORT_QUEUE_SIZE) {
+        return;
+    }
+
+    memcpy(report_queue[queue_tail].report, report, len);
+    report_queue[queue_tail].len = len;
+
+    queue_tail = (queue_tail + 1) % REPORT_QUEUE_SIZE;
+    queue_count++;
+}
+
+// Forward declaration - implemented by xinput host or similar
+extern bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance,
+                                   uint8_t const* report, uint16_t len);
+
+static bool send_to_dongle(uint8_t* report, uint16_t len)
+{
+    if (xbone_dev_addr == 0) {
+        return false;
+    }
+    return tuh_xinput_send_report(xbone_dev_addr, xbone_instance, report, len);
+}
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+void xbone_auth_init(void)
+{
+    xgip_init(&incoming_xgip);
+    xgip_init(&outgoing_xgip);
+
+    xbone_dev_addr = 0;
+    xbone_instance = 0;
+    dongle_ready = false;
+
+    queue_head = 0;
+    queue_tail = 0;
+    queue_count = 0;
+}
+
+bool xbone_auth_is_available(void)
+{
+    return dongle_ready && xbone_dev_addr != 0;
+}
+
+bool xbone_auth_is_complete(void)
+{
+    return xbone_auth_is_completed();
+}
+
+void xbone_auth_task(void)
+{
+    if (!dongle_ready) {
+        return;
+    }
+
+    // Forward auth from console to dongle
+    xbone_auth_state_t state = xbone_auth_get_state();
+
+    if (state == XBONE_AUTH_SEND_CONSOLE_TO_DONGLE) {
+        uint8_t is_chunked = (xbone_auth_get_length() > GIP_MAX_CHUNK_SIZE);
+        uint8_t needs_ack = (xbone_auth_get_length() > 2);
+
+        xgip_reset(&outgoing_xgip);
+        xgip_set_attributes(&outgoing_xgip, xbone_auth_get_type(),
+                           xbone_auth_get_sequence(), 1, is_chunked, needs_ack);
+        xgip_set_data(&outgoing_xgip, xbone_auth_get_buffer(), xbone_auth_get_length());
+
+        // Update state to waiting
+        xbone_auth_set_data(xbone_auth_get_buffer(), xbone_auth_get_length(),
+                           xbone_auth_get_sequence(), xbone_auth_get_type(),
+                           XBONE_AUTH_WAIT_CONSOLE_TO_DONGLE);
+
+    } else if (state == XBONE_AUTH_WAIT_CONSOLE_TO_DONGLE) {
+        queue_host_report(xgip_generate_packet(&outgoing_xgip),
+                         xgip_get_packet_length(&outgoing_xgip));
+
+        if (!xgip_is_chunked(&outgoing_xgip) || xgip_end_of_chunk(&outgoing_xgip)) {
+            xbone_auth_set_data(xbone_auth_get_buffer(), xbone_auth_get_length(),
+                               xbone_auth_get_sequence(), xbone_auth_get_type(),
+                               XBONE_AUTH_IDLE);
+        }
+    }
+
+    // Process report queue - send to dongle
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (queue_count > 0 && (now - last_report_queue_sent) > REPORT_QUEUE_INTERVAL) {
+        uint8_t report[64];
+        uint16_t len = report_queue[queue_head].len;
+        memcpy(report, report_queue[queue_head].report, len);
+
+        if (send_to_dongle(report, len)) {
+            queue_head = (queue_head + 1) % REPORT_QUEUE_SIZE;
+            queue_count--;
+            last_report_queue_sent = now;
+        } else {
+            busy_wait_ms(REPORT_QUEUE_INTERVAL);
+        }
+    }
+}
+
+void xbone_auth_register(uint8_t dev_addr, uint8_t instance)
+{
+    printf("[xbone_auth] Registering dongle: dev_addr=%d, instance=%d\n", dev_addr, instance);
+    xbone_dev_addr = dev_addr;
+    xbone_instance = instance;
+
+    xgip_reset(&incoming_xgip);
+    xgip_reset(&outgoing_xgip);
+}
+
+void xbone_auth_unregister(uint8_t dev_addr)
+{
+    if (xbone_dev_addr == dev_addr) {
+        printf("[xbone_auth] Unregistering dongle: dev_addr=%d\n", dev_addr);
+        // Don't reset dongle_ready - Magic-X may remount but still be ready
+        xbone_dev_addr = 0;
+        xbone_instance = 0;
+    }
+}
+
+void xbone_auth_xmount(uint8_t dev_addr, uint8_t instance,
+                       uint8_t controller_type, uint8_t subtype)
+{
+    // Check if this looks like an Xbox One auth dongle
+    // Controller type 0xFF with certain subtypes indicates auth dongle
+    xbone_auth_register(dev_addr, instance);
+}
+
+void xbone_auth_report_received(uint8_t dev_addr, uint8_t instance,
+                                uint8_t const* report, uint16_t len)
+{
+    if (dev_addr != xbone_dev_addr || instance != xbone_instance) {
+        return;
+    }
+
+    xgip_parse(&incoming_xgip, report, len);
+
+    if (!xgip_validate(&incoming_xgip)) {
+        // First packet may be invalid, wait for dongle boot
+        busy_wait_ms(50);
+        xgip_reset(&incoming_xgip);
+        return;
+    }
+
+    // Send ACK if required
+    if (xgip_ack_required(&incoming_xgip)) {
+        queue_host_report(xgip_generate_ack(&incoming_xgip),
+                         xgip_get_packet_length(&incoming_xgip));
+    }
+
+    uint8_t cmd = xgip_get_command(&incoming_xgip);
+
+    switch (cmd) {
+        case GIP_ANNOUNCE:
+            // Dongle announced - request descriptor
+            xgip_reset(&outgoing_xgip);
+            xgip_set_attributes(&outgoing_xgip, GIP_DEVICE_DESCRIPTOR, 1, 1, false, 0);
+            queue_host_report(xgip_generate_packet(&outgoing_xgip),
+                             xgip_get_packet_length(&outgoing_xgip));
+            break;
+
+        case GIP_DEVICE_DESCRIPTOR:
+            // Got descriptor - power on dongle
+            if (xgip_end_of_chunk(&incoming_xgip) || !xgip_is_chunked(&incoming_xgip)) {
+                // Send power-on commands
+                xgip_reset(&outgoing_xgip);
+                xgip_set_attributes(&outgoing_xgip, GIP_POWER_MODE_DEVICE_CONFIG, 2, 1, false, 0);
+                xgip_set_data(&outgoing_xgip, xb1_power_on, sizeof(xb1_power_on));
+                queue_host_report(xgip_generate_packet(&outgoing_xgip),
+                                 xgip_get_packet_length(&outgoing_xgip));
+
+                xgip_reset(&outgoing_xgip);
+                xgip_set_attributes(&outgoing_xgip, GIP_POWER_MODE_DEVICE_CONFIG, 3, 1, false, 0);
+                xgip_set_data(&outgoing_xgip, xb1_power_on_single, sizeof(xb1_power_on_single));
+                queue_host_report(xgip_generate_packet(&outgoing_xgip),
+                                 xgip_get_packet_length(&outgoing_xgip));
+
+                // Send rumble command to enable dongle
+                xgip_reset(&outgoing_xgip);
+                xgip_set_attributes(&outgoing_xgip, GIP_CMD_RUMBLE, 1, 0, false, 0);
+                xgip_set_data(&outgoing_xgip, xb1_rumble_on, sizeof(xb1_rumble_on));
+                queue_host_report(xgip_generate_packet(&outgoing_xgip),
+                                 xgip_get_packet_length(&outgoing_xgip));
+
+                dongle_ready = true;
+                printf("[xbone_auth] Dongle ready!\n");
+            }
+            break;
+
+        case GIP_AUTH:
+        case GIP_FINAL_AUTH:
+            // Forward auth response to console
+            if (!xgip_is_chunked(&incoming_xgip) ||
+                (xgip_is_chunked(&incoming_xgip) && xgip_end_of_chunk(&incoming_xgip))) {
+
+                xbone_auth_set_data(xgip_get_data(&incoming_xgip),
+                                   xgip_get_data_length(&incoming_xgip),
+                                   xgip_get_sequence(&incoming_xgip),
+                                   xgip_get_command(&incoming_xgip),
+                                   XBONE_AUTH_SEND_DONGLE_TO_CONSOLE);
+                xgip_reset(&incoming_xgip);
+            }
+            break;
+
+        case GIP_ACK_RESPONSE:
+        default:
+            break;
+    }
+}
+
+// Weak implementation if xinput_host doesn't provide this
+__attribute__((weak))
+bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance,
+                            uint8_t const* report, uint16_t len)
+{
+    (void)dev_addr;
+    (void)instance;
+    (void)report;
+    (void)len;
+    return false;
+}
