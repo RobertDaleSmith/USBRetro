@@ -41,6 +41,7 @@ BOARD_SCRIPT_kb2040 := boards/build_ada_kb2040.sh
 BOARD_SCRIPT_qtpy := boards/build_ada_qtpy.sh
 BOARD_SCRIPT_rp2040zero := boards/build_waveshare_rp2040_zero.sh
 BOARD_SCRIPT_feather_usbhost := boards/build_ada_feather_usbhost.sh
+BOARD_SCRIPT_macropad := boards/build_ada_macropad.sh
 
 # Console targets (cmake target names)
 CONSOLE_3do := usbretro_3do
@@ -54,6 +55,8 @@ CONSOLE_uart := usbretro_uart
 CONSOLE_usb := usbretro_usb
 CONSOLE_snes2usb := usbretro_snes2usb
 CONSOLE_controller_fisherprice := usbretro_controller_fisherprice
+CONSOLE_controller_alpakka := usbretro_controller_alpakka
+CONSOLE_controller_macropad := usbretro_controller_macropad
 
 # App definitions: APP_name = board console output_name
 # Naming convention: usb2<console> for all apps
@@ -68,9 +71,11 @@ APP_usb2uart := kb2040 uart usb2uart
 APP_usb2usb := feather_usbhost usb usb2usb
 APP_snes2usb := kb2040 snes2usb snes2usb
 APP_controller_fisherprice := kb2040 controller_fisherprice controller_fisherprice
+APP_controller_alpakka := pico controller_alpakka controller_alpakka
+APP_controller_macropad := macropad controller_macropad controller_macropad
 
-# All apps
-APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb snes2usb controller_fisherprice
+# All apps (note: controller_macropad not included - build explicitly with 'make controller_macropad')
+APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb snes2usb controller_fisherprice controller_alpakka
 
 # Stable apps for release (mature enough for public release)
 RELEASE_APPS := usb2pce usb2gc usb2nuon
@@ -117,6 +122,8 @@ help:
 	@echo "  make usb2usb       - Build usb2usb (Feather USB Host + USB HID gamepad)"
 	@echo "  make snes2usb      - Build snes2usb (KB2040 + SNES→USB HID gamepad)"
 	@echo "  make controller_fisherprice - Build controller_fisherprice (KB2040 + GPIO→USB HID gamepad)"
+	@echo "  make controller_alpakka - Build controller_alpakka (Pico + GPIO/I2C→USB HID gamepad)"
+	@echo "  make controller_macropad - Build controller_macropad (MacroPad RP2040 + 12 keys→USB HID gamepad)"
 	@echo ""
 	@echo "$(GREEN)Convenience Targets:$(NC)"
 	@echo "  make all           - Build all apps"
@@ -137,6 +144,8 @@ help:
 	@echo "  make flash-usb2usb - Flash usb2usb firmware"
 	@echo "  make flash-snes2usb - Flash snes2usb firmware"
 	@echo "  make flash-controller_fisherprice - Flash controller_fisherprice firmware"
+	@echo "  make flash-controller_alpakka - Flash controller_alpakka firmware"
+	@echo "  make flash-controller_macropad - Flash controller_macropad firmware"
 	@echo ""
 	@echo "$(GREEN)Console-Only Targets (uses KB2040):$(NC)"
 	@echo "  make pce           - Build PCEngine firmware"
@@ -230,6 +239,14 @@ snes2usb:
 .PHONY: controller_fisherprice
 controller_fisherprice:
 	$(call build_app,controller_fisherprice)
+
+.PHONY: controller_alpakka
+controller_alpakka:
+	$(call build_app,controller_alpakka)
+
+.PHONY: controller_macropad
+controller_macropad:
+	$(call build_app,controller_macropad)
 
 # Console-only targets (defaults to KB2040)
 .PHONY: 3do
@@ -378,6 +395,14 @@ flash-snes2usb:
 .PHONY: flash-controller_fisherprice
 flash-controller_fisherprice:
 	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_fisherprice
+
+.PHONY: flash-controller_alpakka
+flash-controller_alpakka:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_alpakka
+
+.PHONY: flash-controller_macropad
+flash-controller_macropad:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_macropad
 
 # Internal flash helper for specific app (finds most recent matching file)
 .PHONY: _flash_app

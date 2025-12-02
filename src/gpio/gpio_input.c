@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Robert Dale Smith
 //
-// Reads buttons and analog sticks wired directly to GPIO pins.
+// Reads buttons and analog sticks wired to GPIO pins or I2C expanders.
 // Each registered config creates a controller input source.
 
 #include "gpio_input.h"
@@ -12,8 +12,21 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/adc.h"
+#include "hardware/i2c.h"
 #include <stdio.h>
 #include <string.h>
+
+// ============================================================================
+// I2C I/O EXPANDER REGISTERS (PCA9555/TCA9555 compatible)
+// ============================================================================
+
+#define I2C_IO_REG_INPUT     0x00  // Input port register
+#define I2C_IO_REG_OUTPUT    0x02  // Output port register
+#define I2C_IO_REG_POLARITY  0x04  // Polarity inversion register
+#define I2C_IO_REG_CONFIG    0x06  // Configuration register
+#define I2C_IO_REG_PULLUP    0x46  // Pull-up resistor register (TCA9555 only)
+
+#define I2C_FREQ 400000  // 400kHz
 
 // ============================================================================
 // INTERNAL STATE
@@ -32,12 +45,74 @@ static uint32_t gpio_prev_buttons[GPIO_MAX_DEVICES];
 // ADC initialized flag
 static bool adc_initialized = false;
 
+// I2C initialized flag
+static bool i2c_initialized = false;
+
+// I2C expander cached state (16 bits per expander)
+static uint16_t i2c_expander_cache[2] = {0, 0};
+
 // ============================================================================
-// INTERNAL HELPERS
+// I2C HELPERS
+// ============================================================================
+
+// Initialize I2C bus for expanders
+static void i2c_expander_init(int8_t sda_pin, int8_t scl_pin) {
+    if (i2c_initialized) return;
+    if (sda_pin < 0 || scl_pin < 0) return;
+
+    printf("[gpio] Initializing I2C on SDA=%d, SCL=%d\n", sda_pin, scl_pin);
+
+    i2c_init(i2c1, I2C_FREQ);
+    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
+    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
+    gpio_pull_up(sda_pin);
+    gpio_pull_up(scl_pin);
+
+    // Configure expanders: set polarity inversion and enable pull-ups
+    uint8_t polarity_data[] = {I2C_IO_REG_POLARITY, 0xFF, 0xFF};
+    uint8_t pullup_data[] = {I2C_IO_REG_PULLUP, 0xFF, 0xFF};
+
+    // Try to configure expander 0
+    if (i2c_write_blocking(i2c1, GPIO_I2C_EXPANDER_ADDR_0, polarity_data, 3, false) >= 0) {
+        i2c_write_blocking(i2c1, GPIO_I2C_EXPANDER_ADDR_0, pullup_data, 3, false);
+        printf("[gpio] I2C expander 0 (0x%02X) configured\n", GPIO_I2C_EXPANDER_ADDR_0);
+    }
+
+    // Try to configure expander 1
+    if (i2c_write_blocking(i2c1, GPIO_I2C_EXPANDER_ADDR_1, polarity_data, 3, false) >= 0) {
+        i2c_write_blocking(i2c1, GPIO_I2C_EXPANDER_ADDR_1, pullup_data, 3, false);
+        printf("[gpio] I2C expander 1 (0x%02X) configured\n", GPIO_I2C_EXPANDER_ADDR_1);
+    }
+
+    i2c_initialized = true;
+}
+
+// Read 16 bits from I2C expander
+static uint16_t i2c_expander_read(uint8_t addr) {
+    uint8_t reg = I2C_IO_REG_INPUT;
+    uint8_t buf[2] = {0, 0};
+
+    i2c_write_blocking(i2c1, addr, &reg, 1, true);
+    i2c_read_blocking(i2c1, addr, buf, 2, false);
+
+    return (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+}
+
+// Update I2C expander cache (call once per poll cycle)
+static void i2c_expander_update_cache(void) {
+    if (!i2c_initialized) return;
+
+    i2c_expander_cache[0] = i2c_expander_read(GPIO_I2C_EXPANDER_ADDR_0);
+    i2c_expander_cache[1] = i2c_expander_read(GPIO_I2C_EXPANDER_ADDR_1);
+}
+
+// ============================================================================
+// GPIO HELPERS
 // ============================================================================
 
 // Initialize a single GPIO pin as input with appropriate pull
-static void gpio_init_button_pin(int8_t pin, bool active_high) {
+static void gpio_init_button_pin(int16_t pin, bool active_high) {
+    // Only initialize direct GPIO pins (0-29)
     if (pin < 0 || pin > 29) return;
 
     gpio_init(pin);
@@ -52,10 +127,27 @@ static void gpio_init_button_pin(int8_t pin, bool active_high) {
 }
 
 // Read a button pin and return true if pressed
-static bool gpio_read_button(int8_t pin, bool active_high) {
+// Supports direct GPIO (0-29) and I2C expanders (100-115, 200-215)
+static bool gpio_read_button(int16_t pin, bool active_high) {
     if (pin < 0) return false;
 
-    bool state = gpio_get(pin);
+    bool state;
+
+    if (pin < 100) {
+        // Direct GPIO
+        state = gpio_get(pin);
+    } else if (pin < 200) {
+        // I2C expander 0 (pins 100-115)
+        uint8_t bit = pin - GPIO_I2C_EXPANDER_0_BASE;
+        if (bit > 15) return false;
+        state = (i2c_expander_cache[0] >> bit) & 1;
+    } else {
+        // I2C expander 1 (pins 200-215)
+        uint8_t bit = pin - GPIO_I2C_EXPANDER_1_BASE;
+        if (bit > 15) return false;
+        state = (i2c_expander_cache[1] >> bit) & 1;
+    }
+
     return active_high ? state : !state;
 }
 
@@ -87,13 +179,32 @@ static uint8_t apply_deadzone(uint8_t value, uint8_t deadzone) {
     return value;
 }
 
+// Check if config uses I2C expanders
+static bool config_uses_i2c(const gpio_device_config_t* config) {
+    return (config->dpad_up >= 100 || config->dpad_down >= 100 ||
+            config->dpad_left >= 100 || config->dpad_right >= 100 ||
+            config->b1 >= 100 || config->b2 >= 100 ||
+            config->b3 >= 100 || config->b4 >= 100 ||
+            config->l1 >= 100 || config->r1 >= 100 ||
+            config->l2 >= 100 || config->r2 >= 100 ||
+            config->s1 >= 100 || config->s2 >= 100 ||
+            config->l3 >= 100 || config->r3 >= 100 ||
+            config->a1 >= 100 || config->a2 >= 100 ||
+            config->l4 >= 100 || config->r4 >= 100);
+}
+
 // Initialize GPIO pins for a device config
 static void gpio_init_device_pins(const gpio_device_config_t* config) {
     if (!config) return;
 
     bool ah = config->active_high;
 
-    // Initialize button pins
+    // Initialize I2C if this config uses expanders
+    if (config_uses_i2c(config)) {
+        i2c_expander_init(config->i2c_sda, config->i2c_scl);
+    }
+
+    // Initialize direct GPIO button pins (I2C pins are handled by expander init)
     gpio_init_button_pin(config->dpad_up, ah);
     gpio_init_button_pin(config->dpad_down, ah);
     gpio_init_button_pin(config->dpad_left, ah);
@@ -115,6 +226,8 @@ static void gpio_init_device_pins(const gpio_device_config_t* config) {
     gpio_init_button_pin(config->r3, ah);
     gpio_init_button_pin(config->a1, ah);
     gpio_init_button_pin(config->a2, ah);
+    gpio_init_button_pin(config->l4, ah);
+    gpio_init_button_pin(config->r4, ah);
 
     // Initialize ADC if any analog inputs are used
     bool has_analog = (config->adc_lx >= 0 || config->adc_ly >= 0 ||
@@ -139,8 +252,9 @@ static void gpio_init_device_pins(const gpio_device_config_t* config) {
         adc_gpio_init(26 + config->adc_ry);
     }
 
-    printf("[gpio] Initialized device: %s (active_%s)\n",
-           config->name, ah ? "high" : "low");
+    printf("[gpio] Initialized device: %s (active_%s%s)\n",
+           config->name, ah ? "high" : "low",
+           config_uses_i2c(config) ? ", I2C" : "");
 }
 
 // Poll a single device and update its input event
@@ -179,6 +293,9 @@ static void gpio_poll_device(uint8_t device_index) {
     if (gpio_read_button(config->r3, ah)) buttons |= USBR_BUTTON_R3;
     if (gpio_read_button(config->a1, ah)) buttons |= USBR_BUTTON_A1;
     if (gpio_read_button(config->a2, ah)) buttons |= USBR_BUTTON_A2;
+
+    // Extra buttons (L4/R4 mapped to L2/R2 digital for now)
+    // TODO: Add proper L4/R4 button defines if needed
 
     // Simple debounce: only update if same as previous read
     // (This filters out single-sample glitches)
@@ -258,6 +375,11 @@ static void gpio_input_init(void) {
 }
 
 static void gpio_input_task(void) {
+    // Update I2C expander cache once per cycle (more efficient than per-button)
+    if (i2c_initialized) {
+        i2c_expander_update_cache();
+    }
+
     // Poll all registered devices
     for (uint8_t i = 0; i < gpio_device_count; i++) {
         gpio_poll_device(i);

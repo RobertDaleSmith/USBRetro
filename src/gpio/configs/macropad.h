@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2024 Robert Dale Smith
 //
-// GPIO mappings for Adafruit MacroPad RP2040 as a gamepad.
-// Based on GP2040-CE adafruit-macropad branch configuration.
-// 12 keys (3x4 grid) + rotary encoder mapped to gamepad buttons.
+// GPIO mappings for Adafruit MacroPad RP2040.
+// 12 mechanical keys in 4x3 grid + rotary encoder with button.
+//
+// Physical layout:
+//   [1] [2] [3]
+//   [4] [5] [6]
+//   [7] [8] [9]
+//   [10][11][12]
+//   + Rotary encoder (button on GPIO 0)
 
 #ifndef GPIO_CONFIG_MACROPAD_H
 #define GPIO_CONFIG_MACROPAD_H
@@ -12,52 +18,60 @@
 #include "../gpio_input.h"
 
 // ============================================================================
-// ADAFRUIT MACROPAD RP2040
+// MACROPAD - Arcade/Fightstick Layout
 // ============================================================================
-// 12-key mechanical keyboard with rotary encoder.
-// Active low buttons (pressed = GPIO low, uses internal pull-ups)
+// Maps 12 keys to standard gamepad buttons for arcade/fightstick use.
+// Rotary encoder button = Home.
 //
-// Physical layout (3x4 grid):
-//   [0]  [1]  [2]     -> A1(Home), R1, UP
-//   [3]  [4]  [5]     -> L1, RIGHT, DOWN
-//   [6]  [7]  [8]     -> S1(Select), B3, B4
-//   [9]  [10] [11]    -> S2(Start), B1, B2
+// Default mapping (arcade 8-button + extras):
+//   [S1] [S2] [A1]     <- Select, Start, Home
+//   [B3] [B4] [R1]     <- X, Y, RB
+//   [B1] [B2] [R2]     <- A, B, RT
+//   [L1] [L2] [A2]     <- LB, LT, Capture
 
 static const gpio_device_config_t gpio_config_macropad = {
     .name = "MacroPad",
-    .active_high = false,  // MacroPad uses active low (pull-ups)
+    .active_high = false,   // Keys have pull-ups (pressed = low)
 
-    // D-pad (mapped to keys in row 1-2)
-    .dpad_up    = 2,    // Key 2 (top right)
-    .dpad_down  = 5,    // Key 5 (row 2, right)
-    .dpad_left  = 6,    // Key 6 (row 3, left)
-    .dpad_right = 4,    // Key 4 (row 2, middle)
+    // No I2C expanders
+    .i2c_sda = GPIO_PIN_DISABLED,
+    .i2c_scl = GPIO_PIN_DISABLED,
 
-    // Face buttons (bottom two rows)
-    .b1 = 11,   // Key 11 - A / Cross
-    .b2 = 12,   // Key 12 - B / Circle
-    .b3 = 8,    // Key 8 - X / Square
-    .b4 = 9,    // Key 9 - Y / Triangle
+    // No D-pad (use keys for buttons instead)
+    .dpad_up    = GPIO_PIN_DISABLED,
+    .dpad_down  = GPIO_PIN_DISABLED,
+    .dpad_left  = GPIO_PIN_DISABLED,
+    .dpad_right = GPIO_PIN_DISABLED,
+
+    // Face buttons (row 2-3: keys 4-5, 7-8)
+    .b1 = 7,                // A / Cross (Key 7)
+    .b2 = 8,                // B / Circle (Key 8)
+    .b3 = 4,                // X / Square (Key 4)
+    .b4 = 5,                // Y / Triangle (Key 5)
 
     // Shoulder buttons
-    .l1 = 3,    // Key 3
-    .r1 = 1,    // Key 1
-    .l2 = GPIO_PIN_DISABLED,
-    .r2 = GPIO_PIN_DISABLED,
+    .l1 = 10,               // LB / L1 (Key 10)
+    .r1 = 6,                // RB / R1 (Key 6)
+    .l2 = 11,               // LT / L2 (Key 11)
+    .r2 = 9,                // RT / R2 (Key 9)
 
-    // Meta buttons
-    .s1 = 7,    // Key 7 - Select / Back
-    .s2 = 10,   // Key 10 - Start
+    // Meta buttons (row 1: keys 1-2)
+    .s1 = 1,                // Select / Back (Key 1)
+    .s2 = 2,                // Start (Key 2)
 
-    // Stick clicks (not available)
+    // No stick clicks
     .l3 = GPIO_PIN_DISABLED,
     .r3 = GPIO_PIN_DISABLED,
 
-    // Home button
-    .a1 = 0,    // Key 0 - Home / Guide
-    .a2 = GPIO_PIN_DISABLED,
+    // Home on encoder button, Capture on Key 12
+    .a1 = 0,                // Home / Guide (Encoder button)
+    .a2 = 12,               // Capture (Key 12)
 
-    // No analog sticks (rotary encoder could be added later)
+    // Extra buttons (Key 3 unused in this layout)
+    .l4 = GPIO_PIN_DISABLED,
+    .r4 = 3,                // Extra right (Key 3)
+
+    // No analog sticks
     .adc_lx = GPIO_PIN_DISABLED,
     .adc_ly = GPIO_PIN_DISABLED,
     .adc_rx = GPIO_PIN_DISABLED,
@@ -69,7 +83,7 @@ static const gpio_device_config_t gpio_config_macropad = {
     .invert_ry = false,
     .deadzone = 10,
 
-    // NeoPixel on GPIO 19 (12 LEDs under keys)
+    // NeoPixel on GPIO 19 (12 LEDs, one per key)
     .led_pin = 19,
     .led_count = 12,
 };

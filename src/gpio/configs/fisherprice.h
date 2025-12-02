@@ -20,6 +20,10 @@ static const gpio_device_config_t gpio_config_fisherprice = {
     .name = "Fisher Price",
     .active_high = true,
 
+    // No I2C expanders
+    .i2c_sda = GPIO_PIN_DISABLED,
+    .i2c_scl = GPIO_PIN_DISABLED,
+
     // D-pad
     .dpad_up    = 9,
     .dpad_down  = 10,
@@ -50,6 +54,10 @@ static const gpio_device_config_t gpio_config_fisherprice = {
     .a1 = GPIO_PIN_DISABLED,
     .a2 = GPIO_PIN_DISABLED,
 
+    // Extra paddles
+    .l4 = GPIO_PIN_DISABLED,
+    .r4 = GPIO_PIN_DISABLED,
+
     // No analog sticks
     .adc_lx = GPIO_PIN_DISABLED,
     .adc_ly = GPIO_PIN_DISABLED,
@@ -76,6 +84,10 @@ static const gpio_device_config_t gpio_config_fisherprice = {
 static const gpio_device_config_t gpio_config_fisherprice_analog = {
     .name = "Fisher Price Analog",
     .active_high = true,
+
+    // No I2C expanders
+    .i2c_sda = GPIO_PIN_DISABLED,
+    .i2c_scl = GPIO_PIN_DISABLED,
 
     // D-pad
     .dpad_up    = 9,
@@ -106,6 +118,10 @@ static const gpio_device_config_t gpio_config_fisherprice_analog = {
     // Home/Capture
     .a1 = GPIO_PIN_DISABLED,
     .a2 = GPIO_PIN_DISABLED,
+
+    // Extra paddles
+    .l4 = GPIO_PIN_DISABLED,
+    .r4 = GPIO_PIN_DISABLED,
 
     // Left analog stick on ADC
     // GPIO 26 = ADC0, GPIO 27 = ADC1

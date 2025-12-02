@@ -24,12 +24,16 @@
     #include "gpio/configs/fisherprice.h"
     #define GPIO_CONFIG gpio_config_fisherprice_analog
     #define CONTROLLER_NAME "Fisher Price Analog"
+#elif defined(CONTROLLER_TYPE_ALPAKKA)
+    #include "gpio/configs/alpakka.h"
+    #define GPIO_CONFIG gpio_config_alpakka
+    #define CONTROLLER_NAME "Alpakka"
 #elif defined(CONTROLLER_TYPE_MACROPAD)
     #include "gpio/configs/macropad.h"
     #define GPIO_CONFIG gpio_config_macropad
     #define CONTROLLER_NAME "MacroPad"
 #else
-    #error "No controller type defined! Define one of: CONTROLLER_TYPE_FISHERPRICE, CONTROLLER_TYPE_FISHERPRICE_ANALOG, CONTROLLER_TYPE_MACROPAD"
+    #error "No controller type defined! Define one of: CONTROLLER_TYPE_FISHERPRICE, CONTROLLER_TYPE_ALPAKKA, etc."
 #endif
 
 // ============================================================================

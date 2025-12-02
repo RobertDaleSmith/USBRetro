@@ -57,6 +57,8 @@ add_executable(usbretro_uart) # For the usbretro_uart target (USB2UART ESP32 bri
 add_executable(usbretro_usb) # For the usbretro_usb target (USB2USB HID gamepad output)
 add_executable(usbretro_snes2usb) # For the usbretro_snes2usb target (SNES→USB HID gamepad)
 add_executable(usbretro_controller_fisherprice) # Controller app: Fisher Price (KB2040)
+add_executable(usbretro_controller_alpakka) # Controller app: Alpakka (Pico)
+add_executable(usbretro_controller_macropad) # Controller app: MacroPad (Adafruit MacroPad RP2040)
 
 if (PICO_BOARD STREQUAL "pico")
     message(STATUS "PICO_BOARD is '${PICO_BOARD}', applying RPI_PICO_BUILD definition for usbretro_pce.")
@@ -87,6 +89,8 @@ target_compile_definitions(usbretro_usb PRIVATE
 )
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 target_compile_definitions(usbretro_controller_fisherprice PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE=1 DISABLE_USB_HOST=1)
+target_compile_definitions(usbretro_controller_alpakka PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_ALPAKKA=1 DISABLE_USB_HOST=1)
+target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
@@ -99,6 +103,8 @@ target_compile_options(usbretro_uart PRIVATE -O3) # Set optimization level to O3
 target_compile_options(usbretro_usb PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_snes2usb PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_controller_fisherprice PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_controller_alpakka PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_controller_macropad PRIVATE -O3) # Set optimization level to O3 for your_target
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
@@ -117,6 +123,8 @@ pico_add_extra_outputs(usbretro_uart)
 pico_add_extra_outputs(usbretro_usb)
 pico_add_extra_outputs(usbretro_snes2usb)
 pico_add_extra_outputs(usbretro_controller_fisherprice)
+pico_add_extra_outputs(usbretro_controller_alpakka)
+pico_add_extra_outputs(usbretro_controller_macropad)
 
 # Enable UART stdio for usb2usb debugging (GPIO 0=TX, GPIO 1=RX)
 pico_enable_stdio_uart(usbretro_usb 1)
@@ -143,6 +151,8 @@ pico_generate_pio_header(usbretro_uart ${CMAKE_CURRENT_LIST_DIR}/core/services/l
 pico_generate_pio_header(usbretro_usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_snes2usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_controller_fisherprice ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
+pico_generate_pio_header(usbretro_controller_alpakka ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
+pico_generate_pio_header(usbretro_controller_macropad ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 
 ## SET TARGET SOURCES
 
@@ -328,6 +338,34 @@ target_sources(usbretro_controller_fisherprice PUBLIC # Controller app: Fisher P
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
 )
 
+target_sources(usbretro_controller_alpakka PUBLIC # Controller app: Alpakka
+    ${CORE_SOURCES}  # No USB host - uses GPIO input
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xbone.c  # Xbox One GIP class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
+    # GPIO input driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/gpio/gpio_input.c
+    # App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
+)
+
+target_sources(usbretro_controller_macropad PUBLIC # Controller app: MacroPad
+    ${CORE_SOURCES}  # No USB host - uses GPIO input
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xbone.c  # Xbox One GIP class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
+    # GPIO input driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/gpio/gpio_input.c
+    # App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
+)
+
 ## SET TARGET INCLUDE DIRS
 target_include_directories(usbretro_pce PUBLIC # FOR PCE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -412,6 +450,22 @@ target_include_directories(usbretro_controller_fisherprice PUBLIC # Controller: 
     ${CMAKE_CURRENT_SOURCE_DIR}/gpio
 )
 
+target_include_directories(usbretro_controller_alpakka PUBLIC # Controller: Alpakka
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+    ${CMAKE_CURRENT_SOURCE_DIR}/gpio
+)
+
+target_include_directories(usbretro_controller_macropad PUBLIC # Controller: MacroPad
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+    ${CMAKE_CURRENT_SOURCE_DIR}/gpio
+)
+
 ## SET TARGET LINK LIBS
 set(COMMON_LIBRARIES
     pico_stdlib
@@ -481,6 +535,27 @@ target_link_libraries(usbretro_controller_fisherprice PRIVATE # Controller: Fish
     pico_multicore
     hardware_pio
     hardware_adc
+    hardware_i2c
+    tinyusb_device
+    tinyusb_board
+)
+
+target_link_libraries(usbretro_controller_alpakka PRIVATE # Controller: Alpakka
+    pico_stdlib
+    pico_multicore
+    hardware_pio
+    hardware_adc
+    hardware_i2c
+    tinyusb_device
+    tinyusb_board
+)
+
+target_link_libraries(usbretro_controller_macropad PRIVATE # Controller: MacroPad
+    pico_stdlib
+    pico_multicore
+    hardware_pio
+    hardware_adc
+    hardware_i2c
     tinyusb_device
     tinyusb_board
 )
