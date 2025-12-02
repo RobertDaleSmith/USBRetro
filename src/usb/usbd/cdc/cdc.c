@@ -112,6 +112,9 @@ static void cdc_process_command(const char* cmd)
                  strcasecmp(value, "XBOX") == 0) {
             mode_num = USB_OUTPUT_MODE_XBOX_ORIGINAL;
         }
+        else if (strcasecmp(value, "XAC") == 0 || strcasecmp(value, "ADAPTIVE") == 0) {
+            mode_num = USB_OUTPUT_MODE_XAC;
+        }
 
         if (mode_num >= 0 && mode_num < USB_OUTPUT_MODE_COUNT) {
             usb_output_mode_t current = usbd_get_mode();
@@ -143,6 +146,7 @@ static void cdc_process_command(const char* cmd)
         cdc_data_write_str("  5: Switch\r\n");
         cdc_data_write_str("  6: PS Classic\r\n");
         cdc_data_write_str("  7: Xbox One\r\n");
+        cdc_data_write_str("  8: XAC Compat (not in toggle)\r\n");
     }
     // VERSION or VER? - Query firmware version
     else if (strcmp(cmd, "VERSION") == 0 || strcmp(cmd, "VER?") == 0) {

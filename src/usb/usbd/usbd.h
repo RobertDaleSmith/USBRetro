@@ -26,6 +26,7 @@ typedef enum {
     USB_OUTPUT_MODE_SWITCH,             // Nintendo Switch (docked)
     USB_OUTPUT_MODE_PSCLASSIC,          // PlayStation Classic (PS1 Mini)
     USB_OUTPUT_MODE_XBONE,              // Xbox One (GIP protocol)
+    USB_OUTPUT_MODE_XAC,                // Xbox Adaptive Controller compatible
     USB_OUTPUT_MODE_COUNT
 } usb_output_mode_t;
 

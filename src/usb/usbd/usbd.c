@@ -22,6 +22,7 @@
 #include "descriptors/psclassic_descriptors.h"
 #include "descriptors/ps4_descriptors.h"
 #include "descriptors/xbone_descriptors.h"
+#include "descriptors/xac_descriptors.h"
 #include "tud_xid.h"
 #include "tud_xinput.h"
 #include "tud_xbone.h"
@@ -78,6 +79,9 @@ static uint8_t ps4_report_counter = 0;
 // Current Xbox One report (for Xbox One mode)
 static gip_input_report_t xbone_report;
 
+// Current XAC report (for Xbox Adaptive Controller compatible mode)
+static xac_in_report_t xac_report;
+
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
 static char usb_serial_str[USB_SERIAL_LEN + 1];
@@ -96,6 +100,7 @@ static const char* mode_names[] = {
     [USB_OUTPUT_MODE_SWITCH] = "Switch",
     [USB_OUTPUT_MODE_PSCLASSIC] = "PS Classic",
     [USB_OUTPUT_MODE_XBONE] = "Xbox One",
+    [USB_OUTPUT_MODE_XAC] = "XAC Compat",
 };
 
 // ============================================================================
@@ -202,7 +207,7 @@ bool usbd_set_mode(usb_output_mode_t mode)
         return false;
     }
 
-    // Supported modes: HID, Xbox OG, XInput, PS3, PS4, Switch, PS Classic, Xbox One
+    // Supported modes: HID, Xbox OG, XInput, PS3, PS4, Switch, PS Classic, Xbox One, XAC
     if (mode != USB_OUTPUT_MODE_HID &&
         mode != USB_OUTPUT_MODE_XBOX_ORIGINAL &&
         mode != USB_OUTPUT_MODE_XINPUT &&
@@ -210,7 +215,8 @@ bool usbd_set_mode(usb_output_mode_t mode)
         mode != USB_OUTPUT_MODE_PS4 &&
         mode != USB_OUTPUT_MODE_SWITCH &&
         mode != USB_OUTPUT_MODE_PSCLASSIC &&
-        mode != USB_OUTPUT_MODE_XBONE) {
+        mode != USB_OUTPUT_MODE_XBONE &&
+        mode != USB_OUTPUT_MODE_XAC) {
         printf("[usbd] Mode %d not yet supported\n", mode);
         return false;
     }
@@ -289,7 +295,8 @@ void usbd_init(void)
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PS4 ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
                 flash_settings.usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC ||
-                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBONE) {
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XBONE ||
+                flash_settings.usb_output_mode == USB_OUTPUT_MODE_XAC) {
                 output_mode = (usb_output_mode_t)flash_settings.usb_output_mode;
                 printf("[usbd] Loaded mode from flash: %s\n", mode_names[output_mode]);
             } else {
@@ -382,6 +389,11 @@ void usbd_init(void)
             memset(&xbone_report, 0, sizeof(gip_input_report_t));
             break;
 
+        case USB_OUTPUT_MODE_XAC:
+            // Initialize XAC report to neutral state
+            xac_init_report(&xac_report);
+            break;
+
         case USB_OUTPUT_MODE_HID:
         default:
             // Initialize HID report to neutral state
@@ -465,6 +477,13 @@ void usbd_task(void)
             // Xbox One mode: update driver and send report
             tud_xbone_update();
             if (xbone_is_powered_on() && tud_xbone_ready()) {
+                usbd_send_report(0);
+            }
+            break;
+
+        case USB_OUTPUT_MODE_XAC:
+            // XAC mode: send HID report (no CDC)
+            if (tud_hid_ready()) {
                 usbd_send_report(0);
             }
             break;
@@ -986,6 +1005,50 @@ static bool usbd_send_xbone_report(uint8_t player_index)
     return tud_xbone_send_report(&xbone_report);
 }
 
+// Send XAC report (Xbox Adaptive Controller compatible mode)
+static bool usbd_send_xac_report(uint8_t player_index)
+{
+    if (!tud_hid_ready()) {
+        return false;
+    }
+
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
+
+    if (event) {
+        // Analog sticks (0-255, Y-axis inverted: input 0=down, output 0=up)
+        xac_report.lx = event->analog[ANALOG_X];
+        xac_report.ly = 255 - event->analog[ANALOG_Y];
+        xac_report.rx = event->analog[ANALOG_Z];
+        xac_report.ry = 255 - event->analog[ANALOG_RX];
+
+        // D-pad as hat switch
+        xac_report.hat = convert_dpad_to_hat(event->buttons);
+
+        // Buttons (12 total, split into low 4 bits and high 8 bits)
+        uint16_t buttons = 0;
+        if (event->buttons & USBR_BUTTON_B1) buttons |= XAC_MASK_B1;  // A
+        if (event->buttons & USBR_BUTTON_B2) buttons |= XAC_MASK_B2;  // B
+        if (event->buttons & USBR_BUTTON_B3) buttons |= XAC_MASK_B3;  // X
+        if (event->buttons & USBR_BUTTON_B4) buttons |= XAC_MASK_B4;  // Y
+        if (event->buttons & USBR_BUTTON_L1) buttons |= XAC_MASK_L1;  // LB
+        if (event->buttons & USBR_BUTTON_R1) buttons |= XAC_MASK_R1;  // RB
+        if (event->buttons & USBR_BUTTON_L2) buttons |= XAC_MASK_L2;  // LT (digital)
+        if (event->buttons & USBR_BUTTON_R2) buttons |= XAC_MASK_R2;  // RT (digital)
+        if (event->buttons & USBR_BUTTON_S1) buttons |= XAC_MASK_S1;  // Back
+        if (event->buttons & USBR_BUTTON_S2) buttons |= XAC_MASK_S2;  // Start
+        if (event->buttons & USBR_BUTTON_L3) buttons |= XAC_MASK_L3;  // LS
+        if (event->buttons & USBR_BUTTON_R3) buttons |= XAC_MASK_R3;  // RS
+
+        xac_report.buttons_lo = buttons & 0x0F;
+        xac_report.buttons_hi = (buttons >> 4) & 0xFF;
+    } else {
+        // No input - send neutral state
+        xac_init_report(&xac_report);
+    }
+
+    return tud_hid_report(0, &xac_report, sizeof(xac_report));
+}
+
 bool usbd_send_report(uint8_t player_index)
 {
     switch (output_mode) {
@@ -1005,6 +1068,8 @@ bool usbd_send_report(uint8_t player_index)
             return usbd_send_ps4_report(player_index);
         case USB_OUTPUT_MODE_XBONE:
             return usbd_send_xbone_report(player_index);
+        case USB_OUTPUT_MODE_XAC:
+            return usbd_send_xac_report(player_index);
         case USB_OUTPUT_MODE_HID:
         default:
             return usbd_send_hid_report(player_index);
@@ -1146,6 +1211,8 @@ uint8_t const *tud_descriptor_device_cb(void)
             return (uint8_t const *)&ps4_device_descriptor;
         case USB_OUTPUT_MODE_XBONE:
             return (uint8_t const *)&xbone_device_descriptor;
+        case USB_OUTPUT_MODE_XAC:
+            return (uint8_t const *)&xac_device_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return (uint8_t const *)&desc_device_hid;
@@ -1195,6 +1262,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
             return ps4_config_descriptor;
         case USB_OUTPUT_MODE_XBONE:
             return xbone_config_descriptor;
+        case USB_OUTPUT_MODE_XAC:
+            return xac_config_descriptor;
         case USB_OUTPUT_MODE_HID:
         default:
             return desc_configuration_hid;
@@ -1286,6 +1355,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PSCLASSIC_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_PS4) {
                 str = PS4_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_XAC) {
+                str = XAC_MANUFACTURER;
             } else {
                 str = USB_HID_MANUFACTURER;
             }
@@ -1302,6 +1373,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PSCLASSIC_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_PS4) {
                 str = PS4_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_XAC) {
+                str = XAC_PRODUCT;
             } else {
                 str = USB_HID_PRODUCT;
             }
@@ -1352,6 +1425,9 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf)
     }
     if (output_mode == USB_OUTPUT_MODE_PS4) {
         return ps4_report_descriptor;
+    }
+    if (output_mode == USB_OUTPUT_MODE_XAC) {
+        return xac_report_descriptor;
     }
     return hid_report_descriptor;
 }
