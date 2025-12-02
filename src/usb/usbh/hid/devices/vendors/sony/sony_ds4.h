@@ -142,9 +142,14 @@ ds4_auth_state_t ds4_auth_get_state(void);
 // Called when usbd receives 0xF0 feature report
 bool ds4_auth_send_nonce(const uint8_t* data, uint16_t len);
 
-// Get cached signature response (0xF1)
-// Returns bytes copied, 0 if not ready
-uint16_t ds4_auth_get_signature(uint8_t* buffer, uint16_t max_len);
+// Get cached signature response for a specific page (0xF1)
+// page: 0-18 (19 pages total)
+// Returns bytes copied
+uint16_t ds4_auth_get_signature(uint8_t* buffer, uint16_t max_len, uint8_t page);
+
+// Get next signature page (auto-incrementing, 0-18)
+// Console calls GET_REPORT(0xF1) sequentially, this returns pages in order
+uint16_t ds4_auth_get_next_signature(uint8_t* buffer, uint16_t max_len);
 
 // Get auth status (0xF2)
 // Returns status report data

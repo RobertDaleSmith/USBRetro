@@ -1409,11 +1409,11 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 return len;
 
             case PS4_REPORT_ID_AUTH_RESPONSE:   // 0xF1 - Signature from DS4
-                // Get signature from DS4 passthrough
+                // Get next signature page from DS4 passthrough (auto-incrementing)
                 len = 64;
                 if (reqlen < len) len = reqlen;
                 if (ds4_auth_is_available()) {
-                    return ds4_auth_get_signature(buffer, len);
+                    return ds4_auth_get_next_signature(buffer, len);
                 }
                 memset(buffer, 0, len);
                 return len;
@@ -1425,9 +1425,9 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 if (ds4_auth_is_available()) {
                     return ds4_auth_get_status(buffer, len);
                 }
-                // Return "busy" if no DS4
+                // Return "signing" status if no DS4 available
                 memset(buffer, 0, len);
-                buffer[1] = 0x00;  // Not ready
+                buffer[1] = 0x10;  // 16 = signing/not ready
                 return len;
 
             case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - handled in set_report
@@ -1437,6 +1437,9 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 return len;
 
             case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Return page size info
+                // Reset auth state when console requests 0xF3 (per hid-remapper)
+                // This ensures signature_ready is false for new auth cycle
+                ds4_auth_reset();
                 len = sizeof(ps4_feature_f3);
                 if (reqlen < len) len = reqlen;
                 memcpy(buffer, ps4_feature_f3, len);
