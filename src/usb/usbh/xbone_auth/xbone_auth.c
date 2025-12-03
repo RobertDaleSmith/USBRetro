@@ -74,9 +74,13 @@ extern bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance,
 static bool send_to_dongle(uint8_t* report, uint16_t len)
 {
     if (xbone_dev_addr == 0) {
+        printf("[xbone_auth] send_to_dongle: no controller registered!\n");
         return false;
     }
-    return tuh_xinput_send_report(xbone_dev_addr, xbone_instance, report, len);
+    bool result = tuh_xinput_send_report(xbone_dev_addr, xbone_instance, report, len);
+    printf("[xbone_auth] send_to_dongle: dev=%d inst=%d len=%d result=%s\n",
+           xbone_dev_addr, xbone_instance, len, result ? "OK" : "FAILED");
+    return result;
 }
 
 // ============================================================================
@@ -109,12 +113,16 @@ bool xbone_auth_is_complete(void)
 
 void xbone_auth_task(void)
 {
-    if (!dongle_ready) {
-        return;
-    }
-
     // Forward auth from console to controller
     xbone_auth_state_t state = xbone_auth_get_state();
+
+    if (!dongle_ready) {
+        // Log if we're missing auth requests due to no controller
+        if (state == XBONE_AUTH_SEND_CONSOLE_TO_DONGLE) {
+            printf("[xbone_auth] WARNING: Auth request pending but no controller ready! dev_addr=%d\n", xbone_dev_addr);
+        }
+        return;
+    }
 
     if (state == XBONE_AUTH_SEND_CONSOLE_TO_DONGLE) {
         printf("[xbone_auth] Forwarding auth challenge to controller: type=0x%02x len=%d seq=%d\n",
@@ -301,5 +309,6 @@ bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance,
     (void)instance;
     (void)report;
     (void)len;
+    printf("[xbone_auth] ERROR: Using weak tuh_xinput_send_report stub!\n");
     return false;
 }
