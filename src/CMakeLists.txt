@@ -65,6 +65,21 @@ if (PICO_BOARD STREQUAL "pico")
     target_compile_definitions(usbretro_pce PRIVATE RPI_PICO_BUILD=1)
 endif()
 
+# Board-level user button GPIO definitions
+# Each board has a different GPIO for the user/boot button
+if (PICO_BOARD STREQUAL "adafruit_kb2040")
+    set(BOARD_BUTTON_GPIO 11)
+elseif (PICO_BOARD STREQUAL "adafruit_qtpy_rp2040")
+    set(BOARD_BUTTON_GPIO 21)
+elseif (PICO_BOARD STREQUAL "adafruit_macropad_rp2040")
+    set(BOARD_BUTTON_GPIO 0)  # Rotary encoder button
+elseif (PICO_BOARD STREQUAL "adafruit_feather_rp2040")
+    set(BOARD_BUTTON_GPIO 7)
+else()
+    set(BOARD_BUTTON_GPIO 7)  # Default fallback
+endif()
+message(STATUS "Board ${PICO_BOARD}: BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO}")
+
 target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
 target_compile_definitions(usbretro_xb1 PRIVATE CONFIG_XB1=1)
@@ -88,9 +103,9 @@ target_compile_definitions(usbretro_usb PRIVATE
     PICO_DEFAULT_UART_RX_PIN=1
 )
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
-target_compile_definitions(usbretro_controller_fisherprice PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE=1 DISABLE_USB_HOST=1)
-target_compile_definitions(usbretro_controller_alpakka PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_ALPAKKA=1 DISABLE_USB_HOST=1)
-target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=0 ADAFRUIT_MACROPAD_RP2040=1 WS2812_NUM_PIXELS=12)
+target_compile_definitions(usbretro_controller_fisherprice PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO})
+target_compile_definitions(usbretro_controller_alpakka PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_ALPAKKA=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO})
+target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO} ADAFRUIT_MACROPAD_RP2040=1 WS2812_NUM_PIXELS=12)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
@@ -334,6 +349,13 @@ target_sources(usbretro_controller_fisherprice PUBLIC # Controller app: Fisher P
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
     # Pad input driver
     ${CMAKE_CURRENT_SOURCE_DIR}/pad/pad_input.c
+    # Speaker driver for rumble feedback (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/speaker/speaker.c
+    # Display driver for OLED status (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/display/display.c
+    # UART host/device for linking controllers via QWIIC (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart/uart_device.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart/uart_host.c
     # App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
 )
@@ -348,6 +370,13 @@ target_sources(usbretro_controller_alpakka PUBLIC # Controller app: Alpakka
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
     # Pad input driver
     ${CMAKE_CURRENT_SOURCE_DIR}/pad/pad_input.c
+    # Speaker driver for rumble feedback (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/speaker/speaker.c
+    # Display driver for OLED status (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/display/display.c
+    # UART host/device for linking controllers via QWIIC (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart/uart_device.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart/uart_host.c
     # App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
 )
@@ -455,6 +484,9 @@ target_include_directories(usbretro_controller_fisherprice PUBLIC # Controller: 
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
     ${CMAKE_CURRENT_SOURCE_DIR}/pad
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host
 )
 
 target_include_directories(usbretro_controller_alpakka PUBLIC # Controller: Alpakka
@@ -463,6 +495,9 @@ target_include_directories(usbretro_controller_alpakka PUBLIC # Controller: Alpa
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
     ${CMAKE_CURRENT_SOURCE_DIR}/pad
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host
 )
 
 target_include_directories(usbretro_controller_macropad PUBLIC # Controller: MacroPad
@@ -546,6 +581,8 @@ target_link_libraries(usbretro_controller_fisherprice PRIVATE # Controller: Fish
     hardware_pio
     hardware_adc
     hardware_i2c
+    hardware_pwm
+    hardware_spi
     tinyusb_device
     tinyusb_board
 )
@@ -556,6 +593,8 @@ target_link_libraries(usbretro_controller_alpakka PRIVATE # Controller: Alpakka
     hardware_pio
     hardware_adc
     hardware_i2c
+    hardware_pwm
+    hardware_spi
     tinyusb_device
     tinyusb_board
 )

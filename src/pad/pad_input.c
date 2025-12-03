@@ -229,6 +229,14 @@ static void pad_init_device_pins(const pad_device_config_t* config) {
     pad_init_button_pin(config->l4, ah);
     pad_init_button_pin(config->r4, ah);
 
+    // Initialize toggle switch pin (always active high - switch to VCC when on)
+    if (config->dpad_toggle >= 0 && config->dpad_toggle <= 29) {
+        gpio_init(config->dpad_toggle);
+        gpio_set_dir(config->dpad_toggle, GPIO_IN);
+        gpio_pull_down(config->dpad_toggle);  // Pull down, switch connects to VCC when on
+        printf("[pad] D-pad toggle switch on GPIO %d\n", config->dpad_toggle);
+    }
+
     // Initialize ADC if any analog inputs are used
     bool has_analog = (config->adc_lx >= 0 || config->adc_ly >= 0 ||
                        config->adc_rx >= 0 || config->adc_ry >= 0);
@@ -268,11 +276,39 @@ static void pad_poll_device(uint8_t device_index) {
     // Read buttons into bitmap
     uint32_t buttons = 0;
 
-    // D-pad
-    if (pad_read_button(config->dpad_up, ah))    buttons |= USBR_BUTTON_DU;
-    if (pad_read_button(config->dpad_down, ah))  buttons |= USBR_BUTTON_DD;
-    if (pad_read_button(config->dpad_left, ah))  buttons |= USBR_BUTTON_DL;
-    if (pad_read_button(config->dpad_right, ah)) buttons |= USBR_BUTTON_DR;
+    // Check toggle switch state (HIGH = D-pad mode, LOW = analog mode)
+    bool dpad_mode = true;  // Default to D-pad mode
+    if (config->dpad_toggle >= 0 && config->dpad_toggle <= 29) {
+        dpad_mode = gpio_get(config->dpad_toggle);
+    }
+
+    // Read D-pad buttons
+    bool dpad_up = pad_read_button(config->dpad_up, ah);
+    bool dpad_down = pad_read_button(config->dpad_down, ah);
+    bool dpad_left = pad_read_button(config->dpad_left, ah);
+    bool dpad_right = pad_read_button(config->dpad_right, ah);
+
+    if (dpad_mode) {
+        // D-pad mode: output as digital buttons
+        if (dpad_up)    buttons |= USBR_BUTTON_DU;
+        if (dpad_down)  buttons |= USBR_BUTTON_DD;
+        if (dpad_left)  buttons |= USBR_BUTTON_DL;
+        if (dpad_right) buttons |= USBR_BUTTON_DR;
+    } else {
+        // Analog mode: output D-pad as left stick
+        // X axis: left = 0, center = 128, right = 255
+        // Y axis: up = 0, center = 128, down = 255
+        uint8_t lx = 128, ly = 128;
+
+        if (dpad_left && !dpad_right) lx = 0;
+        else if (dpad_right && !dpad_left) lx = 255;
+
+        if (dpad_up && !dpad_down) ly = 255;
+        else if (dpad_down && !dpad_up) ly = 0;
+
+        event->analog[ANALOG_X] = lx;
+        event->analog[ANALOG_Y] = ly;
+    }
 
     // Face buttons
     if (pad_read_button(config->b1, ah)) buttons |= USBR_BUTTON_B1;

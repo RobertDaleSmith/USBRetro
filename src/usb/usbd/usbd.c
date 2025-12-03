@@ -186,6 +186,16 @@ static int16_t convert_axis_to_s16(uint8_t value)
     return (int16_t)scaled;
 }
 
+// Convert and invert axis (for Y-axis where convention differs)
+// Uses 32-bit math to avoid -32768 negation overflow
+static int16_t convert_axis_to_s16_inverted(uint8_t value)
+{
+    int32_t scaled = -((int32_t)value - 128) * 256;
+    if (scaled < -32768) scaled = -32768;
+    if (scaled > 32767) scaled = 32767;
+    return (int16_t)scaled;
+}
+
 // ============================================================================
 // MODE SELECTION API
 // ============================================================================
@@ -645,9 +655,9 @@ static bool usbd_send_xinput_report(uint8_t player_index)
         // Analog sticks (signed 16-bit, -32768 to +32767)
         // Y-axis inverted: input 0=down, XInput convention positive=up
         xinput_report.stick_lx = convert_axis_to_s16(event->analog[ANALOG_X]);
-        xinput_report.stick_ly = -convert_axis_to_s16(event->analog[ANALOG_Y]);
+        xinput_report.stick_ly = convert_axis_to_s16_inverted(event->analog[ANALOG_Y]);
         xinput_report.stick_rx = convert_axis_to_s16(event->analog[ANALOG_Z]);
-        xinput_report.stick_ry = -convert_axis_to_s16(event->analog[ANALOG_RX]);
+        xinput_report.stick_ry = convert_axis_to_s16_inverted(event->analog[ANALOG_RX]);
     } else {
         // No input - send neutral state
         xinput_report.buttons0 = 0;

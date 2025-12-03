@@ -24,30 +24,30 @@ static const pad_device_config_t pad_config_fisherprice = {
     .i2c_sda = PAD_PIN_DISABLED,
     .i2c_scl = PAD_PIN_DISABLED,
 
-    // D-pad
-    .dpad_up    = 9,
-    .dpad_down  = 10,
-    .dpad_left  = 19,
-    .dpad_right = 20,
+    // D-pad (on ADC pins A0-A3 = GPIO 26-29)
+    .dpad_up    = 27,   // A1
+    .dpad_down  = 29,   // A3
+    .dpad_left  = 26,   // A0
+    .dpad_right = 28,   // A2
 
-    // Face buttons (SNES layout positions on controller)
+    // Face buttons
     .b1 = 3,    // A / Cross
-    .b2 = 4,    // B / Circle
+    .b2 = 2,    // B / Circle
     .b3 = 5,    // X / Square
-    .b4 = 2,    // Y / Triangle
+    .b4 = 4,    // Y / Triangle
 
-    // Shoulder buttons
-    .l1 = 28,   // LB / L1
-    .r1 = 8,    // RB / R1
-    .l2 = 29,   // LT / L2
-    .r2 = 7,    // RT / R2
+    // Shoulder buttons (disabled for now)
+    .l1 = PAD_PIN_DISABLED,
+    .r1 = PAD_PIN_DISABLED,
+    .l2 = PAD_PIN_DISABLED,
+    .r2 = PAD_PIN_DISABLED,
 
     // Meta buttons
-    .s1 = 0,    // Select / Back
-    .s2 = 1,    // Start
+    .s1 = PAD_PIN_DISABLED,
+    .s2 = 18,   // Start
 
     // Stick clicks
-    .l3 = 18,   // L3
+    .l3 = PAD_PIN_DISABLED,
     .r3 = PAD_PIN_DISABLED,
 
     // Home/Capture
@@ -57,6 +57,9 @@ static const pad_device_config_t pad_config_fisherprice = {
     // Extra paddles
     .l4 = PAD_PIN_DISABLED,
     .r4 = PAD_PIN_DISABLED,
+
+    // Toggle switch: HIGH = D-pad mode, LOW = analog stick mode
+    .dpad_toggle = 6,
 
     // No analog sticks
     .adc_lx = PAD_PIN_DISABLED,

@@ -81,6 +81,11 @@ typedef struct {
     int16_t l4;                 // Extra left trigger/paddle
     int16_t r4;                 // Extra right trigger/paddle
 
+    // Toggle switch for D-pad mode (PAD_PIN_DISABLED = not used)
+    // When HIGH: D-pad outputs as digital D-pad
+    // When LOW: D-pad outputs as left analog stick
+    int16_t dpad_toggle;
+
     // Analog stick ADC channels (0-3 for GPIO 26-29, PAD_PIN_DISABLED = not used)
     // Note: RP2040 has 4 ADC channels on GPIO 26, 27, 28, 29
     int8_t adc_lx;              // Left stick X (ADC channel 0-3)
@@ -169,6 +174,7 @@ extern const InputInterface pad_input_interface;
     .a2 = PAD_PIN_DISABLED, \
     .l4 = PAD_PIN_DISABLED, \
     .r4 = PAD_PIN_DISABLED, \
+    .dpad_toggle = PAD_PIN_DISABLED, \
     .adc_lx = PAD_PIN_DISABLED, \
     .adc_ly = PAD_PIN_DISABLED, \
     .adc_rx = PAD_PIN_DISABLED, \
