@@ -115,6 +115,10 @@ typedef struct {
     int8_t display_cs;          // Chip select pin
     int8_t display_dc;          // Data/Command pin
     int8_t display_rst;         // Reset pin
+
+    // QWIIC UART for linking controllers (PAD_PIN_DISABLED = not used)
+    int8_t qwiic_tx;            // UART TX pin (QWIIC SDA)
+    int8_t qwiic_rx;            // UART RX pin (QWIIC SCL)
 } pad_device_config_t;
 
 // ============================================================================

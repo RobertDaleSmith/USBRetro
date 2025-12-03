@@ -125,6 +125,10 @@ static const pad_device_config_t pad_config_macropad = {
     .display_cs = 22,           // OLED CS
     .display_dc = 24,           // OLED DC
     .display_rst = 23,          // OLED Reset
+
+    // QWIIC UART for linking two MacroPads (GPIO 20=TX, 21=RX on UART1)
+    .qwiic_tx = 20,             // QWIIC SDA → UART1 TX
+    .qwiic_rx = 21,             // QWIIC SCL → UART1 RX
 };
 
 #endif // PAD_CONFIG_MACROPAD_H

@@ -50,17 +50,7 @@ typedef enum {
     UART_HOST_MODE_AI_BLEND,        // Blend UART inputs with existing player inputs
 } uart_host_mode_t;
 
-// ============================================================================
-// AI BLEND MODES (when UART_HOST_MODE_AI_BLEND)
-// ============================================================================
-
-typedef enum {
-    UART_BLEND_OFF = 0,             // AI injection disabled
-    UART_BLEND_OBSERVE,             // AI observes only, no injection
-    UART_BLEND_ASSIST,              // OR with player input (AI assists)
-    UART_BLEND_OVERRIDE,            // AI can override player input
-    UART_BLEND_TAKEOVER,            // AI full control (player input ignored)
-} uart_blend_mode_t;
+// AI blend modes are defined in uart_protocol.h (uart_blend_mode_t)
 
 // ============================================================================
 // PUBLIC API

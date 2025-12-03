@@ -366,6 +366,9 @@ target_sources(usbretro_controller_macropad PUBLIC # Controller app: MacroPad
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/speaker/speaker.c
     # Display driver for OLED status
     ${CMAKE_CURRENT_SOURCE_DIR}/core/services/display/display.c
+    # UART host/device for linking controllers via QWIIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart/uart_device.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart/uart_host.c
     # App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
 )
@@ -468,6 +471,9 @@ target_include_directories(usbretro_controller_macropad PUBLIC # Controller: Mac
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
     ${CMAKE_CURRENT_SOURCE_DIR}/pad
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host
 )
 
 ## SET TARGET LINK LIBS

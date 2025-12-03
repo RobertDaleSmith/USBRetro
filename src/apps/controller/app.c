@@ -12,12 +12,17 @@
 #include "core/services/leds/neopixel/ws2812.h"
 #include "core/services/speaker/speaker.h"
 #include "core/services/display/display.h"
+#include "native/device/uart/uart_device.h"
+#include "native/host/uart/uart_host.h"
 #include "pad/pad_input.h"
 #include "usb/usbd/usbd.h"
 #include "core/buttons.h"
 #include "tusb.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
+
+// UART linking state
+static bool uart_link_enabled = false;
 
 // Track last displayed mode to avoid unnecessary redraws
 static usb_output_mode_t last_displayed_mode = 0xFF;
@@ -138,6 +143,27 @@ static void on_button_event(button_event_t event)
 }
 
 // ============================================================================
+// UART LINK TAP (sends local inputs to linked controller)
+// ============================================================================
+
+// Router tap callback - sends local inputs to linked controller via UART
+// Filters out UART-received inputs (dev_addr >= 0xD0) to prevent loops
+static void uart_link_tap(output_target_t output, uint8_t player_index,
+                          const input_event_t* event)
+{
+    (void)output;
+
+    if (!uart_link_enabled) return;
+
+    // Don't resend inputs that came from UART (dev_addr 0xD0+ range)
+    // This prevents infinite loops between linked controllers
+    if (event->dev_addr >= 0xD0) return;
+
+    // Send local input to linked controller
+    uart_device_queue_input(event, player_index);
+}
+
+// ============================================================================
 // APP INPUT INTERFACES
 // ============================================================================
 
@@ -215,6 +241,21 @@ void app_init(void)
         printf("[app:controller] Display initialized\n");
     }
 
+    // Initialize UART link if QWIIC pins are configured
+    if (PAD_CONFIG.qwiic_tx != PAD_PIN_DISABLED && PAD_CONFIG.qwiic_rx != PAD_PIN_DISABLED) {
+        // Initialize UART host (receives inputs from linked controller)
+        uart_host_init_pins(PAD_CONFIG.qwiic_tx, PAD_CONFIG.qwiic_rx, UART_PROTOCOL_BAUD_DEFAULT);
+        uart_host_set_mode(UART_HOST_MODE_NORMAL);
+
+        // Initialize UART device (sends inputs to linked controller)
+        uart_device_init_pins(PAD_CONFIG.qwiic_tx, PAD_CONFIG.qwiic_rx, UART_PROTOCOL_BAUD_DEFAULT);
+        uart_device_set_mode(UART_DEVICE_MODE_ON_CHANGE);
+
+        uart_link_enabled = true;
+        printf("[app:controller] UART link enabled on QWIIC (TX=%d, RX=%d)\n",
+               PAD_CONFIG.qwiic_tx, PAD_CONFIG.qwiic_rx);
+    }
+
     // Configure router for Pad → USB Device
     router_config_t router_cfg = {
         .mode = ROUTING_MODE_SIMPLE,
@@ -231,8 +272,16 @@ void app_init(void)
     // Add route: Pad → USB Device
     router_add_route(INPUT_SOURCE_GPIO, OUTPUT_TARGET_USB_DEVICE, 0);
 
+    // Set up router tap for UART linking (if enabled)
+    if (uart_link_enabled) {
+        router_set_tap(OUTPUT_TARGET_USB_DEVICE, uart_link_tap);
+    }
+
     printf("[app:controller] Initialization complete\n");
     printf("[app:controller]   Routing: Pad → USB Device (HID Gamepad)\n");
+    if (uart_link_enabled) {
+        printf("[app:controller]   UART Link: Enabled (connect via QWIIC to merge inputs)\n");
+    }
     printf("[app:controller]   Double-click encoder button to switch USB mode\n");
 }
 
@@ -310,6 +359,12 @@ void app_task(void)
 {
     // Process button input for mode switching
     button_task();
+
+    // Process UART link communication (if enabled)
+    if (uart_link_enabled) {
+        uart_host_task();   // Receive inputs from linked controller
+        uart_device_task(); // Send inputs to linked controller
+    }
 
     // Get rumble value
     uint8_t rumble = 0;
