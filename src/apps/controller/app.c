@@ -12,6 +12,7 @@
 #include "core/services/leds/neopixel/ws2812.h"
 #include "core/services/speaker/speaker.h"
 #include "core/services/display/display.h"
+#include "core/services/codes/codes.h"
 #include "native/device/uart/uart_device.h"
 #include "native/host/uart/uart_host.h"
 #include "pad/pad_input.h"
@@ -143,6 +144,34 @@ static void on_button_event(button_event_t event)
 }
 
 // ============================================================================
+// KONAMI CODE CALLBACK
+// ============================================================================
+
+static void on_code_detected(const char* code_name)
+{
+    printf("[app:controller] Code detected: %s\n", code_name);
+
+    // Visual feedback - use profile indicator (flashes LEDs)
+    neopixel_indicate_profile(3);  // Flash 4 times
+
+    // Audio feedback - play victory melody
+    if (speaker_is_initialized()) {
+        speaker_tone(880, 200);    // A5
+        sleep_ms(100);
+        speaker_tone(1047, 200);   // C6
+        sleep_ms(100);
+        speaker_tone(1319, 255);   // E6
+        sleep_ms(200);
+        speaker_stop();
+    }
+
+    // Display feedback - show on marquee
+    if (display_is_initialized()) {
+        display_marquee_add("KONAMI!");
+    }
+}
+
+// ============================================================================
 // UART LINK TAP (sends local inputs to linked controller)
 // ============================================================================
 
@@ -202,6 +231,9 @@ void app_init(void)
     // Initialize button service
     button_init();
     button_set_callback(on_button_event);
+
+    // Initialize codes service (Konami code detection)
+    codes_set_callback(on_code_detected);
 
     // Register pad device configuration BEFORE interface init
     int dev_idx = pad_input_add_device(&PAD_CONFIG);
@@ -359,6 +391,9 @@ void app_task(void)
 {
     // Process button input for mode switching
     button_task();
+
+    // Process codes detection (Konami code, etc.)
+    codes_task_for_output(OUTPUT_TARGET_USB_DEVICE);
 
     // Process UART link communication (if enabled)
     if (uart_link_enabled) {

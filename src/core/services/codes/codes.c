@@ -22,6 +22,9 @@ static uint8_t test_counter = 0;
 // Previous button state for edge detection
 static uint32_t prev_buttons = 0xFFFFF;
 
+// Callback for code detection notifications
+static codes_callback_t code_callback = NULL;
+
 // Internal helpers
 static void shift_buffer_and_insert(uint32_t new_value);
 static void check_for_sequence_match(void);
@@ -50,22 +53,18 @@ uint8_t codes_get_test_counter(void)
     return test_counter;
 }
 
+void codes_set_callback(codes_callback_t callback)
+{
+    code_callback = callback;
+}
+
 // ============================================================================
 // SEQUENCE DETECTION
 // ============================================================================
 
-// Called by console update_output() after sending data to console
-// Reads button state from router (player 0) for sequence detection
-void codes_task(void)
+// Internal function that processes button state for sequence detection
+static void codes_process_buttons(const input_event_t* event)
 {
-    // Get current button state from router (player 0)
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
-
-    // Fallback to other outputs if GameCube returns NULL
-    if (!event) event = router_get_output(OUTPUT_TARGET_PCENGINE, 0);
-    if (!event) event = router_get_output(OUTPUT_TARGET_NUON, 0);
-    if (!event) event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
-    if (!event) event = router_get_output(OUTPUT_TARGET_LOOPY, 0);
     if (!event) return;
 
     // USBR buttons use inverted logic (0 = pressed, 1 = released)
@@ -86,6 +85,31 @@ void codes_task(void)
     }
 }
 
+// Called by console update_output() after sending data to console
+// Reads button state from router (player 0) for sequence detection
+void codes_task(void)
+{
+    // Get current button state from router (player 0)
+    const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
+
+    // Fallback to other outputs if GameCube returns NULL
+    if (!event) event = router_get_output(OUTPUT_TARGET_PCENGINE, 0);
+    if (!event) event = router_get_output(OUTPUT_TARGET_NUON, 0);
+    if (!event) event = router_get_output(OUTPUT_TARGET_XBOXONE, 0);
+    if (!event) event = router_get_output(OUTPUT_TARGET_LOOPY, 0);
+    if (!event) event = router_get_output(OUTPUT_TARGET_USB_DEVICE, 0);
+    if (!event) return;
+
+    codes_process_buttons(event);
+}
+
+// Task with explicit output target (for controller app)
+void codes_task_for_output(output_target_t output)
+{
+    const input_event_t* event = router_get_output(output, 0);
+    codes_process_buttons(event);
+}
+
 // ============================================================================
 // INTERNAL HELPERS
 // ============================================================================
@@ -100,7 +124,7 @@ static void shift_buffer_and_insert(uint32_t new_value)
 
 static void check_for_sequence_match(void)
 {
-    // Check for test mode sequence
+    // Check for Konami code sequence
     bool match = true;
     for (int i = 0; i < CODE_LENGTH; i++) {
         if (code_buffer[i] != sequence_test_mode[i]) {
@@ -112,10 +136,20 @@ static void check_for_sequence_match(void)
     if (match) {
         test_mode = !test_mode;
         if (test_mode) {
-            printf("[codes] Test mode enabled\n");
+            printf("[codes] Konami code detected! Test mode enabled\n");
         } else {
-            printf("[codes] Test mode disabled\n");
+            printf("[codes] Konami code detected! Test mode disabled\n");
             test_counter = 0;
+        }
+
+        // Notify callback
+        if (code_callback) {
+            code_callback("KONAMI");
+        }
+
+        // Clear buffer to prevent immediate re-trigger
+        for (int i = 0; i < CODE_LENGTH; i++) {
+            code_buffer[i] = 0;
         }
     }
 }
