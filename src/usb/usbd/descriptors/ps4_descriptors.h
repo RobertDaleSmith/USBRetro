@@ -326,7 +326,8 @@ static const uint8_t ps4_report_descriptor[] = {
 // CONFIGURATION DESCRIPTOR
 // ============================================================================
 
-#define PS4_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
+// Config descriptor length: Config(9) + Interface(9) + HID(9) + EP_IN(7) + EP_OUT(7) = 41
+#define PS4_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_INOUT_DESC_LEN)
 
 static const uint8_t ps4_config_descriptor[] = {
     // Configuration descriptor
@@ -344,7 +345,7 @@ static const uint8_t ps4_config_descriptor[] = {
     TUSB_DESC_INTERFACE,            // bDescriptorType
     0x00,                           // bInterfaceNumber
     0x00,                           // bAlternateSetting
-    0x01,                           // bNumEndpoints
+    0x02,                           // bNumEndpoints (IN + OUT)
     TUSB_CLASS_HID,                 // bInterfaceClass
     0x00,                           // bInterfaceSubClass (No Boot)
     0x00,                           // bInterfaceProtocol
@@ -363,6 +364,14 @@ static const uint8_t ps4_config_descriptor[] = {
     0x07,                           // bLength
     TUSB_DESC_ENDPOINT,             // bDescriptorType
     0x81,                           // bEndpointAddress (EP1 IN)
+    TUSB_XFER_INTERRUPT,            // bmAttributes
+    U16_TO_U8S_LE(PS4_ENDPOINT_SIZE), // wMaxPacketSize
+    0x01,                           // bInterval (1ms)
+
+    // Endpoint descriptor (OUT) - for rumble/LED output reports
+    0x07,                           // bLength
+    TUSB_DESC_ENDPOINT,             // bDescriptorType
+    0x02,                           // bEndpointAddress (EP2 OUT)
     TUSB_XFER_INTERRUPT,            // bmAttributes
     U16_TO_U8S_LE(PS4_ENDPOINT_SIZE), // wMaxPacketSize
     0x01,                           // bInterval (1ms)

@@ -113,10 +113,13 @@ void xbone_auth_task(void)
         return;
     }
 
-    // Forward auth from console to dongle
+    // Forward auth from console to controller
     xbone_auth_state_t state = xbone_auth_get_state();
 
     if (state == XBONE_AUTH_SEND_CONSOLE_TO_DONGLE) {
+        printf("[xbone_auth] Forwarding auth challenge to controller: type=0x%02x len=%d seq=%d\n",
+               xbone_auth_get_type(), xbone_auth_get_length(), xbone_auth_get_sequence());
+
         uint8_t is_chunked = (xbone_auth_get_length() > GIP_MAX_CHUNK_SIZE);
         uint8_t needs_ack = (xbone_auth_get_length() > 2);
 
@@ -131,28 +134,33 @@ void xbone_auth_task(void)
                            XBONE_AUTH_WAIT_CONSOLE_TO_DONGLE);
 
     } else if (state == XBONE_AUTH_WAIT_CONSOLE_TO_DONGLE) {
-        queue_host_report(xgip_generate_packet(&outgoing_xgip),
-                         xgip_get_packet_length(&outgoing_xgip));
+        uint8_t* packet = xgip_generate_packet(&outgoing_xgip);
+        uint8_t packet_len = xgip_get_packet_length(&outgoing_xgip);
+        printf("[xbone_auth] Sending auth packet to controller: len=%d\n", packet_len);
+        queue_host_report(packet, packet_len);
 
         if (!xgip_is_chunked(&outgoing_xgip) || xgip_end_of_chunk(&outgoing_xgip)) {
+            printf("[xbone_auth] Auth challenge sent, waiting for controller response\n");
             xbone_auth_set_data(xbone_auth_get_buffer(), xbone_auth_get_length(),
                                xbone_auth_get_sequence(), xbone_auth_get_type(),
                                XBONE_AUTH_IDLE);
         }
     }
 
-    // Process report queue - send to dongle
+    // Process report queue - send to controller
     uint32_t now = to_ms_since_boot(get_absolute_time());
     if (queue_count > 0 && (now - last_report_queue_sent) > REPORT_QUEUE_INTERVAL) {
         uint8_t report[64];
         uint16_t len = report_queue[queue_head].len;
         memcpy(report, report_queue[queue_head].report, len);
 
+        printf("[xbone_auth] Sending queued report to controller: len=%d, cmd=0x%02x\n", len, report[0]);
         if (send_to_dongle(report, len)) {
             queue_head = (queue_head + 1) % REPORT_QUEUE_SIZE;
             queue_count--;
             last_report_queue_sent = now;
         } else {
+            printf("[xbone_auth] Failed to send report to controller\n");
             busy_wait_ms(REPORT_QUEUE_INTERVAL);
         }
     }
@@ -160,12 +168,17 @@ void xbone_auth_task(void)
 
 void xbone_auth_register(uint8_t dev_addr, uint8_t instance)
 {
-    printf("[xbone_auth] Registering dongle: dev_addr=%d, instance=%d\n", dev_addr, instance);
+    printf("[xbone_auth] Registering Xbox One controller for auth: dev_addr=%d, instance=%d\n", dev_addr, instance);
     xbone_dev_addr = dev_addr;
     xbone_instance = instance;
 
     xgip_reset(&incoming_xgip);
     xgip_reset(&outgoing_xgip);
+
+    // Mark as ready immediately - Xbox One controllers are already initialized
+    // by xinput_host.c (unlike dongles which need the announce/descriptor handshake)
+    dongle_ready = true;
+    printf("[xbone_auth] Controller ready for auth passthrough!\n");
 }
 
 void xbone_auth_unregister(uint8_t dev_addr)
@@ -189,13 +202,18 @@ void xbone_auth_xmount(uint8_t dev_addr, uint8_t instance,
 void xbone_auth_report_received(uint8_t dev_addr, uint8_t instance,
                                 uint8_t const* report, uint16_t len)
 {
+    printf("[xbone_auth] Report received from controller: dev=%d inst=%d len=%d cmd=0x%02x\n",
+           dev_addr, instance, len, report[0]);
+
     if (dev_addr != xbone_dev_addr || instance != xbone_instance) {
+        printf("[xbone_auth] Ignoring - not our registered controller\n");
         return;
     }
 
     xgip_parse(&incoming_xgip, report, len);
 
     if (!xgip_validate(&incoming_xgip)) {
+        printf("[xbone_auth] Invalid packet, resetting\n");
         // First packet may be invalid, wait for dongle boot
         busy_wait_ms(50);
         xgip_reset(&incoming_xgip);
@@ -204,11 +222,13 @@ void xbone_auth_report_received(uint8_t dev_addr, uint8_t instance,
 
     // Send ACK if required
     if (xgip_ack_required(&incoming_xgip)) {
+        printf("[xbone_auth] Sending ACK to controller\n");
         queue_host_report(xgip_generate_ack(&incoming_xgip),
                          xgip_get_packet_length(&incoming_xgip));
     }
 
     uint8_t cmd = xgip_get_command(&incoming_xgip);
+    printf("[xbone_auth] Parsed command: 0x%02x\n", cmd);
 
     switch (cmd) {
         case GIP_ANNOUNCE:
@@ -250,9 +270,13 @@ void xbone_auth_report_received(uint8_t dev_addr, uint8_t instance,
         case GIP_AUTH:
         case GIP_FINAL_AUTH:
             // Forward auth response to console
+            printf("[xbone_auth] Got auth response from controller! cmd=0x%02x chunked=%d\n",
+                   cmd, xgip_is_chunked(&incoming_xgip));
             if (!xgip_is_chunked(&incoming_xgip) ||
                 (xgip_is_chunked(&incoming_xgip) && xgip_end_of_chunk(&incoming_xgip))) {
 
+                printf("[xbone_auth] Forwarding auth response to console: len=%d seq=%d\n",
+                       xgip_get_data_length(&incoming_xgip), xgip_get_sequence(&incoming_xgip));
                 xbone_auth_set_data(xgip_get_data(&incoming_xgip),
                                    xgip_get_data_length(&incoming_xgip),
                                    xgip_get_sequence(&incoming_xgip),

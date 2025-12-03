@@ -96,9 +96,13 @@ typedef struct {
     // Analog stick deadzone (0-127, applied to center)
     uint8_t deadzone;
 
-    // NeoPixel LED pin (GPIO_PIN_DISABLED = not used)
+    // NeoPixel LED configuration (GPIO_PIN_DISABLED = not used)
     int8_t led_pin;
     uint8_t led_count;          // Number of LEDs
+
+    // Per-LED colors (RGB, up to 16 LEDs)
+    // If led_colors is NULL or all zeros, uses default pattern
+    uint8_t led_colors[16][3];  // [led_index][R, G, B]
 } gpio_device_config_t;
 
 // ============================================================================

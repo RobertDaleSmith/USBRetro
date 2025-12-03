@@ -90,7 +90,7 @@ target_compile_definitions(usbretro_usb PRIVATE
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 target_compile_definitions(usbretro_controller_fisherprice PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE=1 DISABLE_USB_HOST=1)
 target_compile_definitions(usbretro_controller_alpakka PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_ALPAKKA=1 DISABLE_USB_HOST=1)
-target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1)
+target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=0 ADAFRUIT_MACROPAD_RP2040=1 WS2812_NUM_PIXELS=12)
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target

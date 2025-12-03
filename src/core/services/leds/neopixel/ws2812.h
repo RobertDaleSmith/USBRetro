@@ -22,4 +22,11 @@ void neopixel_indicate_profile(uint8_t profile_index);
 // Check if profile indicator is currently active
 bool neopixel_is_indicating(void);
 
+// Set custom per-LED colors from GPIO config
+// colors: array of [n][3] RGB values, count: number of LEDs
+void neopixel_set_custom_colors(const uint8_t colors[][3], uint8_t count);
+
+// Check if custom colors are active
+bool neopixel_has_custom_colors(void);
+
 #endif // WS2812_H

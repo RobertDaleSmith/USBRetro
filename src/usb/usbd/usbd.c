@@ -1491,6 +1491,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 len = 64;
                 if (reqlen < len) len = reqlen;
 #ifndef DISABLE_USB_HOST
+                printf("[USBD] PS4 GET_REPORT 0xF1 (signature)\n");
                 if (ds4_auth_is_available()) {
                     return ds4_auth_get_next_signature(buffer, len);
                 }
@@ -1503,6 +1504,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 len = 16;
                 if (reqlen < len) len = reqlen;
 #ifndef DISABLE_USB_HOST
+                printf("[USBD] PS4 GET_REPORT 0xF2 (status)\n");
                 if (ds4_auth_is_available()) {
                     return ds4_auth_get_status(buffer, len);
                 }
@@ -1519,6 +1521,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
                 return len;
 
             case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Return page size info
+                printf("[USBD] PS4 GET_REPORT 0xF3 (reset)\n");
 #ifndef DISABLE_USB_HOST
                 // Reset auth state when console requests 0xF3 (per hid-remapper)
                 // This ensures signature_ready is false for new auth cycle
@@ -1568,12 +1571,15 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         switch (report_id) {
             case PS4_REPORT_ID_AUTH_PAYLOAD:    // 0xF0 - Nonce from console
                 // Forward nonce to connected DS4
+                printf("[USBD] PS4 SET_REPORT 0xF0 (nonce), bufsize=%d, ds4_avail=%d\n",
+                       bufsize, ds4_auth_is_available());
                 if (ds4_auth_is_available()) {
                     ds4_auth_send_nonce(buffer, bufsize);
                 }
                 return;
 
             case PS4_REPORT_ID_AUTH_RESET:      // 0xF3 - Reset auth
+                printf("[USBD] PS4 SET_REPORT 0xF3 (reset auth)\n");
                 ds4_auth_reset();
                 return;
 

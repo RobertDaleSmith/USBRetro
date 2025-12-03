@@ -11,20 +11,28 @@
 #include "ws2812.pio.h"
 #include "app_config.h"
 
-#define NUM_PIXELS 1
+// Number of NeoPixels (can be overridden in CMakeLists.txt)
+#ifndef WS2812_NUM_PIXELS
+#define WS2812_NUM_PIXELS 1
+#endif
+#define NUM_PIXELS WS2812_NUM_PIXELS
 
-// NeoPixel power control (some boards need this enabled)
+// NeoPixel power control and pin configuration (board-specific)
 #ifdef ADAFRUIT_FEATHER_RP2040_USB_HOST
 #define WS2812_PIN 21
 #define WS2812_POWER_PIN 20
+#define IS_RGBW true
+#elif defined(ADAFRUIT_MACROPAD_RP2040)
+#define WS2812_PIN 19
+#define IS_RGBW false  // MacroPad uses WS2812B (RGB, not RGBW)
 #elif defined(PICO_DEFAULT_WS2812_PIN)
 #define WS2812_PIN PICO_DEFAULT_WS2812_PIN
+#define IS_RGBW true
 #else
 // default to pin 2 if the board doesn't have a default WS2812 pin defined
 #define WS2812_PIN 2
-#endif
-
 #define IS_RGBW true
+#endif
 
 #include "core/services/codes/codes.h"
 
@@ -51,6 +59,10 @@ static volatile uint8_t profile_to_indicate = 0;
 static volatile uint8_t blinks_remaining = 0;
 static volatile int stored_pattern = 0;  // Store player count for color matching
 static absolute_time_t state_change_time;
+
+// Custom per-LED colors (set via neopixel_set_custom_colors)
+static uint8_t custom_led_colors[16][3];  // [led_index][R, G, B]
+static bool use_custom_colors = false;
 
 // Timing constants for NeoPixel profile indicator (in microseconds for precision)
 // We count OFF blinks, so OFF time is longer and more noticeable
@@ -154,28 +166,39 @@ void pattern_greens(uint len, uint t) {
 }
 
 void pattern_blue(uint len, uint t) {
-    int max = 100;
-    put_pixel(max * 0x00001);
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(0, 0, 64)); // blue
+    }
 }
 
 void pattern_red(uint len, uint t) {
-    put_pixel(urgb_u32(64, 0, 0)); // red
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(64, 0, 0)); // red
+    }
 }
 
 void pattern_green(uint len, uint t) {
-    put_pixel(urgb_u32(0, 64, 0)); // green
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(0, 64, 0)); // green
+    }
 }
 
 void pattern_purple(uint len, uint t) {
-    put_pixel(urgb_u32(6, 0, 64)); // purple
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(6, 0, 64)); // purple
+    }
 }
 
 void pattern_pink(uint len, uint t) {
-    put_pixel(urgb_u32(64, 20, 32)); // purple
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(64, 20, 32)); // pink
+    }
 }
 
 void pattern_yellow(uint len, uint t) {
-    put_pixel(urgb_u32(64, 64, 0)); // yellow
+    for (uint i = 0; i < len; ++i) {
+        put_pixel(urgb_u32(64, 64, 0)); // yellow
+    }
 }
 
 void pattern_br(uint len, uint t) {
@@ -236,6 +259,35 @@ void pattern_brgpy(uint len, uint t) {
     }
 }
 
+// Custom colors pattern - uses colors set via neopixel_set_custom_colors()
+void pattern_custom(uint len, uint t) {
+    for (uint i = 0; i < len && i < 16; ++i) {
+        put_pixel(urgb_u32(custom_led_colors[i][0],
+                          custom_led_colors[i][1],
+                          custom_led_colors[i][2]));
+    }
+}
+
+// Set custom per-LED colors from GPIO config
+// colors: array of [16][3] RGB values, count: number of LEDs
+void neopixel_set_custom_colors(const uint8_t colors[][3], uint8_t count) {
+    use_custom_colors = false;
+    for (uint8_t i = 0; i < count && i < 16; ++i) {
+        custom_led_colors[i][0] = colors[i][0];
+        custom_led_colors[i][1] = colors[i][1];
+        custom_led_colors[i][2] = colors[i][2];
+        // Check if any color is non-zero
+        if (colors[i][0] || colors[i][1] || colors[i][2]) {
+            use_custom_colors = true;
+        }
+    }
+}
+
+// Check if custom colors are active
+bool neopixel_has_custom_colors(void) {
+    return use_custom_colors;
+}
+
 typedef void (*pattern)(uint len, uint t);
 const struct {
     pattern pat;
@@ -274,7 +326,10 @@ void neopixel_init()
     uint offset = pio_add_program(pio, &ws2812_program);
     sm = pio_claim_unused_sm(pio, true);
     ws2812_program_init(pio, sm, offset, WS2812_PIN, 800000, IS_RGBW);
-    put_pixel(urgb_u32(0x40, 0x20, 0x00)); // init color value (holds color on auto sel boot)
+    // Initialize all pixels with startup color (orange)
+    for (uint i = 0; i < NUM_PIXELS; ++i) {
+        put_pixel(urgb_u32(0x40, 0x20, 0x00));
+    }
 }
 
 // Trigger NeoPixel LED profile indicator blinking (called from console code)
@@ -305,8 +360,10 @@ void neopixel_task(int pat)
 
         switch (neopixel_state) {
             case NEOPIXEL_BLINK_OFF:
-                // Turn LED off (this is what we count)
-                put_pixel(urgb_u32(0x00, 0x00, 0x00));
+                // Turn all LEDs off (this is what we count)
+                for (uint i = 0; i < NUM_PIXELS; ++i) {
+                    put_pixel(urgb_u32(0x00, 0x00, 0x00));
+                }
                 if (time_in_state >= BLINK_OFF_TIME_US) {
                     blinks_remaining--;
                     if (blinks_remaining > 0) {
@@ -322,9 +379,12 @@ void neopixel_task(int pat)
                 break;
 
             case NEOPIXEL_BLINK_ON:
-                // Show LED using the same color as connection status (based on stored player count)
-                // Call the appropriate pattern to match connection status color
-                pattern_table[stored_pattern].pat(NUM_PIXELS, tic);
+                // Show LED using custom colors or pattern based on stored player count
+                if (use_custom_colors) {
+                    pattern_custom(NUM_PIXELS, tic);
+                } else {
+                    pattern_table[stored_pattern].pat(NUM_PIXELS, tic);
+                }
                 if (time_in_state >= BLINK_ON_TIME_US) {
                     // Back to OFF for the next blink
                     neopixel_state = NEOPIXEL_BLINK_OFF;
@@ -355,7 +415,12 @@ void neopixel_task(int pat)
     stored_pattern = pat;
 
     if (absolute_time_diff_us(init_time, current_time) > reset_period) {
-        pattern_table[pat].pat(NUM_PIXELS, tic);
+        // Use custom colors if set, otherwise use pattern table
+        if (use_custom_colors) {
+            pattern_custom(NUM_PIXELS, tic);
+        } else {
+            pattern_table[pat].pat(NUM_PIXELS, tic);
+        }
 
         tic += dir;
 

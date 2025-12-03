@@ -10,6 +10,9 @@
 #include "chatpad.h"
 #include "core/input_event.h"
 
+// Xbox One auth passthrough
+#include "usb/usbh/xbone_auth/xbone_auth.h"
+
 // BTD driver for Bluetooth dongles
 #if CFG_TUH_BTD
 #include "usb/usbh/btd/btd.h"
@@ -135,7 +138,15 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
 
 void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_interface_t *xinput_itf)
 {
-  printf("XINPUT MOUNTED %02x %d\n", dev_addr, instance);
+  printf("XINPUT MOUNTED %02x %d type=%d\n", dev_addr, instance, xinput_itf->type);
+
+  // Register Xbox One controllers for auth passthrough
+  if (xinput_itf->type == XBOXONE)
+  {
+    printf("[xinput] Xbox One controller detected - registering for auth passthrough\n");
+    xbone_auth_register(dev_addr, instance);
+  }
+
   // If this is a Xbox 360 Wireless controller we need to wait for a connection packet
   // on the in pipe before setting LEDs etc. So just start getting data until a controller is connected.
   if (xinput_itf->type == XBOX360_WIRELESS && xinput_itf->connected == false)
@@ -159,6 +170,9 @@ void tuh_xinput_mount_cb(uint8_t dev_addr, uint8_t instance, const xinputh_inter
 void tuh_xinput_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("XINPUT UNMOUNTED %02x %d\n", dev_addr, instance);
+
+  // Unregister from auth passthrough
+  xbone_auth_unregister(dev_addr);
 }
 
 uint8_t byteScaleAnalog(int16_t xbox_val)
@@ -172,6 +186,9 @@ uint8_t byteScaleAnalog(int16_t xbox_val)
 
 void xinput_task(void)
 {
+  // Process Xbox One auth passthrough
+  xbone_auth_task();
+
   // Rumble only if controller connected
   if (!playersCount) return;
 
