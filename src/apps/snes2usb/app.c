@@ -4,8 +4,10 @@
 // This app polls native SNES/NES controllers and routes input to USB device output.
 
 #include "app.h"
+#include "profiles.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/services/profiles/profile.h"
 #include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "usb/usbd/usbd.h"
@@ -76,9 +78,25 @@ void app_init(void)
     };
     players_init_with_config(&player_cfg);
 
+    // Initialize profile system with button combos (Select+Start=Home)
+    static const profile_config_t profile_cfg = {
+        .output_profiles = { NULL },
+        .shared_profiles = &snes2usb_profile_set,
+    };
+    profile_init(&profile_cfg);
+
     printf("[app:snes2usb] Initialization complete\n");
     printf("[app:snes2usb]   Routing: SNES/NES → USB HID Gamepad\n");
     printf("[app:snes2usb]   SNES pins: CLK=%d LATCH=%d D0=%d D1=%d IO=%d\n",
            SNES_PIN_CLOCK, SNES_PIN_LATCH, SNES_PIN_DATA0,
            SNES_PIN_DATA1, SNES_PIN_IOBIT);
+}
+
+// ============================================================================
+// APP TASK
+// ============================================================================
+
+void app_task(void)
+{
+    // Nothing extra needed - USB device task handles everything
 }
