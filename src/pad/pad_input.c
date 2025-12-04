@@ -151,15 +151,27 @@ static bool pad_read_button(int16_t pin, bool active_high) {
     return active_high ? state : !state;
 }
 
-// Read ADC channel and return 0-255 value
+// Read ADC channel and return 0-255 value with proper scaling
+// Most analog joysticks don't use full 0-3.3V range
+// ADC range: 0-4095 (12-bit), adjust min/max based on actual joystick
+#define ADC_STICK_MIN  1100  // Minimum ADC value at full deflection
+#define ADC_STICK_MAX  3000  // Maximum ADC value at full deflection
+#define ADC_STICK_CENTER 2048
+
 static uint8_t pad_read_adc(int8_t channel, bool invert) {
     if (channel < 0 || channel > 3) return 128;  // Centered
 
     adc_select_input(channel);
     uint16_t raw = adc_read();  // 12-bit: 0-4095
 
-    // Convert to 8-bit
-    uint8_t value = raw >> 4;  // 0-255
+    // Scale from joystick's actual range to full 0-255
+    // Clamp to expected range first
+    if (raw < ADC_STICK_MIN) raw = ADC_STICK_MIN;
+    if (raw > ADC_STICK_MAX) raw = ADC_STICK_MAX;
+
+    // Scale to 0-255
+    uint32_t scaled = ((uint32_t)(raw - ADC_STICK_MIN) * 255) / (ADC_STICK_MAX - ADC_STICK_MIN);
+    uint8_t value = (uint8_t)scaled;
 
     if (invert) {
         value = 255 - value;
@@ -276,10 +288,10 @@ static void pad_poll_device(uint8_t device_index) {
     // Read buttons into bitmap
     uint32_t buttons = 0;
 
-    // Check toggle switch state (HIGH = D-pad mode, LOW = analog mode)
+    // Check toggle switch state (LOW = D-pad mode, HIGH = right analog mode)
     bool dpad_mode = true;  // Default to D-pad mode
     if (config->dpad_toggle >= 0 && config->dpad_toggle <= 29) {
-        dpad_mode = gpio_get(config->dpad_toggle);
+        dpad_mode = !gpio_get(config->dpad_toggle);  // Inverted: LOW = D-pad, HIGH = analog
     }
 
     // Read D-pad buttons
@@ -295,19 +307,19 @@ static void pad_poll_device(uint8_t device_index) {
         if (dpad_left)  buttons |= USBR_BUTTON_DL;
         if (dpad_right) buttons |= USBR_BUTTON_DR;
     } else {
-        // Analog mode: output D-pad as left stick
+        // Analog mode: output D-pad as right stick
         // X axis: left = 0, center = 128, right = 255
-        // Y axis: up = 0, center = 128, down = 255
-        uint8_t lx = 128, ly = 128;
+        // Y axis: up = 255, center = 128, down = 0
+        uint8_t rx = 128, ry = 128;
 
-        if (dpad_left && !dpad_right) lx = 0;
-        else if (dpad_right && !dpad_left) lx = 255;
+        if (dpad_left && !dpad_right) rx = 0;
+        else if (dpad_right && !dpad_left) rx = 255;
 
-        if (dpad_up && !dpad_down) ly = 255;
-        else if (dpad_down && !dpad_up) ly = 0;
+        if (dpad_up && !dpad_down) ry = 255;
+        else if (dpad_down && !dpad_up) ry = 0;
 
-        event->analog[ANALOG_X] = lx;
-        event->analog[ANALOG_Y] = ly;
+        event->analog[ANALOG_Z] = rx;   // Right stick X
+        event->analog[ANALOG_RX] = ry;  // Right stick Y
     }
 
     // Face buttons

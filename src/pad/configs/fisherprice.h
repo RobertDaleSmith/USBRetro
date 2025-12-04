@@ -81,8 +81,9 @@ static const pad_device_config_t pad_config_fisherprice = {
 // ============================================================================
 // FISHER PRICE ANALOG (Advanced mod with analog stick)
 // ============================================================================
-// KB2040 pin mapping with analog stick added.
-// Based on GP2040-CE kb2040-analog-fisher-price branch.
+// KB2040 pin mapping with analog stick on ADC.
+// D-pad buttons directly wired, analog stick on ADC pins 26-27.
+// Based on GP2040-CE kb2040-fisher-price-analog branch.
 
 static const pad_device_config_t pad_config_fisherprice_analog = {
     .name = "Fisher Price Analog",
@@ -92,7 +93,7 @@ static const pad_device_config_t pad_config_fisherprice_analog = {
     .i2c_sda = PAD_PIN_DISABLED,
     .i2c_scl = PAD_PIN_DISABLED,
 
-    // D-pad
+    // D-pad (directly wired digital buttons)
     .dpad_up    = 9,
     .dpad_down  = 10,
     .dpad_left  = 19,
@@ -110,12 +111,12 @@ static const pad_device_config_t pad_config_fisherprice_analog = {
     .l2 = 29,   // LT / L2
     .r2 = 7,    // RT / R2
 
-    // Meta buttons (S1 disabled, S2 moved to GPIO 18)
-    .s1 = PAD_PIN_DISABLED,
-    .s2 = 18,   // Start
+    // Meta buttons
+    .s1 = 0,    // Select / Back
+    .s2 = 1,    // Start
 
     // Stick clicks
-    .l3 = PAD_PIN_DISABLED,
+    .l3 = 18,   // Left stick click
     .r3 = PAD_PIN_DISABLED,
 
     // Home/Capture
@@ -126,15 +127,19 @@ static const pad_device_config_t pad_config_fisherprice_analog = {
     .l4 = PAD_PIN_DISABLED,
     .r4 = PAD_PIN_DISABLED,
 
-    // Left analog stick on ADC
-    // GPIO 26 = ADC0, GPIO 27 = ADC1
+    // Toggle switch for D-pad mode (slider)
+    // HIGH = D-pad outputs as digital D-pad
+    // LOW = D-pad outputs as left analog stick
+    .dpad_toggle = 6,
+
+    // Left analog stick on ADC (GPIO 26-27)
     .adc_lx = 0,    // ADC channel 0 (GPIO 26)
     .adc_ly = 1,    // ADC channel 1 (GPIO 27)
     .adc_rx = PAD_PIN_DISABLED,
     .adc_ry = PAD_PIN_DISABLED,
 
     .invert_lx = false,
-    .invert_ly = true,  // Y inverted per GP2040-CE config
+    .invert_ly = false,
     .invert_rx = false,
     .invert_ry = false,
     .deadzone = 10,

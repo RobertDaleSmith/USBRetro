@@ -55,6 +55,7 @@ CONSOLE_uart := usbretro_uart
 CONSOLE_usb := usbretro_usb
 CONSOLE_snes2usb := usbretro_snes2usb
 CONSOLE_controller_fisherprice := usbretro_controller_fisherprice
+CONSOLE_controller_fisherprice_analog := usbretro_controller_fisherprice_analog
 CONSOLE_controller_alpakka := usbretro_controller_alpakka
 CONSOLE_controller_macropad := usbretro_controller_macropad
 
@@ -71,6 +72,7 @@ APP_usb2uart := kb2040 uart usb2uart
 APP_usb2usb := feather_usbhost usb usb2usb
 APP_snes2usb := kb2040 snes2usb snes2usb
 APP_controller_fisherprice := kb2040 controller_fisherprice controller_fisherprice
+APP_controller_fisherprice_analog := kb2040 controller_fisherprice_analog controller_fisherprice_analog
 APP_controller_alpakka := pico controller_alpakka controller_alpakka
 APP_controller_macropad := macropad controller_macropad controller_macropad
 
@@ -122,6 +124,7 @@ help:
 	@echo "  make usb2usb       - Build usb2usb (Feather USB Host + USB HID gamepad)"
 	@echo "  make snes2usb      - Build snes2usb (KB2040 + SNES→USB HID gamepad)"
 	@echo "  make controller_fisherprice - Build controller_fisherprice (KB2040 + GPIO→USB HID gamepad)"
+	@echo "  make controller_fisherprice_analog - Build controller_fisherprice_analog (KB2040 + ADC analog stick)"
 	@echo "  make controller_alpakka - Build controller_alpakka (Pico + GPIO/I2C→USB HID gamepad)"
 	@echo "  make controller_macropad - Build controller_macropad (MacroPad RP2040 + 12 keys→USB HID gamepad)"
 	@echo ""
@@ -144,6 +147,7 @@ help:
 	@echo "  make flash-usb2usb - Flash usb2usb firmware"
 	@echo "  make flash-snes2usb - Flash snes2usb firmware"
 	@echo "  make flash-controller_fisherprice - Flash controller_fisherprice firmware"
+	@echo "  make flash-controller_fisherprice_analog - Flash controller_fisherprice_analog firmware"
 	@echo "  make flash-controller_alpakka - Flash controller_alpakka firmware"
 	@echo "  make flash-controller_macropad - Flash controller_macropad firmware"
 	@echo ""
@@ -239,6 +243,10 @@ snes2usb:
 .PHONY: controller_fisherprice
 controller_fisherprice:
 	$(call build_app,controller_fisherprice)
+
+.PHONY: controller_fisherprice_analog
+controller_fisherprice_analog:
+	$(call build_app,controller_fisherprice_analog)
 
 .PHONY: controller_alpakka
 controller_alpakka:
@@ -395,6 +403,10 @@ flash-snes2usb:
 .PHONY: flash-controller_fisherprice
 flash-controller_fisherprice:
 	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_fisherprice
+
+.PHONY: flash-controller_fisherprice_analog
+flash-controller_fisherprice_analog:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_fisherprice_analog
 
 .PHONY: flash-controller_alpakka
 flash-controller_alpakka:

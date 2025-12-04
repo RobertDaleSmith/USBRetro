@@ -5,6 +5,7 @@
 // Copyright 2024 Robert Dale Smith
 
 #include "app.h"
+#include "profiles.h"
 #include "core/router/router.h"
 #include "core/input_interface.h"
 #include "core/output_interface.h"
@@ -13,6 +14,7 @@
 #include "core/services/speaker/speaker.h"
 #include "core/services/display/display.h"
 #include "core/services/codes/codes.h"
+#include "core/services/profiles/profile.h"
 #include "native/device/uart/uart_device.h"
 #include "native/host/uart/uart_host.h"
 #include "pad/pad_input.h"
@@ -300,6 +302,13 @@ void app_init(void)
         .mouse_drain_rate = 0,
     };
     router_init(&router_cfg);
+
+    // Initialize profile system with button combos (S1+S2=A1)
+    static const profile_config_t profile_cfg = {
+        .output_profiles = { NULL },
+        .shared_profiles = &controller_profile_set,
+    };
+    profile_init(&profile_cfg);
 
     // Add route: Pad → USB Device
     router_add_route(INPUT_SOURCE_GPIO, OUTPUT_TARGET_USB_DEVICE, 0);

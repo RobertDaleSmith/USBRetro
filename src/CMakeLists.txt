@@ -57,6 +57,7 @@ add_executable(usbretro_uart) # For the usbretro_uart target (USB2UART ESP32 bri
 add_executable(usbretro_usb) # For the usbretro_usb target (USB2USB HID gamepad output)
 add_executable(usbretro_snes2usb) # For the usbretro_snes2usb target (SNES→USB HID gamepad)
 add_executable(usbretro_controller_fisherprice) # Controller app: Fisher Price (KB2040)
+add_executable(usbretro_controller_fisherprice_analog) # Controller app: Fisher Price Analog (KB2040)
 add_executable(usbretro_controller_alpakka) # Controller app: Alpakka (Pico)
 add_executable(usbretro_controller_macropad) # Controller app: MacroPad (Adafruit MacroPad RP2040)
 
@@ -104,6 +105,7 @@ target_compile_definitions(usbretro_usb PRIVATE
 )
 target_compile_definitions(usbretro_snes2usb PRIVATE CONFIG_SNES2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1)
 target_compile_definitions(usbretro_controller_fisherprice PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO})
+target_compile_definitions(usbretro_controller_fisherprice_analog PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_FISHERPRICE_ANALOG=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO})
 target_compile_definitions(usbretro_controller_alpakka PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_ALPAKKA=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO})
 target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLER=1 CONTROLLER_TYPE_MACROPAD=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO} ADAFRUIT_MACROPAD_RP2040=1 WS2812_NUM_PIXELS=12)
 
@@ -118,6 +120,7 @@ target_compile_options(usbretro_uart PRIVATE -O3) # Set optimization level to O3
 target_compile_options(usbretro_usb PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_snes2usb PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_controller_fisherprice PRIVATE -O3) # Set optimization level to O3 for your_target
+target_compile_options(usbretro_controller_fisherprice_analog PRIVATE -O3)
 target_compile_options(usbretro_controller_alpakka PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_controller_macropad PRIVATE -O3) # Set optimization level to O3 for your_target
 
@@ -138,6 +141,7 @@ pico_add_extra_outputs(usbretro_uart)
 pico_add_extra_outputs(usbretro_usb)
 pico_add_extra_outputs(usbretro_snes2usb)
 pico_add_extra_outputs(usbretro_controller_fisherprice)
+pico_add_extra_outputs(usbretro_controller_fisherprice_analog)
 pico_add_extra_outputs(usbretro_controller_alpakka)
 pico_add_extra_outputs(usbretro_controller_macropad)
 
@@ -166,6 +170,7 @@ pico_generate_pio_header(usbretro_uart ${CMAKE_CURRENT_LIST_DIR}/core/services/l
 pico_generate_pio_header(usbretro_usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_snes2usb ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_controller_fisherprice ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
+pico_generate_pio_header(usbretro_controller_fisherprice_analog ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_controller_alpakka ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_controller_macropad ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 
@@ -360,6 +365,27 @@ target_sources(usbretro_controller_fisherprice PUBLIC # Controller app: Fisher P
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
 )
 
+target_sources(usbretro_controller_fisherprice_analog PUBLIC # Controller app: Fisher Price Analog
+    ${CORE_SOURCES}  # No USB host - uses GPIO input
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/cdc/cdc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xid.c  # Xbox Original XID class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xbone.c  # Xbox One GIP class driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
+    # Pad input driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/pad/pad_input.c
+    # Speaker driver for rumble feedback (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/speaker/speaker.c
+    # Display driver for OLED status (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/services/display/display.c
+    # UART host/device for linking controllers via QWIIC (no-op if not configured)
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart/uart_device.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart/uart_host.c
+    # App layer
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
+)
+
 target_sources(usbretro_controller_alpakka PUBLIC # Controller app: Alpakka
     ${CORE_SOURCES}  # No USB host - uses pad input
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/usbd.c
@@ -489,6 +515,17 @@ target_include_directories(usbretro_controller_fisherprice PUBLIC # Controller: 
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host
 )
 
+target_include_directories(usbretro_controller_fisherprice_analog PUBLIC # Controller: Fisher Price Analog
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+    ${CMAKE_CURRENT_SOURCE_DIR}/pad
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host/uart
+    ${CMAKE_CURRENT_SOURCE_DIR}/native/host
+)
+
 target_include_directories(usbretro_controller_alpakka PUBLIC # Controller: Alpakka
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
@@ -576,6 +613,18 @@ target_link_libraries(usbretro_snes2usb PRIVATE # FOR SNES2USB (SNES input, USB 
 )
 
 target_link_libraries(usbretro_controller_fisherprice PRIVATE # Controller: Fisher Price
+    pico_stdlib
+    pico_multicore
+    hardware_pio
+    hardware_adc
+    hardware_i2c
+    hardware_pwm
+    hardware_spi
+    tinyusb_device
+    tinyusb_board
+)
+
+target_link_libraries(usbretro_controller_fisherprice_analog PRIVATE # Controller: Fisher Price Analog
     pico_stdlib
     pico_multicore
     hardware_pio

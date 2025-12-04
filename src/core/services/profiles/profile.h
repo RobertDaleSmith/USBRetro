@@ -66,6 +66,17 @@ typedef struct {
 } button_map_entry_t;
 
 // ============================================================================
+// BUTTON COMBO ENTRY
+// ============================================================================
+// Maps multiple input buttons pressed together to output(s)
+
+typedef struct {
+    uint32_t inputs;            // USBR_BUTTON_* inputs (OR'd together - all must be pressed)
+    uint32_t output;            // USBR_BUTTON_* output(s) when combo active
+    bool consume_inputs;        // If true, remove input buttons from output when combo fires
+} button_combo_entry_t;
+
+// ============================================================================
 // TRIGGER BEHAVIOR
 // ============================================================================
 // How analog triggers (L2/R2) should behave
@@ -84,6 +95,7 @@ typedef enum {
 // ============================================================================
 
 #define MAX_BUTTON_MAPPINGS 24  // Max button mappings per profile
+#define MAX_BUTTON_COMBOS 8     // Max button combos per profile
 
 typedef struct {
     // Identity
@@ -94,6 +106,11 @@ typedef struct {
     // If a button isn't in this list, it passes through unchanged (input == output)
     const button_map_entry_t* button_map;
     uint8_t button_map_count;
+
+    // Button combos (multiple buttons → output)
+    // Checked before individual mappings; if consume_inputs is true, input buttons are removed
+    const button_combo_entry_t* combo_map;
+    uint8_t combo_map_count;
 
     // Trigger configuration
     trigger_behavior_t l2_behavior;
@@ -302,6 +319,14 @@ uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_butto
 #define MAP_DISABLED(in) \
     { .input = (in), .output = 0, .analog = ANALOG_TARGET_NONE, .analog_value = 0 }
 
+// Button combo: multiple inputs → output (consumes inputs by default)
+#define MAP_COMBO(ins, out) \
+    { .inputs = (ins), .output = (out), .consume_inputs = true }
+
+// Button combo: multiple inputs → output (keeps inputs in output)
+#define MAP_COMBO_KEEP(ins, out) \
+    { .inputs = (ins), .output = (out), .consume_inputs = false }
+
 // Standard trigger settings
 #define PROFILE_TRIGGERS_DEFAULT \
     .l2_behavior = TRIGGER_PASSTHROUGH, \
@@ -322,6 +347,8 @@ uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_butto
     .description = "Standard 1:1 mapping", \
     .button_map = NULL, \
     .button_map_count = 0, \
+    .combo_map = NULL, \
+    .combo_map_count = 0, \
     PROFILE_TRIGGERS_DEFAULT, \
     PROFILE_ANALOG_DEFAULT, \
     .adaptive_triggers = false, \

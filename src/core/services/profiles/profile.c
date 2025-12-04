@@ -609,13 +609,14 @@ void profile_apply(const profile_t* profile,
 {
     // Suppress combo buttons when profile switch is active
     // This prevents Select + D-pad from being output during switching
+    // Note: active-high (bit set = pressed, bit clear = released)
     if (profile_switch_combo_active()) {
-        // Set combo buttons to "released" (active-low: released = bit set)
-        input_buttons |= USBR_BUTTON_S1;   // Select
-        input_buttons |= USBR_BUTTON_DU;   // D-pad Up
-        input_buttons |= USBR_BUTTON_DD;   // D-pad Down
-        input_buttons |= USBR_BUTTON_DL;   // D-pad Left
-        input_buttons |= USBR_BUTTON_DR;   // D-pad Right
+        // Clear combo buttons to "released"
+        input_buttons &= ~USBR_BUTTON_S1;   // Select
+        input_buttons &= ~USBR_BUTTON_DU;   // D-pad Up
+        input_buttons &= ~USBR_BUTTON_DD;   // D-pad Down
+        input_buttons &= ~USBR_BUTTON_DL;   // D-pad Left
+        input_buttons &= ~USBR_BUTTON_DR;   // D-pad Right
     }
 
     // Initialize output with passthrough values
@@ -628,13 +629,38 @@ void profile_apply(const profile_t* profile,
     output->l2_analog = l2;
     output->r2_analog = r2;
 
+    // Process button combos first (before individual mappings)
+    // Combos can add buttons and optionally consume their input buttons
+    // Note: Router uses active-high (1 = pressed, 0 = released)
+    uint32_t combo_consumed = 0;  // Track which inputs were consumed by combos
+    if (profile && profile->combo_map && profile->combo_map_count > 0) {
+        for (uint8_t i = 0; i < profile->combo_map_count; i++) {
+            const button_combo_entry_t* combo = &profile->combo_map[i];
+
+            // Check if all combo inputs are pressed (active-high: pressed = bit set)
+            // All bits in combo->inputs must be set in input_buttons
+            if ((input_buttons & combo->inputs) == combo->inputs) {
+                // Combo is active - add output button(s)
+                // Set output bits to 1 (pressed) for combo outputs
+                output->buttons |= combo->output;
+
+                // If consuming inputs, track them for removal
+                if (combo->consume_inputs) {
+                    combo_consumed |= combo->inputs;
+                }
+            }
+        }
+
+        // Remove consumed inputs from output (clear bits = released in active-high)
+        output->buttons &= ~combo_consumed;
+    }
+
     if (!profile || !profile->button_map || profile->button_map_count == 0) {
-        // No mapping, passthrough
+        // No mapping, passthrough (combos already applied above)
         return;
     }
 
-    // Build output button state
-    // Start with all buttons released (active-high for building)
+    // Build output button state (active-high: 1 = pressed, 0 = released)
     uint32_t output_buttons = 0;
     uint32_t mapped_inputs = 0;
 
@@ -642,11 +668,11 @@ void profile_apply(const profile_t* profile,
     for (uint8_t i = 0; i < profile->button_map_count; i++) {
         const button_map_entry_t* entry = &profile->button_map[i];
 
-        // Check if input button is pressed (active-low: pressed = bit clear)
-        bool pressed = ((input_buttons & entry->input) == 0);
+        // Check if input button is pressed (active-high: pressed = bit set)
+        bool pressed = ((input_buttons & entry->input) != 0);
 
         if (pressed) {
-            // Set output button(s) (active-high during building)
+            // Set output button(s)
             output_buttons |= entry->output;
 
             // Apply analog target if specified
@@ -659,13 +685,13 @@ void profile_apply(const profile_t* profile,
         mapped_inputs |= entry->input;
     }
 
-    // Passthrough unmapped buttons
+    // Passthrough unmapped buttons (active-high)
     uint32_t unmapped_inputs = ~mapped_inputs;
-    uint32_t pressed_unmapped = ~input_buttons & unmapped_inputs;
+    uint32_t pressed_unmapped = input_buttons & unmapped_inputs;
     output_buttons |= pressed_unmapped;
 
-    // Convert back to active-low format
-    output->buttons = ~output_buttons;
+    // Output is active-high
+    output->buttons = output_buttons;
 
     // Apply stick sensitivity scaling
     if (profile->left_stick_sensitivity != 1.0f) {
@@ -691,18 +717,19 @@ void profile_apply(const profile_t* profile,
     }
 
     // Apply trigger behavior (if triggers weren't overridden by button mappings)
+    // Note: active-high (bit set = pressed)
     if (!output->l2_analog_override) {
         switch (profile->l2_behavior) {
             case TRIGGER_DIGITAL_ONLY:
                 output->l2_analog = 0;
                 break;
             case TRIGGER_FULL_PRESS:
-                if ((input_buttons & USBR_BUTTON_L2) == 0) {
+                if (input_buttons & USBR_BUTTON_L2) {
                     output->l2_analog = 255;
                 }
                 break;
             case TRIGGER_LIGHT_PRESS:
-                if ((input_buttons & USBR_BUTTON_L2) == 0) {
+                if (input_buttons & USBR_BUTTON_L2) {
                     output->l2_analog = profile->l2_analog_value;
                 }
                 break;
@@ -719,12 +746,12 @@ void profile_apply(const profile_t* profile,
                 output->r2_analog = 0;
                 break;
             case TRIGGER_FULL_PRESS:
-                if ((input_buttons & USBR_BUTTON_R2) == 0) {
+                if (input_buttons & USBR_BUTTON_R2) {
                     output->r2_analog = 255;
                 }
                 break;
             case TRIGGER_LIGHT_PRESS:
-                if ((input_buttons & USBR_BUTTON_R2) == 0) {
+                if (input_buttons & USBR_BUTTON_R2) {
                     output->r2_analog = profile->r2_analog_value;
                 }
                 break;
