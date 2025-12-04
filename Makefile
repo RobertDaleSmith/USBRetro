@@ -47,7 +47,7 @@ BOARD_SCRIPT_macropad := boards/build_ada_macropad.sh
 CONSOLE_3do := usbretro_3do
 CONSOLE_pce := usbretro_pce
 CONSOLE_ngc := usbretro_ngc
-CONSOLE_xb1 := usbretro_xb1
+CONSOLE_xb1ctrl := usbretro_xb1ctrl
 CONSOLE_nuon := usbretro_nuon
 CONSOLE_loopy := usbretro_loopy
 CONSOLE_snes3do := usbretro_snes3do
@@ -64,7 +64,7 @@ CONSOLE_controller_macropad := usbretro_controller_macropad
 APP_usb2pce := kb2040 pce usb2pce
 APP_usb2gc := kb2040 ngc usb2gc
 APP_usb2nuon := kb2040 nuon usb2nuon
-APP_usb2xb1 := qtpy xb1 usb2xb1
+APP_usb2xb1ctrl := qtpy xb1ctrl usb2xb1ctrl
 APP_usb2loopy := kb2040 loopy usb2loopy
 APP_usb23do := rp2040zero 3do usb23do
 APP_snes23do := rp2040zero snes3do snes23do
@@ -77,7 +77,7 @@ APP_controller_alpakka := pico controller_alpakka controller_alpakka
 APP_controller_macropad := macropad controller_macropad controller_macropad
 
 # All apps (note: controller_macropad not included - build explicitly with 'make controller_macropad')
-APPS := usb2pce usb2gc usb2nuon usb2xb1 usb2loopy usb23do snes23do usb2uart usb2usb snes2usb controller_fisherprice controller_alpakka
+APPS := usb2pce usb2gc usb2nuon usb2xb1ctrl usb2loopy usb23do snes23do usb2uart usb2usb snes2usb controller_fisherprice controller_alpakka
 
 # Stable apps for release (mature enough for public release)
 RELEASE_APPS := usb2pce usb2gc usb2nuon
@@ -116,7 +116,7 @@ help:
 	@echo "  make usb2pce       - Build usb2pce (KB2040 + PCEngine)"
 	@echo "  make usb2gc        - Build usb2gc (KB2040 + GameCube)"
 	@echo "  make usb2nuon      - Build usb2nuon (KB2040 + Nuon)"
-	@echo "  make usb2xb1       - Build usb2xb1 (QT Py + Xbox One)"
+	@echo "  make usb2xb1ctrl       - Build usb2xb1ctrl (QT Py + Xbox One)"
 	@echo "  make usb2loopy     - Build usb2loopy (KB2040 + Loopy)"
 	@echo "  make usb23do       - Build usb23do (RP2040 Zero + 3DO)"
 	@echo "  make snes23do      - Build snes23do (RP2040 Zero + SNES->3DO)"
@@ -139,7 +139,7 @@ help:
 	@echo "  make flash-usb2pce - Flash usb2pce firmware"
 	@echo "  make flash-usb2gc  - Flash usb2gc firmware"
 	@echo "  make flash-usb2nuon - Flash usb2nuon firmware"
-	@echo "  make flash-usb2xb1 - Flash usb2xb1 firmware"
+	@echo "  make flash-usb2xb1ctrl - Flash usb2xb1ctrl firmware"
 	@echo "  make flash-usb2loopy - Flash usb2loopy firmware"
 	@echo "  make flash-usb23do - Flash usb23do firmware"
 	@echo "  make flash-snes23do - Flash snes23do firmware"
@@ -155,7 +155,7 @@ help:
 	@echo "  make pce           - Build PCEngine firmware"
 	@echo "  make ngc           - Build GameCube firmware"
 	@echo "  make nuon          - Build Nuon firmware"
-	@echo "  make xb1           - Build Xbox One firmware"
+	@echo "  make xb1ctrl       - Build Xbox One Controller firmware"
 	@echo "  make loopy         - Build Loopy firmware"
 	@echo "  make 3do           - Build 3DO firmware"
 	@echo ""
@@ -212,9 +212,9 @@ usb2gc:
 usb2nuon:
 	$(call build_app,usb2nuon)
 
-.PHONY: usb2xb1
-usb2xb1:
-	$(call build_app,usb2xb1)
+.PHONY: usb2xb1ctrl
+usb2xb1ctrl:
+	$(call build_app,usb2xb1ctrl)
 
 .PHONY: usb2loopy
 usb2loopy:
@@ -293,13 +293,13 @@ ngc_rp2040zero:
 	@echo "  Output: src/build/$(CONSOLE_ngc).uf2"
 	@echo ""
 
-.PHONY: xb1
-xb1:
-	@echo "$(YELLOW)Building Xbox One (QT Py)...$(NC)"
+.PHONY: xb1ctrl
+xb1ctrl:
+	@echo "$(YELLOW)Building Xbox One Controller (QT Py)...$(NC)"
 	@cd src && rm -rf build && sh $(BOARD_SCRIPT_qtpy)
-	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_xb1) -j4
-	@echo "$(GREEN)✓ Xbox One built successfully$(NC)"
-	@echo "  Output: src/build/$(CONSOLE_xb1).uf2"
+	@cd src/build && $(MAKE) --no-print-directory $(CONSOLE_xb1ctrl) -j4
+	@echo "$(GREEN)✓ Xbox One Controller built successfully$(NC)"
+	@echo "  Output: src/build/$(CONSOLE_xb1ctrl).uf2"
 	@echo ""
 
 .PHONY: nuon
@@ -372,9 +372,9 @@ flash-usb2gc:
 flash-usb2nuon:
 	@$(MAKE) --no-print-directory _flash_app APP_NAME=usb2nuon
 
-.PHONY: flash-usb2xb1
-flash-usb2xb1:
-	@$(MAKE) --no-print-directory _flash_app APP_NAME=usb2xb1
+.PHONY: flash-usb2xb1ctrl
+flash-usb2xb1ctrl:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=usb2xb1ctrl
 
 .PHONY: flash-usb2loopy
 flash-usb2loopy:
