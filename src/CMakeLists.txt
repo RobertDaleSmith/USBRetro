@@ -48,7 +48,6 @@ endif()
 
 add_executable(usbretro_pce) # For the usbretro_pce target
 add_executable(usbretro_ngc) # For the usbretro_ngc target
-add_executable(usbretro_xb1ctrl) # For the usbretro_xb1ctrl target
 add_executable(usbretro_nuon) # For the usbretro_nuon target
 add_executable(usbretro_loopy) # For the usbretro_loopy target
 add_executable(usbretro_3do) # For the usbretro_3do target
@@ -83,7 +82,6 @@ message(STATUS "Board ${PICO_BOARD}: BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO}")
 
 target_compile_definitions(usbretro_pce PRIVATE CONFIG_PCE=1)
 target_compile_definitions(usbretro_ngc PRIVATE CONFIG_NGC=1)
-target_compile_definitions(usbretro_xb1ctrl PRIVATE CONFIG_XB1CTRL=1)
 target_compile_definitions(usbretro_nuon PRIVATE CONFIG_NUON=1)
 target_compile_definitions(usbretro_loopy PRIVATE CONFIG_LOOPY=1)
 target_compile_definitions(usbretro_3do PRIVATE CONFIG_3DO=1)
@@ -111,7 +109,6 @@ target_compile_definitions(usbretro_controller_macropad PRIVATE CONFIG_CONTROLLE
 
 target_compile_options(usbretro_pce PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_ngc PRIVATE -O3) # Set optimization level to O3 for your_target
-target_compile_options(usbretro_xb1ctrl PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_nuon PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_loopy PRIVATE -O3) # Set optimization level to O3 for your_target
 target_compile_options(usbretro_3do PRIVATE -O3) # Set optimization level to O3 for your_target
@@ -132,7 +129,6 @@ endif()
 
 pico_add_extra_outputs(usbretro_pce)
 pico_add_extra_outputs(usbretro_ngc)
-pico_add_extra_outputs(usbretro_xb1ctrl)
 pico_add_extra_outputs(usbretro_nuon)
 pico_add_extra_outputs(usbretro_loopy)
 pico_add_extra_outputs(usbretro_3do)
@@ -154,7 +150,6 @@ pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pc
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio )
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
-pico_generate_pio_header(usbretro_xb1ctrl ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_read.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_send.pio )
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/core/services/leds/neopixel/ws2812.pio )
@@ -269,13 +264,6 @@ target_sources(usbretro_ngc PUBLIC # For NGC
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/src/GamecubeConsole.c
     # Phase 5: App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2gc/app.c
-)
-
-target_sources(usbretro_xb1ctrl PUBLIC # For XB1
-    ${COMMON_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone/xboxone_device.c
-    # Phase 5: App layer
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2xb1ctrl/app.c
 )
 
 target_sources(usbretro_nuon PUBLIC # For NUON
@@ -443,13 +431,6 @@ target_include_directories(usbretro_ngc PUBLIC # FOR NGC
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/joybus-pio/include
 )
 
-target_include_directories(usbretro_xb1ctrl PUBLIC # FOR XB1
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2xb1ctrl
-    ${CMAKE_CURRENT_SOURCE_DIR}/native/device/xboxone
-)
-
 target_include_directories(usbretro_nuon PUBLIC # FOR NUON
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common
@@ -564,12 +545,6 @@ target_link_libraries(usbretro_pce PRIVATE # FOR PCE
 target_link_libraries(usbretro_ngc PRIVATE # FOR NGC
     ${COMMON_LIBRARIES}
     hardware_flash
-)
-
-target_link_libraries(usbretro_xb1ctrl PRIVATE # FOR XB1
-    ${COMMON_LIBRARIES}
-    pico_i2c_slave
-    hardware_i2c
 )
 
 target_link_libraries(usbretro_nuon PRIVATE # FOR NUON
