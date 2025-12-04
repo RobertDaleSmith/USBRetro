@@ -25,7 +25,7 @@ typedef struct TU_ATTR_PACKED
 } switch_instance_t;
 
 // Cached device report properties on mount
-typedef struct TU_ATTR_PACKED
+typedef struct
 {
   switch_instance_t instances[CFG_TUH_HID];
   uint8_t instance_count;

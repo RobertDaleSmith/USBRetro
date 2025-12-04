@@ -324,7 +324,6 @@ target_sources(usbretro_usb PUBLIC # For USB (USB→USB HID gamepad)
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xinput.c  # Xbox 360 XInput class driver
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/tud_xbone.c  # Xbox One GIP class driver
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/xgip_protocol.c  # Xbox One GIP protocol
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xbone_auth/xbone_auth.c  # Xbox One auth passthrough
     # Phase 5: App layer
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )

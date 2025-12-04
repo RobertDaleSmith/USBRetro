@@ -102,3 +102,12 @@ void app_init(void)
     printf("[app:usb2nuon]   Soft reset: enabled (button combo)\n");
     printf("[app:usb2nuon]   Profiles: %d (active: %s)\n", profile_count, active_name ? active_name : "none");
 }
+
+// ============================================================================
+// APP TASK
+// ============================================================================
+
+void app_task(void)
+{
+    // Nothing extra needed - output interface task handles everything
+}

@@ -139,7 +139,9 @@ uint8_t router_get_player_count(output_target_t output);
 // ROUTING TABLES (Phase 6)
 // ============================================================================
 
+#ifndef MAX_ROUTES
 #define MAX_ROUTES 32  // Maximum number of routes in routing table
+#endif
 
 // Route entry for N:M routing
 typedef struct {

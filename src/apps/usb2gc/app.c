@@ -8,6 +8,7 @@
 #include "profiles.h"
 #include "core/router/router.h"
 #include "core/services/players/manager.h"
+#include "core/services/players/feedback.h"
 #include "core/services/profiles/profile.h"
 #include "core/input_interface.h"
 #include "core/output_interface.h"
@@ -107,6 +108,11 @@ void app_init(void)
 
 void app_task(void)
 {
-    // App-specific periodic tasks go here
-    // For GCUSB, most logic is in gamecube_device.c
+    // Forward rumble from GameCube console to USB controllers
+    if (gamecube_output_interface.get_rumble) {
+        uint8_t rumble = gamecube_output_interface.get_rumble();
+        for (int i = 0; i < playersCount; i++) {
+            feedback_set_rumble(i, rumble, rumble);
+        }
+    }
 }

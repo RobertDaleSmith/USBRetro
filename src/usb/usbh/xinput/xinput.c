@@ -10,8 +10,13 @@
 #include "chatpad.h"
 #include "core/input_event.h"
 
-// Xbox One auth passthrough
-#include "usb/usbh/xbone_auth/xbone_auth.h"
+// Xbox One auth passthrough - weak stubs for non-USB-device builds
+// These are overridden by xbone_auth.c when linked (usb2usb build)
+__attribute__((weak)) void xbone_auth_init(void) {}
+__attribute__((weak)) void xbone_auth_task(void) {}
+__attribute__((weak)) void xbone_auth_register(uint8_t dev_addr, uint8_t instance) { (void)dev_addr; (void)instance; }
+__attribute__((weak)) void xbone_auth_unregister(uint8_t dev_addr) { (void)dev_addr; }
+__attribute__((weak)) void xbone_auth_report_received(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) { (void)dev_addr; (void)instance; (void)report; (void)len; }
 
 // BTD driver for Bluetooth dongles
 #if CFG_TUH_BTD

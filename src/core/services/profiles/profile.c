@@ -335,10 +335,10 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
 
     player_combo_state_t* combo = &player_combo[player_index];
 
-    // Check button states (buttons are active-low in USBR format)
-    bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
-    bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
-    bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
+    // Check button states (buttons are active-high: 1 = pressed)
+    bool select_held = ((buttons & USBR_BUTTON_S1) != 0);
+    bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) != 0);
+    bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) != 0);
 
     // Select released - reset everything for this player
     if (!select_held) {
@@ -417,12 +417,12 @@ void profile_check_switch_combo(uint32_t buttons)
     uint8_t player_count = get_player_count ? get_player_count() : 0;
     if (player_count == 0) return;  // No controllers connected
 
-    // Check button states (buttons are active-low in USBR format)
-    bool select_held = ((buttons & USBR_BUTTON_S1) == 0);
-    bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) == 0);
-    bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) == 0);
-    bool dpad_left_pressed = ((buttons & USBR_BUTTON_DL) == 0);
-    bool dpad_right_pressed = ((buttons & USBR_BUTTON_DR) == 0);
+    // Check button states (buttons are active-high: 1 = pressed)
+    bool select_held = ((buttons & USBR_BUTTON_S1) != 0);
+    bool dpad_up_pressed = ((buttons & USBR_BUTTON_DU) != 0);
+    bool dpad_down_pressed = ((buttons & USBR_BUTTON_DD) != 0);
+    bool dpad_left_pressed = ((buttons & USBR_BUTTON_DL) != 0);
+    bool dpad_right_pressed = ((buttons & USBR_BUTTON_DR) != 0);
 
     // Select released - reset everything
     if (!select_held) {

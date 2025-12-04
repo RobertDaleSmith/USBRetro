@@ -103,3 +103,12 @@ void app_init(void)
     printf("[app:usb2xb1]   I2C passthrough: enabled (GPIO expander emulation)\n");
     printf("[app:usb2xb1]   DAC analog: enabled (MCP4728 for sticks/triggers)\n");
 }
+
+// ============================================================================
+// APP TASK
+// ============================================================================
+
+void app_task(void)
+{
+    // Nothing extra needed - output interface task handles everything
+}

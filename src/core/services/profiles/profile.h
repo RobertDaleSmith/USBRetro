@@ -135,7 +135,7 @@ typedef struct {
 // Result of applying profile mapping to input - consumed by output devices
 
 typedef struct {
-    uint32_t buttons;           // Remapped button state (active-low)
+    uint32_t buttons;           // Remapped button state (active-high: 1 = pressed)
 
     // Analog outputs (can be modified by button mappings)
     uint8_t left_x;

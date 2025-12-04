@@ -101,3 +101,12 @@ void app_init(void)
     printf("[app:usb2loopy]   Profiles: %d (active: %s)\n", profile_count, active_name ? active_name : "none");
     printf("[app:usb2loopy]   Status: EXPERIMENTAL - protocol partially implemented\n");
 }
+
+// ============================================================================
+// APP TASK
+// ============================================================================
+
+void app_task(void)
+{
+    // Nothing extra needed - output interface task handles everything
+}

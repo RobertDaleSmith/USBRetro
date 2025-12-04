@@ -199,3 +199,12 @@ void app_init(void)
     printf("[app:usb2uart]   Player slots: %d (FIXED mode)\n", MAX_PLAYER_SLOTS);
     printf("[app:usb2uart]   Feedback: per-player rumble/LED from ESP32\n");
 }
+
+// ============================================================================
+// APP TASK
+// ============================================================================
+
+void app_task(void)
+{
+    // Nothing extra needed - output interface task handles everything
+}
