@@ -879,16 +879,15 @@ static bool usbd_send_psclassic_report(uint8_t player_index)
         else if (right)         psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
 
         // Face buttons and shoulders (bits 0-9)
-        // Note: L1/R1 and L2/R2 swapped to match PS Classic bit layout
         psclassic_report.buttons |=
               (buttons & USBR_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
             | (buttons & USBR_BUTTON_B2 ? PSCLASSIC_MASK_CIRCLE   : 0)
             | (buttons & USBR_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
             | (buttons & USBR_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
-            | (buttons & USBR_BUTTON_L1 ? PSCLASSIC_MASK_L2       : 0)
-            | (buttons & USBR_BUTTON_R1 ? PSCLASSIC_MASK_R2       : 0)
-            | (buttons & USBR_BUTTON_L2 ? PSCLASSIC_MASK_L1       : 0)
-            | (buttons & USBR_BUTTON_R2 ? PSCLASSIC_MASK_R1       : 0)
+            | (buttons & USBR_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
+            | (buttons & USBR_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
+            | (buttons & USBR_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
+            | (buttons & USBR_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
             | (buttons & USBR_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
             | (buttons & USBR_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
 
