@@ -8,6 +8,7 @@
 #include "core/input_event.h"
 #include "core/router/router.h"
 #include "core/buttons.h"
+#include "core/services/players/manager.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -151,10 +152,11 @@ static void gamepad_disconnect(bthid_device_t* device)
 
     bthid_gamepad_data_t* gp = (bthid_gamepad_data_t*)device->driver_data;
     if (gp) {
-        // Reinitialize to neutral state before disconnect
+        // Remove player assignment
+        remove_players_by_address(gp->event.dev_addr, gp->event.instance);
+
         init_input_event(&gp->event);
         gp->initialized = false;
-        // TODO: Notify router of disconnect
     }
 }
 

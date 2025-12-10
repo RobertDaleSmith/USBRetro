@@ -105,9 +105,11 @@ static void l2cap_process_signaling(uint8_t conn_index, const uint8_t* data, uin
                 uint16_t dcid = 0;
 
                 if (ch) {
-                    // Accept HID PSMs
+                    // Accept HID and SDP PSMs
+                    // SDP is needed by some controllers during reconnection
                     if (req->psm == L2CAP_PSM_HID_CONTROL ||
-                        req->psm == L2CAP_PSM_HID_INTERRUPT) {
+                        req->psm == L2CAP_PSM_HID_INTERRUPT ||
+                        req->psm == L2CAP_PSM_SDP) {
                         ch->state = L2CAP_CHANNEL_CONFIG;
                         ch->local_cid = next_local_cid++;
                         ch->remote_cid = req->source_cid;

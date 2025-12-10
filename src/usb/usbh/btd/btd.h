@@ -180,6 +180,8 @@ bool btd_hci_link_key_reply(const uint8_t* bd_addr, const uint8_t* link_key);
 bool btd_hci_link_key_neg_reply(const uint8_t* bd_addr);
 bool btd_hci_user_confirm_reply(const uint8_t* bd_addr);
 bool btd_hci_io_capability_reply(const uint8_t* bd_addr);
+bool btd_hci_authentication_requested(uint16_t handle);
+bool btd_hci_set_connection_encryption(uint16_t handle, bool enable);
 bool btd_hci_remote_name_request(const uint8_t* bd_addr);
 
 // ============================================================================
@@ -196,6 +198,12 @@ bool btd_send_acl_data(uint16_t handle, uint8_t pb_flag, uint8_t bc_flag,
 
 // Called when a new connection is established
 extern void btd_on_connection(uint8_t conn_index);
+
+// Called when authentication completes
+extern void btd_on_auth_complete(uint8_t conn_index, uint8_t status);
+
+// Called when encryption changes
+extern void btd_on_encryption_change(uint8_t conn_index, uint8_t status, bool enabled);
 
 // Called when a connection is disconnected
 extern void btd_on_disconnection(uint8_t conn_index);

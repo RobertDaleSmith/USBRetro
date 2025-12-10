@@ -2,6 +2,7 @@
 // Routes BTD and L2CAP callbacks to the BT transport layer
 
 #include "btd.h"
+#include "btd_linkkey.h"
 #include "l2cap.h"
 #include "bt/transport/bt_transport.h"
 #include <stdio.h>
@@ -15,6 +16,7 @@
 static struct {
     bool control_open;
     bool interrupt_open;
+    bool interrupt_pending;  // Need to initiate interrupt connection
     uint16_t control_cid;
     uint16_t interrupt_cid;
 } hid_channel_state[BTD_MAX_CONNECTIONS];
@@ -64,8 +66,64 @@ void btd_on_connection(uint8_t conn_index)
     // Reset HID channel state for this connection
     memset(&hid_channel_state[conn_index], 0, sizeof(hid_channel_state[0]));
 
-    // L2CAP channels will be created when the remote device sends
-    // L2CAP connection requests for HID PSMs
+    // Request authentication before initiating L2CAP
+    // This is required for devices like DS4 that need SSP
+    const btd_connection_t* conn = btd_get_connection(conn_index);
+    if (conn) {
+        printf("[BTD_GLUE] Requesting authentication...\n");
+        btd_hci_authentication_requested(conn->handle);
+    }
+}
+
+void btd_on_auth_complete(uint8_t conn_index, uint8_t status)
+{
+    printf("[BTD_GLUE] Authentication complete for connection %d, status=0x%02X\n",
+           conn_index, status);
+
+    const btd_connection_t* conn = btd_get_connection(conn_index);
+    if (!conn) {
+        return;
+    }
+
+    if (status != 0) {
+        printf("[BTD_GLUE] Authentication failed\n");
+        // Status 0x06 = PIN or Key Missing - device lost our bond
+        // Delete our stored key so SSP can re-pair on next connection
+        if (status == 0x06) {
+            printf("[BTD_GLUE] Deleting stale link key for device\n");
+            btd_linkkey_delete(conn->bd_addr);
+        }
+        // Disconnect so device can re-pair
+        btd_hci_disconnect(conn->handle, 0x13);  // 0x13 = Remote User Terminated
+        return;
+    }
+
+    // Request encryption after authentication
+    // L2CAP will be started after encryption is enabled
+    printf("[BTD_GLUE] Requesting encryption...\n");
+    btd_hci_set_connection_encryption(conn->handle, true);
+}
+
+void btd_on_encryption_change(uint8_t conn_index, uint8_t status, bool enabled)
+{
+    printf("[BTD_GLUE] Encryption change for connection %d: status=0x%02X, enabled=%d\n",
+           conn_index, status, enabled);
+
+    if (status != 0 || !enabled) {
+        printf("[BTD_GLUE] Encryption failed or disabled\n");
+        return;
+    }
+
+    // Now that encryption is enabled, initiate L2CAP connections for HID
+    printf("[BTD_GLUE] Initiating L2CAP connections for HID...\n");
+
+    // Connect HID Control channel (PSM 0x0011)
+    uint16_t control_cid = l2cap_connect(conn_index, L2CAP_PSM_HID_CONTROL);
+    if (control_cid) {
+        printf("[BTD_GLUE] HID Control connection initiated (local_cid=0x%04X)\n", control_cid);
+    } else {
+        printf("[BTD_GLUE] Failed to initiate HID Control connection\n");
+    }
 }
 
 void btd_on_disconnection(uint8_t conn_index)
@@ -104,6 +162,11 @@ void l2cap_on_channel_open(uint16_t local_cid, uint16_t psm, uint8_t conn_index)
         hid_channel_state[conn_index].control_open = true;
         hid_channel_state[conn_index].control_cid = local_cid;
         printf("[BTD_GLUE] HID Control channel ready\n");
+
+        // Mark interrupt connection as pending - will be initiated on next task cycle
+        // This avoids USB endpoint busy issues from sending too fast
+        hid_channel_state[conn_index].interrupt_pending = true;
+        printf("[BTD_GLUE] HID Interrupt connection pending\n");
     }
     else if (psm == L2CAP_PSM_HID_INTERRUPT) {
         hid_channel_state[conn_index].interrupt_open = true;
@@ -128,18 +191,33 @@ void l2cap_on_channel_closed(uint16_t local_cid)
 
     // Find which connection this channel belonged to
     for (int i = 0; i < BTD_MAX_CONNECTIONS; i++) {
+        bool was_open = false;
+
         if (hid_channel_state[i].control_cid == local_cid) {
+            was_open = hid_channel_state[i].control_open;
             hid_channel_state[i].control_open = false;
             hid_channel_state[i].control_cid = 0;
-            update_btd_connection_cids(i);
-            break;
         }
-        if (hid_channel_state[i].interrupt_cid == local_cid) {
+        else if (hid_channel_state[i].interrupt_cid == local_cid) {
+            was_open = hid_channel_state[i].interrupt_open;
             hid_channel_state[i].interrupt_open = false;
             hid_channel_state[i].interrupt_cid = 0;
-            update_btd_connection_cids(i);
-            break;
         }
+        else {
+            continue;
+        }
+
+        update_btd_connection_cids(i);
+
+        // If a channel was open and is now closed, check if device is disconnecting
+        if (was_open) {
+            // If neither channel is open anymore, notify disconnect
+            if (!hid_channel_state[i].control_open && !hid_channel_state[i].interrupt_open) {
+                printf("[BTD_GLUE] All HID channels closed for connection %d\n", i);
+                bt_on_disconnect(i);
+            }
+        }
+        break;
     }
 }
 
@@ -161,5 +239,28 @@ void l2cap_on_data(uint16_t local_cid, const uint8_t* data, uint16_t len)
         // HID control data (handshake, feature reports, etc.)
         printf("[BTD_GLUE] HID Control data: %d bytes\n", len);
         // TODO: Handle control channel responses if needed
+    }
+}
+
+// ============================================================================
+// TASK FUNCTION
+// Call this periodically to process pending operations
+// ============================================================================
+
+void btd_glue_task(void)
+{
+    // Process pending interrupt connections
+    for (int i = 0; i < BTD_MAX_CONNECTIONS; i++) {
+        if (hid_channel_state[i].interrupt_pending && hid_channel_state[i].control_open) {
+            hid_channel_state[i].interrupt_pending = false;
+
+            printf("[BTD_GLUE] Initiating HID Interrupt connection...\n");
+            uint16_t interrupt_cid = l2cap_connect(i, L2CAP_PSM_HID_INTERRUPT);
+            if (interrupt_cid) {
+                printf("[BTD_GLUE] HID Interrupt connection initiated (local_cid=0x%04X)\n", interrupt_cid);
+            } else {
+                printf("[BTD_GLUE] Failed to initiate HID Interrupt connection\n");
+            }
+        }
     }
 }

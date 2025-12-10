@@ -194,6 +194,12 @@ typedef struct __attribute__((packed)) {
     uint32_t numeric_value;
 } hci_event_user_confirm_request_t;
 
+// Simple Pairing Complete event
+typedef struct __attribute__((packed)) {
+    uint8_t status;
+    uint8_t bd_addr[6];
+} hci_event_simple_pairing_complete_t;
+
 // Remote Name Request Complete event
 typedef struct __attribute__((packed)) {
     uint8_t status;

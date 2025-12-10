@@ -17,6 +17,13 @@
 
 static btd_t btd_ctx;
 
+// Pending connection info (stored during inquiry, used when connection completes)
+static struct {
+    uint8_t bd_addr[6];
+    uint8_t class_of_device[3];
+    bool valid;
+} pending_connection;
+
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
@@ -58,10 +65,16 @@ void btd_init(void)
 // Heartbeat counter for debug
 static uint32_t btd_task_counter = 0;
 
+// Forward declaration for glue layer task
+extern void btd_glue_task(void);
+
 void btd_task(void)
 {
     // Handle link key flash saves (debounced)
     btd_linkkey_task();
+
+    // Process pending L2CAP connections
+    btd_glue_task();
 
     if (!btd_ctx.dongle_connected) {
         return;
@@ -148,8 +161,9 @@ static void btd_state_machine(void)
             break;
 
         case BTD_STATE_WRITE_SCAN:
-            // Enable inquiry scan + page scan for pairing
-            btd_hci_write_scan_enable(HCI_SCAN_INQUIRY_AND_PAGE);
+            // Enable page scan only - allows paired devices to connect to us
+            // but we're not discoverable (we scan for devices, they don't scan for us)
+            btd_hci_write_scan_enable(HCI_SCAN_PAGE_ONLY);
             break;
 
         case BTD_STATE_INQUIRY:
@@ -407,6 +421,20 @@ bool btd_hci_io_capability_reply(const uint8_t* bd_addr)
     return btd_send_hci_cmd(HCI_IO_CAPABILITY_REQUEST_REPLY, (uint8_t*)&params, sizeof(params));
 }
 
+bool btd_hci_authentication_requested(uint16_t handle)
+{
+    printf("[BTD] Requesting authentication for handle 0x%04X\n", handle);
+    uint8_t params[2] = { handle & 0xFF, (handle >> 8) & 0xFF };
+    return btd_send_hci_cmd(HCI_AUTH_REQUESTED, params, 2);
+}
+
+bool btd_hci_set_connection_encryption(uint16_t handle, bool enable)
+{
+    printf("[BTD] Setting encryption for handle 0x%04X: %s\n", handle, enable ? "ON" : "OFF");
+    uint8_t params[3] = { handle & 0xFF, (handle >> 8) & 0xFF, enable ? 1 : 0 };
+    return btd_send_hci_cmd(HCI_SET_CONNECTION_ENCRYPTION, params, 3);
+}
+
 bool btd_hci_remote_name_request(const uint8_t* bd_addr)
 {
     char addr_str[18];
@@ -605,13 +633,30 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                        results[i].class_of_device[0],
                        major_class);
 
-                // Try to connect to any device for now (debug)
-                printf("[BTD] Attempting connection...\n");
+                // Only connect to Peripheral devices (major class 5 = gamepads, keyboards, mice)
+                if (major_class != 5) {
+                    printf("[BTD] Skipping non-peripheral device (major=%d)\n", major_class);
+                    continue;
+                }
+
+                // If we have a stored link key, don't initiate - wait for device to connect to us
+                // This avoids race conditions with devices that prefer to initiate reconnection
+                if (btd_linkkey_find(results[i].bd_addr)) {
+                    printf("[BTD] Known device (has stored key), waiting for it to connect...\n");
+                    continue;
+                }
+
+                printf("[BTD] New peripheral found, attempting connection...\n");
+                // Store pending connection info for later use
+                memcpy(pending_connection.bd_addr, results[i].bd_addr, 6);
+                memcpy(pending_connection.class_of_device, results[i].class_of_device, 3);
+                pending_connection.valid = true;
+
                 btd_hci_inquiry_cancel();  // Stop inquiry
                 btd_hci_create_connection(results[i].bd_addr,
                                          results[i].page_scan_rep_mode,
                                          results[i].clock_offset);
-                return;  // Only connect to first device found
+                return;  // Only connect to first peripheral found
             }
             break;
         }
@@ -634,13 +679,30 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                        major_class,
                        results[i].rssi);
 
-                // Try to connect to any device for now (debug)
-                printf("[BTD] Attempting connection...\n");
+                // Only connect to Peripheral devices (major class 5 = gamepads, keyboards, mice)
+                if (major_class != 5) {
+                    printf("[BTD] Skipping non-peripheral device (major=%d)\n", major_class);
+                    continue;
+                }
+
+                // If we have a stored link key, don't initiate - wait for device to connect to us
+                // This avoids race conditions with devices that prefer to initiate reconnection
+                if (btd_linkkey_find(results[i].bd_addr)) {
+                    printf("[BTD] Known device (has stored key), waiting for it to connect...\n");
+                    continue;
+                }
+
+                printf("[BTD] New peripheral found, attempting connection...\n");
+                // Store pending connection info for later use
+                memcpy(pending_connection.bd_addr, results[i].bd_addr, 6);
+                memcpy(pending_connection.class_of_device, results[i].class_of_device, 3);
+                pending_connection.valid = true;
+
                 btd_hci_inquiry_cancel();  // Stop inquiry
                 btd_hci_create_connection(results[i].bd_addr,
                                          results[i].page_scan_rep_mode,
                                          results[i].clock_offset);
-                return;  // Only connect to first device found
+                return;  // Only connect to first peripheral found
             }
             break;
         }
@@ -658,8 +720,25 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                    major_class,
                    eir->rssi);
 
-            // Try to connect to any device for now (debug)
-            printf("[BTD] Attempting connection...\n");
+            // Only connect to Peripheral devices (major class 5 = gamepads, keyboards, mice)
+            if (major_class != 5) {
+                printf("[BTD] Skipping non-peripheral device (major=%d)\n", major_class);
+                break;
+            }
+
+            // If we have a stored link key, don't initiate - wait for device to connect to us
+            // This avoids race conditions with devices that prefer to initiate reconnection
+            if (btd_linkkey_find(eir->bd_addr)) {
+                printf("[BTD] Known device (has stored key), waiting for it to connect...\n");
+                break;
+            }
+
+            printf("[BTD] New peripheral found, attempting connection...\n");
+            // Store pending connection info for later use
+            memcpy(pending_connection.bd_addr, eir->bd_addr, 6);
+            memcpy(pending_connection.class_of_device, eir->class_of_device, 3);
+            pending_connection.valid = true;
+
             btd_hci_inquiry_cancel();  // Stop inquiry
             btd_hci_create_connection(eir->bd_addr,
                                      eir->page_scan_rep_mode,
@@ -675,8 +754,18 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                    addr_str, req->class_of_device[2], req->class_of_device[1],
                    req->class_of_device[0], req->link_type);
 
+            // Store pending connection info for incoming connections
+            memcpy(pending_connection.bd_addr, req->bd_addr, 6);
+            memcpy(pending_connection.class_of_device, req->class_of_device, 3);
+            pending_connection.valid = true;
+
             // Accept ACL connections
             if (req->link_type == HCI_LINK_TYPE_ACL) {
+                printf("[BTD] Accepting connection from %s\n", addr_str);
+                // Cancel inquiry if running to avoid command conflicts
+                if (btd_ctx.state == BTD_STATE_INQUIRY) {
+                    btd_hci_inquiry_cancel();
+                }
                 btd_hci_accept_connection(req->bd_addr, HCI_ROLE_SLAVE);
             }
             break;
@@ -690,6 +779,9 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
             if (cc->status == HCI_SUCCESS) {
                 printf("[BTD] Connection complete: %s, handle=0x%04X\n", addr_str, cc->handle);
 
+                // Stop scanning while connected
+                btd_ctx.state = BTD_STATE_RUNNING;
+
                 // Allocate connection slot
                 btd_connection_t* conn = btd_alloc_connection();
                 if (conn) {
@@ -697,6 +789,14 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                     memcpy(conn->bd_addr, cc->bd_addr, 6);
                     conn->handle = cc->handle;
                     conn->name[0] = '\0';  // Clear name, will be filled by remote name request
+
+                    // Copy class of device from pending connection if addresses match
+                    if (pending_connection.valid &&
+                        memcmp(pending_connection.bd_addr, cc->bd_addr, 6) == 0) {
+                        memcpy(conn->class_of_device, pending_connection.class_of_device, 3);
+                        pending_connection.valid = false;
+                    }
+
                     btd_ctx.num_connections++;
 
                     // Request remote name to identify the device
@@ -708,6 +808,9 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                 }
             } else {
                 printf("[BTD] Connection failed: %s, status=0x%02X\n", addr_str, cc->status);
+                // Restart inquiry to keep scanning for devices
+                printf("[BTD] Restarting inquiry after failed connection\n");
+                btd_ctx.state = BTD_STATE_INQUIRY;
             }
             break;
         }
@@ -724,6 +827,12 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                 btd_ctx.num_connections--;
 
                 btd_on_disconnection(idx);
+            }
+
+            // Restart scanning for devices after disconnect
+            if (btd_ctx.num_connections == 0) {
+                printf("[BTD] All devices disconnected, restarting inquiry\n");
+                btd_ctx.state = BTD_STATE_INQUIRY;
             }
             break;
         }
@@ -787,6 +896,54 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
 
             // Auto-accept (no display/keyboard)
             btd_hci_user_confirm_reply(uc->bd_addr);
+            break;
+        }
+
+        case HCI_EVENT_IO_CAPABILITY_RESPONSE: {
+            const hci_event_io_cap_response_t* io = (const hci_event_io_cap_response_t*)evt->params;
+            char addr_str[18];
+            btd_bd_addr_to_str(io->bd_addr, addr_str);
+            printf("[BTD] IO capability response from %s: io=%d oob=%d auth=%d\n",
+                   addr_str, io->io_capability, io->oob_data_present, io->auth_requirements);
+            break;
+        }
+
+        case HCI_EVENT_SIMPLE_PAIRING_COMPLETE: {
+            const hci_event_simple_pairing_complete_t* sp = (const hci_event_simple_pairing_complete_t*)evt->params;
+            char addr_str[18];
+            btd_bd_addr_to_str(sp->bd_addr, addr_str);
+            printf("[BTD] Simple pairing complete: %s, status=0x%02X\n", addr_str, sp->status);
+            if (sp->status != HCI_SUCCESS) {
+                printf("[BTD] SSP failed - device may need to be in pairing mode\n");
+            }
+            break;
+        }
+
+        case HCI_EVENT_AUTH_COMPLETE: {
+            uint8_t status = evt->params[0];
+            uint16_t handle = evt->params[1] | (evt->params[2] << 8);
+            printf("[BTD] Authentication complete: handle=0x%04X, status=0x%02X\n", handle, status);
+
+            btd_connection_t* conn = btd_find_connection_by_handle(handle);
+            if (conn) {
+                uint8_t idx = conn - btd_ctx.connections;
+                btd_on_auth_complete(idx, status);
+            }
+            break;
+        }
+
+        case HCI_EVENT_ENCRYPT_CHANGE: {
+            uint8_t status = evt->params[0];
+            uint16_t handle = evt->params[1] | (evt->params[2] << 8);
+            uint8_t enabled = evt->params[3];
+            printf("[BTD] Encryption change: handle=0x%04X, status=0x%02X, enabled=%d\n",
+                   handle, status, enabled);
+
+            btd_connection_t* conn = btd_find_connection_by_handle(handle);
+            if (conn) {
+                uint8_t idx = conn - btd_ctx.connections;
+                btd_on_encryption_change(idx, status, enabled != 0);
+            }
             break;
         }
 

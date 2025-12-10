@@ -3,6 +3,7 @@
 
 #include "bthid.h"
 #include "bt/transport/bt_transport.h"
+#include "devices/generic/bthid_gamepad.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -236,8 +237,11 @@ void bt_on_hid_ready(uint8_t conn_index)
             driver->init(device);
         }
     } else {
-        printf("[BTHID] No specific driver found, using generic\n");
-        // TODO: Use generic gamepad driver
+        printf("[BTHID] No specific driver found, using generic gamepad\n");
+        device->driver = &bthid_gamepad_driver;
+        if (bthid_gamepad_driver.init) {
+            bthid_gamepad_driver.init(device);
+        }
     }
 }
 

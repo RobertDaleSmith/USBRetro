@@ -10,6 +10,7 @@
 #include "core/input_event.h"
 #include "core/router/router.h"
 #include "core/buttons.h"
+#include "core/services/players/manager.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -277,6 +278,9 @@ static void ds4_disconnect(bthid_device_t* device)
 
     ds4_bt_data_t* ds4 = (ds4_bt_data_t*)device->driver_data;
     if (ds4) {
+        // Remove player assignment
+        remove_players_by_address(ds4->event.dev_addr, ds4->event.instance);
+
         init_input_event(&ds4->event);
         ds4->initialized = false;
     }

@@ -2,6 +2,7 @@
 // Manages the active transport and provides weak callback defaults
 
 #include "bt_transport.h"
+#include "bt/bthid/bthid_registry.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -13,6 +14,9 @@ const bt_transport_t* bt_transport = NULL;
 void bt_init(const bt_transport_t* transport)
 {
     bt_transport = transport;
+
+    // Initialize BTHID registry (registers all drivers)
+    bthid_registry_init();
 
     if (bt_transport && bt_transport->init) {
         printf("[BT] Initializing transport: %s\n", bt_transport->name);
