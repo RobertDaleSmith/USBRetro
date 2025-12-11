@@ -241,3 +241,55 @@ void btd_linkkey_task(void)
         btd_linkkey_save_now();
     }
 }
+
+// ============================================================================
+// LOCAL BD_ADDR CACHING
+// ============================================================================
+
+void btd_linkkey_set_local_addr(const uint8_t* bd_addr)
+{
+    if (!initialized || !bd_addr) {
+        return;
+    }
+
+    // Check if it's different from what we have
+    if (linkkey_storage.local_addr_valid == 0x01 &&
+        memcmp(linkkey_storage.local_bd_addr, bd_addr, BTD_BDADDR_SIZE) == 0) {
+        // Already stored, no change needed
+        return;
+    }
+
+    memcpy(linkkey_storage.local_bd_addr, bd_addr, BTD_BDADDR_SIZE);
+    linkkey_storage.local_addr_valid = 0x01;
+
+    char addr_str[18];
+    // Format address for logging
+    snprintf(addr_str, sizeof(addr_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+             bd_addr[0], bd_addr[1], bd_addr[2],
+             bd_addr[3], bd_addr[4], bd_addr[5]);
+    printf("[BTD] Caching local BD_ADDR: %s\n", addr_str);
+
+    btd_linkkey_save();
+}
+
+const uint8_t* btd_linkkey_get_local_addr(void)
+{
+    if (!initialized) {
+        return NULL;
+    }
+
+    if (linkkey_storage.local_addr_valid != 0x01) {
+        return NULL;
+    }
+
+    // Check if it's not all zeros
+    bool valid = false;
+    for (int i = 0; i < BTD_BDADDR_SIZE; i++) {
+        if (linkkey_storage.local_bd_addr[i] != 0) {
+            valid = true;
+            break;
+        }
+    }
+
+    return valid ? linkkey_storage.local_bd_addr : NULL;
+}

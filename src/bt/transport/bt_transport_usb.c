@@ -4,6 +4,7 @@
 #include "bt_transport.h"
 #include "usb/usbh/btd/btd.h"
 #include "usb/usbh/btd/l2cap.h"
+#include "bt/bthid/bthid.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -51,6 +52,7 @@ static void usb_transport_init(void)
 static void usb_transport_task(void)
 {
     btd_task();
+    bthid_task();  // Run BT HID device driver tasks
 }
 
 static bool usb_transport_is_ready(void)

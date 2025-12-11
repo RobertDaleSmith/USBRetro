@@ -38,7 +38,9 @@ typedef struct {
     uint32_t magic;                                      // Validation: 0x42544C4B ("BTLK")
     uint32_t version;                                    // Storage format version
     btd_linkkey_entry_t entries[BTD_LINKKEY_MAX_DEVICES];
-    uint8_t  reserved[16];                               // Reserved for future use
+    uint8_t  local_bd_addr[BTD_BDADDR_SIZE];             // Cached local dongle address
+    uint8_t  local_addr_valid;                           // 0x01 if local_bd_addr is valid
+    uint8_t  reserved[9];                                // Reserved for future use
 } btd_linkkey_storage_t;
 
 #define BTD_LINKKEY_MAGIC       0x42544C4B  // "BTLK"
@@ -85,5 +87,18 @@ void btd_linkkey_save_now(void);
 
 // Task function for debounced saves (call from main loop)
 void btd_linkkey_task(void);
+
+// ============================================================================
+// LOCAL BD_ADDR CACHING
+// For DS3 BT pairing - cache dongle address so DS3 can be programmed even
+// when dongle isn't currently connected
+// ============================================================================
+
+// Store the local dongle's BD_ADDR to flash
+void btd_linkkey_set_local_addr(const uint8_t* bd_addr);
+
+// Get the cached local BD_ADDR
+// Returns pointer to 6-byte address, or NULL if not cached
+const uint8_t* btd_linkkey_get_local_addr(void);
 
 #endif // BTD_LINKKEY_H

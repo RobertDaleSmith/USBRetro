@@ -508,10 +508,34 @@ void ds4_auth_reset(void) {
     TU_LOG1("[DS4 Auth] Auth state reset\r\n");
 }
 
+// Shared buffer for DS3 BT address verification (filled by tuh_hid_get_report)
+static uint8_t ds3_verify_buf[8] = {0};
+
+// Get pointer to DS3 verify buffer (called from sony_ds3.c)
+uint8_t* ds3_get_verify_buffer(void) {
+    return ds3_verify_buf;
+}
+
 // TinyUSB callback for get_report completion
 void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
                                     uint16_t len) {
+    // Handle DS3 BT address verification (report 0xF5)
+    if (report_id == 0xF5) {
+        // Notify DS3 driver that GET_REPORT completed
+        extern void ds3_on_get_report_complete(uint8_t dev_addr, uint8_t instance);
+        ds3_on_get_report_complete(dev_addr, idx);
+
+        if (len == 0) {
+            printf("[DS3] GET_REPORT 0xF5 FAILED\n");
+        } else {
+            printf("[DS3] Current host address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                   ds3_verify_buf[2], ds3_verify_buf[3], ds3_verify_buf[4],
+                   ds3_verify_buf[5], ds3_verify_buf[6], ds3_verify_buf[7]);
+        }
+        return;
+    }
+
     // Check if this is for our auth DS4
     if (!ds4_auth.ds4_available ||
         dev_addr != ds4_auth.dev_addr ||
@@ -575,6 +599,14 @@ void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
 void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
                                     uint16_t len) {
+    // DS3 BT address programming complete
+    if (report_id == 0xF5) {
+        if (len == 8) {
+            printf("[DS3] BT host address programmed successfully\n");
+        }
+        return;
+    }
+
     // Check if this is for our auth DS4
     if (!ds4_auth.ds4_available ||
         dev_addr != ds4_auth.dev_addr ||

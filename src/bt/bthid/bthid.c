@@ -58,11 +58,19 @@ void bthid_register_driver(const bthid_driver_t* driver)
 // TASK
 // ============================================================================
 
+static bool bthid_task_debug_done = false;
+
 void bthid_task(void)
 {
     // Run device driver tasks
     for (int i = 0; i < BTHID_MAX_DEVICES; i++) {
         if (devices[i].active && devices[i].driver) {
+            if (!bthid_task_debug_done) {
+                printf("[BTHID] Task loop: dev %d active, driver=%p, drv->task=%p\n",
+                       i, devices[i].driver,
+                       ((const bthid_driver_t*)devices[i].driver)->task);
+                bthid_task_debug_done = true;
+            }
             const bthid_driver_t* drv = (const bthid_driver_t*)devices[i].driver;
             if (drv->task) {
                 drv->task(&devices[i]);
@@ -243,6 +251,10 @@ void bt_on_hid_ready(uint8_t conn_index)
             bthid_gamepad_driver.init(device);
         }
     }
+
+    // Debug: confirm device state directly from array
+    printf("[BTHID] Setup complete: devices[0].active=%d, devices[0].driver=%p\n",
+           devices[0].active, devices[0].driver);
 }
 
 void bt_on_disconnect(uint8_t conn_index)

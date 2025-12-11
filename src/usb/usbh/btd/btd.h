@@ -121,6 +121,8 @@ typedef struct {
     bool     scan_enabled;
     bool     pairing_mode;
     bool     evt_pending;       // Event endpoint transfer is pending
+    bool     acl_out_pending;   // ACL OUT transfer pending
+    uint16_t acl_out_pending_len; // Length of pending ACL data
 } btd_t;
 
 // ============================================================================
@@ -234,6 +236,13 @@ void btd_driver_close(uint8_t dev_addr);
 // ============================================================================
 // DEBUG / UTILITY
 // ============================================================================
+
+// Get local Bluetooth address (dongle's MAC)
+// Returns pointer to 6-byte BD_ADDR, or NULL if BT not initialized
+const uint8_t* btd_get_local_bd_addr(void);
+
+// Check if BT dongle is connected and initialized
+bool btd_is_available(void);
 
 // Convert BD_ADDR to string "XX:XX:XX:XX:XX:XX"
 void btd_bd_addr_to_str(const uint8_t* bd_addr, char* str);

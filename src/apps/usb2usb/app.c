@@ -180,6 +180,9 @@ void app_task(void)
     // Process button input
     button_task();
 
+    // Run Bluetooth transport tasks (including HID device drivers)
+    bt_task();
+
     // Route rumble from USB device output to USB host input controllers
     // The output interface receives rumble from the console (e.g., Xbox OG)
     // and we forward it to connected controllers via the feedback system

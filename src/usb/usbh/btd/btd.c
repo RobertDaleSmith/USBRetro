@@ -68,6 +68,9 @@ static uint32_t btd_task_counter = 0;
 // Forward declaration for glue layer task
 extern void btd_glue_task(void);
 
+// Forward declaration for endpoint busy check
+extern bool usbh_edpt_busy(uint8_t dev_addr, uint8_t ep_addr);
+
 void btd_task(void)
 {
     // Handle link key flash saves (debounced)
@@ -78,6 +81,14 @@ void btd_task(void)
 
     if (!btd_ctx.dongle_connected) {
         return;
+    }
+
+    // Retry pending ACL OUT if endpoint is now free
+    if (btd_ctx.acl_out_pending && !usbh_edpt_busy(btd_ctx.dev_addr, btd_ctx.ep_acl_out)) {
+        btd_ctx.acl_out_pending = false;
+        btd_ctx.acl_credits--;
+        usbh_edpt_xfer(btd_ctx.dev_addr, btd_ctx.ep_acl_out,
+                       btd_ctx.acl_out_buf, btd_ctx.acl_out_pending_len);
     }
 
     // Heartbeat every ~5 seconds (assuming 1ms task rate)
@@ -472,9 +483,18 @@ bool btd_send_acl_data(uint16_t handle, uint8_t pb_flag, uint8_t bc_flag,
         memcpy(&btd_ctx.acl_out_buf[4], data, len);
     }
 
+    uint16_t total_len = 4 + len;
+
+    // Check if endpoint is busy - if so, mark as pending for later
+    if (usbh_edpt_busy(btd_ctx.dev_addr, btd_ctx.ep_acl_out)) {
+        btd_ctx.acl_out_pending = true;
+        btd_ctx.acl_out_pending_len = total_len;
+        return true;  // Return success, will be sent from task loop
+    }
+
     // Send via bulk OUT
     btd_ctx.acl_credits--;
-    return usbh_edpt_xfer(btd_ctx.dev_addr, btd_ctx.ep_acl_out, btd_ctx.acl_out_buf, 4 + len);
+    return usbh_edpt_xfer(btd_ctx.dev_addr, btd_ctx.ep_acl_out, btd_ctx.acl_out_buf, total_len);
 }
 
 // ============================================================================
@@ -516,6 +536,8 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                         char addr_str[18];
                         btd_bd_addr_to_str(btd_ctx.bd_addr, addr_str);
                         printf("[BTD] Local BD_ADDR: %s\n", addr_str);
+                        // Cache for DS3 pairing (persists even when dongle unplugged)
+                        btd_linkkey_set_local_addr(btd_ctx.bd_addr);
                     }
                     btd_ctx.state = BTD_STATE_READ_VERSION;
                     break;
@@ -860,8 +882,32 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
                 printf("[BTD] Found stored link key, replying\n");
                 btd_hci_link_key_reply(lk->bd_addr, stored_key);
             } else {
-                printf("[BTD] No stored link key, triggering new pairing\n");
-                btd_hci_link_key_neg_reply(lk->bd_addr);
+                // Check if this is a DS3 - they don't do normal pairing
+                // DS3 expects host to have a link key (can be zeros)
+                // DS3 COD is 0x000508, name might not be available yet
+                btd_connection_t* conn = btd_find_connection_by_bdaddr(lk->bd_addr);
+                bool is_ds3 = false;
+                if (conn) {
+                    // Check COD: DS3 is 0x000508 (bytes: 08 05 00)
+                    if (conn->class_of_device[0] == 0x08 &&
+                        conn->class_of_device[1] == 0x05 &&
+                        conn->class_of_device[2] == 0x00) {
+                        is_ds3 = true;
+                    }
+                    // Also check name if available
+                    if (conn->name[0] && strstr(conn->name, "PLAYSTATION(R)3")) {
+                        is_ds3 = true;
+                    }
+                }
+
+                if (is_ds3) {
+                    printf("[BTD] DS3 detected - using zero link key\n");
+                    static const uint8_t zero_key[16] = {0};
+                    btd_hci_link_key_reply(lk->bd_addr, zero_key);
+                } else {
+                    printf("[BTD] No stored link key, triggering new pairing\n");
+                    btd_hci_link_key_neg_reply(lk->bd_addr);
+                }
             }
             break;
         }
@@ -1099,6 +1145,38 @@ void btd_print_state(void)
     printf("[BTD] State: %s\n", state_names[btd_ctx.state]);
     printf("[BTD] Dongle connected: %d\n", btd_ctx.dongle_connected);
     printf("[BTD] Connections: %d\n", btd_ctx.num_connections);
+}
+
+const uint8_t* btd_get_local_bd_addr(void)
+{
+    // First try live address if dongle is connected
+    if (btd_ctx.dongle_connected && btd_ctx.state >= BTD_STATE_INQUIRY) {
+        // Check if BD_ADDR is valid (not all zeros)
+        bool valid = false;
+        for (int i = 0; i < 6; i++) {
+            if (btd_ctx.bd_addr[i] != 0) {
+                valid = true;
+                break;
+            }
+        }
+        if (valid) {
+            return btd_ctx.bd_addr;
+        }
+    }
+
+    // Fall back to cached address from flash
+    // This allows DS3 pairing even when dongle isn't currently connected
+    return btd_linkkey_get_local_addr();
+}
+
+bool btd_is_available(void)
+{
+    // Live dongle connected
+    if (btd_ctx.dongle_connected && btd_ctx.state >= BTD_STATE_INQUIRY) {
+        return true;
+    }
+    // Or we have a cached address from a previously-connected dongle
+    return btd_linkkey_get_local_addr() != NULL;
 }
 
 // ============================================================================

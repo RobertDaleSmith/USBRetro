@@ -66,13 +66,25 @@ void btd_on_connection(uint8_t conn_index)
     // Reset HID channel state for this connection
     memset(&hid_channel_state[conn_index], 0, sizeof(hid_channel_state[0]));
 
+    const btd_connection_t* conn = btd_get_connection(conn_index);
+    if (!conn) return;
+
+    // Check if this is a DS3 - COD 0x000508 (bytes: 08 05 00)
+    // DS3 doesn't use authentication/encryption - it initiates L2CAP directly
+    bool is_ds3 = (conn->class_of_device[0] == 0x08 &&
+                   conn->class_of_device[1] == 0x05 &&
+                   conn->class_of_device[2] == 0x00);
+
+    if (is_ds3) {
+        printf("[BTD_GLUE] DS3 detected - skipping auth, waiting for L2CAP\n");
+        // DS3 will initiate L2CAP connection itself
+        return;
+    }
+
     // Request authentication before initiating L2CAP
     // This is required for devices like DS4 that need SSP
-    const btd_connection_t* conn = btd_get_connection(conn_index);
-    if (conn) {
-        printf("[BTD_GLUE] Requesting authentication...\n");
-        btd_hci_authentication_requested(conn->handle);
-    }
+    printf("[BTD_GLUE] Requesting authentication...\n");
+    btd_hci_authentication_requested(conn->handle);
 }
 
 void btd_on_auth_complete(uint8_t conn_index, uint8_t status)
@@ -233,6 +245,7 @@ void l2cap_on_data(uint16_t local_cid, const uint8_t* data, uint16_t len)
     // Check if this is the interrupt channel (HID reports come on interrupt)
     if (local_cid == hid_channel_state[conn_index].interrupt_cid) {
         // HID input report - forward to transport layer
+        printf("[BTD_GLUE] HID Interrupt data: %d bytes\n", len);
         bt_on_hid_report(conn_index, data, len);
     }
     else if (local_cid == hid_channel_state[conn_index].control_cid) {

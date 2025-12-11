@@ -6,6 +6,7 @@
 
 // Include all BT HID drivers
 #include "devices/generic/bthid_gamepad.h"
+#include "devices/vendors/sony/ds3_bt.h"
 #include "devices/vendors/sony/ds4_bt.h"
 #include "devices/vendors/sony/ds5_bt.h"
 #include "devices/vendors/nintendo/switch_pro_bt.h"
@@ -20,6 +21,7 @@ void bthid_registry_init(void)
     // Order matters - first match wins
 
     // Sony controllers
+    ds3_bt_register();
     ds4_bt_register();
     ds5_bt_register();
 
