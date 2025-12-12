@@ -134,6 +134,14 @@ static uint32_t apply_usbd_profile(const input_event_t* event, profile_output_t*
         profile_out->gyro[2] = event->gyro[2];
     }
 
+    // Copy pressure data through (no remapping)
+    profile_out->has_pressure = event->has_pressure;
+    if (event->has_pressure) {
+        for (int i = 0; i < 12; i++) {
+            profile_out->pressure[i] = event->pressure[i];
+        }
+    }
+
     return profile_out->buttons;
 }
 
@@ -819,24 +827,38 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         ps3_report.rx = profile_out.right_x;
         ps3_report.ry = 255 - profile_out.right_y;
 
-        // Pressure-sensitive buttons (D-pad)
-        ps3_report.pressure_up    = (buttons & USBR_BUTTON_DU) ? 0xFF : 0x00;
-        ps3_report.pressure_right = (buttons & USBR_BUTTON_DR) ? 0xFF : 0x00;
-        ps3_report.pressure_down  = (buttons & USBR_BUTTON_DD) ? 0xFF : 0x00;
-        ps3_report.pressure_left  = (buttons & USBR_BUTTON_DL) ? 0xFF : 0x00;
-
-        // Pressure-sensitive buttons (triggers/bumpers)
-        // Use profile analog values for L2/R2, fall back to digital for L1/R1
-        ps3_report.pressure_l2 = profile_out.l2_analog;
-        ps3_report.pressure_r2 = profile_out.r2_analog;
-        ps3_report.pressure_l1 = (buttons & USBR_BUTTON_L1) ? 0xFF : 0x00;
-        ps3_report.pressure_r1 = (buttons & USBR_BUTTON_R1) ? 0xFF : 0x00;
-
-        // Pressure-sensitive buttons (face buttons)
-        ps3_report.pressure_triangle = (buttons & USBR_BUTTON_B4) ? 0xFF : 0x00;
-        ps3_report.pressure_circle   = (buttons & USBR_BUTTON_B2) ? 0xFF : 0x00;
-        ps3_report.pressure_cross    = (buttons & USBR_BUTTON_B1) ? 0xFF : 0x00;
-        ps3_report.pressure_square   = (buttons & USBR_BUTTON_B3) ? 0xFF : 0x00;
+        // Pressure-sensitive buttons - use actual pressure data if available
+        if (profile_out.has_pressure) {
+            // D-pad pressure
+            ps3_report.pressure_up    = profile_out.pressure[0];
+            ps3_report.pressure_right = profile_out.pressure[1];
+            ps3_report.pressure_down  = profile_out.pressure[2];
+            ps3_report.pressure_left  = profile_out.pressure[3];
+            // Triggers/bumpers pressure
+            ps3_report.pressure_l2    = profile_out.pressure[4];
+            ps3_report.pressure_r2    = profile_out.pressure[5];
+            ps3_report.pressure_l1    = profile_out.pressure[6];
+            ps3_report.pressure_r1    = profile_out.pressure[7];
+            // Face buttons pressure
+            ps3_report.pressure_triangle = profile_out.pressure[8];
+            ps3_report.pressure_circle   = profile_out.pressure[9];
+            ps3_report.pressure_cross    = profile_out.pressure[10];
+            ps3_report.pressure_square   = profile_out.pressure[11];
+        } else {
+            // Fall back to digital (0xFF pressed, 0x00 released)
+            ps3_report.pressure_up    = (buttons & USBR_BUTTON_DU) ? 0xFF : 0x00;
+            ps3_report.pressure_right = (buttons & USBR_BUTTON_DR) ? 0xFF : 0x00;
+            ps3_report.pressure_down  = (buttons & USBR_BUTTON_DD) ? 0xFF : 0x00;
+            ps3_report.pressure_left  = (buttons & USBR_BUTTON_DL) ? 0xFF : 0x00;
+            ps3_report.pressure_l2    = profile_out.l2_analog;
+            ps3_report.pressure_r2    = profile_out.r2_analog;
+            ps3_report.pressure_l1    = (buttons & USBR_BUTTON_L1) ? 0xFF : 0x00;
+            ps3_report.pressure_r1    = (buttons & USBR_BUTTON_R1) ? 0xFF : 0x00;
+            ps3_report.pressure_triangle = (buttons & USBR_BUTTON_B4) ? 0xFF : 0x00;
+            ps3_report.pressure_circle   = (buttons & USBR_BUTTON_B2) ? 0xFF : 0x00;
+            ps3_report.pressure_cross    = (buttons & USBR_BUTTON_B1) ? 0xFF : 0x00;
+            ps3_report.pressure_square   = (buttons & USBR_BUTTON_B3) ? 0xFF : 0x00;
+        }
 
         // Motion data (SIXAXIS) - big-endian 16-bit values
         if (event->has_motion) {

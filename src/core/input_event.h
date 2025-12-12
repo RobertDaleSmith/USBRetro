@@ -131,6 +131,11 @@ typedef struct {
     int16_t accel[3];           // Accelerometer X, Y, Z
     int16_t gyro[3];            // Gyroscope X, Y, Z
     bool has_motion;            // Motion data is valid
+
+    // Pressure-sensitive button data (DS3)
+    // Order: up, right, down, left, l2, r2, l1, r1, triangle, circle, cross, square
+    uint8_t pressure[12];       // 0x00 = released, 0xFF = fully pressed
+    bool has_pressure;          // Pressure data is valid
 } input_event_t;
 
 // ============================================================================
@@ -175,6 +180,12 @@ static inline void init_input_event(input_event_t* event) {
     for (int i = 0; i < 3; i++) {
         event->accel[i] = 0;
         event->gyro[i] = 0;
+    }
+
+    // Clear pressure data
+    event->has_pressure = false;
+    for (int i = 0; i < 12; i++) {
+        event->pressure[i] = 0;
     }
 }
 

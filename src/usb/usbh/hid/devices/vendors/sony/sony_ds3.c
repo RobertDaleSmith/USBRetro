@@ -204,6 +204,25 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .has_motion = has_motion,
         .accel = {accel_x, accel_y, accel_z},
         .gyro = {0, 0, gyro_z},  // DS3 only has Z-axis gyro
+        .has_pressure = true,
+        // DS3 pressure mapping: struct indices are shifted due to report ID stripping
+        // D-pad: up, right, down, left at pressure[4-7]
+        // Triggers: L2, R2, L1, R1 at pressure[8-11]
+        // Face buttons: triangle, circle, cross, square at unused[0-3]
+        .pressure = {
+          ds3_report.pressure[4],  // up
+          ds3_report.pressure[5],  // right
+          ds3_report.pressure[6],  // down
+          ds3_report.pressure[7],  // left
+          ds3_report.pressure[8],  // L2
+          ds3_report.pressure[9],  // R2
+          ds3_report.pressure[10], // L1
+          ds3_report.pressure[11], // R1
+          ds3_report.unused[0],    // triangle
+          ds3_report.unused[1],    // circle
+          ds3_report.unused[2],    // cross
+          ds3_report.unused[3],    // square
+        },
       };
       router_submit_input(&event);
 

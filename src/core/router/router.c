@@ -535,6 +535,14 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                         out->current_state.gyro[2] = dev->gyro[2];
                     }
 
+                    // Pressure: use first device that has pressure data
+                    if (dev->has_pressure && !out->current_state.has_pressure) {
+                        out->current_state.has_pressure = true;
+                        for (int j = 0; j < 12; j++) {
+                            out->current_state.pressure[j] = dev->pressure[j];
+                        }
+                    }
+
                     // Use metadata from first active device
                     if (first) {
                         out->current_state.dev_addr = dev->dev_addr;

@@ -158,6 +158,11 @@ typedef struct {
     int16_t gyro[3];            // Gyroscope X, Y, Z
     bool has_motion;            // Motion data is valid
 
+    // Pressure-sensitive button data (DS3 passthrough)
+    // Order: up, right, down, left, L2, R2, L1, R1, triangle, circle, cross, square
+    uint8_t pressure[12];       // 0x00 = released, 0xFF = fully pressed
+    bool has_pressure;          // Pressure data is valid
+
 } profile_output_t;
 
 // ============================================================================

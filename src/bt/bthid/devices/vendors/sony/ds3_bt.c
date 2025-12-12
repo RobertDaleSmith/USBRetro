@@ -303,6 +303,22 @@ static void ds3_process_report(bthid_device_t* device, const uint8_t* data, uint
     ds3->event.gyro[1] = 0;
     ds3->event.gyro[2] = gyro_z;
 
+    // Pressure data (same layout as USB: first 4 bytes are reserved/junk)
+    ds3->event.has_pressure = true;
+    ds3->event.pressure[0] = rpt->pressure[4];   // up
+    ds3->event.pressure[1] = rpt->pressure[5];   // right
+    ds3->event.pressure[2] = rpt->pressure[6];   // down
+    ds3->event.pressure[3] = rpt->pressure[7];   // left
+    ds3->event.pressure[4] = rpt->pressure[8];   // L2
+    ds3->event.pressure[5] = rpt->pressure[9];   // R2
+    ds3->event.pressure[6] = rpt->pressure[10];  // L1
+    ds3->event.pressure[7] = rpt->pressure[11];  // R1
+    // Face buttons are in reserved4 (same layout as USB unused[])
+    ds3->event.pressure[8] = rpt->reserved4[0];  // triangle
+    ds3->event.pressure[9] = rpt->reserved4[1];  // circle
+    ds3->event.pressure[10] = rpt->reserved4[2]; // cross
+    ds3->event.pressure[11] = rpt->reserved4[3]; // square
+
     router_submit_input(&ds3->event);
 }
 
