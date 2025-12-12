@@ -33,40 +33,43 @@
 
 // W3C Gamepad API standard button order
 // Bit position = W3C button index (trivial conversion: 1 << index)
+//
+// Joypad    XInput    Switch    PS3/4/5    DInput
+// ------    ------    ------    -------    ------
 
 // Face buttons (right cluster)
-#define JP_BUTTON_B1 (1 << 0)   // 0 - Bottom (Cross/A)
-#define JP_BUTTON_B2 (1 << 1)   // 1 - Right (Circle/B)
-#define JP_BUTTON_B3 (1 << 2)   // 2 - Left (Square/X)
-#define JP_BUTTON_B4 (1 << 3)   // 3 - Top (Triangle/Y)
+#define JP_BUTTON_B1 (1 << 0)   // A         B         Cross      2
+#define JP_BUTTON_B2 (1 << 1)   // B         A         Circle     3
+#define JP_BUTTON_B3 (1 << 2)   // X         Y         Square     1
+#define JP_BUTTON_B4 (1 << 3)   // Y         X         Triangle   4
 
-// Shoulder buttons (front)
-#define JP_BUTTON_L1 (1 << 4)   // 4 - Top left front (L1/LB)
-#define JP_BUTTON_R1 (1 << 5)   // 5 - Top right front (R1/RB)
-#define JP_BUTTON_L2 (1 << 6)   // 6 - Bottom left front (L2/LT)
-#define JP_BUTTON_R2 (1 << 7)   // 7 - Bottom right front (R2/RT)
+// Shoulder buttons
+#define JP_BUTTON_L1 (1 << 4)   // LB        L         L1         5
+#define JP_BUTTON_R1 (1 << 5)   // RB        R         R1         6
+#define JP_BUTTON_L2 (1 << 6)   // LT        ZL        L2         7
+#define JP_BUTTON_R2 (1 << 7)   // RT        ZR        R2         8
 
 // Center cluster
-#define JP_BUTTON_S1 (1 << 8)   // 8 - Left center (Select/Back/Share)
-#define JP_BUTTON_S2 (1 << 9)   // 9 - Right center (Start/Options)
+#define JP_BUTTON_S1 (1 << 8)   // Back      -         Select     9
+#define JP_BUTTON_S2 (1 << 9)   // Start     +         Start      10
 
 // Stick clicks
-#define JP_BUTTON_L3 (1 << 10)  // 10 - Left stick click
-#define JP_BUTTON_R3 (1 << 11)  // 11 - Right stick click
+#define JP_BUTTON_L3 (1 << 10)  // LS        LS        L3         11
+#define JP_BUTTON_R3 (1 << 11)  // RS        RS        R3         12
 
-// D-pad (left cluster)
-#define JP_BUTTON_DU (1 << 12)  // 12 - D-pad Up
-#define JP_BUTTON_DD (1 << 13)  // 13 - D-pad Down
-#define JP_BUTTON_DL (1 << 14)  // 14 - D-pad Left
-#define JP_BUTTON_DR (1 << 15)  // 15 - D-pad Right
+// D-pad
+#define JP_BUTTON_DU (1 << 12)  // D-Up      D-Up      D-Up       Hat
+#define JP_BUTTON_DD (1 << 13)  // D-Down    D-Down    D-Down     Hat
+#define JP_BUTTON_DL (1 << 14)  // D-Left    D-Left    D-Left     Hat
+#define JP_BUTTON_DR (1 << 15)  // D-Right   D-Right   D-Right    Hat
 
-// Auxiliary (center)
-#define JP_BUTTON_A1 (1 << 16)  // 16 - Center (Guide/Home/PS)
+// Auxiliary
+#define JP_BUTTON_A1 (1 << 16)  // Guide     Home      PS         13
+#define JP_BUTTON_A2 (1 << 17)  // -         Capture   Touchpad   14
+#define JP_BUTTON_A3 (1 << 18)  // -         -         Mute       -
 
-// Extended buttons (beyond W3C standard)
-#define JP_BUTTON_A2 (1 << 17)  // 17 - Touchpad/Capture
-#define JP_BUTTON_A3 (1 << 18)  // 18 - Mute (DualSense)
-#define JP_BUTTON_L4 (1 << 19)  // 19 - Rear left paddle
-#define JP_BUTTON_R4 (1 << 20)  // 20 - Rear right paddle
+// Paddles (extended)
+#define JP_BUTTON_L4 (1 << 19)  // P1        -         -          -
+#define JP_BUTTON_R4 (1 << 20)  // P2        -         -          -
 
 #endif // BUTTONS_H
