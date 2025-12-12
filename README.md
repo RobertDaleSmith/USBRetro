@@ -43,7 +43,6 @@ Joypad Core is the real-time nervous system of the Joypad platform.
 | **Nuon DVD Players** | Controller, Spinner (Tempest 3000), IGR | [Docs](docs/consoles/NUON.md) |
 | **3DO Interactive Multiplayer** | 8 players, Mouse, Extension passthrough | [Docs](docs/consoles/3DO.md) |
 | **Casio Loopy** | 4 players (experimental) | [Docs](docs/consoles/LOOPY.md) |
-| **Xbox One S** | USB host mod, Full passthrough | [Docs](docs/consoles/XBOXONE.md) |
 
 ---
 
@@ -123,7 +122,6 @@ make usb2gc        # USB2GC (KB2040 + GameCube)
 make usb2nuon      # USB2Nuon (KB2040 + Nuon)
 make usb23do       # USB23DO (KB2040 + 3DO)
 make usb2loopy     # USB2Loopy (KB2040 + Casio Loopy)
-make usb2xb1       # USB2XB1 (QT Py + Xbox One)
 make snes23do      # SNES23DO (SNES→3DO bridge)
 ```
 
@@ -146,7 +144,6 @@ Output firmware files appear in `releases/` directory.
 - **[Nuon](docs/consoles/NUON.md)** - Controller, Tempest 3000 spinner, IGR
 - **[3DO](docs/consoles/3DO.md)** - 8-player support, mouse, profiles
 - **[Casio Loopy](docs/consoles/LOOPY.md)** - Experimental support
-- **[Xbox One S](docs/consoles/XBOXONE.md)** - USB host mod installation
 
 ---
 
