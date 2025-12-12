@@ -189,6 +189,9 @@ void router_set_active_outputs(output_target_t* outputs, uint8_t count);
 // Returns OUTPUT_TARGET_NONE if no outputs configured
 output_target_t router_get_primary_output(void);
 
+// Reset all output states to neutral (call when all controllers disconnect)
+void router_reset_outputs(void);
+
 // ============================================================================
 // OUTPUT TAP (Push-based notification)
 // ============================================================================

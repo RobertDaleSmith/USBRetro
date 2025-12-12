@@ -5,6 +5,7 @@
 
 #include "manager.h"
 #include "core/services/profiles/profile_indicator.h"
+#include "core/router/router.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -258,5 +259,11 @@ void remove_players_by_address(int dev_addr, int instance)
     playersCount = highest_occupied + 1;
 
     printf("[players] FIXED mode: playersCount now %d (highest occupied + 1)\n", playersCount);
+  }
+
+  // If all controllers disconnected, reset router outputs to neutral
+  // This prevents stuck buttons from persisting after the last controller disconnects
+  if (playersCount == 0) {
+    router_reset_outputs();
   }
 }

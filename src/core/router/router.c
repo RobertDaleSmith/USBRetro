@@ -763,3 +763,24 @@ output_state_t* router_get_state_ptr(output_target_t output) {
     if (output >= MAX_OUTPUTS) return NULL;
     return router_outputs[output];
 }
+
+// Reset all output states to neutral (call when all controllers disconnect)
+void router_reset_outputs(void) {
+    printf("[router] Resetting all outputs to neutral\n");
+
+    // Reset all output states
+    for (uint8_t output = 0; output < MAX_OUTPUTS; output++) {
+        for (uint8_t player = 0; player < MAX_PLAYERS_PER_OUTPUT; player++) {
+            init_input_event(&router_outputs[output][player].current_state);
+            router_outputs[output][player].updated = true;  // Signal that state changed
+        }
+
+        // Clear blend device tracking
+        for (uint8_t i = 0; i < MAX_BLEND_DEVICES; i++) {
+            blend_devices[output][i].active = false;
+            blend_devices[output][i].dev_addr = 0;
+            blend_devices[output][i].instance = -1;
+            init_input_event(&blend_devices[output][i].state);
+        }
+    }
+}
