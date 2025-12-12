@@ -77,6 +77,17 @@ typedef struct {
 } button_combo_entry_t;
 
 // ============================================================================
+// STICK MODIFIER
+// ============================================================================
+// Button-triggered sensitivity modifier for analog sticks
+
+typedef struct {
+    uint32_t trigger;           // Button that activates modifier (e.g., USBR_BUTTON_L3)
+    float sensitivity;          // Sensitivity when modifier active (0.0-1.0)
+    bool consume_trigger;       // If true, remove trigger button from output
+} stick_modifier_t;
+
+// ============================================================================
 // TRIGGER BEHAVIOR
 // ============================================================================
 // How analog triggers (L2/R2) should behave
@@ -123,6 +134,12 @@ typedef struct {
     // Analog stick settings
     float left_stick_sensitivity;   // 0.0-1.0 (1.0 = 100%)
     float right_stick_sensitivity;  // 0.0-1.0 (0.0 = disabled)
+
+    // Stick modifiers (button-triggered sensitivity changes)
+    const stick_modifier_t* left_stick_modifiers;
+    uint8_t left_stick_modifier_count;
+    const stick_modifier_t* right_stick_modifiers;
+    uint8_t right_stick_modifier_count;
 
     // DualSense adaptive trigger feedback
     bool adaptive_triggers;
@@ -337,6 +354,14 @@ uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_butto
 #define MAP_COMBO_KEEP(ins, out) \
     { .inputs = (ins), .output = (out), .consume_inputs = false }
 
+// Stick modifier: button → reduced sensitivity (consumes trigger by default)
+#define STICK_MODIFIER(btn, sens) \
+    { .trigger = (btn), .sensitivity = (sens), .consume_trigger = true }
+
+// Stick modifier: button → reduced sensitivity (keeps trigger in output)
+#define STICK_MODIFIER_KEEP(btn, sens) \
+    { .trigger = (btn), .sensitivity = (sens), .consume_trigger = false }
+
 // Standard trigger settings
 #define PROFILE_TRIGGERS_DEFAULT \
     .l2_behavior = TRIGGER_PASSTHROUGH, \
@@ -349,7 +374,11 @@ uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_butto
 // Standard analog settings
 #define PROFILE_ANALOG_DEFAULT \
     .left_stick_sensitivity = 1.0f, \
-    .right_stick_sensitivity = 1.0f
+    .right_stick_sensitivity = 1.0f, \
+    .left_stick_modifiers = NULL, \
+    .left_stick_modifier_count = 0, \
+    .right_stick_modifiers = NULL, \
+    .right_stick_modifier_count = 0
 
 // Full default profile (passthrough)
 #define PROFILE_DEFAULT { \

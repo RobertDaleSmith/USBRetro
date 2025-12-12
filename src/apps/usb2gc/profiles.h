@@ -56,6 +56,10 @@ static const profile_t gc_profile_default = {
     .r2_analog_value = 0,
     .left_stick_sensitivity = 1.0f,
     .right_stick_sensitivity = 1.0f,
+    .left_stick_modifiers = NULL,
+    .left_stick_modifier_count = 0,
+    .right_stick_modifiers = NULL,
+    .right_stick_modifier_count = 0,
     .adaptive_triggers = true,
 };
 
@@ -93,6 +97,10 @@ static const profile_t gc_profile_snes = {
     .r2_analog_value = 0,
     .left_stick_sensitivity = 1.0f,
     .right_stick_sensitivity = 1.0f,
+    .left_stick_modifiers = NULL,
+    .left_stick_modifier_count = 0,
+    .right_stick_modifiers = NULL,
+    .right_stick_modifier_count = 0,
     .adaptive_triggers = true,
 };
 
@@ -100,6 +108,7 @@ static const profile_t gc_profile_snes = {
 // PROFILE: SSBM - Super Smash Bros Melee Competitive
 // ============================================================================
 // Yoink1975's config: L1→Z, LT→Light shield, RT→L+R quit combo
+// L3 = walk modifier (50% sensitivity)
 
 static const button_map_entry_t gc_ssbm_map[] = {
     // Face buttons
@@ -119,9 +128,14 @@ static const button_map_entry_t gc_ssbm_map[] = {
     MAP_BUTTON(USBR_BUTTON_S2, GC_BUTTON_START),
 };
 
+// L3 = walk modifier (reduces to 50% for precise movement)
+static const stick_modifier_t gc_ssbm_left_modifiers[] = {
+    STICK_MODIFIER(USBR_BUTTON_L3, 0.50f),
+};
+
 static const profile_t gc_profile_ssbm = {
     .name = "ssbm",
-    .description = "SSBM: LB→Z, LT→light(43), RT→L+R, 85% stick",
+    .description = "SSBM: LB→Z, L3→walk, 85% stick",
     .button_map = gc_ssbm_map,
     .button_map_count = sizeof(gc_ssbm_map) / sizeof(gc_ssbm_map[0]),
     .l2_behavior = TRIGGER_LIGHT_PRESS,   // Light shield
@@ -132,6 +146,10 @@ static const profile_t gc_profile_ssbm = {
     .r2_analog_value = 0,
     .left_stick_sensitivity = 0.85f,      // 85% for Melee precision
     .right_stick_sensitivity = 1.0f,
+    .left_stick_modifiers = gc_ssbm_left_modifiers,
+    .left_stick_modifier_count = sizeof(gc_ssbm_left_modifiers) / sizeof(gc_ssbm_left_modifiers[0]),
+    .right_stick_modifiers = NULL,
+    .right_stick_modifier_count = 0,
     .adaptive_triggers = true,
 };
 
@@ -171,6 +189,10 @@ static const profile_t gc_profile_mkwii = {
     .r2_analog_value = 0,
     .left_stick_sensitivity = 1.0f,
     .right_stick_sensitivity = 1.0f,
+    .left_stick_modifiers = NULL,
+    .left_stick_modifier_count = 0,
+    .right_stick_modifiers = NULL,
+    .right_stick_modifier_count = 0,
     .adaptive_triggers = true,
 };
 
@@ -210,6 +232,10 @@ static const profile_t gc_profile_fighting = {
     .r2_analog_value = 0,
     .left_stick_sensitivity = 1.0f,
     .right_stick_sensitivity = 0.0f,      // Disabled
+    .left_stick_modifiers = NULL,
+    .left_stick_modifier_count = 0,
+    .right_stick_modifiers = NULL,
+    .right_stick_modifier_count = 0,
     .adaptive_triggers = false,
 };
 

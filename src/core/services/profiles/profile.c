@@ -693,26 +693,53 @@ void profile_apply(const profile_t* profile,
     // Output is active-high
     output->buttons = output_buttons;
 
-    // Apply stick sensitivity scaling
-    if (profile->left_stick_sensitivity != 1.0f) {
-        if (!output->left_x_override) {
-            int16_t rel_x = (int16_t)output->left_x - 128;
-            output->left_x = (uint8_t)(128 + (int16_t)(rel_x * profile->left_stick_sensitivity));
-        }
-        if (!output->left_y_override) {
-            int16_t rel_y = (int16_t)output->left_y - 128;
-            output->left_y = (uint8_t)(128 + (int16_t)(rel_y * profile->left_stick_sensitivity));
+    // Determine effective left stick sensitivity (check modifiers first)
+    float left_sens = profile->left_stick_sensitivity;
+    for (uint8_t i = 0; i < profile->left_stick_modifier_count; i++) {
+        const stick_modifier_t* mod = &profile->left_stick_modifiers[i];
+        if (input_buttons & mod->trigger) {
+            left_sens = mod->sensitivity;
+            if (mod->consume_trigger) {
+                output->buttons &= ~mod->trigger;
+            }
+            break;  // First matching modifier wins
         }
     }
 
-    if (profile->right_stick_sensitivity != 1.0f) {
+    // Determine effective right stick sensitivity (check modifiers first)
+    float right_sens = profile->right_stick_sensitivity;
+    for (uint8_t i = 0; i < profile->right_stick_modifier_count; i++) {
+        const stick_modifier_t* mod = &profile->right_stick_modifiers[i];
+        if (input_buttons & mod->trigger) {
+            right_sens = mod->sensitivity;
+            if (mod->consume_trigger) {
+                output->buttons &= ~mod->trigger;
+            }
+            break;  // First matching modifier wins
+        }
+    }
+
+    // Apply left stick sensitivity scaling
+    if (left_sens != 1.0f) {
+        if (!output->left_x_override) {
+            int16_t rel_x = (int16_t)output->left_x - 128;
+            output->left_x = (uint8_t)(128 + (int16_t)(rel_x * left_sens));
+        }
+        if (!output->left_y_override) {
+            int16_t rel_y = (int16_t)output->left_y - 128;
+            output->left_y = (uint8_t)(128 + (int16_t)(rel_y * left_sens));
+        }
+    }
+
+    // Apply right stick sensitivity scaling
+    if (right_sens != 1.0f) {
         if (!output->right_x_override) {
             int16_t rel_x = (int16_t)output->right_x - 128;
-            output->right_x = (uint8_t)(128 + (int16_t)(rel_x * profile->right_stick_sensitivity));
+            output->right_x = (uint8_t)(128 + (int16_t)(rel_x * right_sens));
         }
         if (!output->right_y_override) {
             int16_t rel_y = (int16_t)output->right_y - 128;
-            output->right_y = (uint8_t)(128 + (int16_t)(rel_y * profile->right_stick_sensitivity));
+            output->right_y = (uint8_t)(128 + (int16_t)(rel_y * right_sens));
         }
     }
 
