@@ -4,6 +4,7 @@
 #include "btd.h"
 #include "btd_linkkey.h"
 #include "l2cap.h"
+#include "att.h"
 #include "bt/transport/bt_transport.h"
 #include <stdio.h>
 #include <string.h>
@@ -284,4 +285,65 @@ void btd_glue_task(void)
             }
         }
     }
+}
+
+// ============================================================================
+// BLE CALLBACKS
+// ============================================================================
+
+void btd_on_le_connection(uint8_t conn_index)
+{
+    const btd_connection_t* conn = btd_get_connection(conn_index);
+    if (!conn) {
+        printf("[BTD_GLUE] BLE connection %d: no connection data\n", conn_index);
+        return;
+    }
+
+    printf("[BTD_GLUE] BLE device connected: conn=%d handle=0x%04X\n",
+           conn_index, conn->handle);
+
+    // Initialize ATT layer for this connection
+    att_on_connect(conn_index, conn->handle);
+}
+
+void btd_on_le_disconnection(uint8_t conn_index)
+{
+    printf("[BTD_GLUE] BLE device disconnected: conn=%d\n", conn_index);
+    att_on_disconnect(conn_index);
+}
+
+void l2cap_on_ble_data(uint8_t conn_index, uint16_t cid, const uint8_t* data, uint16_t len)
+{
+    if (cid == L2CAP_CID_ATT) {
+        // Route ATT data to ATT layer
+        att_process_data(conn_index, data, len);
+    } else if (cid == L2CAP_CID_SM) {
+        // Security Manager - not implemented yet
+        printf("[BTD_GLUE] SM data: %d bytes (not implemented)\n", len);
+    } else if (cid == L2CAP_CID_LE_SIGNALING) {
+        // LE Signaling - not implemented yet
+        printf("[BTD_GLUE] LE Signaling data: %d bytes (not implemented)\n", len);
+    }
+}
+
+// ============================================================================
+// BLE HID REPORT HANDLER (ATT -> Input System)
+// ============================================================================
+
+void att_on_hid_report(uint8_t conn_index, uint8_t report_id,
+                       const uint8_t* data, uint16_t len)
+{
+    printf("[BTD_GLUE] BLE HID Report: conn=%d report_id=%d len=%d\n",
+           conn_index, report_id, len);
+
+    // Print first bytes for debugging
+    printf("[BTD_GLUE]   Data: ");
+    for (int i = 0; i < len && i < 20; i++) {
+        printf("%02X ", data[i]);
+    }
+    if (len > 20) printf("...");
+    printf("\n");
+
+    // TODO: Route to Xbox BLE HID driver for parsing
+    // For now, just log the reports so we can see the data format
 }

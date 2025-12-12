@@ -6,6 +6,7 @@
 #include "btd.h"
 #include "btd_linkkey.h"
 #include "l2cap.h"
+#include "att.h"
 #include "tusb.h"
 #include "host/usbh_pvt.h"
 #include <string.h>
@@ -55,6 +56,9 @@ void btd_init(void)
 
     // Initialize L2CAP layer
     l2cap_init();
+
+    // Initialize ATT layer (for BLE)
+    att_init();
 
     printf("[BTD] Initialized (le_connecting=%d)\n", btd_ctx.le_connecting);
 }
@@ -1238,11 +1242,18 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
             btd_connection_t* conn = btd_find_connection_by_handle(dc->handle);
             if (conn) {
                 uint8_t idx = conn - btd_ctx.connections;
+                bool was_ble = conn->is_ble;
+
                 conn->state = BTD_CONN_DISCONNECTED;
                 conn->handle = 0xFFFF;
                 btd_ctx.num_connections--;
 
-                btd_on_disconnection(idx);
+                // Call appropriate callback based on connection type
+                if (was_ble) {
+                    btd_on_le_disconnection(idx);
+                } else {
+                    btd_on_disconnection(idx);
+                }
             }
 
             // Restart scanning for devices after disconnect
@@ -1968,4 +1979,9 @@ __attribute__((weak)) void btd_on_le_adv_report(const uint8_t* addr, uint8_t add
 __attribute__((weak)) void btd_on_le_connection(uint8_t conn_index)
 {
     printf("[BTD] LE Connection %d established (weak handler)\n", conn_index);
+}
+
+__attribute__((weak)) void btd_on_le_disconnection(uint8_t conn_index)
+{
+    printf("[BTD] LE Connection %d disconnected (weak handler)\n", conn_index);
 }

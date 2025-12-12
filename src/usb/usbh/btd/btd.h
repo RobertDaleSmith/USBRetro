@@ -273,6 +273,9 @@ extern void btd_on_le_adv_report(const uint8_t* addr, uint8_t addr_type,
 // Called when a BLE connection is established
 extern void btd_on_le_connection(uint8_t conn_index);
 
+// Called when a BLE connection is disconnected
+extern void btd_on_le_disconnection(uint8_t conn_index);
+
 // ============================================================================
 // TINYUSB INTEGRATION
 // ============================================================================

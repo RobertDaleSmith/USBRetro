@@ -19,6 +19,11 @@
 #define L2CAP_CID_CONNECTIONLESS    0x0002  // Connectionless reception
 #define L2CAP_CID_AMP_MANAGER       0x0003  // AMP Manager Protocol
 
+// BLE Fixed Channel IDs
+#define L2CAP_CID_ATT               0x0004  // Attribute Protocol (ATT)
+#define L2CAP_CID_LE_SIGNALING      0x0005  // LE L2CAP signaling
+#define L2CAP_CID_SM                0x0006  // Security Manager
+
 // Dynamic CID range (0x0040 - 0xFFFF)
 #define L2CAP_CID_DYNAMIC_START     0x0040
 #define L2CAP_CID_DYNAMIC_END       0xFFFF
@@ -243,6 +248,10 @@ void l2cap_disconnect(uint16_t local_cid);
 // Send data on an L2CAP channel
 bool l2cap_send(uint16_t local_cid, const uint8_t* data, uint16_t len);
 
+// Send data on a BLE fixed channel (ATT, LE Signaling, SM)
+// Uses HCI handle directly instead of dynamic channel
+bool l2cap_send_ble(uint16_t hci_handle, uint16_t cid, const uint8_t* data, uint16_t len);
+
 // Get channel by local CID
 l2cap_channel_t* l2cap_get_channel(uint16_t local_cid);
 
@@ -264,5 +273,8 @@ extern void l2cap_on_channel_closed(uint16_t local_cid);
 
 // Called when data is received on an L2CAP channel
 extern void l2cap_on_data(uint16_t local_cid, const uint8_t* data, uint16_t len);
+
+// Called when BLE data is received on a fixed channel (ATT, SM)
+extern void l2cap_on_ble_data(uint8_t conn_index, uint16_t cid, const uint8_t* data, uint16_t len);
 
 #endif // L2CAP_H

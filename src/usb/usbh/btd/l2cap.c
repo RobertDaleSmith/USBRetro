@@ -69,6 +69,9 @@ void l2cap_process_acl_data(uint8_t conn_index, const uint8_t* data, uint16_t le
     // Route based on CID
     if (cid == L2CAP_CID_SIGNALING) {
         l2cap_process_signaling(conn_index, payload, payload_len);
+    } else if (cid == L2CAP_CID_ATT || cid == L2CAP_CID_SM || cid == L2CAP_CID_LE_SIGNALING) {
+        // BLE fixed channel - route to BLE handler
+        l2cap_on_ble_data(conn_index, cid, payload, payload_len);
     } else if (cid >= L2CAP_CID_DYNAMIC_START) {
         l2cap_process_channel_data(cid, payload, payload_len);
     } else {
@@ -530,6 +533,23 @@ bool l2cap_send(uint16_t local_cid, const uint8_t* data, uint16_t len)
     return btd_send_acl_data(conn->handle, 0x02, 0x00, buf, sizeof(l2cap_header_t) + len);
 }
 
+bool l2cap_send_ble(uint16_t hci_handle, uint16_t cid, const uint8_t* data, uint16_t len)
+{
+    // BLE uses fixed channels - send directly with HCI handle
+    uint8_t buf[256];
+    if (len + sizeof(l2cap_header_t) > sizeof(buf)) {
+        printf("[L2CAP] BLE data too large: %d\n", len);
+        return false;
+    }
+
+    l2cap_header_t* hdr = (l2cap_header_t*)buf;
+    hdr->length = len;
+    hdr->cid = cid;
+    memcpy(buf + sizeof(l2cap_header_t), data, len);
+
+    return btd_send_acl_data(hci_handle, 0x02, 0x00, buf, sizeof(l2cap_header_t) + len);
+}
+
 // ============================================================================
 // WEAK CALLBACK IMPLEMENTATIONS
 // ============================================================================
@@ -548,4 +568,11 @@ __attribute__((weak)) void l2cap_on_channel_closed(uint16_t local_cid)
 __attribute__((weak)) void l2cap_on_data(uint16_t local_cid, const uint8_t* data, uint16_t len)
 {
     printf("[L2CAP] Data on channel 0x%04X: %d bytes - weak handler\n", local_cid, len);
+}
+
+__attribute__((weak)) void l2cap_on_ble_data(uint8_t conn_index, uint16_t cid, const uint8_t* data, uint16_t len)
+{
+    printf("[L2CAP] BLE data on CID 0x%04X: %d bytes - weak handler\n", cid, len);
+    (void)conn_index;
+    (void)data;
 }
