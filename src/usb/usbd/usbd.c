@@ -1180,12 +1180,70 @@ static uint8_t usbd_get_rumble(void)
 // OUTPUT INTERFACE
 // ============================================================================
 
+// Get feedback state with separate left/right rumble and LED data
+static bool usbd_get_feedback(output_feedback_t* fb)
+{
+    if (!fb) return false;
+
+    fb->rumble_left = 0;
+    fb->rumble_right = 0;
+    fb->led_player = 0;
+    fb->led_r = fb->led_g = fb->led_b = 0;
+    fb->dirty = false;
+
+    switch (output_mode) {
+        case USB_OUTPUT_MODE_XBOX_ORIGINAL:
+            // Xbox OG has two 16-bit motors
+            fb->rumble_left = (uint8_t)(xid_rumble.rumble_l >> 8);
+            fb->rumble_right = (uint8_t)(xid_rumble.rumble_r >> 8);
+            fb->dirty = true;
+            return true;
+
+#if CFG_TUD_XINPUT
+        case USB_OUTPUT_MODE_XINPUT:
+            // XInput has two 8-bit motors
+            fb->rumble_left = xinput_output.rumble_l;
+            fb->rumble_right = xinput_output.rumble_r;
+            fb->dirty = true;
+            return true;
+#endif
+
+        case USB_OUTPUT_MODE_PS3:
+            if (!ps3_output_available) return false;
+            // PS3: left is variable force, right is on/off only
+            fb->rumble_left = ps3_output.rumble_left_force;
+            fb->rumble_right = ps3_output.rumble_right_on ? 0xFF : 0x00;
+            // PS3 LEDs: bitmap in leds_bitmap (LED_1=0x02, LED_2=0x04, etc.)
+            if (ps3_output.leds_bitmap & 0x02) fb->led_player = 1;
+            else if (ps3_output.leds_bitmap & 0x04) fb->led_player = 2;
+            else if (ps3_output.leds_bitmap & 0x08) fb->led_player = 3;
+            else if (ps3_output.leds_bitmap & 0x10) fb->led_player = 4;
+            fb->dirty = true;
+            return true;
+
+        case USB_OUTPUT_MODE_PS4:
+            if (!ps4_output_available) return false;
+            // PS4 has two 8-bit motors and RGB lightbar
+            fb->rumble_left = ps4_output.motor_left;
+            fb->rumble_right = ps4_output.motor_right;
+            fb->led_r = ps4_output.lightbar_red;
+            fb->led_g = ps4_output.lightbar_green;
+            fb->led_b = ps4_output.lightbar_blue;
+            fb->dirty = true;
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 const OutputInterface usbd_output_interface = {
     .name = "USB",
     .target = OUTPUT_TARGET_USB_DEVICE,
     .init = usbd_init,
     .task = usbd_task,
     .core1_task = NULL,  // Runs from core0 task - doesn't need dedicated core
+    .get_feedback = usbd_get_feedback,
     .get_rumble = usbd_get_rumble,
     .get_player_led = NULL,
     .get_profile_count = NULL,

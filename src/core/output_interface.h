@@ -9,6 +9,15 @@
 #include "core/input_event.h"
 #include "core/router/router.h"
 
+// Feedback state from output (agnostic representation)
+typedef struct {
+    uint8_t rumble_left;        // Left (heavy) motor 0-255
+    uint8_t rumble_right;       // Right (light) motor 0-255
+    uint8_t led_player;         // Player LED index (1-4), 0 = not set
+    uint8_t led_r, led_g, led_b;// RGB LED color
+    bool dirty;                 // True if feedback changed since last read
+} output_feedback_t;
+
 // Output interface - abstracts different output types (native consoles, USB device, BLE, etc.)
 typedef struct {
     const char* name;                                      // Output name (e.g., "GameCube", "USB Device (XInput)")
@@ -18,7 +27,10 @@ typedef struct {
     void (*task)(void);                                    // Core 0 periodic task (NULL if not needed)
     void (*core1_task)(void);                              // Core 1 loop for timing-critical output (NULL if not needed)
 
-    // Feedback to USB input devices (rumble, LEDs)
+    // Feedback to USB input devices (rumble, LEDs) - agnostic format
+    bool (*get_feedback)(output_feedback_t* fb);           // Get feedback state, returns true if available
+
+    // Legacy single-value rumble (deprecated, use get_feedback instead)
     uint8_t (*get_rumble)(void);                           // Get rumble state (0-255), NULL = no rumble
     uint8_t (*get_player_led)(void);                       // Get player LED state, NULL = no LED override
 
