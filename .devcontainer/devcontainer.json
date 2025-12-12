@@ -1,5 +1,5 @@
 {
-  "name": "USBRetro Development",
+  "name": "Joypad Development",
   "build": {
     "context": "..",
     "dockerfile": "../Dockerfile",
@@ -16,7 +16,7 @@
     "ms-vscode.cpptools"
   ],
   "forwardPorts": [],
-  "postCreateCommand": "echo 'Container for USBRetro development is ready!'",
+  "postCreateCommand": "echo 'Container for Joypad development is ready!'",
   "remoteUser": "root",
-  "workspaceFolder": "/root/workspace/USBRetro"
+  "workspaceFolder": "/root/workspace/Joypad"
 }

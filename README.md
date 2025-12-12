@@ -1,12 +1,12 @@
-# USBRetro
+# Joypad
 
-<p align="center"><img src="docs/images/USBRetro_Outline.png" width="300"/></p>
+<p align="center"><img src="docs/images/Joypad_Outline.png" width="300"/></p>
 <p align="center">
-  <img src="https://img.shields.io/github/license/RobertDaleSmith/USBRetro" />
-  <img src="https://img.shields.io/github/actions/workflow/status/RobertDaleSmith/USBRetro/.github/workflows/build.yml" />
+  <img src="https://img.shields.io/github/license/RobertDaleSmith/Joypad" />
+  <img src="https://img.shields.io/github/actions/workflow/status/RobertDaleSmith/Joypad/.github/workflows/build.yml" />
 </p>
 
-**Use modern USB controllers on retro consoles.** USBRetro is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to native controller protocols for classic gaming systems.
+**Use modern USB controllers on retro consoles.** Joypad is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to native controller protocols for classic gaming systems.
 
 ---
 
@@ -56,7 +56,7 @@ Pre-built adapters available at **[controlleradapter.com](https://controlleradap
 
 ### Quick Flash
 
-1. **Download** latest `.uf2` from [Releases](https://github.com/RobertDaleSmith/USBRetro/releases)
+1. **Download** latest `.uf2` from [Releases](https://github.com/RobertDaleSmith/Joypad/releases)
 2. **Enter bootloader**:
    - **USB-2-PCE / NUON / 3DO**: Hold BOOT + connect USB-C
    - **GC USB**: Just connect USB-C (no button)
@@ -76,8 +76,8 @@ Pre-built adapters available at **[controlleradapter.com](https://controlleradap
 brew install --cask gcc-arm-embedded cmake git
 
 # Clone and initialize
-git clone https://github.com/RobertDaleSmith/usbretro.git
-cd usbretro && make init
+git clone https://github.com/RobertDaleSmith/joypad.git
+cd joypad && make init
 
 # Build specific product
 make usb2gc         # GameCube adapter
@@ -128,7 +128,7 @@ Output firmware files appear in `releases/` directory.
 
 ## Architecture
 
-USBRetro uses a modular architecture:
+Joypad uses a modular architecture:
 
 - **RP2040** - Dual-core ARM Cortex-M0+ microcontroller
 - **TinyUSB** - USB host stack for polling USB devices
@@ -143,8 +143,8 @@ USBRetro uses a modular architecture:
 
 ## Community & Support
 
-- **Discord**: [discord.usbretro.com](https://discord.usbretro.com/) - Community chat
-- **Issues**: [GitHub Issues](https://github.com/RobertDaleSmith/USBRetro/issues) - Bug reports
+- **Discord**: [discord.joypad.com](https://discord.joypad.com/) - Community chat
+- **Issues**: [GitHub Issues](https://github.com/RobertDaleSmith/Joypad/issues) - Bug reports
 - **Email**: support@controlleradapter.com - Product support
 
 ---
@@ -166,4 +166,4 @@ Copyright 2021-2025 Robert Dale Smith (ControllerAdapter.com)
 
 Licensed under the Apache License, Version 2.0 - see [LICENSE](LICENSE) for details.
 
-**Trademark:** The USBRetro name and branding require permission for commercial use. See [TRADEMARK.md](TRADEMARK.md) for details.
+**Trademark:** The Joypad name and branding require permission for commercial use. See [TRADEMARK.md](TRADEMARK.md) for details.

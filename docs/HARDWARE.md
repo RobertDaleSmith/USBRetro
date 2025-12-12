@@ -321,6 +321,6 @@ See individual console documentation for pinouts:
 
 ## Community Builds
 
-Share your build on Discord: [discord.usbretro.com](https://discord.usbretro.com/)
+Share your build on Discord: [discord.joypad.com](https://discord.joypad.com/)
 
 See what others have built and get help with your project!

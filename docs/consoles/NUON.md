@@ -157,4 +157,4 @@ Default spinner sensitivity is optimized for Tempest 3000:
 ## Product Links
 
 - [NUON USB Adapter](https://controlleradapter.com/products/nuon-usb) - Pre-built hardware
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware

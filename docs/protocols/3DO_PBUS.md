@@ -621,7 +621,7 @@ Frame N+1:
 4. **Buffer Size**:
    - Allocate full 56 bytes even if unused
    - Prevents overflow when many devices connected
-   - 201-byte buffer used in USBRetro (includes padding)
+   - 201-byte buffer used in Joypad (includes padding)
 
 5. **Frame Latency**:
    - Extension controllers have 1-frame delay (16-33ms)
@@ -662,7 +662,7 @@ This implementation builds upon these foundations while adding support for moder
 - **SNES23DO**: SNES-to-3DO adapter with extension parsing ([GitHub](https://github.com/RobertDaleSmith/snes23do))
 
 ### Implementation
-- **USBRetro 3DO Module**: `/src/console/3do/` - Full PBUS implementation with extension detection
+- **Joypad 3DO Module**: `/src/console/3do/` - Full PBUS implementation with extension detection
 - **PIO State Machines**: `/src/console/3do/output.pio` - Clock-synchronized bidirectional I/O
 - **Extension Parsing**: `/src/console/3do/3do.c` - `parse_extension_controllers()` function
 

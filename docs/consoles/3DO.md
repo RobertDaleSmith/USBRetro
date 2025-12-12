@@ -201,4 +201,4 @@ The 3DO uses a serial PBUS (Peripheral Bus) protocol:
 ## Product Links
 
 - [USB-2-3DO Adapter](https://controlleradapter.com/products/usb-2-3do) - Pre-built hardware
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware

@@ -1,6 +1,6 @@
 # Installation & Flashing Guide
 
-How to update firmware on your USBRetro adapter.
+How to update firmware on your Joypad adapter.
 
 ## Pre-Built Hardware
 
@@ -12,13 +12,13 @@ Purchase ready-to-use adapters at [controlleradapter.com](https://controlleradap
 
 ## Downloading Firmware
 
-1. Go to [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases)
+1. Go to [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases)
 2. Download the latest `.uf2` file for your product:
-   - `usb2pce_usbretro_pce.uf2` - PCEngine adapter
-   - `usb2gc_usbretro_ngc.uf2` - GameCube adapter
-   - `usb2nuon_usbretro_nuon.uf2` - Nuon adapter
-   - `usb23do_usbretro_3do.uf2` - 3DO adapter
-   - `usb2loopy_usbretro_loopy.uf2` - Casio Loopy adapter (experimental)
+   - `usb2pce_joypad_pce.uf2` - PCEngine adapter
+   - `usb2gc_joypad_ngc.uf2` - GameCube adapter
+   - `usb2nuon_joypad_nuon.uf2` - Nuon adapter
+   - `usb23do_joypad_3do.uf2` - 3DO adapter
+   - `usb2loopy_joypad_loopy.uf2` - Casio Loopy adapter (experimental)
 
 ## Flashing Instructions
 
@@ -161,7 +161,7 @@ Console-specific features will match the version in the release notes.
 
 You can flash any previous firmware version:
 
-1. Download older `.uf2` from [Releases](https://github.com/RobertDaleSmith/USBRetro/releases)
+1. Download older `.uf2` from [Releases](https://github.com/RobertDaleSmith/Joypad/releases)
 2. Follow same flashing procedure
 3. No need to erase current firmware first
 
@@ -176,6 +176,6 @@ To reset adapter to default settings:
 
 ## Getting Help
 
-- **Discord**: [discord.usbretro.com](https://discord.usbretro.com/) - Community support
-- **Issues**: [GitHub Issues](https://github.com/RobertDaleSmith/USBRetro/issues) - Bug reports
+- **Discord**: [discord.joypad.com](https://discord.joypad.com/) - Community support
+- **Issues**: [GitHub Issues](https://github.com/RobertDaleSmith/Joypad/issues) - Bug reports
 - **Email**: support@controlleradapter.com - Product support

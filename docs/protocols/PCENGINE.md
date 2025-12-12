@@ -167,7 +167,7 @@ Bit Position:  7     6      5      4    |  3    2       1   0
 
 ### Implementation
 
-In the USBRetro implementation, 2-button mode is the default. The full byte is constructed as:
+In the Joypad implementation, 2-button mode is the default. The full byte is constructed as:
 
 ```c
 int8_t byte = (players[i].output_buttons & 0xff);
@@ -200,7 +200,7 @@ Nibble 2: Reserved [0, 0, 0, 0]      (bits 3-0)
 
 ### State-Based Implementation
 
-The USBRetro implementation tracks a `state` variable (3 → 2 → 1 → 0) that cycles on each scan:
+The Joypad implementation tracks a `state` variable (3 → 2 → 1 → 0) that cycles on each scan:
 
 ```c
 if (is6btn && state == 2)
@@ -235,9 +235,9 @@ Users can switch modes via hotkey combinations:
 - **START + D-Left** → Enable 3-button mode (Run as III)
 
 ```c
-if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DU)))
+if (!(players[i].output_buttons & (JP_BUTTON_S2 | JP_BUTTON_DU)))
     players[i].button_mode = BUTTON_MODE_6;
-else if (!(players[i].output_buttons & (USBR_BUTTON_S2 | USBR_BUTTON_DD)))
+else if (!(players[i].output_buttons & (JP_BUTTON_S2 | JP_BUTTON_DD)))
     players[i].button_mode = BUTTON_MODE_2;
 ```
 
@@ -382,7 +382,7 @@ When the console scans, the multitap:
 
 ### Data Packing
 
-In the USBRetro implementation, all 5 players are packed into two 32-bit words:
+In the Joypad implementation, all 5 players are packed into two 32-bit words:
 
 ```
 output_word_0 (32 bits):
@@ -518,7 +518,7 @@ sellp:
 - SEL toggle period: ~50-100µs per toggle
 - Full scan cycle: ~600-800µs
 
-**USBRetro timeout values**:
+**Joypad timeout values**:
 ```c
 #define RESET_PERIOD    600   // µs - timeout for end-of-scan detection
 #define SCAN_TIMEOUT    550   // µs - max CLR LOW + SEL HIGH duration

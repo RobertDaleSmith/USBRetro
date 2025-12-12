@@ -1,4 +1,4 @@
-# USBRetro Top-Level Makefile
+# Joypad Top-Level Makefile
 # Builds firmware for all product variants
 
 # Default target
@@ -106,7 +106,7 @@ NC := \033[0m
 .PHONY: help
 help:
 	@echo ""
-	@echo "$(BLUE)USBRetro Firmware Build System$(NC)"
+	@echo "$(BLUE)Joypad Firmware Build System$(NC)"
 	@echo "$(BLUE)==============================$(NC)"
 	@echo ""
 	@echo "$(GREEN)Quick Start:$(NC)"

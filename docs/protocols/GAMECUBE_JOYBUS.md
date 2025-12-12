@@ -64,7 +64,7 @@ The GameCube controller port uses a **proprietary 6-pin connector**:
 | 5 | N/C | - | Not connected |
 | 6 | 3.3V | - | +3.3V power (from console, optional) |
 
-**Cable shielding**: The shield is connected to Pin 4 (GND). In the USBRetro implementation, GPIO pins are connected to the cable shield and driven to ground for EMI protection.
+**Cable shielding**: The shield is connected to Pin 4 (GND). In the Joypad implementation, GPIO pins are connected to the cable shield and driven to ground for EMI protection.
 
 ### Electrical Characteristics
 
@@ -365,7 +365,7 @@ These keys are specific to Japanese keyboards and may not have direct equivalent
 
 ### HID to GameCube Keycode Mapping
 
-The USBRetro implementation provides a complete lookup table (`hid_to_gc_key[256]`) to translate USB HID keycodes to GameCube keycodes:
+The Joypad implementation provides a complete lookup table (`hid_to_gc_key[256]`) to translate USB HID keycodes to GameCube keycodes:
 
 ```c
 uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
@@ -432,7 +432,7 @@ The keyboard was designed for PSO Episode I & II. Here are the in-game key mappi
 
 ### Overview
 
-The USBRetro GameCube implementation features a **sophisticated profile system** with flash-backed persistence, allowing users to switch between preconfigured button mappings and trigger behaviors optimized for specific games.
+The Joypad GameCube implementation features a **sophisticated profile system** with flash-backed persistence, allowing users to switch between preconfigured button mappings and trigger behaviors optimized for specific games.
 
 ### Available Profiles
 
@@ -779,10 +779,10 @@ Modern controllers have different trigger types:
 
 ```c
 // For digital-only controllers: convert button press to full analog
-if (analog_l == 0 && (buttons & USBR_BUTTON_L2) == 0) {
+if (analog_l == 0 && (buttons & JP_BUTTON_L2) == 0) {
     players[player_index].output_analog_l = 255;  // Treat as full press
 }
-if (analog_r == 0 && (buttons & USBR_BUTTON_R2) == 0) {
+if (analog_r == 0 && (buttons & JP_BUTTON_R2) == 0) {
     players[player_index].output_analog_r = 255;
 }
 ```
@@ -797,16 +797,16 @@ USB controllers send analog triggers starting at 0%. Modern controllers' firmwar
 
 ```c
 // Save original digital button state
-bool original_l2_pressed = (buttons & USBR_BUTTON_L2) == 0;
+bool original_l2_pressed = (buttons & JP_BUTTON_L2) == 0;
 
 // Force L2/R2 to "not pressed" initially
-players[player_index].output_buttons |= (USBR_BUTTON_L2 | USBR_BUTTON_R2);
+players[player_index].output_buttons |= (JP_BUTTON_L2 | JP_BUTTON_R2);
 
 // LT: Use profile threshold if analog present, else fall back to digital
 if (analog_l > active_profile->l2_threshold ||
     (analog_l == 0 && original_l2_pressed))
 {
-    players[player_index].output_buttons &= ~USBR_BUTTON_L2;
+    players[player_index].output_buttons &= ~JP_BUTTON_L2;
 }
 ```
 

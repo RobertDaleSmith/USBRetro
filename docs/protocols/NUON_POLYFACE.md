@@ -980,7 +980,7 @@ The **C-buttons** (C-Up, C-Down, C-Left, C-Right) correspond to the **right anal
 
 This mapping originated with the N64 controller and was adopted by Nuon.
 
-### USBRetro → Nuon Mapping
+### Joypad → Nuon Mapping
 
 From `map_nuon_buttons()` in `nuon.c`:
 
@@ -1325,7 +1325,7 @@ The `__not_in_flash_func` attribute ensures this critical code runs from SRAM (n
 
 ### Soft Reset Feature
 
-USBRetro implements a **soft reset** feature via button combo:
+Joypad implements a **soft reset** feature via button combo:
 
 **Button Combo**: NUON + START + L + R (held for 2 seconds)
 
@@ -1379,7 +1379,7 @@ The QUADX value represents **signed delta** since last query:
 2. **REQUEST commands** (0x27, 0x84) - Exact behavior unclear
 3. **TAGGED flag** - Persistence mechanism unknown (may require EEPROM)
 4. **Advanced device types** (fishing reel, light gun) - Not tested
-5. **Multi-controller support** - Nuon supports up to 4 controllers, but USBRetro currently implements only 1
+5. **Multi-controller support** - Nuon supports up to 4 controllers, but Joypad currently implements only 1
 
 ---
 
@@ -1462,7 +1462,7 @@ This protocol documentation was made possible through extensive reverse-engineer
 - **Source Code**: `src/console/nuon/nuon.c`, `nuon.h`
 - **PIO Programs**: `polyface_read.pio`, `polyface_send.pio`
 - **Nuon SDK**: `joystick.h` (leaked development headers)
-- **USBRetro Project**: https://github.com/RobertDaleSmith/USBRetro
+- **Joypad Project**: https://github.com/RobertDaleSmith/Joypad
 
 ---
 

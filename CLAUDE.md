@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-USBRetro is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to retro console protocols (PCEngine, GameCube, Nuon, Xbox One, Loopy, 3DO). It uses TinyUSB for USB host functionality and RP2040's PIO (Programmable I/O) for console-specific timing-critical protocols.
+Joypad is firmware for RP2040-based adapters that converts USB controllers, keyboards, and mice to retro console protocols (PCEngine, GameCube, Nuon, Xbox One, Loopy, 3DO). It uses TinyUSB for USB host functionality and RP2040's PIO (Programmable I/O) for console-specific timing-critical protocols.
 
 ## Build Commands
 
@@ -28,7 +28,7 @@ make all
 make clean
 ```
 
-Output files are created in `releases/` directory with product names (e.g., `usb2pce_usbretro_pce.uf2`).
+Output files are created in `releases/` directory with product names (e.g., `usb2pce_joypad_pce.uf2`).
 
 ### Product Build Matrix
 
@@ -48,8 +48,8 @@ Output files are created in `releases/` directory with product names (e.g., `usb
 brew install --cask gcc-arm-embedded
 export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
 cd ~/git
-git clone https://github.com/RobertDaleSmith/usbretro.git
-cd usbretro
+git clone https://github.com/RobertDaleSmith/joypad.git
+cd joypad
 make init  # Initializes pico-sdk 2.2.0 and TinyUSB 0.19.0
 ```
 
@@ -62,7 +62,7 @@ src/
 ├── main.c                      # Entry point, main loop
 ├── CMakeLists.txt              # Build configuration
 ├── core/                       # Shared firmware infrastructure
-│   ├── buttons.h               # Canonical USBR_BUTTON_* definitions
+│   ├── buttons.h               # Canonical JP_BUTTON_* definitions
 │   ├── input_event.h           # Unified input event structure
 │   ├── output_interface.h      # Console output abstraction
 │   ├── router/                 # Input→Output routing system
@@ -142,7 +142,7 @@ typedef struct {
     uint8_t dev_addr;           // USB device address
     int8_t instance;            // Instance number
     input_device_type_t type;   // GAMEPAD, MOUSE, KEYBOARD, etc.
-    uint32_t buttons;           // Button bitmap (USBR_BUTTON_*)
+    uint32_t buttons;           // Button bitmap (JP_BUTTON_*)
     uint8_t analog[8];          // Analog axes (0-255, centered at 128)
     int8_t delta_x, delta_y;    // Mouse deltas
     // ... more fields
@@ -250,7 +250,7 @@ Console protocols use RP2040 PIO for precise timing:
    - `profiles.h` (optional)
 
 4. Add to `CMakeLists.txt`:
-   - `add_executable(usbretro_<console>)`
+   - `add_executable(joypad_<console>)`
    - `target_compile_definitions(...PRIVATE CONFIG_<CONSOLE>=1)`
    - Source files and includes
 
@@ -275,16 +275,16 @@ Console protocols use RP2040 PIO for precise timing:
 
 ### Button Mapping
 
-USBRetro uses canonical button definitions (`core/buttons.h`):
+Joypad uses canonical button definitions (`core/buttons.h`):
 ```c
-#define USBR_BUTTON_B1 0x00020  // A/Cross
-#define USBR_BUTTON_B2 0x00010  // B/Circle
-#define USBR_BUTTON_B3 0x02000  // X/Square
-#define USBR_BUTTON_B4 0x01000  // Y/Triangle
-#define USBR_BUTTON_L1 0x04000  // LB/L1
-#define USBR_BUTTON_R1 0x08000  // RB/R1
-#define USBR_BUTTON_S1 0x00040  // Back/Select
-#define USBR_BUTTON_S2 0x00080  // Start
+#define JP_BUTTON_B1 0x00020  // A/Cross
+#define JP_BUTTON_B2 0x00010  // B/Circle
+#define JP_BUTTON_B3 0x02000  // X/Square
+#define JP_BUTTON_B4 0x01000  // Y/Triangle
+#define JP_BUTTON_L1 0x04000  // LB/L1
+#define JP_BUTTON_R1 0x08000  // RB/R1
+#define JP_BUTTON_S1 0x00040  // Back/Select
+#define JP_BUTTON_S2 0x00080  // Start
 // ... etc
 ```
 
@@ -292,7 +292,7 @@ Buttons are **active-low** (0 = pressed, 1 = released).
 
 ## Common Pitfalls
 
-- **Buttons are active-low** - Check with `(buttons & USBR_BUTTON_X) == 0` for pressed
+- **Buttons are active-low** - Check with `(buttons & JP_BUTTON_X) == 0` for pressed
 - **GameCube requires 130MHz** - Set via `set_sys_clock_khz(130000, true)`
 - **PIO has 32 instruction limit** - Optimize or split programs
 - **Use `__not_in_flash_func`** - For timing-critical code to avoid XIP latency

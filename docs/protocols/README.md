@@ -1,6 +1,6 @@
 # Console Protocol Documentation
 
-This directory contains comprehensive technical documentation of the retro console communication protocols implemented in USBRetro. Each protocol represents significant reverse-engineering work and aims to serve as a definitive reference for developers.
+This directory contains comprehensive technical documentation of the retro console communication protocols implemented in Joypad. Each protocol represents significant reverse-engineering work and aims to serve as a definitive reference for developers.
 
 ## Available Protocol Documentation
 
@@ -165,7 +165,7 @@ Many retro protocols were never officially documented, existing only in propriet
 
 ## License
 
-All protocol documentation in this directory is licensed under Apache License 2.0, matching the USBRetro project license.
+All protocol documentation in this directory is licensed under Apache License 2.0, matching the Joypad project license.
 
 ---
 

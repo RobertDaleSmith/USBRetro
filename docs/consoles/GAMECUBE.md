@@ -203,4 +203,4 @@ Pin 6: 3.3V (optional, some boards)
 ## Product Links
 
 - [GC USB Adapter](https://controlleradapter.com/products/gc-usb) - Pre-built hardware
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware

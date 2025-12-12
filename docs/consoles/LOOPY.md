@@ -86,11 +86,11 @@ The Loopy adapter is experimental:
 ## Contributing
 
 If you have a Casio Loopy and can help test:
-- Join Discord: [discord.usbretro.com](https://discord.usbretro.com/)
+- Join Discord: [discord.joypad.com](https://discord.joypad.com/)
 - Report issues on GitHub
 - Protocol documentation appreciated
 
 ## Product Links
 
 - **Pre-built hardware**: Not currently available (experimental)
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware

@@ -1,6 +1,6 @@
-# USBRetro Build Guide
+# Joypad Build Guide
 
-Complete guide for building USBRetro firmware on macOS, Linux, and Windows.
+Complete guide for building Joypad firmware on macOS, Linux, and Windows.
 
 ## Table of Contents
 
@@ -22,15 +22,15 @@ Complete guide for building USBRetro firmware on macOS, Linux, and Windows.
 brew install --cask gcc-arm-embedded cmake git
 
 # 2. Clone and initialize submodules
-git clone https://github.com/RobertDaleSmith/USBRetro.git
-cd USBRetro
+git clone https://github.com/RobertDaleSmith/Joypad.git
+cd Joypad
 make init          # Installs pico-sdk and TinyUSB as submodules
 
 # 3. Build a product
 make usb2pce       # or: usb2gc, usb2nuon, usb23do, usb2loopy
 ```
 
-Output: `releases/usb2pce_usbretro_pce.uf2` (ready to flash!)
+Output: `releases/usb2pce_joypad_pce.uf2` (ready to flash!)
 
 ---
 
@@ -82,10 +82,10 @@ Use WSL2 with Ubuntu and follow Linux instructions above.
 #### Option 2: Native Windows
 
 1. Download and install [Raspberry Pi Pico Windows Installer](https://github.com/raspberrypi/pico-setup-windows/releases)
-2. Clone USBRetro and initialize:
+2. Clone Joypad and initialize:
    ```powershell
-   git clone https://github.com/RobertDaleSmith/USBRetro.git
-   cd USBRetro
+   git clone https://github.com/RobertDaleSmith/Joypad.git
+   cd Joypad
    make init
    ```
 
@@ -105,7 +105,7 @@ make usb2xb1       # USB2XB1 (QT Py + Xbox One)
 make snes23do      # SNES23DO (KB2040 + SNES→3DO bridge)
 ```
 
-**Output**: `releases/<product>_usbretro_<console>.uf2`
+**Output**: `releases/<product>_joypad_<console>.uf2`
 
 ### Build All Products
 
@@ -134,17 +134,17 @@ make help          # Display all available targets
 
 ## Product Build Matrix
 
-USBRetro supports multiple **board × console** combinations:
+Joypad supports multiple **board × console** combinations:
 
 | Product | Board | Console | Command | Output File |
 |---------|-------|---------|---------|-------------|
-| **USB2PCE** | KB2040 | PCEngine | `make usb2pce` | `usb2pce_usbretro_pce.uf2` |
-| **USB2GC** | KB2040 | GameCube | `make usb2gc` | `usb2gc_usbretro_ngc.uf2` |
-| **USB2Nuon** | KB2040 | Nuon | `make usb2nuon` | `usb2nuon_usbretro_nuon.uf2` |
-| **USB23DO** | KB2040 | 3DO | `make usb23do` | `usb23do_usbretro_3do.uf2` |
-| **USB2Loopy** | KB2040 | Casio Loopy | `make usb2loopy` | `usb2loopy_usbretro_loopy.uf2` |
-| **USB2XB1** | QT Py | Xbox One | `make usb2xb1` | `usb2xb1_usbretro_xb1.uf2` |
-| **SNES23DO** | KB2040 | SNES→3DO | `make snes23do` | `snes23do_usbretro_snes3do.uf2` |
+| **USB2PCE** | KB2040 | PCEngine | `make usb2pce` | `usb2pce_joypad_pce.uf2` |
+| **USB2GC** | KB2040 | GameCube | `make usb2gc` | `usb2gc_joypad_ngc.uf2` |
+| **USB2Nuon** | KB2040 | Nuon | `make usb2nuon` | `usb2nuon_joypad_nuon.uf2` |
+| **USB23DO** | KB2040 | 3DO | `make usb23do` | `usb23do_joypad_3do.uf2` |
+| **USB2Loopy** | KB2040 | Casio Loopy | `make usb2loopy` | `usb2loopy_joypad_loopy.uf2` |
+| **USB2XB1** | QT Py | Xbox One | `make usb2xb1` | `usb2xb1_joypad_xb1.uf2` |
+| **SNES23DO** | KB2040 | SNES→3DO | `make snes23do` | `snes23do_joypad_snes3do.uf2` |
 
 ### Board Variants
 
@@ -234,7 +234,7 @@ make <target>
 
 ### Architecture Overview
 
-USBRetro uses a modular architecture:
+Joypad uses a modular architecture:
 
 ```
 src/
@@ -296,6 +296,6 @@ Console protocols use RP2040 PIO for precise timing:
 ## Getting Help
 
 - **Documentation**: See [README.md](../README.md), [CLAUDE.md](../CLAUDE.md)
-- **Issues**: https://github.com/RobertDaleSmith/USBRetro/issues
-- **Discord**: https://discord.usbretro.com/
+- **Issues**: https://github.com/RobertDaleSmith/Joypad/issues
+- **Discord**: https://discord.joypad.com/
 - **SDK Docs**: https://www.raspberrypi.com/documentation/pico-sdk/

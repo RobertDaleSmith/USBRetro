@@ -126,8 +126,8 @@ Controllers are remapped to Xbox layout:
 ## Product Links
 
 - **Pre-built hardware**: Not currently available (DIY only)
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
-- [Discord](https://discord.usbretro.com/) - Community support for mod
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware
+- [Discord](https://discord.joypad.com/) - Community support for mod
 
 ---
 

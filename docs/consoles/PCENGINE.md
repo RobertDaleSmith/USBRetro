@@ -156,4 +156,4 @@ PCEngine multitap scanning:
 ## Product Links
 
 - [USB-2-PCE Adapter](https://controlleradapter.com/products/usb-2-pce) - Pre-built hardware
-- [GitHub Releases](https://github.com/RobertDaleSmith/USBRetro/releases) - Latest firmware
+- [GitHub Releases](https://github.com/RobertDaleSmith/Joypad/releases) - Latest firmware

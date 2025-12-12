@@ -256,7 +256,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
-          name: USBRetro v${{ needs.check-version.outputs.version }}
+          name: Joypad v${{ needs.check-version.outputs.version }}
           body: |
             ## Installation
 
