@@ -4,8 +4,18 @@
 #include "bthid.h"
 #include "bt/transport/bt_transport.h"
 #include "devices/generic/bthid_gamepad.h"
+#include "devices/vendors/sony/ds4_bt.h"
+#include "devices/vendors/sony/ds5_bt.h"
 #include <string.h>
 #include <stdio.h>
+
+// ============================================================================
+// SONY REPORT IDS (for reclassification)
+// ============================================================================
+
+#define SONY_REPORT_ID_BASIC    0x01    // DS3/DS4 basic mode
+#define SONY_REPORT_ID_DS4      0x11    // DS4 full BT report
+#define SONY_REPORT_ID_DS5      0x31    // DS5 full BT report
 
 // ============================================================================
 // CONFIGURATION
@@ -28,6 +38,7 @@ static uint8_t driver_count = 0;
 static bthid_device_t* find_or_create_device(uint8_t conn_index);
 static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod);
 static bthid_device_type_t classify_device(const uint8_t* class_of_device);
+static bool try_reclassify_sony_device(bthid_device_t* device, uint8_t report_id);
 
 // ============================================================================
 // INITIALIZATION
@@ -202,6 +213,49 @@ static bthid_device_type_t classify_device(const uint8_t* class_of_device)
 }
 
 // ============================================================================
+// SONY DEVICE RECLASSIFICATION
+// Detect DS4 vs DS5 by report ID and swap drivers if needed
+// ============================================================================
+
+static bool try_reclassify_sony_device(bthid_device_t* device, uint8_t report_id)
+{
+    const bthid_driver_t* current = (const bthid_driver_t*)device->driver;
+    const bthid_driver_t* new_driver = NULL;
+
+    // Check if reclassification is needed
+    if (report_id == SONY_REPORT_ID_DS5 && current != &ds5_bt_driver) {
+        // Got DS5 report but not using DS5 driver
+        new_driver = &ds5_bt_driver;
+        printf("[BTHID] Reclassify: report 0x%02X -> DS5 driver\n", report_id);
+    } else if (report_id == SONY_REPORT_ID_DS4 && current != &ds4_bt_driver) {
+        // Got DS4 full report but not using DS4 driver
+        new_driver = &ds4_bt_driver;
+        printf("[BTHID] Reclassify: report 0x%02X -> DS4 driver\n", report_id);
+    }
+
+    if (new_driver) {
+        // Disconnect old driver
+        if (current && current->disconnect) {
+            current->disconnect(device);
+        }
+
+        // Clear driver data
+        device->driver_data = NULL;
+
+        // Initialize new driver
+        device->driver = new_driver;
+        if (new_driver->init) {
+            new_driver->init(device);
+        }
+
+        printf("[BTHID] Reclassification complete: now using %s\n", new_driver->name);
+        return true;
+    }
+
+    return false;
+}
+
+// ============================================================================
 // TRANSPORT CALLBACKS
 // Override weak implementations in bt_transport.c
 // ============================================================================
@@ -296,7 +350,19 @@ void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
             const uint8_t* report_data = data + 1;
             uint16_t report_len = len - 1;
 
-            if (report_type == BTHID_REPORT_TYPE_INPUT) {
+            if (report_type == BTHID_REPORT_TYPE_INPUT && report_len >= 1) {
+                // Check report ID for Sony device reclassification
+                // This handles cases where name matching was wrong (e.g., third-party controllers)
+                uint8_t report_id = report_data[0];
+                if (report_id == SONY_REPORT_ID_DS4 || report_id == SONY_REPORT_ID_DS5) {
+                    // Try to reclassify based on actual report ID
+                    if (try_reclassify_sony_device(device, report_id)) {
+                        // Driver was swapped - it will process this report on next iteration
+                        // after its init sequence completes
+                        return;
+                    }
+                }
+
                 // Input report - route to driver
                 if (device->driver) {
                     const bthid_driver_t* drv = (const bthid_driver_t*)device->driver;

@@ -66,6 +66,14 @@ void btd_on_connection(uint8_t conn_index)
     // Reset HID channel state for this connection
     memset(&hid_channel_state[conn_index], 0, sizeof(hid_channel_state[0]));
 
+    // Auth will be requested after remote name completes to avoid HCI command overflow
+    // See btd_on_remote_name_complete() below
+}
+
+void btd_on_remote_name_complete(uint8_t conn_index, const char* name)
+{
+    printf("[BTD_GLUE] Remote name complete for connection %d: %s\n", conn_index, name);
+
     const btd_connection_t* conn = btd_get_connection(conn_index);
     if (!conn) return;
 
@@ -82,7 +90,7 @@ void btd_on_connection(uint8_t conn_index)
     }
 
     // Request authentication before initiating L2CAP
-    // This is required for devices like DS4 that need SSP
+    // This is required for devices like DS4/DS5 that need SSP
     printf("[BTD_GLUE] Requesting authentication...\n");
     btd_hci_authentication_requested(conn->handle);
 }

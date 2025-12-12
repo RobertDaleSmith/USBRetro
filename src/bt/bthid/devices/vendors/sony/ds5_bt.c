@@ -3,6 +3,7 @@
 //
 // Reference: https://controllers.fandom.com/wiki/Sony_DualSense
 // BT reports have similar structure to USB but with different report IDs
+// BT output reports require CRC32
 
 #include "ds5_bt.h"
 #include "bt/bthid/bthid.h"
@@ -10,8 +11,28 @@
 #include "core/input_event.h"
 #include "core/router/router.h"
 #include "core/buttons.h"
+#include "core/services/players/manager.h"
+#include "core/services/players/feedback.h"
+#include "pico/time.h"
 #include <string.h>
 #include <stdio.h>
+
+// Player LED colors (RGB values) - same as DS4
+static const uint8_t PLAYER_COLORS[][3] = {
+    {  0,   0,  64 },   // Player 1: Blue
+    { 64,   0,   0 },   // Player 2: Red
+    {  0,  64,   0 },   // Player 3: Green
+    { 64,   0,  64 },   // Player 4: Pink/Fuchsia
+};
+
+// Player LED patterns for DS5 (5 LEDs in a row)
+// Pattern is a bitmask: bit 0=leftmost, bit 4=rightmost
+static const uint8_t PLAYER_LED_PATTERNS[] = {
+    0x04,   // Player 1: center LED (--*--)
+    0x0A,   // Player 2: left+right of center (-*-*-)
+    0x15,   // Player 3: outer + center (*-*-*)
+    0x1B,   // Player 4: all but center (**-**)
+};
 
 // ============================================================================
 // DS5 CONSTANTS
@@ -31,7 +52,7 @@ typedef struct __attribute__((packed)) {
     uint8_t x2, y2;         // Right stick
     uint8_t l2_trigger;     // L2 analog
     uint8_t r2_trigger;     // R2 analog
-    uint8_t counter;        // Report counter
+    uint8_t counter;        // Report counter / sequence number
 
     struct {
         uint8_t dpad     : 4;   // Hat: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW, 8=released
@@ -59,10 +80,12 @@ typedef struct __attribute__((packed)) {
         uint8_t pad     : 5;
     };
 
-    // Extended data for motion
-    uint8_t reserved[4];    // Unknown bytes
-    int16_t gyro[3];        // x, y, z
-    int16_t accel[3];       // x, y, z
+    uint8_t reserved1;          // 4th button byte
+
+    // Extended data for motion (matches Linux kernel hid-playstation.c)
+    uint8_t reserved2[4];       // Timestamp/padding bytes
+    int16_t gyro[3];            // x, y, z (pitch, yaw, roll)
+    int16_t accel[3];           // x, y, z
     // Touchpad etc follows but not parsed
 } ds5_input_report_t;
 
@@ -105,16 +128,54 @@ typedef struct __attribute__((packed)) {
 } ds5_bt_output_report_t;
 
 // ============================================================================
+// CRC32 for DS5 BT output reports
+// ============================================================================
+
+// Core CRC32 calculation (returns raw CRC, no inversion)
+static uint32_t ds5_crc32_raw(uint32_t seed, const uint8_t* data, size_t len)
+{
+    uint32_t crc = seed;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+        }
+    }
+    return crc;
+}
+
+// DS5 BT output CRC - matches Linux kernel hid-playstation driver
+// Two-step calculation: first hash seed (0xA2), then hash report data
+static uint32_t ds5_bt_crc32(const uint8_t* report_data, size_t len)
+{
+    const uint8_t seed = 0xA2;  // PS_OUTPUT_CRC32_SEED
+
+    // Step 1: Hash the seed byte
+    uint32_t crc = ds5_crc32_raw(0xFFFFFFFF, &seed, 1);
+
+    // Step 2: Continue hashing with report data (use intermediate CRC as seed)
+    crc = ds5_crc32_raw(crc, report_data, len);
+
+    // Final inversion
+    return ~crc;
+}
+
+// ============================================================================
 // DRIVER DATA
 // ============================================================================
 
 typedef struct {
     input_event_t event;
     bool initialized;
+    uint8_t activation_state;
+    uint32_t activation_time;
     uint8_t output_seq;
-    uint8_t player_led;
+
+    // Current feedback state (for change detection)
     uint8_t rumble_left;
     uint8_t rumble_right;
+    uint8_t led_r, led_g, led_b;
+    uint8_t player_led;
 } ds5_bt_data_t;
 
 static ds5_bt_data_t ds5_data[BTHID_MAX_DEVICES];
@@ -123,39 +184,89 @@ static ds5_bt_data_t ds5_data[BTHID_MAX_DEVICES];
 // HELPER FUNCTIONS
 // ============================================================================
 
-static void ds5_set_led(bthid_device_t* device, uint8_t r, uint8_t g, uint8_t b, uint8_t player)
+static void ds5_send_output(bthid_device_t* device, uint8_t rumble_left, uint8_t rumble_right,
+                            uint8_t r, uint8_t g, uint8_t b, uint8_t player_led)
 {
     ds5_bt_data_t* ds5 = (ds5_bt_data_t*)device->driver_data;
     if (!ds5) return;
 
-    uint8_t buf[64];
+    // DS5 BT output report - matches Linux kernel hid-playstation.c dualsense_output_report_common
+    // Report structure: report_id(1) + seq_tag(1) + tag(1) + common(47) + reserved(24) + crc(4) = 78 bytes
+    // Buffer: 0xA2 header + 78-byte report = 79 bytes total
+    uint8_t buf[79];
     memset(buf, 0, sizeof(buf));
 
-    ds5_bt_output_report_t* out = (ds5_bt_output_report_t*)buf;
+    // BT HID header
+    buf[0] = 0xA2;  // DATA | OUTPUT (BT HID transaction header)
 
-    out->report_id = DS5_REPORT_BT_OUTPUT;
-    out->seq_tag = (ds5->output_seq++ << 4) | 0x00;
-    out->tag = 0x10;
+    // Report header (report bytes 0-2, buf offset 1-3)
+    buf[1] = 0x31;  // Report ID
+    buf[2] = (ds5->output_seq++ << 4);  // Sequence tag (upper nibble)
+    buf[3] = 0x10;  // Tag: 0x10 for BT
 
-    // Enable rumble and LED
-    out->valid_flag0 = 0x03;    // Rumble motors
-    out->valid_flag1 = 0x04 | 0x08 | 0x10;  // Player LED, lightbar, LED setup
-    out->valid_flag2 = 0x00;
+    // Common struct starts at report byte 3 (buf offset 4)
+    // Linux kernel offsets within common:
+    // 0: valid_flag0, 1: valid_flag1, 2: motor_right, 3: motor_left
+    // 4-7: audio volumes, 8: mute_led, 9: power_save, 10-36: reserved2
+    // 37: audio_control2, 38: valid_flag2, 39-40: reserved3
+    // 41: lightbar_setup, 42: led_brightness, 43: player_leds
+    // 44: red, 45: green, 46: blue
 
-    out->rumble_right = ds5->rumble_right;
-    out->rumble_left = ds5->rumble_left;
+    // Valid flags
+    buf[4] = 0x03;   // common[0] valid_flag0: COMPATIBLE_VIBRATION | HAPTICS_SELECT
+    buf[5] = 0x14;   // common[1] valid_flag1: LIGHTBAR_CONTROL(0x04) | PLAYER_INDICATOR_CONTROL(0x10)
 
-    out->lightbar_setup = 0x02;  // Enable LED changes
-    out->led_brightness = 0x02;  // Full brightness
+    // Rumble motors (common offsets 2-3)
+    buf[6] = rumble_right;   // common[2] motor_right (high frequency)
+    buf[7] = rumble_left;    // common[3] motor_left (low frequency)
 
-    // Player LED pattern (5 LEDs)
-    out->player_led = player;
+    // common[4-9]: audio volumes, mute_led, power_save - leave as 0
+    // common[10-36]: reserved2 - leave as 0
+    // common[37]: audio_control2 - leave as 0
 
-    out->lightbar_r = r;
-    out->lightbar_g = g;
-    out->lightbar_b = b;
+    // common[38] = buf[42]: valid_flag2
+    buf[42] = 0x02;  // LIGHTBAR_SETUP_CONTROL
 
-    bt_send_interrupt(device->conn_index, buf, sizeof(ds5_bt_output_report_t));
+    // common[39-40] = buf[43-44]: reserved3 - leave as 0
+
+    // common[41] = buf[45]: lightbar_setup
+    buf[45] = 0x02;  // LIGHTBAR_SETUP_LIGHT_OUT
+
+    // common[42] = buf[46]: led_brightness
+    buf[46] = 0x01;  // Full brightness
+
+    // common[43] = buf[47]: player_leds
+    buf[47] = player_led;
+
+    // common[44-46] = buf[48-50]: lightbar RGB
+    buf[48] = r;
+    buf[49] = g;
+    buf[50] = b;
+
+    // buf[51-74]: reserved[24] - leave as 0
+
+    // CRC32 calculated over report data only (buf[1..74] = 74 bytes)
+    // The 0xA2 seed is handled internally by ds5_bt_crc32
+    uint32_t crc = ds5_bt_crc32(&buf[1], 74);
+
+    // Append CRC (little-endian) at bytes 75-78
+    buf[75] = (crc >> 0) & 0xFF;
+    buf[76] = (crc >> 8) & 0xFF;
+    buf[77] = (crc >> 16) & 0xFF;
+    buf[78] = (crc >> 24) & 0xFF;
+
+    // Send on interrupt channel (79 bytes: 0xA2 + 78-byte report including CRC)
+    bt_send_interrupt(device->conn_index, buf, 79);
+    printf("[DS5_BT] Output: rumble L=%d R=%d, LED=%02X, RGB=%d/%d/%d\n",
+           rumble_left, rumble_right, player_led, r, g, b);
+
+    // Update cached state
+    ds5->rumble_left = rumble_left;
+    ds5->rumble_right = rumble_right;
+    ds5->led_r = r;
+    ds5->led_g = g;
+    ds5->led_b = b;
+    ds5->player_led = player_led;
 }
 
 // ============================================================================
@@ -191,21 +302,25 @@ static bool ds5_init(bthid_device_t* device)
         if (!ds5_data[i].initialized) {
             init_input_event(&ds5_data[i].event);
             ds5_data[i].initialized = true;
+            ds5_data[i].activation_state = 0;
+            ds5_data[i].activation_time = 0;
             ds5_data[i].output_seq = 0;
-            ds5_data[i].player_led = 0x04;  // Center LED for player 1
             ds5_data[i].rumble_left = 0;
             ds5_data[i].rumble_right = 0;
+            ds5_data[i].led_r = 0;
+            ds5_data[i].led_g = 0;
+            ds5_data[i].led_b = 64;  // Default blue
+            ds5_data[i].player_led = PLAYER_LED_PATTERNS[0];
 
             ds5_data[i].event.type = INPUT_TYPE_GAMEPAD;
             ds5_data[i].event.dev_addr = device->conn_index;
             ds5_data[i].event.instance = 0;
-            ds5_data[i].event.button_count = 10;
+            ds5_data[i].event.button_count = 14;
+            ds5_data[i].event.has_motion = true;
 
             device->driver_data = &ds5_data[i];
 
-            // Set initial LED color (blue for player 1)
-            ds5_set_led(device, 0, 0, 64, 0x04);
-
+            // Activation happens in task (state machine with delays)
             return true;
         }
     }
@@ -213,10 +328,18 @@ static bool ds5_init(bthid_device_t* device)
     return false;
 }
 
+static bool ds5_process_debug_done = false;
+
 static void ds5_process_report(bthid_device_t* device, const uint8_t* data, uint16_t len)
 {
     ds5_bt_data_t* ds5 = (ds5_bt_data_t*)device->driver_data;
     if (!ds5 || len < 1) return;
+
+    // Debug: print first report received
+    if (!ds5_process_debug_done) {
+        printf("[DS5_BT] Process report: len=%d, data[0]=0x%02X\n", len, data[0]);
+        ds5_process_debug_done = true;
+    }
 
     uint8_t report_id = data[0];
     const uint8_t* report_data = NULL;
@@ -232,6 +355,7 @@ static void ds5_process_report(bthid_device_t* device, const uint8_t* data, uint
         report_len = len - 1;
     } else {
         // Unknown report format
+        printf("[DS5_BT] Unknown report: len=%d, data[0]=0x%02X\n", len, data[0]);
         return;
     }
 
@@ -284,7 +408,7 @@ static void ds5_process_report(bthid_device_t* device, const uint8_t* data, uint
 
     // Motion data (DS5 has full 3-axis gyro and accel)
     // Check if we have enough data for motion
-    if (len >= sizeof(ds5_input_report_t)) {
+    if (report_len >= sizeof(ds5_input_report_t)) {
         ds5->event.has_motion = true;
         ds5->event.accel[0] = rpt->accel[0];
         ds5->event.accel[1] = rpt->accel[1];
@@ -305,7 +429,115 @@ static void ds5_task(bthid_device_t* device)
     ds5_bt_data_t* ds5 = (ds5_bt_data_t*)device->driver_data;
     if (!ds5) return;
 
-    // Could send periodic LED/rumble updates here if needed
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // State machine for activation with delays
+    switch (ds5->activation_state) {
+        case 0:  // Wait a moment then send initial LED
+            ds5->activation_state = 1;
+            ds5->activation_time = now;
+            break;
+
+        case 1:  // Wait 100ms then send initial LED
+            if (now - ds5->activation_time >= 100) {
+                // Set initial LED based on player index
+                int player_idx = find_player_index(ds5->event.dev_addr, ds5->event.instance);
+                int idx = (player_idx >= 0 && player_idx < 4) ? player_idx : 0;
+                ds5_send_output(device, 0, 0,
+                    PLAYER_COLORS[idx][0], PLAYER_COLORS[idx][1], PLAYER_COLORS[idx][2],
+                    PLAYER_LED_PATTERNS[idx]);
+                ds5->activation_state = 2;
+            }
+            break;
+
+        case 2:  // Activated - monitor feedback system for rumble/LED updates
+            {
+                int player_idx = find_player_index(ds5->event.dev_addr, ds5->event.instance);
+                if (player_idx >= 0) {
+                    feedback_state_t* fb = feedback_get_state(player_idx);
+                    if (!fb) break;
+
+                    bool need_update = false;
+                    uint8_t r = ds5->led_r;
+                    uint8_t g = ds5->led_g;
+                    uint8_t b = ds5->led_b;
+                    uint8_t player_led = ds5->player_led;
+                    uint8_t rumble_left = ds5->rumble_left;
+                    uint8_t rumble_right = ds5->rumble_right;
+
+                    // Calculate player LED from pattern (like DS3)
+                    // DS5 has separate player LED bar and RGB lightbar
+                    uint8_t calc_player_led;
+                    if (fb->led.pattern != 0) {
+                        // Map feedback pattern bits to DS5 player LED pattern
+                        int player_num = 0;
+                        if (fb->led.pattern & 0x01) player_num = 0;
+                        else if (fb->led.pattern & 0x02) player_num = 1;
+                        else if (fb->led.pattern & 0x04) player_num = 2;
+                        else if (fb->led.pattern & 0x08) player_num = 3;
+                        calc_player_led = PLAYER_LED_PATTERNS[player_num];
+                    } else {
+                        // Default to player index
+                        int idx = player_idx % 4;
+                        calc_player_led = PLAYER_LED_PATTERNS[idx];
+                    }
+
+                    // Check if player LED changed
+                    if (calc_player_led != ds5->player_led) {
+                        player_led = calc_player_led;
+                        need_update = true;
+                    }
+
+                    // Check RGB lightbar from feedback
+                    if (fb->led_dirty) {
+                        if (fb->led.r != 0 || fb->led.g != 0 || fb->led.b != 0) {
+                            // Host specified RGB color directly
+                            r = fb->led.r;
+                            g = fb->led.g;
+                            b = fb->led.b;
+                        } else if (fb->led.pattern != 0) {
+                            // Use player color based on pattern
+                            int player_num = 0;
+                            if (fb->led.pattern & 0x01) player_num = 0;
+                            else if (fb->led.pattern & 0x02) player_num = 1;
+                            else if (fb->led.pattern & 0x04) player_num = 2;
+                            else if (fb->led.pattern & 0x08) player_num = 3;
+                            r = PLAYER_COLORS[player_num][0];
+                            g = PLAYER_COLORS[player_num][1];
+                            b = PLAYER_COLORS[player_num][2];
+                        } else {
+                            // Default to player index color
+                            int idx = player_idx % 4;
+                            r = PLAYER_COLORS[idx][0];
+                            g = PLAYER_COLORS[idx][1];
+                            b = PLAYER_COLORS[idx][2];
+                        }
+                        player_led = calc_player_led;
+                        need_update = true;
+                    }
+
+                    // Check rumble
+                    if (fb->rumble_dirty) {
+                        rumble_left = fb->rumble.left;
+                        rumble_right = fb->rumble.right;
+                        need_update = true;
+                    }
+
+                    // Also check if values changed (even without dirty flag)
+                    if (rumble_left != ds5->rumble_left || rumble_right != ds5->rumble_right ||
+                        r != ds5->led_r || g != ds5->led_g || b != ds5->led_b ||
+                        player_led != ds5->player_led) {
+                        need_update = true;
+                    }
+
+                    if (need_update) {
+                        ds5_send_output(device, rumble_left, rumble_right, r, g, b, player_led);
+                        feedback_clear_dirty(player_idx);
+                    }
+                }
+            }
+            break;
+    }
 }
 
 static void ds5_disconnect(bthid_device_t* device)
@@ -314,6 +546,9 @@ static void ds5_disconnect(bthid_device_t* device)
 
     ds5_bt_data_t* ds5 = (ds5_bt_data_t*)device->driver_data;
     if (ds5) {
+        // Remove player assignment
+        remove_players_by_address(ds5->event.dev_addr, ds5->event.instance);
+
         init_input_event(&ds5->event);
         ds5->initialized = false;
     }

@@ -167,6 +167,11 @@ static bool ds4_match(const char* device_name, const uint8_t* class_of_device)
         return false;
     }
 
+    // Don't match DualSense (DS5) - let DS5 driver handle it
+    if (strstr(device_name, "DualSense") != NULL) {
+        return false;
+    }
+
     // Match known DS4 device names
     if (strstr(device_name, "Wireless Controller") != NULL) {
         return true;

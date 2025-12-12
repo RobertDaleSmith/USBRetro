@@ -213,6 +213,9 @@ extern void btd_on_disconnection(uint8_t conn_index);
 // Called when ACL data is received
 extern void btd_on_acl_data(uint8_t conn_index, const uint8_t* data, uint16_t len);
 
+// Called when remote name request completes
+extern void btd_on_remote_name_complete(uint8_t conn_index, const char* name);
+
 // ============================================================================
 // TINYUSB INTEGRATION
 // ============================================================================

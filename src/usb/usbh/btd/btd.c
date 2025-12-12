@@ -1011,17 +1011,26 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
             char addr_str[18];
             btd_bd_addr_to_str(rn->bd_addr, addr_str);
 
+            btd_connection_t* conn = btd_find_connection_by_bdaddr(rn->bd_addr);
             if (rn->status == HCI_SUCCESS) {
                 printf("[BTD] Remote name from %s: %s\n", addr_str, rn->remote_name);
 
                 // Store name in connection record
-                btd_connection_t* conn = btd_find_connection_by_bdaddr(rn->bd_addr);
                 if (conn) {
                     strncpy(conn->name, rn->remote_name, BTD_MAX_NAME_LEN - 1);
                     conn->name[BTD_MAX_NAME_LEN - 1] = '\0';
+
+                    // Notify higher layer - auth can now proceed
+                    uint8_t idx = conn - btd_ctx.connections;
+                    btd_on_remote_name_complete(idx, conn->name);
                 }
             } else {
                 printf("[BTD] Remote name request failed for %s: 0x%02X\n", addr_str, rn->status);
+                // Still notify so auth can proceed with empty name
+                if (conn) {
+                    uint8_t idx = conn - btd_ctx.connections;
+                    btd_on_remote_name_complete(idx, "");
+                }
             }
             break;
         }
@@ -1383,4 +1392,9 @@ __attribute__((weak)) void btd_on_disconnection(uint8_t conn_index)
 __attribute__((weak)) void btd_on_acl_data(uint8_t conn_index, const uint8_t* data, uint16_t len)
 {
     printf("[BTD] ACL data on connection %d: %d bytes (weak handler)\n", conn_index, len);
+}
+
+__attribute__((weak)) void btd_on_remote_name_complete(uint8_t conn_index, const char* name)
+{
+    printf("[BTD] Remote name complete for connection %d: %s (weak handler)\n", conn_index, name);
 }
