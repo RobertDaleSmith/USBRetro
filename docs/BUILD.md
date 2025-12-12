@@ -1,15 +1,15 @@
-# Joypad Build Guide
+# Joypad Core Build Guide
 
-Complete guide for building Joypad firmware on macOS, Linux, and Windows.
+Complete guide for building Joypad Core firmware on macOS, Linux, and Windows.
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Prerequisites](#prerequisites)
-- [Building Firmware](#building-firmware)
-- [Product Build Matrix](#product-build-matrix)
+- [Building Apps](#building-apps)
+- [App Reference](#app-reference)
+- [Architecture Overview](#architecture-overview)
 - [Troubleshooting](#troubleshooting)
-- [Advanced Topics](#advanced-topics)
 
 ---
 
@@ -22,15 +22,15 @@ Complete guide for building Joypad firmware on macOS, Linux, and Windows.
 brew install --cask gcc-arm-embedded cmake git
 
 # 2. Clone and initialize submodules
-git clone https://github.com/RobertDaleSmith/Joypad.git
-cd Joypad
-make init          # Installs pico-sdk and TinyUSB as submodules
+git clone https://github.com/joypad-ai/joypad-core.git
+cd joypad-core
+make init
 
-# 3. Build a product
-make usb2pce       # or: usb2gc, usb2nuon, usb23do, usb2loopy
+# 3. Build an app
+make usb2pce       # or: usb2gc, usb2nuon, usb23do, usb2usb, etc.
 ```
 
-Output: `releases/usb2pce_joypad_pce.uf2` (ready to flash!)
+Output: `releases/usbr_<commit>_<board>_<app>.uf2`
 
 ---
 
@@ -38,17 +38,14 @@ Output: `releases/usb2pce_joypad_pce.uf2` (ready to flash!)
 
 ### macOS
 
-#### Required Tools
-
-1. **ARM GCC Toolchain** (Official from ARM, not Homebrew formula!)
+1. **ARM GCC Toolchain** (Official from ARM)
    ```bash
    brew install --cask gcc-arm-embedded
    ```
    - Installs to: `/Applications/ArmGNUToolchain/<version>/arm-none-eabi/`
-   - Current tested version: 14.2.rel1
-   - **Do NOT use** `brew install arm-none-eabi-gcc` (missing newlib/nosys.specs)
+   - **Do NOT use** `brew install arm-none-eabi-gcc` (missing newlib)
 
-2. **CMake** (3.13+ required)
+2. **CMake** (3.13+)
    ```bash
    brew install cmake
    ```
@@ -57,13 +54,6 @@ Output: `releases/usb2pce_joypad_pce.uf2` (ready to flash!)
    ```bash
    brew install git
    ```
-
-**Note**: Pico SDK and TinyUSB are included as submodules - no separate installation needed! Just run `make init` after cloning.
-
-#### Optional Tools
-
-- **picotool** (for UF2 inspection): `brew install picotool`
-- **minicom** (for serial debugging): `brew install minicom`
 
 ### Linux (Debian/Ubuntu)
 
@@ -75,227 +65,202 @@ sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi \
 
 ### Windows
 
-#### Option 1: WSL2 (Recommended)
-
 Use WSL2 with Ubuntu and follow Linux instructions above.
-
-#### Option 2: Native Windows
-
-1. Download and install [Raspberry Pi Pico Windows Installer](https://github.com/raspberrypi/pico-setup-windows/releases)
-2. Clone Joypad and initialize:
-   ```powershell
-   git clone https://github.com/RobertDaleSmith/Joypad.git
-   cd Joypad
-   make init
-   ```
 
 ---
 
-## Building Firmware
+## Building Apps
 
-### Build Specific Products
-
-```bash
-make usb2pce       # USB2PCE (KB2040 + PCEngine)
-make usb2gc        # USB2GC (KB2040 + GameCube)
-make usb2nuon      # USB2Nuon (KB2040 + Nuon)
-make usb23do       # USB23DO (KB2040 + 3DO)
-make usb2loopy     # USB2Loopy (KB2040 + Casio Loopy)
-make usb2xb1       # USB2XB1 (QT Py + Xbox One)
-make snes23do      # SNES23DO (KB2040 + SNES→3DO bridge)
-```
-
-**Output**: `releases/<product>_joypad_<console>.uf2`
-
-### Build All Products
-
-```bash
-make all           # Build all products
-make clean         # Clean build artifacts
-```
-
-### Legacy Product Aliases
-
-For backwards compatibility with existing scripts:
-
-```bash
-make gcusb         # Alias for usb2gc
-make nuonusb       # Alias for usb2nuon
-make xboxadapter   # Alias for usb2xb1
-```
-
-### Show Available Commands
+### Show All Targets
 
 ```bash
 make help          # Display all available targets
 ```
 
+### Console Adapter Apps
+
+Convert USB/Bluetooth controllers to retro console protocols:
+
+```bash
+make usb2pce       # USB → PCEngine/TurboGrafx-16
+make usb2gc        # USB → GameCube/Wii
+make usb2nuon      # USB → Nuon DVD players
+make usb23do       # USB → 3DO
+make usb2loopy     # USB → Casio Loopy (experimental)
+make snes23do      # SNES controller → 3DO
+```
+
+### USB Output Apps
+
+Convert USB/Bluetooth controllers to USB HID gamepad output:
+
+```bash
+make usb2usb                # USB → USB HID (Feather USB Host)
+make usb2usb_rp2040zero     # USB → USB HID (RP2040-Zero)
+make snes2usb               # SNES controller → USB HID
+```
+
+### Custom Controller Apps
+
+Build custom controllers from GPIO/analog inputs:
+
+```bash
+make controller_fisherprice        # GPIO buttons → USB HID
+make controller_fisherprice_analog # GPIO + analog stick → USB HID
+make controller_alpakka            # Alpakka controller (Pico)
+make controller_macropad           # MacroPad RP2040 → USB HID
+```
+
+### Utility Apps
+
+```bash
+make usb2uart      # USB → UART (ESP32 Bluetooth bridge)
+```
+
+### Build All
+
+```bash
+make all           # Build all apps
+make releases      # Build stable release apps only
+make clean         # Clean build artifacts
+```
+
 ---
 
-## Product Build Matrix
+## App Reference
 
-Joypad supports multiple **board × console** combinations:
+### Console Adapters
 
-| Product | Board | Console | Command | Output File |
-|---------|-------|---------|---------|-------------|
-| **USB2PCE** | KB2040 | PCEngine | `make usb2pce` | `usb2pce_joypad_pce.uf2` |
-| **USB2GC** | KB2040 | GameCube | `make usb2gc` | `usb2gc_joypad_ngc.uf2` |
-| **USB2Nuon** | KB2040 | Nuon | `make usb2nuon` | `usb2nuon_joypad_nuon.uf2` |
-| **USB23DO** | KB2040 | 3DO | `make usb23do` | `usb23do_joypad_3do.uf2` |
-| **USB2Loopy** | KB2040 | Casio Loopy | `make usb2loopy` | `usb2loopy_joypad_loopy.uf2` |
-| **USB2XB1** | QT Py | Xbox One | `make usb2xb1` | `usb2xb1_joypad_xb1.uf2` |
-| **SNES23DO** | KB2040 | SNES→3DO | `make snes23do` | `snes23do_joypad_snes3do.uf2` |
+| App | Board | Input | Output | Description |
+|-----|-------|-------|--------|-------------|
+| `usb2pce` | KB2040 | USB/BT | PCEngine | 5-player multitap, mouse support |
+| `usb2gc` | KB2040 | USB/BT | GameCube | Profiles, rumble, keyboard mode |
+| `usb2nuon` | KB2040 | USB/BT | Nuon | Spinner, in-game reset |
+| `usb23do` | RP2040-Zero | USB/BT | 3DO | 8-player daisy chain, mouse |
+| `usb2loopy` | KB2040 | USB/BT | Loopy | 4 players (experimental) |
+| `snes23do` | RP2040-Zero | SNES | 3DO | Native SNES controller input |
 
-### Board Variants
+### USB Output
 
-| Board | PICO_BOARD Value | Notes |
-|-------|------------------|-------|
-| Raspberry Pi Pico | `pico` | Standard RP2040 board |
-| Adafruit KB2040 | `adafruit_kb2040` | **Default for most products** |
-| Adafruit QT Py RP2040 | `adafruit_qtpy_rp2040` | Used for Xbox adapter |
+| App | Board | Input | Output | Description |
+|-----|-------|-------|--------|-------------|
+| `usb2usb` | Feather USB Host | USB/BT | USB HID | USB gamepad passthrough |
+| `usb2usb_rp2040zero` | RP2040-Zero | USB/BT | USB HID | Compact USB passthrough |
+| `snes2usb` | KB2040 | SNES | USB HID | SNES to USB adapter |
 
-### Console Outputs
+### Custom Controllers
 
-| Console | Features | Special Notes |
-|---------|----------|---------------|
-| **PCEngine** | Multitap (5 players), Mouse | PIO-based protocol |
-| **GameCube** | Profiles, Rumble, Keyboard | **Requires 130MHz clock** |
-| **Nuon** | Spinner, IGR (In-Game Reset) | PIO-based Polyface protocol |
-| **3DO** | 8-player daisy chain, Mouse | PIO-based PBUS protocol |
-| **Casio Loopy** | 4 players | Experimental |
-| **Xbox One** | USB passthrough | Internal console mod |
+| App | Board | Input | Output | Description |
+|-----|-------|-------|--------|-------------|
+| `controller_fisherprice` | KB2040 | GPIO | USB HID | Digital buttons only |
+| `controller_fisherprice_analog` | KB2040 | GPIO+ADC | USB HID | With analog stick |
+| `controller_alpakka` | Pico | GPIO/I2C | USB HID | Alpakka design |
+| `controller_macropad` | MacroPad | 12 keys | USB HID | Macro keypad |
+
+### Supported Boards
+
+| Board | ID | USB Host | Notes |
+|-------|-----|----------|-------|
+| Adafruit KB2040 | `kb2040` | Yes | Default for most apps |
+| Raspberry Pi Pico | `pico` | Yes | Standard RP2040 |
+| Waveshare RP2040-Zero | `rp2040zero` | Yes | Compact form factor |
+| Adafruit Feather USB Host | `feather_usbhost` | Yes | Built-in USB-A port |
+| Adafruit MacroPad RP2040 | `macropad` | No | 12 keys + rotary encoder |
+
+---
+
+## Architecture Overview
+
+### Input Sources
+
+Joypad Core supports multiple input sources:
+
+- **USB HID** - Standard USB gamepads, keyboards, mice
+- **USB X-input** - Xbox 360/One/Series controllers
+- **Bluetooth HID** - Wireless controllers via BT dongle (`src/bt/`)
+- **Native** - Direct controller protocols (SNES via `src/native/host/`)
+
+### Output Targets
+
+- **Retro Consoles** - PCEngine, GameCube, Nuon, 3DO, Loopy (`src/native/device/`)
+- **USB Device** - HID gamepad, XInput modes (`src/usb/usbd/`)
+- **UART** - Serial bridge for ESP32 Bluetooth (`src/native/device/uart/`)
+
+### Core Components
+
+```
+src/
+├── apps/                     # App configurations
+│   ├── usb2pce/              # PCEngine adapter
+│   ├── usb2gc/               # GameCube adapter
+│   ├── usb2usb/              # USB passthrough
+│   ├── controller/           # Custom controllers
+│   └── ...
+├── core/                     # Shared infrastructure
+│   ├── buttons.h             # JP_BUTTON_* definitions
+│   ├── router/               # Input→Output routing
+│   └── services/             # Profiles, players, LEDs, etc.
+├── usb/
+│   ├── usbh/                 # USB Host (input)
+│   │   ├── hid/              # HID device drivers
+│   │   └── xinput/           # X-input support
+│   └── usbd/                 # USB Device (output)
+├── bt/                       # Bluetooth support
+│   ├── bthid/                # BT HID device drivers
+│   └── transport/            # BT transport layer
+└── native/
+    ├── device/               # Console output protocols
+    │   ├── pcengine/
+    │   ├── gamecube/
+    │   ├── nuon/
+    │   ├── 3do/
+    │   └── ...
+    └── host/                 # Native controller input
+        └── snes/
+```
+
+### Dual-Core Architecture
+
+- **Core 0**: USB/BT polling, device processing, main loop
+- **Core 1**: Console output protocol (timing-critical PIO)
 
 ---
 
 ## Troubleshooting
 
-### macOS Issues
+### macOS: `nosys.specs: No such file or directory`
 
-#### Error: `nosys.specs: No such file or directory`
-
-**Cause**: Using Homebrew's `arm-none-eabi-gcc` formula (incomplete)
-
-**Solution**: Use official ARM toolchain cask instead
+Using wrong toolchain. Fix:
 ```bash
-brew uninstall arm-none-eabi-gcc  # Remove formula version
-brew install --cask gcc-arm-embedded  # Install official version
-export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi
+brew uninstall arm-none-eabi-gcc
+brew install --cask gcc-arm-embedded
 ```
 
-#### Build fails with SDK errors
+### Build fails with SDK errors
 
-**Cause**: Outdated or uninitialized submodules
-
-**Solution**: Re-initialize submodules
+Re-initialize submodules:
 ```bash
+make clean
 make init
-make clean
-make usb2pce  # or your target
-```
-
-### Linux Issues
-
-#### Error: `arm-none-eabi-gcc: not found`
-
-**Solution**: Install toolchain
-```bash
-sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi
-```
-
-### General Build Issues
-
-#### Error: CMake configuration fails
-
-**Solution**: Clean build directory
-```bash
-make clean
 make <target>
 ```
 
-### Runtime Issues
+### Board doesn't enumerate
 
-#### Board doesn't enumerate as USB host
+1. Wrong firmware for board
+2. USB cable is charge-only
+3. Try different USB port
 
-**Possible causes**:
-1. Wrong board flashed (e.g., Pico build on KB2040)
-2. USB cable is charge-only (no data)
-3. Hardware issue with USB power
+### Controllers not detected
 
-#### Controllers not detected
-
-**Check**:
-1. Firmware matches board (KB2040 firmware on KB2040 board)
-2. USB hub is powered (if using hub)
-3. Controller is compatible (see [HARDWARE.md](HARDWARE.md))
-
----
-
-## Advanced Topics
-
-### Architecture Overview
-
-Joypad uses a modular architecture:
-
-```
-src/
-├── main.c                    # Entry point, main loop
-├── core/                     # Shared firmware infrastructure
-│   ├── router/               # Input→Output routing
-│   ├── services/             # Players, Profiles, LEDs, etc.
-│   └── output_interface.h    # Console output abstraction
-├── apps/                     # Product configurations
-│   ├── usb2pce/              # USB→PCEngine app
-│   ├── usb2gc/               # USB→GameCube app
-│   └── ...
-├── usb/                      # USB input layer
-│   ├── hid/                  # HID device drivers
-│   └── usbh/                 # USB host coordination
-└── native/                   # Console-specific code
-    ├── device/               # We emulate devices for consoles
-    └── host/                 # We act as console for native controllers
-```
-
-### Dual-Core Architecture
-
-- **Core 0**: USB polling, device processing, main loop
-- **Core 1**: Console output protocol (timing-critical)
-
-### PIO State Machines
-
-Console protocols use RP2040 PIO for precise timing:
-- **PCEngine**: `plex.pio`, `clock.pio`, `select.pio`
-- **Nuon**: `polyface_read.pio`, `polyface_send.pio`
-- **3DO**: `sampling.pio`, `output.pio`
-- **Loopy**: `loopy.pio`
-- **GameCube**: External `joybus-pio` library
-
-### Adding a New Product
-
-1. Create `src/apps/<productname>/` directory with:
-   - `app.h` - App manifest (features, routing config)
-   - `app.c` - App initialization
-   - `profiles.h` - Button mapping profiles (optional)
-
-2. Add CMake target in `src/CMakeLists.txt`
-
-3. Add Makefile target
-
-4. Test build:
-   ```bash
-   make <productname>
-   ```
-
-### Memory Considerations
-
-- Functions marked `__not_in_flash_func` are kept in SRAM for performance
-- Used for timing-critical code
-- RP2040 has ~264KB SRAM total
+1. Check [HARDWARE.md](HARDWARE.md) for compatibility
+2. Ensure USB hub is powered (if using)
+3. Try direct connection without hub
 
 ---
 
 ## Getting Help
 
-- **Documentation**: See [README.md](../README.md), [CLAUDE.md](../CLAUDE.md)
-- **Issues**: https://github.com/RobertDaleSmith/Joypad/issues
+- **Docs**: [README.md](../README.md), [HARDWARE.md](HARDWARE.md)
+- **Issues**: https://github.com/joypad-ai/joypad-core/issues
 - **Discord**: https://discord.joypad.com/
-- **SDK Docs**: https://www.raspberrypi.com/documentation/pico-sdk/

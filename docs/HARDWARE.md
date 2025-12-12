@@ -1,6 +1,6 @@
 # Hardware Compatibility
 
-Complete list of supported USB input devices, RP2040 boards, and console outputs.
+Complete list of supported input devices, RP2040 boards, and output targets.
 
 ## Supported USB Input Devices
 
@@ -120,7 +120,30 @@ Complete list of supported USB input devices, RP2040 boards, and console outputs
 - Some controllers require more power (rumble)
 - Use powered hub for 3+ high-power devices
 
-## Supported Console Outputs
+## Bluetooth Input (via Dongle)
+
+Joypad Core supports Bluetooth controllers via USB Bluetooth dongles.
+
+### Supported Bluetooth Controllers
+
+- **DualShock 3** - Full support with rumble
+- **DualShock 4** - Full support with rumble and touchpad
+- **DualSense** - Full support with rumble
+- **Switch Pro Controller** - Full support with rumble
+- **Xbox Wireless** - Via Bluetooth mode
+
+### Bluetooth Dongles
+
+Any USB Bluetooth adapter should work. Tested:
+- Generic CSR 4.0 dongles
+- TP-Link UB400/UB500
+- ASUS USB-BT400
+
+**Note**: Bluetooth adds slight latency compared to wired USB. For competitive play, wired is recommended.
+
+## Supported Output Targets
+
+### Console Outputs
 
 ### PCEngine / TurboGrafx-16
 
@@ -163,14 +186,22 @@ Complete list of supported USB input devices, RP2040 boards, and console outputs
 - **Status**: Experimental
 - **Documentation**: [LOOPY.md](consoles/LOOPY.md)
 
-### Xbox One S (Internal Mod)
+### USB Device Output
 
-- **Players**: Multiple via USB hub
-- **Input Types**: Controller
-- **Features**: USB passthrough to Xbox One
-- **Protocol**: I2C to Xbox One controller chip
-- **Status**: Hardware mod required
-- **Documentation**: [XBOXONE.md](consoles/XBOXONE.md)
+Joypad Core can also output as a USB HID gamepad, allowing you to:
+- Convert Bluetooth controllers to wired USB
+- Add features to existing controllers (profiles, macros)
+- Build custom controllers
+
+**USB Output Modes:**
+- **USB HID Gamepad** - Standard gamepad compatible with PC/Mac/Linux
+- **XInput** - Xbox 360/One compatible mode for Windows
+- **DirectInput** - Legacy Windows gamepad mode
+
+**Apps using USB output:**
+- `usb2usb` - USB/BT controller → USB HID gamepad
+- `snes2usb` - SNES controller → USB HID gamepad
+- `controller_*` - Custom GPIO controllers → USB HID gamepad
 
 ## Supported RP2040 Boards
 
@@ -203,21 +234,29 @@ Complete list of supported USB input devices, RP2040 boards, and console outputs
 - More GPIO available
 - Lower cost than KB2040
 
-### Adafruit QT Py RP2040
+### Adafruit Feather RP2040 USB Host
 
-- **Features**: USB-C, 11 GPIO pins, boot button, WS2812 RGB LED
-- **Form Factor**: Tiny (1" × 0.7")
-- **Products**: USB2XB1 (Xbox One internal mod)
-- **Purchase**: [Adafruit](https://www.adafruit.com/product/4900)
+- **Features**: USB-C (device) + USB-A (host), 21 GPIO pins, boot button, RGB LED
+- **Form Factor**: Feather (2.0" × 0.9")
+- **Products**: usb2usb (USB passthrough)
+- **Purchase**: [Adafruit](https://www.adafruit.com/product/5723)
 
 **Use Cases:**
-- Space-constrained applications
-- Xbox One S internal mod
-- Portable/embedded projects
+- USB passthrough applications
+- Built-in USB-A host port (no adapter needed)
+- USB → USB conversion
 
-**Limitations:**
-- Fewer GPIO pins (11 vs 21)
-- Harder to solder (smaller pads)
+### Adafruit MacroPad RP2040
+
+- **Features**: 12 mechanical key switches, rotary encoder, OLED display, RGB LEDs
+- **Form Factor**: MacroPad (3.4" × 2.8")
+- **Products**: controller_macropad
+- **Purchase**: [Adafruit](https://www.adafruit.com/product/5128)
+
+**Use Cases:**
+- Custom macro pad controller
+- Stream deck alternative
+- Fighting game button box
 
 ### Waveshare RP2040-Zero
 
@@ -238,8 +277,9 @@ Complete list of supported USB input devices, RP2040 boards, and console outputs
 |-------|-----|------|-----|------|------|----------|
 | KB2040 | USB-C | 21 | RGB | Medium | $10 | **General use (recommended)** |
 | Pico | Micro | 26 | No | Large | $4 | Budget builds |
-| QT Py | USB-C | 11 | RGB | Tiny | $10 | Space-limited mods |
-| Waveshare | USB-C | 20 | RGB | Smallest | $6 | Embedded/experimental |
+| Feather USB Host | USB-C+A | 21 | RGB | Medium | $12 | USB passthrough |
+| MacroPad | USB-C | 12 keys | RGB | Large | $30 | Custom controllers |
+| RP2040-Zero | USB-C | 20 | RGB | Smallest | $6 | Compact/embedded |
 
 ## Power Requirements
 
