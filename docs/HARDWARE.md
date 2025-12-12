@@ -64,7 +64,6 @@ Complete list of supported input devices, RP2040 boards, and output targets.
 - **Sega Astrocity Mini Controller** - Arcade stick
 - **Hori Pokken Tournament Controller** - Fight stick
 - **Hori Horipad** - Generic Hori gamepads
-- **DragonRise Generic USB** - Generic HID controllers
 - **Generic DirectInput Controllers** - Most D-input gamepads
 - **Generic HID Gamepads** - Standard USB HID joysticks
 
