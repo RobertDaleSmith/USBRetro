@@ -350,16 +350,26 @@ static void ds3_task(bthid_device_t* device)
             }
             break;
 
-        case 2:  // Activated - monitor player LED and rumble
+        case 2:  // Activated - monitor player LED and rumble from feedback system
             {
                 int player_idx = find_player_index(ds3->event.dev_addr, ds3->event.instance);
                 if (player_idx >= 0) {
                     feedback_state_t* fb = feedback_get_state(player_idx);
                     bool need_update = false;
 
-                    // Check LED
-                    uint8_t led = PLAYER_LEDS[player_idx + 1] << 1;
-                    if (led != ds3->player_led) {
+                    // Check LED from feedback system
+                    // Feedback pattern: bits 0-3 for players 1-4 (0x01, 0x02, 0x04, 0x08)
+                    // DS3 LED bitmap: bits 1-4 for LEDs 1-4 (0x02, 0x04, 0x08, 0x10)
+                    // Conversion: shift left by 1
+                    uint8_t led;
+                    if (fb->led.pattern != 0) {
+                        // Use LED from host/feedback system
+                        led = fb->led.pattern << 1;
+                    } else {
+                        // Default to player index-based LED
+                        led = PLAYER_LEDS[player_idx + 1] << 1;
+                    }
+                    if (fb->led_dirty || led != ds3->player_led) {
                         ds3->player_led = led;
                         need_update = true;
                     }

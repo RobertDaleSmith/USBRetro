@@ -208,28 +208,36 @@ void output_sony_ds3(uint8_t dev_addr, uint8_t instance, device_output_config_t*
     }
   };
 
-  // led player indicator
-  switch (config->player_index+1)
-  {
-  case 1:
-  case 2:
-  case 3:
-  case 4:
-  case 5:
-    output_report.data.leds_bitmap = (PLAYER_LEDS[config->player_index+1] << 1);
-    break;
+  // LED player indicator
+  // config->leds contains fb->led.pattern from feedback system (0x01-0x08 for players 1-4)
+  // DS3 LED bitmap is shifted left by 1 (0x02, 0x04, 0x08, 0x10 for LEDs 1-4)
+  if (config->leds != 0) {
+    // Use LED from feedback system (e.g., from host output report)
+    output_report.data.leds_bitmap = config->leds << 1;
+  } else {
+    // Fall back to player index based LED
+    switch (config->player_index+1)
+    {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      output_report.data.leds_bitmap = (PLAYER_LEDS[config->player_index+1] << 1);
+      break;
 
-  default: // unassigned
-    // turn all config->leds on
-    output_report.data.leds_bitmap = (PLAYER_LEDS[10] << 1);
+    default: // unassigned
+      // turn all LEDs on
+      output_report.data.leds_bitmap = (PLAYER_LEDS[10] << 1);
 
-    // make all config->leds dim
-    for (int n = 0; n < 4; n++) {
-      output_report.data.led[n].duty_length = 0;
-      output_report.data.led[n].duty_on = 32;
-      output_report.data.led[n].duty_off = 223;
+      // make all LEDs dim
+      for (int n = 0; n < 4; n++) {
+        output_report.data.led[n].duty_length = 0;
+        output_report.data.led[n].duty_on = 32;
+        output_report.data.led[n].duty_off = 223;
+      }
+      break;
     }
-    break;
   }
 
   // fun
