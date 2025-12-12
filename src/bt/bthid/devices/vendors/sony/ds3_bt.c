@@ -270,6 +270,19 @@ static void ds3_process_report(bthid_device_t* device, const uint8_t* data, uint
     if (rx == 0) rx = 1;
     if (ry == 0) ry = 1;
 
+    // Parse motion data (SIXAXIS)
+    // Motion at bytes 40-47 of the report data (after report ID stripped)
+    int16_t accel_x = 0, accel_y = 0, accel_z = 0, gyro_z = 0;
+    bool has_motion = false;
+    if (len >= 48) {
+        // Big-endian 16-bit values
+        accel_x = (int16_t)((data[40] << 8) | data[41]);
+        accel_y = (int16_t)((data[42] << 8) | data[43]);
+        accel_z = (int16_t)((data[44] << 8) | data[45]);
+        gyro_z  = (int16_t)((data[46] << 8) | data[47]);
+        has_motion = true;
+    }
+
     // Update event
     ds3->event.buttons = buttons;
     ds3->event.analog[0] = lx;
@@ -280,6 +293,15 @@ static void ds3_process_report(bthid_device_t* device, const uint8_t* data, uint
     ds3->event.analog[5] = lt;
     ds3->event.analog[6] = rt;
     ds3->event.analog[7] = 128;  // Unused
+
+    // Motion data
+    ds3->event.has_motion = has_motion;
+    ds3->event.accel[0] = accel_x;
+    ds3->event.accel[1] = accel_y;
+    ds3->event.accel[2] = accel_z;
+    ds3->event.gyro[0] = 0;  // DS3 only has Z-axis gyro
+    ds3->event.gyro[1] = 0;
+    ds3->event.gyro[2] = gyro_z;
 
     router_submit_input(&ds3->event);
 }

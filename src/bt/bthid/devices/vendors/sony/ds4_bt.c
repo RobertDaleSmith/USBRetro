@@ -49,8 +49,12 @@ typedef struct __attribute__((packed)) {
     uint8_t l2_trigger;
     uint8_t r2_trigger;
 
-    // We don't parse beyond this for basic gamepad support
-    // Full report includes: timestamp, battery, gyro, accel, touchpad, etc.
+    // Extended data for motion
+    uint16_t timestamp;
+    uint8_t battery;
+    int16_t gyro[3];    // x, y, z
+    int16_t accel[3];   // x, y, z
+    // Touchpad etc follows but not parsed
 } ds4_input_report_t;
 
 // DS4 BT output report (for rumble/LED)
@@ -258,6 +262,20 @@ static void ds4_process_report(bthid_device_t* device, const uint8_t* data, uint
     // Triggers
     ds4->event.analog[ANALOG_RZ] = rpt->l2_trigger;
     ds4->event.analog[ANALOG_SLIDER] = rpt->r2_trigger;
+
+    // Motion data (DS4 has full 3-axis gyro and accel)
+    // Check if we have enough data for motion (full report is 78 bytes)
+    if (len >= sizeof(ds4_input_report_t)) {
+        ds4->event.has_motion = true;
+        ds4->event.accel[0] = rpt->accel[0];
+        ds4->event.accel[1] = rpt->accel[1];
+        ds4->event.accel[2] = rpt->accel[2];
+        ds4->event.gyro[0] = rpt->gyro[0];
+        ds4->event.gyro[1] = rpt->gyro[1];
+        ds4->event.gyro[2] = rpt->gyro[2];
+    } else {
+        ds4->event.has_motion = false;
+    }
 
     // Submit to router
     router_submit_input(&ds4->event);

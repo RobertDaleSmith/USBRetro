@@ -103,15 +103,31 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
   if (report_id == 1)
   {
     sony_ds3_report_t ds3_report;
-    memcpy(&ds3_report, report, sizeof(ds3_report));
+    // Only copy actual report size (48 bytes after report ID stripped), not full struct size
+    memcpy(&ds3_report, report, len < sizeof(ds3_report) ? len : sizeof(ds3_report));
 
     // counter is +1, assign to make it easier to compare 2 report
     prev_report[dev_addr-1].counter = ds3_report.counter;
 
-    // only print if changes since it is polled ~ 5ms
-    // Since count+1 after each report and  x, y, z, rz fluctuate within 1 or 2
-    // We need more than memcmp to check if report is different enough
-    if ( diff_report_ds3(&prev_report[dev_addr-1], &ds3_report) )
+    // Check if buttons/sticks changed (for debug logging)
+    bool buttons_changed = diff_report_ds3(&prev_report[dev_addr-1], &ds3_report);
+
+    // Parse motion data (SIXAXIS)
+    // DS3 motion is at bytes 41-48 in original report (1-indexed with report ID at byte 0)
+    // After report++ strips report ID, motion is at indices 40-47
+    int16_t accel_x = 0, accel_y = 0, accel_z = 0, gyro_z = 0;
+    bool has_motion = false;
+    if (len >= 48) {
+      // DS3 accelerometer: big-endian 16-bit values centered at ~512
+      accel_x = (int16_t)((report[40] << 8) | report[41]);
+      accel_y = (int16_t)((report[42] << 8) | report[43]);
+      accel_z = (int16_t)((report[44] << 8) | report[45]);
+      gyro_z  = (int16_t)((report[46] << 8) | report[47]);
+      has_motion = true;
+    }
+
+    // Always submit events when motion is available, or when buttons/sticks changed
+    if (has_motion || buttons_changed)
     {
       uint8_t analog_1x = ds3_report.lx;
       uint8_t analog_1y = 255 - ds3_report.ly;
@@ -123,32 +139,34 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
       uint8_t analog_l = ds3_report.pressure[8];  // L2 pressure
       uint8_t analog_r = ds3_report.pressure[9];  // R2 pressure
 
-      TU_LOG1("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
-      TU_LOG1("DPad = ");
+      if (buttons_changed) {
+        TU_LOG1("(lx, ly, rx, ry, l, r) = (%u, %u, %u, %u, %u, %u)\r\n", analog_1x, analog_1y, analog_2x, analog_2y, analog_l, analog_r);
+        TU_LOG1("DPad = ");
 
-      if (ds3_report.up       ) TU_LOG1("Up ");
-      if (ds3_report.down     ) TU_LOG1("Down ");
-      if (ds3_report.left     ) TU_LOG1("Left ");
-      if (ds3_report.right    ) TU_LOG1("Right ");
+        if (ds3_report.up       ) TU_LOG1("Up ");
+        if (ds3_report.down     ) TU_LOG1("Down ");
+        if (ds3_report.left     ) TU_LOG1("Left ");
+        if (ds3_report.right    ) TU_LOG1("Right ");
 
-      if (ds3_report.square   ) TU_LOG1("Square ");
-      if (ds3_report.cross    ) TU_LOG1("Cross ");
-      if (ds3_report.circle   ) TU_LOG1("Circle ");
-      if (ds3_report.triangle ) TU_LOG1("Triangle ");
+        if (ds3_report.square   ) TU_LOG1("Square ");
+        if (ds3_report.cross    ) TU_LOG1("Cross ");
+        if (ds3_report.circle   ) TU_LOG1("Circle ");
+        if (ds3_report.triangle ) TU_LOG1("Triangle ");
 
-      if (ds3_report.l1       ) TU_LOG1("L1 ");
-      if (ds3_report.r1       ) TU_LOG1("R1 ");
-      if (ds3_report.l2       ) TU_LOG1("L2 ");
-      if (ds3_report.r2       ) TU_LOG1("R2 ");
+        if (ds3_report.l1       ) TU_LOG1("L1 ");
+        if (ds3_report.r1       ) TU_LOG1("R1 ");
+        if (ds3_report.l2       ) TU_LOG1("L2 ");
+        if (ds3_report.r2       ) TU_LOG1("R2 ");
 
-      if (ds3_report.select   ) TU_LOG1("Select ");
-      if (ds3_report.start    ) TU_LOG1("Start ");
-      if (ds3_report.l3       ) TU_LOG1("L3 ");
-      if (ds3_report.r3       ) TU_LOG1("R3 ");
+        if (ds3_report.select   ) TU_LOG1("Select ");
+        if (ds3_report.start    ) TU_LOG1("Start ");
+        if (ds3_report.l3       ) TU_LOG1("L3 ");
+        if (ds3_report.r3       ) TU_LOG1("R3 ");
 
-      if (ds3_report.ps       ) TU_LOG1("PS ");
+        if (ds3_report.ps       ) TU_LOG1("PS ");
 
-      TU_LOG1("\r\n");
+        TU_LOG1("\r\n");
+      }
 
       // All shoulder buttons passed as digital (platform-agnostic)
       // Consoles handle analog trigger thresholds in their router_submit_input()
@@ -183,6 +201,9 @@ void input_sony_ds3(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .button_count = 10,  // PS3: Cross, Circle, Square, Triangle, L1, R1, L2, R2, L3, R3
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
         .keys = 0,
+        .has_motion = has_motion,
+        .accel = {accel_x, accel_y, accel_z},
+        .gyro = {0, 0, gyro_z},  // DS3 only has Z-axis gyro
       };
       router_submit_input(&event);
 

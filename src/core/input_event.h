@@ -124,6 +124,13 @@ typedef struct {
     uint8_t button_count;       // Number of face buttons (2, 3, 4, 6, etc.)
     bool has_rumble;            // Device supports rumble
     bool has_force_feedback;    // Device supports force feedback
+
+    // Motion data (SIXAXIS/DualShock/DualSense)
+    // Accelerometer: raw sensor values, typically ~512 center for DS3, signed for DS4/DS5
+    // Gyroscope: angular velocity, DS3 only has Z axis (X/Y remain 0)
+    int16_t accel[3];           // Accelerometer X, Y, Z
+    int16_t gyro[3];            // Gyroscope X, Y, Z
+    bool has_motion;            // Motion data is valid
 } input_event_t;
 
 // ============================================================================
@@ -162,6 +169,13 @@ static inline void init_input_event(input_event_t* event) {
     event->type = INPUT_TYPE_NONE;
     event->layout = LAYOUT_MODERN_4FACE;  // Default to modern 4-face (Xbox/PS/Switch style)
     event->button_count = 4;  // Default to 4 face buttons
+
+    // Clear motion data
+    event->has_motion = false;
+    for (int i = 0; i < 3; i++) {
+        event->accel[i] = 0;
+        event->gyro[i] = 0;
+    }
 }
 
 // Convert old post_globals() parameters to input_event_t (for migration)

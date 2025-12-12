@@ -29,6 +29,14 @@
 #define PS3_JOYSTICK_MID     0x7F
 #define PS3_SIXAXIS_MID      0x01FF  // 511 - center for accelerometer/gyro
 
+// Motion data byte offsets (relative to report start, after report ID)
+// Motion data is big-endian 16-bit values
+#define PS3_MOTION_OFFSET    40      // Start of motion data in 48-byte report (after report ID stripped)
+#define PS3_ACCEL_X_OFFSET   40
+#define PS3_ACCEL_Y_OFFSET   42
+#define PS3_ACCEL_Z_OFFSET   44
+#define PS3_GYRO_Z_OFFSET    46
+
 // Report IDs
 #define PS3_REPORT_ID_INPUT      0x01
 #define PS3_REPORT_ID_FEATURE_01 0x01
@@ -82,7 +90,7 @@
 // PS3 REPORT STRUCTURES
 // ============================================================================
 
-// Input Report - 49 bytes (matches real DualShock 3)
+// Input Report - 50 bytes (49 + 1 padding byte for WebHID motion alignment)
 typedef struct __attribute__((packed)) {
     uint8_t  report_id;          // 0x01
     uint8_t  reserved0;          // 0x00
@@ -121,16 +129,17 @@ typedef struct __attribute__((packed)) {
     uint8_t  power;              // Power state
     uint8_t  rumble_status;      // 0x10 = wired rumble
 
-    uint8_t  reserved5[9];       // 0x00
+    uint8_t  reserved5[10];      // 0x00 (extra byte to align motion at WebHID offset 41)
 
     // Sixaxis data (10-bit, big-endian)
+    // After WebHID strips report_id, these are at offsets 41-48
     uint16_t accel_x;            // Accelerometer X
     uint16_t accel_y;            // Accelerometer Y
     uint16_t accel_z;            // Accelerometer Z
     uint16_t gyro_z;             // Gyroscope Z
 } ps3_in_report_t;
 
-_Static_assert(sizeof(ps3_in_report_t) == 49, "ps3_in_report_t must be 49 bytes");
+_Static_assert(sizeof(ps3_in_report_t) == 50, "ps3_in_report_t must be 50 bytes");
 
 // Output Report - 48 bytes (rumble and LEDs)
 typedef struct __attribute__((packed)) {
@@ -273,7 +282,7 @@ static const uint8_t ps3_report_descriptor[] = {
     0xC0,              //     End Collection
     0x05, 0x01,        //     Usage Page (Generic Desktop Ctrls)
     0x75, 0x08,        //     Report Size (8)
-    0x95, 0x27,        //     Report Count (39)
+    0x95, 0x28,        //     Report Count (40) - includes padding for motion alignment
     0x09, 0x01,        //     Usage (Pointer)
     0x81, 0x02,        //     Input (Data,Var,Abs)
     0x75, 0x08,        //     Report Size (8)

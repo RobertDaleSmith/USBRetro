@@ -239,7 +239,11 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .button_count = 10,  // PS4: Cross, Circle, Square, Triangle, L1, R1, L2, R2, L3, R3
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
         .delta_x = touchpad_delta_x,  // Touchpad horizontal swipe as mouse-like delta
-        .keys = 0
+        .keys = 0,
+        // Motion data (DS4 has full 3-axis gyro and accel)
+        .has_motion = true,
+        .accel = {ds4_report.accel[0], ds4_report.accel[1], ds4_report.accel[2]},
+        .gyro = {ds4_report.gyro[0], ds4_report.gyro[1], ds4_report.gyro[2]},
       };
       router_submit_input(&event);
 

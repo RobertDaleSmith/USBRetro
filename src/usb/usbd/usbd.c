@@ -123,6 +123,17 @@ static uint32_t apply_usbd_profile(const input_event_t* event, profile_output_t*
                   event->analog[ANALOG_RZ], event->analog[ANALOG_SLIDER],
                   profile_out);
 
+    // Copy motion data through (no remapping)
+    profile_out->has_motion = event->has_motion;
+    if (event->has_motion) {
+        profile_out->accel[0] = event->accel[0];
+        profile_out->accel[1] = event->accel[1];
+        profile_out->accel[2] = event->accel[2];
+        profile_out->gyro[0] = event->gyro[0];
+        profile_out->gyro[1] = event->gyro[1];
+        profile_out->gyro[2] = event->gyro[2];
+    }
+
     return profile_out->buttons;
 }
 
@@ -826,6 +837,20 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         ps3_report.pressure_circle   = (buttons & USBR_BUTTON_B2) ? 0xFF : 0x00;
         ps3_report.pressure_cross    = (buttons & USBR_BUTTON_B1) ? 0xFF : 0x00;
         ps3_report.pressure_square   = (buttons & USBR_BUTTON_B3) ? 0xFF : 0x00;
+
+        // Motion data (SIXAXIS) - big-endian 16-bit values
+        if (event->has_motion) {
+            ps3_report.accel_x = __builtin_bswap16((uint16_t)event->accel[0]);
+            ps3_report.accel_y = __builtin_bswap16((uint16_t)event->accel[1]);
+            ps3_report.accel_z = __builtin_bswap16((uint16_t)event->accel[2]);
+            ps3_report.gyro_z  = __builtin_bswap16((uint16_t)event->gyro[2]);
+        } else {
+            // Neutral motion (center at 511 = 0x01FF, big-endian = 0xFF01)
+            ps3_report.accel_x = 0xFF01;
+            ps3_report.accel_y = 0xFF01;
+            ps3_report.accel_z = 0xFF01;
+            ps3_report.gyro_z  = 0xFF01;
+        }
     } else {
         // No input - keep neutral state (already initialized)
         ps3_report.buttons[0] = 0;
@@ -836,6 +861,11 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         ps3_report.rx = PS3_JOYSTICK_MID;
         ps3_report.ry = PS3_JOYSTICK_MID;
         memset(&ps3_report.pressure_up, 0, 12);  // Clear all 12 pressure bytes
+        // Neutral motion (center at 511 = 0x01FF, big-endian = 0xFF01)
+        ps3_report.accel_x = 0xFF01;
+        ps3_report.accel_y = 0xFF01;
+        ps3_report.accel_z = 0xFF01;
+        ps3_report.gyro_z  = 0xFF01;
     }
 
     // Send full report including report_id

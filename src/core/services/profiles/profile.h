@@ -153,6 +153,11 @@ typedef struct {
     bool l2_analog_override;
     bool r2_analog_override;
 
+    // Motion data (passthrough from input)
+    int16_t accel[3];           // Accelerometer X, Y, Z
+    int16_t gyro[3];            // Gyroscope X, Y, Z
+    bool has_motion;            // Motion data is valid
+
 } profile_output_t;
 
 // ============================================================================

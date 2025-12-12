@@ -524,6 +524,17 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     out->current_state.delta_x += dev->delta_x;
                     out->current_state.delta_y += dev->delta_y;
 
+                    // Motion: use first device that has motion data
+                    if (dev->has_motion && !out->current_state.has_motion) {
+                        out->current_state.has_motion = true;
+                        out->current_state.accel[0] = dev->accel[0];
+                        out->current_state.accel[1] = dev->accel[1];
+                        out->current_state.accel[2] = dev->accel[2];
+                        out->current_state.gyro[0] = dev->gyro[0];
+                        out->current_state.gyro[1] = dev->gyro[1];
+                        out->current_state.gyro[2] = dev->gyro[2];
+                    }
+
                     // Use metadata from first active device
                     if (first) {
                         out->current_state.dev_addr = dev->dev_addr;

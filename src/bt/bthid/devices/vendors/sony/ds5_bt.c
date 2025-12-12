@@ -59,7 +59,11 @@ typedef struct __attribute__((packed)) {
         uint8_t pad     : 5;
     };
 
-    // More fields follow (gyro, accel, touchpad) but we don't need them
+    // Extended data for motion
+    uint8_t reserved[4];    // Unknown bytes
+    int16_t gyro[3];        // x, y, z
+    int16_t accel[3];       // x, y, z
+    // Touchpad etc follows but not parsed
 } ds5_input_report_t;
 
 // DS5 BT output report for LED/rumble
@@ -277,6 +281,20 @@ static void ds5_process_report(bthid_device_t* device, const uint8_t* data, uint
     // Triggers
     ds5->event.analog[ANALOG_RZ] = rpt->l2_trigger;
     ds5->event.analog[ANALOG_SLIDER] = rpt->r2_trigger;
+
+    // Motion data (DS5 has full 3-axis gyro and accel)
+    // Check if we have enough data for motion
+    if (len >= sizeof(ds5_input_report_t)) {
+        ds5->event.has_motion = true;
+        ds5->event.accel[0] = rpt->accel[0];
+        ds5->event.accel[1] = rpt->accel[1];
+        ds5->event.accel[2] = rpt->accel[2];
+        ds5->event.gyro[0] = rpt->gyro[0];
+        ds5->event.gyro[1] = rpt->gyro[1];
+        ds5->event.gyro[2] = rpt->gyro[2];
+    } else {
+        ds5->event.has_motion = false;
+    }
 
     // Submit to router
     router_submit_input(&ds5->event);
