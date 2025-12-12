@@ -1,6 +1,12 @@
 # Joypad Core
 
-<p align="center"><img src="docs/images/Joypad_Outline.png" width="300"/></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo_solid.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/logo_solid_black.svg">
+    <img alt="Joypad Core" src="docs/images/logo_solid_black.svg" width="300">
+  </picture>
+</p>
 <p align="center">
   <img src="https://img.shields.io/github/license/joypad-ai/joypad-core" />
   <img src="https://img.shields.io/github/actions/workflow/status/joypad-ai/joypad-core/.github/workflows/build.yml" />
