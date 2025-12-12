@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Joypad Core is firmware for RP2040-based adapters that provides universal controller I/O:
+Joypad Core (formerly **USBRetro**) is firmware for RP2040-based adapters that provides universal controller I/O. Old code/commits may reference `USBR_BUTTON_*` or `usbretro` naming.
 
 **Inputs:**
 - USB HID controllers, keyboards, mice
@@ -43,24 +43,14 @@ make snes2usb      # SNES → USB HID
 # Build all
 make all
 make clean
+
+# Flash (macOS - looks for /Volumes/RPI-RP2)
+make flash              # Flash most recent build
+make flash-usb2pce      # Flash specific app
+make flash-usb2gc
 ```
 
 Output: `releases/usbr_<commit>_<board>_<app>.uf2`
-
-### App Build Matrix
-
-| App | Board | Input | Output |
-|-----|-------|-------|--------|
-| `usb2pce` | KB2040 | USB/BT | PCEngine |
-| `usb2gc` | KB2040 | USB/BT | GameCube |
-| `usb2nuon` | KB2040 | USB/BT | Nuon |
-| `usb23do` | RP2040-Zero | USB/BT | 3DO |
-| `usb2loopy` | KB2040 | USB/BT | Loopy |
-| `usb2usb` | Feather USB Host | USB/BT | USB HID |
-| `snes2usb` | KB2040 | SNES | USB HID |
-| `snes23do` | RP2040-Zero | SNES | 3DO |
-| `usb2uart` | KB2040 | USB | UART/ESP32 |
-| `controller_*` | Various | GPIO | USB HID |
 
 ## Architecture
 
@@ -163,6 +153,14 @@ typedef struct {
 - **SIMPLE**: 1:1 mapping (device N → slot N)
 - **MERGE**: All inputs merged to single output
 - **BROADCAST**: All inputs to all outputs
+
+#### Profile System
+Apps can define button remapping profiles in `profiles.h`:
+- SELECT + D-pad Up/Down cycles profiles (after 2s hold)
+- Visual feedback via NeoPixel LED
+- Haptic feedback via rumble
+- Profile selection persisted to flash
+- Apps without `profiles.h` pass buttons through unchanged
 
 ### Button Definitions (`core/buttons.h`)
 

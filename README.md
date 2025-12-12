@@ -53,7 +53,6 @@ Pre-built adapters available at **[controlleradapter.com](https://controlleradap
 - **[USB-2-PCE](https://controlleradapter.com/products/usb-2-pce)** - PCEngine/TurboGrafx-16 adapter
 - **[GC USB](https://controlleradapter.com/products/gc-usb)** - GameCube/Wii adapter with profiles
 - **[NUON USB](https://controlleradapter.com/products/nuon-usb)** - Nuon DVD player adapter
-- **[USB-2-3DO](https://controlleradapter.com/products/usb-2-3do)** - 3DO adapter with 8-player support
 
 ---
 
