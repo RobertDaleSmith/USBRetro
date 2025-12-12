@@ -1561,12 +1561,12 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
             break;
 #if CFG_TUD_CDC >= 1
         case STRID_CDC_DATA:
-            str = "USBR Data";
+            str = "Joypad Data";
             break;
 #endif
 #if CFG_TUD_CDC >= 2
         case STRID_CDC_DEBUG:
-            str = "USBR Debug";
+            str = "Joypad Debug";
             break;
 #endif
         default:

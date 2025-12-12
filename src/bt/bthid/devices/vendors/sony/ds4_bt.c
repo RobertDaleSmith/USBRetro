@@ -11,8 +11,18 @@
 #include "core/router/router.h"
 #include "core/buttons.h"
 #include "core/services/players/manager.h"
+#include "core/services/players/feedback.h"
+#include "pico/time.h"
 #include <string.h>
 #include <stdio.h>
+
+// Player LED colors (RGB values)
+static const uint8_t PLAYER_COLORS[][3] = {
+    {  0,   0,  64 },   // Player 1: Blue
+    { 64,   0,   0 },   // Player 2: Red
+    {  0,  64,   0 },   // Player 3: Green
+    { 64,   0,  64 },   // Player 4: Pink/Fuchsia
+};
 
 // ============================================================================
 // DS4 REPORT STRUCTURE (same as USB, but BT has 2-byte header offset)
@@ -89,9 +99,13 @@ typedef struct {
     input_event_t event;
     bool initialized;
     bool sixaxis_enabled;
-    uint8_t player_led;
+    uint8_t activation_state;
+    uint32_t activation_time;
+
+    // Current feedback state (for change detection)
     uint8_t rumble_left;
     uint8_t rumble_right;
+    uint8_t led_r, led_g, led_b;
 } ds4_bt_data_t;
 
 static ds4_bt_data_t ds4_data[BTHID_MAX_DEVICES];
@@ -100,7 +114,8 @@ static ds4_bt_data_t ds4_data[BTHID_MAX_DEVICES];
 // HELPER FUNCTIONS
 // ============================================================================
 
-static void ds4_set_led(bthid_device_t* device, uint8_t r, uint8_t g, uint8_t b)
+static void ds4_send_output(bthid_device_t* device, uint8_t rumble_left, uint8_t rumble_right,
+                            uint8_t r, uint8_t g, uint8_t b)
 {
     ds4_bt_data_t* ds4 = (ds4_bt_data_t*)device->driver_data;
     if (!ds4) return;
@@ -116,13 +131,20 @@ static void ds4_set_led(bthid_device_t* device, uint8_t r, uint8_t g, uint8_t b)
     buf[3] = 0x00;
     buf[4] = 0xFF;  // Enable rumble+LED
 
-    buf[7] = ds4->rumble_right;
-    buf[8] = ds4->rumble_left;
+    buf[7] = rumble_right;  // High frequency motor
+    buf[8] = rumble_left;   // Low frequency motor
     buf[9] = r;
     buf[10] = g;
     buf[11] = b;
 
     bt_send_control(device->conn_index, buf, sizeof(buf));
+
+    // Update cached state
+    ds4->rumble_left = rumble_left;
+    ds4->rumble_right = rumble_right;
+    ds4->led_r = r;
+    ds4->led_g = g;
+    ds4->led_b = b;
 }
 
 static void ds4_enable_sixaxis(bthid_device_t* device)
@@ -166,23 +188,23 @@ static bool ds4_init(bthid_device_t* device)
             init_input_event(&ds4_data[i].event);
             ds4_data[i].initialized = true;
             ds4_data[i].sixaxis_enabled = false;
-            ds4_data[i].player_led = 0;
+            ds4_data[i].activation_state = 0;
+            ds4_data[i].activation_time = 0;
             ds4_data[i].rumble_left = 0;
             ds4_data[i].rumble_right = 0;
+            ds4_data[i].led_r = 0;
+            ds4_data[i].led_g = 0;
+            ds4_data[i].led_b = 64;  // Default blue
 
             ds4_data[i].event.type = INPUT_TYPE_GAMEPAD;
             ds4_data[i].event.dev_addr = device->conn_index;
             ds4_data[i].event.instance = 0;
-            ds4_data[i].event.button_count = 10;
+            ds4_data[i].event.button_count = 14;
+            ds4_data[i].event.has_motion = true;  // DS4 has motion
 
             device->driver_data = &ds4_data[i];
 
-            // Enable sixaxis to get full reports
-            ds4_enable_sixaxis(device);
-
-            // Set initial LED color (blue for player 1)
-            ds4_set_led(device, 0, 0, 64);
-
+            // Activation happens in task (state machine with delays)
             return true;
         }
     }
@@ -275,8 +297,8 @@ static void ds4_process_report(bthid_device_t* device, const uint8_t* data, uint
     ds4->event.analog[ANALOG_SLIDER] = rpt->r2_trigger;
 
     // Motion data (DS4 has full 3-axis gyro and accel)
-    // Check if we have enough data for motion (full report is 78 bytes)
-    if (len >= sizeof(ds4_input_report_t)) {
+    // Only available in full report mode (report_len includes gyro/accel)
+    if (ds4->sixaxis_enabled && report_len >= sizeof(ds4_input_report_t)) {
         ds4->event.has_motion = true;
         ds4->event.accel[0] = rpt->accel[0];
         ds4->event.accel[1] = rpt->accel[1];
@@ -297,8 +319,88 @@ static void ds4_task(bthid_device_t* device)
     ds4_bt_data_t* ds4 = (ds4_bt_data_t*)device->driver_data;
     if (!ds4) return;
 
-    // Could send periodic LED/rumble updates here if needed
-    // For now, handled on state change
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // State machine for activation with delays
+    switch (ds4->activation_state) {
+        case 0:  // Send enable_sixaxis
+            ds4_enable_sixaxis(device);
+            ds4->activation_state = 1;
+            ds4->activation_time = now;
+            break;
+
+        case 1:  // Wait 100ms then send initial LED
+            if (now - ds4->activation_time >= 100) {
+                // Set initial LED color (blue for player 1)
+                ds4_send_output(device, 0, 0, 0, 0, 64);
+                ds4->activation_state = 2;
+            }
+            break;
+
+        case 2:  // Activated - monitor feedback system for rumble/LED updates
+            {
+                int player_idx = find_player_index(ds4->event.dev_addr, ds4->event.instance);
+                if (player_idx >= 0) {
+                    feedback_state_t* fb = feedback_get_state(player_idx);
+                    if (!fb) break;
+
+                    bool need_update = false;
+                    uint8_t r = ds4->led_r;
+                    uint8_t g = ds4->led_g;
+                    uint8_t b = ds4->led_b;
+                    uint8_t rumble_left = ds4->rumble_left;
+                    uint8_t rumble_right = ds4->rumble_right;
+
+                    // Check LED from feedback system
+                    if (fb->led_dirty) {
+                        if (fb->led.r != 0 || fb->led.g != 0 || fb->led.b != 0) {
+                            // Host specified RGB color directly
+                            r = fb->led.r;
+                            g = fb->led.g;
+                            b = fb->led.b;
+                        } else if (fb->led.pattern != 0) {
+                            // Player LED pattern - convert to RGB color
+                            // Pattern bits: 0x01=P1, 0x02=P2, 0x04=P3, 0x08=P4
+                            int player_num = 0;
+                            if (fb->led.pattern & 0x01) player_num = 0;
+                            else if (fb->led.pattern & 0x02) player_num = 1;
+                            else if (fb->led.pattern & 0x04) player_num = 2;
+                            else if (fb->led.pattern & 0x08) player_num = 3;
+
+                            r = PLAYER_COLORS[player_num][0];
+                            g = PLAYER_COLORS[player_num][1];
+                            b = PLAYER_COLORS[player_num][2];
+                        } else {
+                            // Default to player index-based color
+                            int color_idx = player_idx % 4;
+                            r = PLAYER_COLORS[color_idx][0];
+                            g = PLAYER_COLORS[color_idx][1];
+                            b = PLAYER_COLORS[color_idx][2];
+                        }
+                        need_update = true;
+                    }
+
+                    // Check rumble
+                    if (fb->rumble_dirty) {
+                        rumble_left = fb->rumble.left;
+                        rumble_right = fb->rumble.right;
+                        need_update = true;
+                    }
+
+                    // Also check if values changed (even without dirty flag)
+                    if (rumble_left != ds4->rumble_left || rumble_right != ds4->rumble_right ||
+                        r != ds4->led_r || g != ds4->led_g || b != ds4->led_b) {
+                        need_update = true;
+                    }
+
+                    if (need_update) {
+                        ds4_send_output(device, rumble_left, rumble_right, r, g, b);
+                        feedback_clear_dirty(player_idx);
+                    }
+                }
+            }
+            break;
+    }
 }
 
 static void ds4_disconnect(bthid_device_t* device)
