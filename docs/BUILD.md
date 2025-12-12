@@ -65,7 +65,68 @@ sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi \
 
 ### Windows
 
+#### Option 1: Native Windows (Chocolatey)
+
+1. **Install Chocolatey** (if not already installed):
+   - Open PowerShell as Administrator
+   - Follow instructions at: https://chocolatey.org/install
+
+2. **Install Required Tools**:
+   ```powershell
+   choco install make gcc-arm-embedded git
+   ```
+
+3. **Add Git Unix Tools to PATH**:
+   ```powershell
+   # Open PowerShell as Administrator:
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Git\usr\bin", "User")
+   ```
+   Close and reopen PowerShell.
+
+4. **Set ARM Toolchain Path**:
+   ```powershell
+   # Find the ARM toolchain installation path:
+   Get-ChildItem "C:\Program Files (x86)" -Filter "arm-none-eabi-gcc.exe" -Recurse -ErrorAction SilentlyContinue
+
+   # Set the environment variable (adjust path based on above output):
+   [Environment]::SetEnvironmentVariable("PICO_TOOLCHAIN_PATH", "C:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\[version]\bin", "User")
+   ```
+   Replace `[version]` with your actual version number. Close and reopen PowerShell.
+
+5. **Verify Installation**:
+   ```powershell
+   make --version
+   arm-none-eabi-gcc --version
+   rm --version
+   ```
+
+6. **Build**:
+   ```powershell
+   git clone https://github.com/joypad-ai/joypad-core.git
+   cd joypad-core
+   make init
+   make usb2pce    # or other target
+   ```
+
+#### Option 2: MSYS2
+
+1. Install MSYS2 from https://www.msys2.org/
+2. Open "MSYS2 MINGW64" terminal
+3. Install tools:
+   ```bash
+   pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-make git
+   ```
+4. Follow standard build instructions
+
+#### Option 3: WSL2 (Recommended)
+
 Use WSL2 with Ubuntu and follow Linux instructions above.
+
+#### Windows Troubleshooting
+
+- **"PICO_TOOLCHAIN_PATH not set"**: Ensure the variable points to the `bin` folder containing `arm-none-eabi-gcc.exe`
+- **"rm: command not found"**: Ensure `C:\Program Files\Git\usr\bin` is in your PATH
+- **PATH changes not taking effect**: Close and reopen PowerShell after modifying environment variables
 
 ---
 
