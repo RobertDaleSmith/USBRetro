@@ -67,10 +67,10 @@
 #define JP_BUTTON_A1 (1 << 16)  // Guide     Home      PS         13
 #define JP_BUTTON_A2 (1 << 17)  // -         Capture   Touchpad   14
 #define JP_BUTTON_A3 (1 << 18)  // -         -         Mute       -
-#define JP_BUTTON_A4 (1 << 21)  // -         -         -          -
+#define JP_BUTTON_A4 (1 << 19)  // -         -         -          -
 
 // Paddles (extended)
-#define JP_BUTTON_L4 (1 << 19)  // P1        -         -          -
-#define JP_BUTTON_R4 (1 << 20)  // P2        -         -          -
+#define JP_BUTTON_L4 (1 << 20)  // P1        -         -          -
+#define JP_BUTTON_R4 (1 << 21)  // P2        -         -          -
 
 #endif // BUTTONS_H
