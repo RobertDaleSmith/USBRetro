@@ -3,6 +3,29 @@
 #ifndef BUTTONS_H
 #define BUTTONS_H
 
+/*
+ *                          JOYPAD BUTTON LAYOUT
+ *
+ *                    L2 (6)                      R2 (7)
+ *                    L1 (4)                      R1 (5)
+ *              ┌────────────────────────────────────────────┐
+ *              │                                            │
+ *              │      DU(12)              B4(3)             │
+ *              │       ┌─┐              ┌─────┐             │
+ *              │  DL ──┼─┼── DR    B3 ──┤     ├── B2        │
+ *              │ (14)  └─┘ (15)   (2)   └─────┘   (1)       │
+ *              │      DD(13)              B1(0)             │
+ *              │                                            │
+ *              │         ╭───╮    A1    ╭───╮               │
+ *              │      L3 │   │   (16)   │   │ R3            │
+ *              │     (10)╰───╯          ╰───╯(11)           │
+ *              │              S1    S2                      │
+ *              │             (8)   (9)                      │
+ *              └────────────────────────────────────────────┘
+ *
+ *   Extended: A2(17)=Touchpad/Capture  A3(18)=Mute  L4(19)/R4(20)=Paddles
+ */
+
 #define MAX_DEVICES 6
 
 // W3C Gamepad API standard button order
