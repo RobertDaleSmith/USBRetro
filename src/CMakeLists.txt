@@ -84,6 +84,7 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/l2cap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/att.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/smp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport_usb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/bthid.c

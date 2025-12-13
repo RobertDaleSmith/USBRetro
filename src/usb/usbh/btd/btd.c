@@ -7,6 +7,7 @@
 #include "btd_linkkey.h"
 #include "l2cap.h"
 #include "att.h"
+#include "smp.h"
 #include "tusb.h"
 #include "host/usbh_pvt.h"
 #include <string.h>
@@ -59,6 +60,9 @@ void btd_init(void)
 
     // Initialize ATT layer (for BLE)
     att_init();
+
+    // Initialize SMP layer (for BLE pairing)
+    smp_init();
 
     printf("[BTD] Initialized (le_connecting=%d)\n", btd_ctx.le_connecting);
 }

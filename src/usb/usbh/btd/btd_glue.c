@@ -5,6 +5,7 @@
 #include "btd_linkkey.h"
 #include "l2cap.h"
 #include "att.h"
+#include "smp.h"
 #include "bt/transport/bt_transport.h"
 #include <stdio.h>
 #include <string.h>
@@ -135,7 +136,16 @@ void btd_on_encryption_change(uint8_t conn_index, uint8_t status, bool enabled)
         return;
     }
 
-    // Now that encryption is enabled, initiate L2CAP connections for HID
+    // Check if this is a BLE connection
+    const btd_connection_t* conn = btd_get_connection(conn_index);
+    if (conn && conn->is_ble) {
+        // BLE encryption enabled - notify SMP which will restart ATT discovery
+        printf("[BTD_GLUE] BLE encryption enabled, notifying SMP...\n");
+        smp_on_encryption_enabled(conn_index);
+        return;
+    }
+
+    // Classic BT: Now that encryption is enabled, initiate L2CAP connections for HID
     printf("[BTD_GLUE] Initiating L2CAP connections for HID...\n");
 
     // Connect HID Control channel (PSM 0x0011)
@@ -302,6 +312,9 @@ void btd_on_le_connection(uint8_t conn_index)
     printf("[BTD_GLUE] BLE device connected: conn=%d handle=0x%04X\n",
            conn_index, conn->handle);
 
+    // Initialize SMP layer for this connection
+    smp_on_connect(conn_index, conn->handle);
+
     // Initialize ATT layer for this connection
     att_on_connect(conn_index, conn->handle);
 }
@@ -309,6 +322,7 @@ void btd_on_le_connection(uint8_t conn_index)
 void btd_on_le_disconnection(uint8_t conn_index)
 {
     printf("[BTD_GLUE] BLE device disconnected: conn=%d\n", conn_index);
+    smp_on_disconnect(conn_index);
     att_on_disconnect(conn_index);
 }
 
@@ -318,12 +332,24 @@ void l2cap_on_ble_data(uint8_t conn_index, uint16_t cid, const uint8_t* data, ui
         // Route ATT data to ATT layer
         att_process_data(conn_index, data, len);
     } else if (cid == L2CAP_CID_SM) {
-        // Security Manager - not implemented yet
-        printf("[BTD_GLUE] SM data: %d bytes (not implemented)\n", len);
+        // Route to Security Manager
+        smp_process_data(conn_index, data, len);
     } else if (cid == L2CAP_CID_LE_SIGNALING) {
         // LE Signaling - not implemented yet
         printf("[BTD_GLUE] LE Signaling data: %d bytes (not implemented)\n", len);
     }
+}
+
+// ============================================================================
+// SMP ENCRYPTION CALLBACK
+// ============================================================================
+
+void smp_on_encrypted(uint8_t conn_index)
+{
+    printf("[BTD_GLUE] SMP encryption complete, restarting ATT discovery...\n");
+
+    // Restart ATT discovery now that we have encryption
+    att_start_discovery(conn_index);
 }
 
 // ============================================================================

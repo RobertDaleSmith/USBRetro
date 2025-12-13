@@ -4,6 +4,7 @@
 #include "att.h"
 #include "btd.h"
 #include "l2cap.h"
+#include "smp.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -380,6 +381,12 @@ static void att_handle_error_rsp(att_client_t* client, const uint8_t* data, uint
     if (err->error_code == ATT_ERROR_ATTRIBUTE_NOT_FOUND) {
         // This is expected at end of discovery, continue to next phase
         att_continue_discovery(client);
+    }
+    else if (err->error_code == ATT_ERROR_INSUFF_ENCRYPTION ||
+             err->error_code == ATT_ERROR_INSUFF_AUTHENTICATION) {
+        // Need to pair/encrypt first
+        printf("[ATT] *** Encryption required - starting SMP pairing ***\n");
+        smp_start_pairing(client->conn_index);
     }
 }
 
