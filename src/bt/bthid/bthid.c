@@ -36,7 +36,8 @@ static uint8_t driver_count = 0;
 // ============================================================================
 
 static bthid_device_t* find_or_create_device(uint8_t conn_index);
-static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod);
+static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod,
+                                          uint16_t vendor_id, uint16_t product_id);
 static bthid_device_type_t classify_device(const uint8_t* class_of_device);
 static bool try_reclassify_sony_device(bthid_device_t* device, uint8_t report_id);
 
@@ -159,11 +160,12 @@ uint8_t bthid_get_device_count(void)
 // DRIVER MATCHING
 // ============================================================================
 
-static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod)
+static const bthid_driver_t* find_driver(const char* name, const uint8_t* cod,
+                                          uint16_t vendor_id, uint16_t product_id)
 {
     // First try registered drivers
     for (int i = 0; i < driver_count; i++) {
-        if (drivers[i]->match && drivers[i]->match(name, cod)) {
+        if (drivers[i]->match && drivers[i]->match(name, cod, vendor_id, product_id)) {
             return drivers[i];
         }
     }
@@ -286,12 +288,13 @@ void bt_on_hid_ready(uint8_t conn_index)
             device->bd_addr[5], device->bd_addr[4], device->bd_addr[3],
             device->bd_addr[2], device->bd_addr[1], device->bd_addr[0]);
 
-    printf("[BTHID] Device: %s (%s), type=%d\n",
+    printf("[BTHID] Device: %s (%s), type=%d, VID=0x%04X PID=0x%04X\n",
            device->name[0] ? device->name : "Unknown",
-           addr_str, device->type);
+           addr_str, device->type, conn->vendor_id, conn->product_id);
 
-    // Find matching driver
-    const bthid_driver_t* driver = find_driver(device->name, conn->class_of_device);
+    // Find matching driver (VID/PID takes priority over name/COD)
+    const bthid_driver_t* driver = find_driver(device->name, conn->class_of_device,
+                                               conn->vendor_id, conn->product_id);
     if (driver) {
         printf("[BTHID] Using driver: %s\n", driver->name);
         device->driver = driver;

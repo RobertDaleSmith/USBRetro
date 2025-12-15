@@ -273,21 +273,25 @@ static void ds5_send_output(bthid_device_t* device, uint8_t rumble_left, uint8_t
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool ds5_match(const char* device_name, const uint8_t* class_of_device)
+static bool ds5_match(const char* device_name, const uint8_t* class_of_device,
+                      uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;
 
-    if (!device_name) {
-        return false;
+    // VID/PID match (highest priority) - Sony vendor ID = 0x054C
+    // DualSense = 0x0CE6, DualSense Edge = 0x0DF2
+    if (vendor_id == 0x054C && (product_id == 0x0CE6 || product_id == 0x0DF2)) {
+        return true;
     }
 
-    // Match known DualSense device names
-    if (strstr(device_name, "DualSense") != NULL) {
-        return true;
-    }
-    // Some controllers might report different names
-    if (strstr(device_name, "PS5 Controller") != NULL) {
-        return true;
+    // Name-based match (fallback if SDP query didn't return VID/PID)
+    if (device_name) {
+        if (strstr(device_name, "DualSense") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "PS5 Controller") != NULL) {
+            return true;
+        }
     }
 
     return false;

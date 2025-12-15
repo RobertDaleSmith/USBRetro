@@ -24,6 +24,8 @@ typedef struct {
     uint8_t  bd_addr[6];            // Bluetooth device address
     char     name[BT_MAX_NAME_LEN]; // Device name
     uint8_t  class_of_device[3];    // Class of Device (for Classic BT)
+    uint16_t vendor_id;             // Vendor ID (from SDP Device ID query)
+    uint16_t product_id;            // Product ID (from SDP Device ID query)
     uint16_t control_cid;           // HID Control channel (local CID)
     uint16_t interrupt_cid;         // HID Interrupt channel (local CID)
     bool     connected;             // Connection active

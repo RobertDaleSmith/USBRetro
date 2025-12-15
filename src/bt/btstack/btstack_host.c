@@ -19,6 +19,7 @@ extern void btstack_memory_init(void);
 
 #include "bluetooth_data_types.h"
 #include "bluetooth_company_id.h"
+#include "bluetooth_sdp.h"
 #include "ad_parser.h"
 #include "gap.h"
 #include "hci.h"
@@ -169,6 +170,8 @@ typedef struct {
     bd_addr_t addr;
     char name[32];
     uint8_t class_of_device[3];
+    uint16_t vendor_id;
+    uint16_t product_id;
     bool hid_ready;
 } classic_connection_t;
 
@@ -179,12 +182,18 @@ static struct {
     bd_addr_t pending_addr;
     uint32_t pending_cod;
     char pending_name[64];
+    uint16_t pending_vid;
+    uint16_t pending_pid;
     bool pending_valid;
     // Pending HID connect (deferred until encryption completes)
     bd_addr_t pending_hid_addr;
     hci_con_handle_t pending_hid_handle;
     bool pending_hid_connect;
 } classic_state;
+
+// SDP query state
+static uint8_t sdp_attribute_value[32];
+static const uint16_t sdp_attribute_value_buffer_size = sizeof(sdp_attribute_value);
 
 // Classic HID descriptor storage
 static uint8_t classic_hid_descriptor_storage[512];
@@ -491,6 +500,47 @@ void btstack_host_process(void)
 }
 
 // ============================================================================
+// SDP QUERY CALLBACK (for VID/PID detection)
+// ============================================================================
+
+static void sdp_query_vid_pid_callback(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    UNUSED(channel);
+    UNUSED(size);
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+
+    switch (hci_event_packet_get_type(packet)) {
+        case SDP_EVENT_QUERY_ATTRIBUTE_VALUE: {
+            uint16_t attr_len = sdp_event_query_attribute_byte_get_attribute_length(packet);
+            if (attr_len <= sdp_attribute_value_buffer_size) {
+                uint16_t offset = sdp_event_query_attribute_byte_get_data_offset(packet);
+                sdp_attribute_value[offset] = sdp_event_query_attribute_byte_get_data(packet);
+
+                // Check if we got all bytes for this attribute
+                if (offset + 1 == attr_len) {
+                    uint16_t attr_id = sdp_event_query_attribute_byte_get_attribute_id(packet);
+                    uint16_t value;
+                    if (de_element_get_uint16(sdp_attribute_value, &value)) {
+                        if (attr_id == BLUETOOTH_ATTRIBUTE_VENDOR_ID) {
+                            classic_state.pending_vid = value;
+                            printf("[BTSTACK_HOST] SDP VID: 0x%04X\n", value);
+                        } else if (attr_id == BLUETOOTH_ATTRIBUTE_PRODUCT_ID) {
+                            classic_state.pending_pid = value;
+                            printf("[BTSTACK_HOST] SDP PID: 0x%04X\n", value);
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case SDP_EVENT_QUERY_COMPLETE:
+            printf("[BTSTACK_HOST] SDP query complete: VID=0x%04X PID=0x%04X\n",
+                   classic_state.pending_vid, classic_state.pending_pid);
+            break;
+    }
+}
+
+// ============================================================================
 // HCI EVENT HANDLER
 // ============================================================================
 
@@ -679,6 +729,8 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             memcpy(classic_state.pending_addr, addr, 6);
             classic_state.pending_cod = cod;
             classic_state.pending_name[0] = '\0';  // Clear, will be filled by remote name request
+            classic_state.pending_vid = 0;
+            classic_state.pending_pid = 0;
             classic_state.pending_valid = true;
             // BTstack should auto-accept via gap_ssp_set_auto_accept(1) set at init
             break;
@@ -708,6 +760,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
                     // Request remote name for driver matching (we don't have it from inquiry)
                     gap_remote_name_request(addr, 0, 0);
+
+                    // Query VID/PID via SDP (PnP Information service)
+                    sdp_client_query_uuid16(&sdp_query_vid_pid_callback, addr,
+                                            BLUETOOTH_SERVICE_CLASS_PNP_INFORMATION);
                 }
                 // Request authentication (Bluepad32 pattern)
                 gap_request_security_level(handle, LEVEL_2);
@@ -1282,6 +1338,13 @@ static void hid_host_packet_handler(uint8_t packet_type, uint16_t channel, uint8
                             conn->name[sizeof(conn->name) - 1] = '\0';
                             printf("[BTSTACK_HOST] Using pending name: %s\n", conn->name);
                         }
+                        // Copy VID/PID if we got them from SDP query
+                        if (classic_state.pending_vid || classic_state.pending_pid) {
+                            conn->vendor_id = classic_state.pending_vid;
+                            conn->product_id = classic_state.pending_pid;
+                            printf("[BTSTACK_HOST] Using pending VID/PID: 0x%04X/0x%04X\n",
+                                   conn->vendor_id, conn->product_id);
+                        }
                         classic_state.pending_valid = false;
                         printf("[BTSTACK_HOST] Using pending COD: 0x%06X\n", (unsigned)classic_state.pending_cod);
                     }
@@ -1453,6 +1516,8 @@ bool btstack_classic_get_connection(uint8_t conn_index, btstack_classic_conn_inf
         info->name[sizeof(info->name) - 1] = '\0';
         // BLE devices don't have class_of_device, set to zeros
         memset(info->class_of_device, 0, 3);
+        info->vendor_id = 0;   // TODO: Get from BLE Device ID if needed
+        info->product_id = 0;
         info->hid_ready = conn->hid_ready;
 
         return true;
@@ -1469,6 +1534,8 @@ bool btstack_classic_get_connection(uint8_t conn_index, btstack_classic_conn_inf
     strncpy(info->name, conn->name, sizeof(info->name) - 1);
     info->name[sizeof(info->name) - 1] = '\0';
     memcpy(info->class_of_device, conn->class_of_device, 3);
+    info->vendor_id = conn->vendor_id;
+    info->product_id = conn->product_id;
     info->hid_ready = conn->hid_ready;
 
     return true;

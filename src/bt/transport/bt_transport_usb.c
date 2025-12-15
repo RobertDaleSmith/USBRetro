@@ -82,6 +82,8 @@ static const bt_connection_t* usb_transport_get_connection(uint8_t index)
     strncpy(conn->name, info.name, BT_MAX_NAME_LEN - 1);
     conn->name[BT_MAX_NAME_LEN - 1] = '\0';
     memcpy(conn->class_of_device, info.class_of_device, 3);
+    conn->vendor_id = info.vendor_id;
+    conn->product_id = info.product_id;
     conn->connected = info.active;
     conn->hid_ready = info.hid_ready;
 

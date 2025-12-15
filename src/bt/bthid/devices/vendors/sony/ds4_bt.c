@@ -159,31 +159,42 @@ static void ds4_enable_sixaxis(bthid_device_t* device)
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool ds4_match(const char* device_name, const uint8_t* class_of_device)
+static bool ds4_match(const char* device_name, const uint8_t* class_of_device,
+                      uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;
 
-    if (!device_name) {
-        return false;
-    }
-
-    // Don't match DualSense (DS5) - let DS5 driver handle it
-    if (strstr(device_name, "DualSense") != NULL) {
-        return false;
-    }
-
-    // Don't match Xbox controllers
-    if (strstr(device_name, "Xbox") != NULL) {
-        return false;
-    }
-
-    // Match known DS4 device names
-    // Note: DS4 advertises as just "Wireless Controller" (no "Sony" prefix)
-    if (strstr(device_name, "Wireless Controller") != NULL) {
+    // VID/PID match (highest priority) - Sony vendor ID = 0x054C
+    // DS4 v1 = 0x05C4, DS4 v2 (Slim) = 0x09CC
+    if (vendor_id == 0x054C && (product_id == 0x05C4 || product_id == 0x09CC)) {
         return true;
     }
-    if (strstr(device_name, "DUALSHOCK 4") != NULL) {
-        return true;
+
+    // Don't match DualSense by VID/PID (DS5 driver handles those)
+    if (vendor_id == 0x054C && (product_id == 0x0CE6 || product_id == 0x0DF2)) {
+        return false;
+    }
+
+    // Name-based match (fallback if SDP query didn't return VID/PID)
+    if (device_name) {
+        // Don't match DualSense (DS5) - let DS5 driver handle it
+        if (strstr(device_name, "DualSense") != NULL) {
+            return false;
+        }
+
+        // Don't match Xbox controllers
+        if (strstr(device_name, "Xbox") != NULL) {
+            return false;
+        }
+
+        // Match known DS4 device names
+        // Note: DS4 advertises as just "Wireless Controller" (no "Sony" prefix)
+        if (strstr(device_name, "Wireless Controller") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "DUALSHOCK 4") != NULL) {
+            return true;
+        }
     }
 
     return false;

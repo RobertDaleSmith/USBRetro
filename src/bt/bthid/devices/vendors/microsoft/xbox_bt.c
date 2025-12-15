@@ -106,28 +106,33 @@ static uint8_t scale_trigger_10to8(uint16_t val)
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool xbox_match(const char* device_name, const uint8_t* class_of_device)
+static bool xbox_match(const char* device_name, const uint8_t* class_of_device,
+                       uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;
+    (void)product_id;
 
-    if (!device_name) {
-        return false;
+    // VID match - Microsoft vendor ID = 0x045E
+    // Many Xbox controller PIDs exist, so just match VID
+    if (vendor_id == 0x045E) {
+        return true;
     }
 
-    // Match known Xbox controller names
-    if (strstr(device_name, "Xbox Wireless Controller") != NULL) {
-        return true;
-    }
-    if (strstr(device_name, "Xbox Elite") != NULL) {
-        return true;
-    }
-    if (strstr(device_name, "Xbox Adaptive") != NULL) {
-        return true;
-    }
-    // Some controllers might use different names
-    if (strstr(device_name, "Microsoft") != NULL &&
-        strstr(device_name, "Controller") != NULL) {
-        return true;
+    // Name-based match (fallback)
+    if (device_name) {
+        if (strstr(device_name, "Xbox Wireless Controller") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "Xbox Elite") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "Xbox Adaptive") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "Microsoft") != NULL &&
+            strstr(device_name, "Controller") != NULL) {
+            return true;
+        }
     }
 
     return false;

@@ -80,8 +80,10 @@ typedef struct {
 typedef struct {
     const char* name;
 
-    // Check if this driver handles a device (by name, COD, or initial report)
-    bool (*match)(const char* device_name, const uint8_t* class_of_device);
+    // Check if this driver handles a device (by VID/PID, name, or COD)
+    // Priority: VID/PID match > name match > COD match
+    bool (*match)(const char* device_name, const uint8_t* class_of_device,
+                  uint16_t vendor_id, uint16_t product_id);
 
     // Initialize driver for a device
     bool (*init)(bthid_device_t* device);

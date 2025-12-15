@@ -195,20 +195,26 @@ static void switch_enable_full_report_mode(bthid_device_t* device)
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool switch_match(const char* device_name, const uint8_t* class_of_device)
+static bool switch_match(const char* device_name, const uint8_t* class_of_device,
+                         uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;
+    (void)product_id;
 
-    if (!device_name) {
-        return false;
-    }
-
-    // Match known Switch controller names
-    if (strstr(device_name, "Pro Controller") != NULL) {
+    // VID match - Nintendo vendor ID = 0x057E
+    // Pro Controller = 0x2009, Joy-Con L = 0x2006, Joy-Con R = 0x2007
+    if (vendor_id == 0x057E) {
         return true;
     }
-    if (strstr(device_name, "Joy-Con") != NULL) {
-        return true;
+
+    // Name-based match (fallback)
+    if (device_name) {
+        if (strstr(device_name, "Pro Controller") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "Joy-Con") != NULL) {
+            return true;
+        }
     }
 
     return false;

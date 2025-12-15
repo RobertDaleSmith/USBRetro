@@ -78,6 +78,8 @@ typedef struct {
     uint8_t bd_addr[6];
     char name[32];
     uint8_t class_of_device[3];
+    uint16_t vendor_id;
+    uint16_t product_id;
     bool hid_ready;
 } btstack_classic_conn_info_t;
 

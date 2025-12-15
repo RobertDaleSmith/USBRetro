@@ -44,9 +44,12 @@ static xbox_ble_data_t xbox_data[BTHID_MAX_DEVICES];
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool xbox_ble_match(const char* device_name, const uint8_t* class_of_device)
+static bool xbox_ble_match(const char* device_name, const uint8_t* class_of_device,
+                           uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;  // BLE doesn't use COD
+    (void)vendor_id;        // BLE doesn't have SDP Device ID
+    (void)product_id;
 
     if (!device_name) {
         return false;

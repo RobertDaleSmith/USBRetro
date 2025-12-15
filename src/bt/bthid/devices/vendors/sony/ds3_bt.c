@@ -106,8 +106,15 @@ static ds3_bt_data_t ds3_data[BTHID_MAX_DEVICES] = {0};
 // DRIVER IMPLEMENTATION
 // ============================================================================
 
-static bool ds3_match(const char* device_name, const uint8_t* class_of_device)
+static bool ds3_match(const char* device_name, const uint8_t* class_of_device,
+                      uint16_t vendor_id, uint16_t product_id)
 {
+    // VID/PID match (highest priority) - Sony vendor ID = 0x054C
+    // DS3/Sixaxis = 0x0268
+    if (vendor_id == 0x054C && product_id == 0x0268) {
+        return true;
+    }
+
     // Match known DS3 device names
     if (device_name && device_name[0] != '\0') {
         if (strstr(device_name, "PLAYSTATION(R)3") != NULL) {
