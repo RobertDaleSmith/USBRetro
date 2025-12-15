@@ -78,20 +78,6 @@ static volatile bool report_pending = false;
 // Forward declarations
 static void process_xbox_ble_report(const uint8_t* data, uint16_t len);
 
-// Hook called from gatt_client.c for Xbox HID notifications
-// Just copies data - processing deferred to main loop to avoid stack overflow
-void btstack_ble_hid_report_hook(uint16_t con_handle, uint16_t value_handle, uint8_t *value, int length)
-{
-    (void)con_handle;
-    (void)value_handle;
-
-    if (length < 16) return;
-
-    // Copy to pending buffer (don't process here - stack too deep)
-    memcpy(pending_report, value, 16);
-    report_pending = true;
-}
-
 // Process Xbox BLE HID report and submit to router
 static void process_xbox_ble_report(const uint8_t* data, uint16_t len)
 {
@@ -623,8 +609,8 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             printf("[BTSTACK_BLE] SM: Pairing complete, handle=0x%04X status=0x%02X\n", handle, status);
 
             if (status == ERROR_CODE_SUCCESS) {
-                printf("[BTSTACK_BLE] SM: Pairing successful! (no action)\n");
-                // Don't do anything - just let it sit to test if hang is in BTstack
+                printf("[BTSTACK_BLE] SM: Pairing successful! Registering HID listener...\n");
+                register_xbox_hid_listener(handle);
             } else {
                 printf("[BTSTACK_BLE] SM: Pairing FAILED\n");
             }
@@ -639,7 +625,10 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             hci_con_handle_t handle = sm_event_reencryption_complete_get_handle(packet);
             uint8_t status = sm_event_reencryption_complete_get_status(packet);
             printf("[BTSTACK_BLE] SM: Re-encryption complete, handle=0x%04X status=0x%02X\n", handle, status);
-            // Don't do anything - just let it sit
+            if (status == ERROR_CODE_SUCCESS) {
+                printf("[BTSTACK_BLE] SM: Re-encryption successful! Registering HID listener...\n");
+                register_xbox_hid_listener(handle);
+            }
             break;
         }
     }
@@ -753,7 +742,7 @@ static void gatt_client_callback(uint8_t packet_type, uint16_t channel, uint8_t 
 // DIRECT XBOX HID NOTIFICATION HANDLER
 // ============================================================================
 
-// Handle notifications directly from gatt_client (bypasses HIDS client)
+// Handle notifications directly from gatt_client listener API
 static void xbox_hid_notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
 {
     UNUSED(channel);
@@ -768,14 +757,11 @@ static void xbox_hid_notification_handler(uint8_t packet_type, uint16_t channel,
 
     // Only process Xbox HID report handle
     if (value_handle != 0x001E) return;
+    if (value_length < 16) return;
 
-    // Build report with report_id prepended
-    static uint8_t xbox_report[32];
-    xbox_report[0] = 0x01;  // Report ID
-    uint16_t copy_len = value_length > 31 ? 31 : value_length;
-    memcpy(&xbox_report[1], value, copy_len);
-
-    process_xbox_ble_report(xbox_report, copy_len + 1);
+    // Defer processing to main loop (same pattern as hook)
+    memcpy(pending_report, value, 16);
+    report_pending = true;
 }
 
 // Register direct listener for Xbox HID notifications
