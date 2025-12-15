@@ -10,9 +10,7 @@
 // - Bulk IN (0x82): ACL Data (controller->host)
 // - Bulk OUT (0x02): ACL Data (host->controller)
 //
-// This file can be compiled in two modes:
-// 1. USE_BTSTACK=1: Full BTstack integration with run loop
-// 2. USE_BTSTACK=0: Standalone mode for testing USB transport only
+// Uses BTstack for full Bluetooth stack integration.
 
 #include "hci_transport_h2_tinyusb.h"
 #include "tusb.h"
@@ -21,31 +19,16 @@
 #include <string.h>
 #include <stdio.h>
 
-// Configuration
-#ifndef USE_BTSTACK
-#define USE_BTSTACK 0
-#endif
+// BTstack is always enabled
+#define USE_BTSTACK 1
 
-#if USE_BTSTACK
-// Full BTstack includes
+// BTstack includes
 #include "btstack_config.h"
 #include "bluetooth.h"
 #include "btstack_defines.h"
 #include "hci_transport.h"
 #include "btstack_run_loop.h"
 #include "btstack_run_loop_embedded.h"
-#else
-// Standalone mode - define minimal types
-typedef struct hci_transport_t hci_transport_t;
-
-// HCI packet types (from Bluetooth spec)
-#define HCI_COMMAND_DATA_PACKET 0x01
-#define HCI_ACL_DATA_PACKET     0x02
-#define HCI_EVENT_PACKET        0x04
-
-// Transport packet sent event (BTstack internal)
-#define HCI_EVENT_TRANSPORT_PACKET_SENT 0x6E
-#endif
 
 // ============================================================================
 // TRANSPORT STATE

@@ -4,8 +4,16 @@
 #include "core/services/players/manager.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
-#include "usb/usbh/btd/btd.h"
 #include "pico/time.h"
+
+// TODO: Get these from BTstack when BT dongle is connected
+static const uint8_t* btd_get_local_bd_addr(void) {
+    static uint8_t dummy_addr[6] = {0};
+    return dummy_addr;
+}
+static bool btd_is_available(void) {
+    return false;  // TODO: Check if BTstack has a dongle connected
+}
 #include "tusb.h"
 #include "host/usbh.h"
 

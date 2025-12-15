@@ -2,13 +2,8 @@
 //
 // Uses BTstack's SM (Security Manager) for LE Secure Connections
 // and GATT client for HID over GATT Profile (HOGP).
-//
-// This runs alongside our existing Classic BT stack (btd.c, btd_l2cap.c, etc.)
 
 #include "btstack_ble.h"
-
-#if USE_BTSTACK
-
 #include "btstack_config.h"
 // Include specific BTstack headers instead of umbrella btstack.h
 // (btstack.h pulls in audio codecs which need sbc_encoder.h)
@@ -898,5 +893,3 @@ bool btstack_ble_is_scanning(void)
 {
     return ble_state.scan_active;
 }
-
-#endif // USE_BTSTACK

@@ -21,18 +21,9 @@ extern void hid_task(void);
 // X-input protocol handlers
 extern void xinput_task(void);
 
-// BTD (Bluetooth Dongle) protocol handlers
+// BTstack (Bluetooth) protocol handlers
 #if CFG_TUH_BTD
-// USE_BTSTACK_TRANSPORT: 0 = old btd.c driver, 1 = new BTstack HCI transport
-#ifndef USE_BTSTACK_TRANSPORT
-#define USE_BTSTACK_TRANSPORT 0
-#endif
-
-#if USE_BTSTACK_TRANSPORT
 #include "btd/hci_transport_h2_tinyusb.h"
-#else
-#include "btd/btd.h"
-#endif
 #endif
 
 // PIO USB pin definitions (configurable per board)
@@ -115,11 +106,7 @@ void usbh_task(void)
 #endif
 
 #if CFG_TUH_BTD
-#if USE_BTSTACK_TRANSPORT
     hci_transport_h2_tinyusb_process();
-#else
-    btd_task();
-#endif
 #endif
 }
 

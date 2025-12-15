@@ -9,23 +9,14 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "hci_transport.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Configuration - set USE_BTSTACK=1 for full BTstack integration
-#ifndef USE_BTSTACK
-#define USE_BTSTACK 0
-#endif
-
-#if USE_BTSTACK
-// Include BTstack header for hci_transport_t definition
-#include "hci_transport.h"
-
-// Get the TinyUSB HCI transport instance (only available with BTstack)
+// Get the TinyUSB HCI transport instance
 const hci_transport_t* hci_transport_h2_tinyusb_instance(void);
-#endif
 
 // USB Bluetooth dongle identification
 #define USB_CLASS_WIRELESS_CTRL     0xE0
@@ -58,12 +49,6 @@ void hci_transport_h2_tinyusb_process(void);
 
 // Check if a Bluetooth dongle is connected
 bool hci_transport_h2_tinyusb_is_connected(void);
-
-// Standalone test mode (USE_BTSTACK=0)
-#if !USE_BTSTACK
-void hci_transport_h2_tinyusb_test_init(void);
-void hci_transport_h2_tinyusb_test_reset(void);
-#endif
 
 #ifdef __cplusplus
 }

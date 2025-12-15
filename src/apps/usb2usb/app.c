@@ -12,8 +12,12 @@
 #include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "usb/usbh/usbh.h"
-#include "usb/usbh/btd/btd_linkkey.h"
 #include "usb/usbd/usbd.h"
+
+// TODO: Implement with BTstack's link key storage
+static void btd_linkkey_delete_all(void) {
+    // BTstack manages link keys internally
+}
 #include "bt/transport/bt_transport.h"
 #include "tusb.h"
 #include "pico/stdlib.h"

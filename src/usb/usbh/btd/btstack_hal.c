@@ -2,9 +2,6 @@
 // Provides timing and interrupt control functions for RP2040
 
 #include "btstack_config.h"
-
-#if USE_BTSTACK
-
 #include "pico/time.h"
 #include "hardware/sync.h"
 
@@ -33,5 +30,3 @@ void hal_cpu_enable_irqs_and_sleep(void)
     // Just return - we're polling in our main loop
     __wfe();  // Wait for event (low power)
 }
-
-#endif // USE_BTSTACK

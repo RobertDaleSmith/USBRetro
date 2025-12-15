@@ -8,13 +8,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-#ifndef USE_BTSTACK
-#define USE_BTSTACK 0
-#endif
-
-#if USE_BTSTACK
-
 #include "bluetooth.h"
 
 #ifdef __cplusplus
@@ -53,7 +46,5 @@ bool btstack_ble_is_scanning(void);
 #ifdef __cplusplus
 }
 #endif
-
-#endif // USE_BTSTACK
 
 #endif // BTSTACK_BLE_H

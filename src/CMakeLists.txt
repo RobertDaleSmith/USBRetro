@@ -79,13 +79,6 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/logitech/logitech_wingman.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/sega/sega_astrocity.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_linkkey.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_l2cap.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_att.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_smp.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/p256.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/hci_transport_h2_tinyusb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport_usb.c
@@ -99,16 +92,7 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_bt.c
 )
 
-# BTD files that conflict with BTstack (excluded when USE_BTSTACK=1)
-# These are our own implementations that BTstack replaces
-set(BTD_CONFLICTING_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_l2cap.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_smp.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_att.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
-)
-
-# BTstack sources (when USE_BTSTACK=1)
+# BTstack sources
 set(PICO_BTSTACK_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/pico-sdk/lib/btstack)
 set(BTSTACK_SOURCES
     # Core
@@ -355,15 +339,7 @@ usbretro_target_common(usbretro_uart)
 # ============================================================================
 
 # --- USB to USB (Feather USB Host) ---
-# Full BTstack integration for BLE (Xbox controller support)
-# - USE_BTSTACK_TRANSPORT=1: Our TinyUSB HCI transport
-# - USE_BTSTACK=1: BTstack for BLE (SM, GATT client)
-# - Our existing btd_l2cap.c etc. still used for Classic BT
-
-# Create filtered source list - exclude files that conflict with BTstack
-set(USB_HOST_SOURCES_BTSTACK ${USB_HOST_SOURCES})
-list(REMOVE_ITEM USB_HOST_SOURCES_BTSTACK ${BTD_CONFLICTING_SOURCES})
-
+# BTstack for BLE and Classic Bluetooth
 add_executable(usbretro_usb)
 target_compile_definitions(usbretro_usb PRIVATE
     CONFIG_USB=1
@@ -375,9 +351,6 @@ target_compile_definitions(usbretro_usb PRIVATE
     PICO_DEFAULT_UART=0
     PICO_DEFAULT_UART_TX_PIN=0
     PICO_DEFAULT_UART_RX_PIN=1
-    # BTstack integration
-    USE_BTSTACK_TRANSPORT=1
-    USE_BTSTACK=1
     # BTstack feature flags
     ENABLE_BLE=1
     ENABLE_CLASSIC=1
@@ -388,7 +361,7 @@ target_compile_definitions(usbretro_usb PRIVATE
 )
 target_sources(usbretro_usb PUBLIC
     ${CORE_SOURCES}
-    ${USB_HOST_SOURCES_BTSTACK}
+    ${USB_HOST_SOURCES}
     ${USB_DEVICE_SOURCES}
     ${BTSTACK_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btstack_ble.c
