@@ -91,10 +91,15 @@ static const bt_connection_t* usb_transport_get_connection(uint8_t index)
 static bool usb_transport_send_control(uint8_t conn_index, const uint8_t* data, uint16_t len)
 {
     // Classic BT: parse SET_REPORT header and forward to BTstack
+    // DS3 and others use SET_REPORT on control channel
     if (len >= 2) {
-        // data[0] = transaction type | report type, data[1] = report_id
+        // data[0] = transaction type | report type
+        // 0x52 = SET_REPORT | Output (0x50 | 0x02)
+        // 0x53 = SET_REPORT | Feature (0x50 | 0x03)
+        uint8_t header = data[0];
+        uint8_t report_type = header & 0x03;  // Lower 2 bits = report type
         uint8_t report_id = data[1];
-        return btstack_classic_send_report(conn_index, report_id, data + 2, len - 2);
+        return btstack_classic_send_set_report_type(conn_index, report_type, report_id, data + 2, len - 2);
     }
     return false;
 }

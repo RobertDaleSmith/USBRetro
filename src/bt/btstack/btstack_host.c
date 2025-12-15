@@ -170,6 +170,10 @@ typedef struct {
 static struct {
     bool inquiry_active;
     classic_connection_t connections[MAX_CLASSIC_CONNECTIONS];
+    // Pending incoming connection info (from HCI_EVENT_CONNECTION_REQUEST)
+    bd_addr_t pending_addr;
+    uint32_t pending_cod;
+    bool pending_valid;
 } classic_state;
 
 // Classic HID descriptor storage
@@ -310,6 +314,8 @@ void btstack_host_init(const void* transport)
     // Initialize classic BT HID Host
     printf("[BTSTACK_HOST] Init Classic HID Host...\n");
     memset(&classic_state, 0, sizeof(classic_state));
+    // Set security level BEFORE hid_host_init (it registers L2CAP services with this level)
+    gap_set_security_level(LEVEL_0);  // DS3 doesn't support SSP
     hid_host_init(classic_hid_descriptor_storage, sizeof(classic_hid_descriptor_storage));
     hid_host_register_packet_handler(hid_host_packet_handler);
 
@@ -356,8 +362,7 @@ void btstack_host_start_scan(void)
     }
 
     if (hid_state.scan_active || classic_state.inquiry_active) {
-        printf("[BTSTACK_HOST] Scan already active\n");
-        return;
+        return;  // Already scanning
     }
 
     printf("[BTSTACK_HOST] Starting BLE scan...\n");
@@ -484,6 +489,36 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 printf("[BTSTACK_HOST] HCI working\n");
                 hid_state.powered_on = true;
 
+                // Reset scan state (in case of reconnect)
+                hid_state.scan_active = false;
+                classic_state.inquiry_active = false;
+
+                // Print our local BD_ADDR
+                bd_addr_t local_addr;
+                gap_local_bd_addr(local_addr);
+                printf("[BTSTACK_HOST] Local BD_ADDR: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                       local_addr[0], local_addr[1], local_addr[2],
+                       local_addr[3], local_addr[4], local_addr[5]);
+
+                // Set local name (for devices that want to see us)
+                gap_set_local_name("Joypad Adapter");
+
+                // Set class of device to Computer (Desktop Workstation)
+                // This helps Sony controllers recognize us as a valid host
+                gap_set_class_of_device(0x000104);  // Major: Computer, Minor: Desktop
+
+                // Enable bonding for Classic BT
+                gap_set_bondable_mode(1);
+                // Set IO capability for "just works" pairing (no PIN required)
+                gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
+                // Auto-accept incoming SSP pairing requests
+                gap_ssp_set_auto_accept(1);
+
+                // Make host discoverable and connectable for incoming connections
+                // Required for Sony controllers (DS3, DS4, DS5) which initiate connections
+                gap_discoverable_control(1);
+                gap_connectable_control(1);
+
                 // Auto-start scanning
                 btstack_host_start_scan();
             }
@@ -513,17 +548,20 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 }
             }
 
-            // Check for Xbox controller
+            // Check for controllers
             bool is_xbox = (strstr(name, "Xbox") != NULL);
+            bool is_nintendo = (strstr(name, "Pro Controller") != NULL ||
+                               strstr(name, "Joy-Con") != NULL);
+            bool is_controller = is_xbox || is_nintendo;
 
-            if (name[0] != 0) {
-                printf("[BTSTACK_HOST] Adv: %02X:%02X:%02X:%02X:%02X:%02X rssi=%d name=\"%s\"%s\n",
-                       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
-                       rssi, name, is_xbox ? " [XBOX]" : "");
+            // Only log potential controllers to reduce spam
+            if (is_controller && name[0] != 0) {
+                printf("[BTSTACK_HOST] BLE controller: %02X:%02X:%02X:%02X:%02X:%02X name=\"%s\"\n",
+                       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0], name);
 
                 // Auto-connect to Xbox controllers
                 if (is_xbox && hid_state.state == BLE_STATE_SCANNING) {
-                    printf("[BTSTACK_HOST] Xbox controller found, connecting...\n");
+                    printf("[BTSTACK_HOST] Connecting to Xbox...\n");
                     // Save name for when connection completes
                     strncpy(hid_state.pending_name, name, sizeof(hid_state.pending_name) - 1);
                     hid_state.pending_name[sizeof(hid_state.pending_name) - 1] = '\0';
@@ -555,9 +593,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             bool is_gamepad = (major_class == 0x05) && ((minor_class & 0x0F) == 0x02);  // Gamepad
             bool is_joystick = (major_class == 0x05) && ((minor_class & 0x0F) == 0x01); // Joystick
 
-            printf("[BTSTACK_HOST] Inquiry: %02X:%02X:%02X:%02X:%02X:%02X COD=0x%06X name=\"%s\"%s\n",
+            // Log all inquiry results for debugging (gamepads highlighted)
+            printf("[BTSTACK_HOST] Inquiry: %02X:%02X:%02X:%02X:%02X:%02X COD=0x%06X%s\n",
                    addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
-                   (unsigned)cod, name, (is_gamepad || is_joystick) ? " [GAMEPAD]" : "");
+                   (unsigned)cod, (is_gamepad || is_joystick) ? " [GAMEPAD]" : "");
 
             // Auto-connect to gamepads
             if ((is_gamepad || is_joystick) && classic_state.inquiry_active) {
@@ -589,15 +628,56 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
         }
 
         case GAP_EVENT_INQUIRY_COMPLETE:
-            printf("[BTSTACK_HOST] Inquiry complete\n");
             classic_state.inquiry_active = false;
-            // Restart scanning after inquiry completes (if we're still in scan mode)
+            // Restart inquiry after it completes (if we're still in scan mode)
             if (hid_state.state == BLE_STATE_SCANNING) {
-                printf("[BTSTACK_HOST] Restarting inquiry...\n");
                 gap_inquiry_start(INQUIRY_DURATION);
                 classic_state.inquiry_active = true;
             }
             break;
+
+        // Classic BT incoming connection request (DS3 connects this way)
+        case HCI_EVENT_CONNECTION_REQUEST: {
+            bd_addr_t addr;
+            hci_event_connection_request_get_bd_addr(packet, addr);
+            uint32_t cod = hci_event_connection_request_get_class_of_device(packet);
+            uint8_t link_type = hci_event_connection_request_get_link_type(packet);
+            printf("[BTSTACK_HOST] Incoming connection: %02X:%02X:%02X:%02X:%02X:%02X COD=0x%06X link=%d\n",
+                   addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], (unsigned)cod, link_type);
+            // Save pending connection info for use when HID connection is established
+            memcpy(classic_state.pending_addr, addr, 6);
+            classic_state.pending_cod = cod;
+            classic_state.pending_valid = true;
+            // BTstack should auto-accept via gap_ssp_set_auto_accept(1) set at init
+            break;
+        }
+
+        case HCI_EVENT_CONNECTION_COMPLETE: {
+            uint8_t status = hci_event_connection_complete_get_status(packet);
+            hci_con_handle_t handle = hci_event_connection_complete_get_connection_handle(packet);
+            bd_addr_t addr;
+            hci_event_connection_complete_get_bd_addr(packet, addr);
+            printf("[BTSTACK_HOST] Connection complete: status=%d handle=0x%04X addr=%02X:%02X:%02X:%02X:%02X:%02X\n",
+                   status, handle, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+            // DS3 will initiate L2CAP channels - hid_host should accept them automatically
+            break;
+        }
+
+        case L2CAP_EVENT_INCOMING_CONNECTION: {
+            uint16_t psm = l2cap_event_incoming_connection_get_psm(packet);
+            uint16_t cid = l2cap_event_incoming_connection_get_local_cid(packet);
+            hci_con_handle_t handle = l2cap_event_incoming_connection_get_handle(packet);
+            printf("[BTSTACK_HOST] L2CAP incoming: PSM=0x%04X cid=0x%04X handle=0x%04X\n", psm, cid, handle);
+            break;
+        }
+
+        case L2CAP_EVENT_CHANNEL_OPENED: {
+            uint8_t status = l2cap_event_channel_opened_get_status(packet);
+            uint16_t psm = l2cap_event_channel_opened_get_psm(packet);
+            uint16_t cid = l2cap_event_channel_opened_get_local_cid(packet);
+            printf("[BTSTACK_HOST] L2CAP opened: status=%d PSM=0x%04X cid=0x%04X\n", status, psm, cid);
+            break;
+        }
 
         case HCI_EVENT_LE_META: {
             uint8_t subevent = hci_event_le_meta_get_subevent_code(packet);
@@ -1063,6 +1143,16 @@ static void hid_host_packet_handler(uint8_t packet_type, uint16_t channel, uint8
                     conn->active = true;
                     conn->hid_cid = hid_cid;
                     hid_subevent_incoming_connection_get_address(packet, conn->addr);
+
+                    // Use pending COD if address matches (from HCI_EVENT_CONNECTION_REQUEST)
+                    if (classic_state.pending_valid &&
+                        memcmp(conn->addr, classic_state.pending_addr, 6) == 0) {
+                        conn->class_of_device[0] = classic_state.pending_cod & 0xFF;
+                        conn->class_of_device[1] = (classic_state.pending_cod >> 8) & 0xFF;
+                        conn->class_of_device[2] = (classic_state.pending_cod >> 16) & 0xFF;
+                        classic_state.pending_valid = false;
+                        printf("[BTSTACK_HOST] Using pending COD: 0x%06X\n", (unsigned)classic_state.pending_cod);
+                    }
                 }
             }
             break;
@@ -1112,16 +1202,19 @@ static void hid_host_packet_handler(uint8_t packet_type, uint16_t channel, uint8
             const uint8_t* report = hid_subevent_report_get_report(packet);
             uint16_t report_len = hid_subevent_report_get_report_len(packet);
 
+            // Debug: show raw BTstack report
+            static bool btstack_report_debug_done = false;
+            if (!btstack_report_debug_done && report_len >= 4) {
+                printf("[BTSTACK_HOST] Raw report len=%d: %02X %02X %02X %02X\n",
+                       report_len, report[0], report[1], report[2], report[3]);
+                btstack_report_debug_done = true;
+            }
+
             // Route to bthid layer
+            // BTstack report already includes 0xA1 header (DATA|INPUT)
             int conn_index = get_classic_conn_index(hid_cid);
             if (conn_index >= 0 && report_len > 0) {
-                // Build BTHID-compatible packet: DATA|INPUT header + report
-                static uint8_t hid_packet[256];
-                hid_packet[0] = 0xA1;  // DATA | INPUT header
-                if (report_len < sizeof(hid_packet) - 1) {
-                    memcpy(hid_packet + 1, report, report_len);
-                    bt_on_hid_report(conn_index, hid_packet, report_len + 1);
-                }
+                bt_on_hid_report(conn_index, report, report_len);
             }
             break;
         }
@@ -1163,7 +1256,41 @@ static void hid_host_packet_handler(uint8_t packet_type, uint16_t channel, uint8
 // CLASSIC BT OUTPUT REPORTS
 // ============================================================================
 
-// Send output report via classic HID (called from bthid drivers)
+// Send SET_REPORT on control channel with specified report type
+// report_type: 1=Input, 2=Output, 3=Feature
+bool btstack_classic_send_set_report_type(uint8_t conn_index, uint8_t report_type,
+                                           uint8_t report_id, const uint8_t* data, uint16_t len)
+{
+    if (conn_index >= MAX_CLASSIC_CONNECTIONS) return false;
+
+    classic_connection_t* conn = &classic_state.connections[conn_index];
+    if (!conn->active || !conn->hid_ready) return false;
+
+    // Map report type to BTstack enum
+    hid_report_type_t hid_type;
+    switch (report_type) {
+        case 1: hid_type = HID_REPORT_TYPE_INPUT; break;
+        case 2: hid_type = HID_REPORT_TYPE_OUTPUT; break;
+        case 3: hid_type = HID_REPORT_TYPE_FEATURE; break;
+        default: hid_type = HID_REPORT_TYPE_OUTPUT; break;
+    }
+
+    uint8_t status = hid_host_send_set_report(conn->hid_cid, hid_type, report_id, data, len);
+    if (status != ERROR_CODE_SUCCESS) {
+        printf("[BTSTACK_HOST] send_set_report failed: type=%d id=0x%02X status=%d\n",
+               report_type, report_id, status);
+    }
+    return status == ERROR_CODE_SUCCESS;
+}
+
+// Send SET_REPORT on control channel (default to OUTPUT type)
+bool btstack_classic_send_set_report(uint8_t conn_index, uint8_t report_id,
+                                      const uint8_t* data, uint16_t len)
+{
+    return btstack_classic_send_set_report_type(conn_index, 2, report_id, data, len);
+}
+
+// Send DATA on interrupt channel (for regular output reports)
 bool btstack_classic_send_report(uint8_t conn_index, uint8_t report_id,
                                   const uint8_t* data, uint16_t len)
 {

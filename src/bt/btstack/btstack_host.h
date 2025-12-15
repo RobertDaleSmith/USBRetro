@@ -85,6 +85,10 @@ bool btstack_classic_get_connection(uint8_t conn_index, btstack_classic_conn_inf
 uint8_t btstack_classic_get_connection_count(void);
 
 // Classic BT output (for bthid drivers)
+bool btstack_classic_send_set_report_type(uint8_t conn_index, uint8_t report_type,
+                                           uint8_t report_id, const uint8_t* data, uint16_t len);
+bool btstack_classic_send_set_report(uint8_t conn_index, uint8_t report_id,
+                                      const uint8_t* data, uint16_t len);
 bool btstack_classic_send_report(uint8_t conn_index, uint8_t report_id,
                                   const uint8_t* data, uint16_t len);
 

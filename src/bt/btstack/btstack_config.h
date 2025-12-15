@@ -61,26 +61,26 @@
 // MEMORY POOLS (static allocation)
 // ============================================================================
 
-// Number of HCI connections (reduced for RAM)
-#define MAX_NR_HCI_CONNECTIONS 1
+// Number of HCI connections (Classic + BLE)
+#define MAX_NR_HCI_CONNECTIONS 2
 
-// Number of L2CAP channels
-#define MAX_NR_L2CAP_CHANNELS 4
+// Number of L2CAP channels (Classic HID needs Control + Interrupt + SDP per device)
+#define MAX_NR_L2CAP_CHANNELS 8
 
 // Number of L2CAP services
-#define MAX_NR_L2CAP_SERVICES 2
+#define MAX_NR_L2CAP_SERVICES 3
 
-// Number of GATT clients
+// Number of GATT clients (for BLE devices)
 #define MAX_NR_GATT_CLIENTS 1
 
 // Number of whitelist entries
-#define MAX_NR_WHITELIST_ENTRIES 1
+#define MAX_NR_WHITELIST_ENTRIES 2
 
 // LE Device DB entries (for bonding storage)
-#define MAX_NR_LE_DEVICE_DB_ENTRIES 1
+#define MAX_NR_LE_DEVICE_DB_ENTRIES 2
 
 // Link keys storage (Classic BT)
-#define NVM_NUM_LINK_KEYS 1
+#define NVM_NUM_LINK_KEYS 2
 // Note: Don't define NVM_NUM_DEVICE_DB_ENTRIES - we use le_device_db_memory.c
 
 // ============================================================================
@@ -89,6 +89,9 @@
 
 // Enable HID Host (for game controllers)
 #define ENABLE_HID_HOST
+
+// Number of HID Host connections (Classic BT HID devices)
+#define MAX_NR_HID_HOST_CONNECTIONS 2
 
 // Number of HIDS clients (BLE HID Service clients)
 #define MAX_NR_HIDS_CLIENTS 1

@@ -108,21 +108,30 @@ static ds3_bt_data_t ds3_data[BTHID_MAX_DEVICES] = {0};
 
 static bool ds3_match(const char* device_name, const uint8_t* class_of_device)
 {
-    (void)class_of_device;
-
-    if (!device_name) {
-        return false;
-    }
-
     // Match known DS3 device names
-    if (strstr(device_name, "PLAYSTATION(R)3") != NULL) {
-        return true;
+    if (device_name && device_name[0] != '\0') {
+        if (strstr(device_name, "PLAYSTATION(R)3") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "Sony PLAYSTATION") != NULL) {
+            return true;
+        }
+        if (strstr(device_name, "SIXAXIS") != NULL) {
+            return true;
+        }
     }
-    if (strstr(device_name, "Sony PLAYSTATION") != NULL) {
-        return true;
-    }
-    if (strstr(device_name, "SIXAXIS") != NULL) {
-        return true;
+
+    // DS3 often connects without a name (incoming connection)
+    // Match by COD: 0x000508 = Peripheral/Gamepad with no services
+    // This is relatively unique to DS3 - most modern gamepads have service bits set
+    if (class_of_device) {
+        uint32_t cod = class_of_device[0] | (class_of_device[1] << 8) | (class_of_device[2] << 16);
+        // COD 0x000508 = DS3 (Peripheral, Gamepad, no services)
+        // Note: This may also match some other legacy gamepads
+        if (cod == 0x000508 && (!device_name || device_name[0] == '\0')) {
+            printf("[DS3_BT] Matched by COD 0x%06X (no name)\n", (unsigned)cod);
+            return true;
+        }
     }
 
     return false;
@@ -142,6 +151,7 @@ static bool ds3_init(bthid_device_t* device)
             ds3_data[i].player_led = 0;
 
             ds3_data[i].event.type = INPUT_TYPE_GAMEPAD;
+            ds3_data[i].event.transport = INPUT_TRANSPORT_BT_CLASSIC;
             ds3_data[i].event.dev_addr = device->conn_index;
             ds3_data[i].event.instance = 0;
             ds3_data[i].event.button_count = 10;
