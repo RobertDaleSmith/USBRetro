@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include "tusb.h"
+#include "core/input_event.h"  // For input_transport_t
 
 #ifndef MAX_PLAYERS
 #define MAX_PLAYERS 5
@@ -39,17 +40,13 @@ typedef struct {
 // ============================================================================
 // Player_t is only used for device-to-slot mapping.
 // Actual input state is stored in router_outputs[][] (see router.c).
-//
-// dev_addr ranges (must not overlap):
-//   0x01 - 0x7F : USB devices (standard USB address space)
-//   0xE0 - 0xE7 : 3DO native controllers (extension port, 8 max)
-//   0xF0 - 0xF7 : SNES native controllers (multitap, 4 used, 8 reserved)
 
 typedef struct TU_ATTR_PACKED
 {
-  int dev_addr;       // Device address (-1 = empty slot, see ranges above)
-  int instance;       // USB device instance (0 for native inputs)
-  int player_number;  // 1-based player number (0 = unassigned)
+  int dev_addr;               // Device address (-1 = empty slot)
+  int instance;               // Device instance/connection index
+  int player_number;          // 1-based player number (0 = unassigned)
+  input_transport_t transport;   // Connection type (USB, BT, native)
 } Player_t;
 
 // ============================================================================
@@ -84,13 +81,13 @@ player_slot_mode_t players_get_slot_mode(void);
 
 // Find player by dev_addr and instance
 // Returns player index (0-based), or -1 if not found
-int __not_in_flash_func(find_player_index)(int dev_addr, int instance);
+int find_player_index(int dev_addr, int instance);
 
 // Add player to array
 // SHIFT mode: Adds to end (playersCount++)
 // FIXED mode: Finds first empty slot (dev_addr == -1)
 // Returns player index (0-based), or -1 if full
-int __not_in_flash_func(add_player)(int dev_addr, int instance);
+int add_player(int dev_addr, int instance, input_transport_t transport);
 
 // Remove player(s) by address
 // SHIFT mode: Shifts remaining players up, renumbers all

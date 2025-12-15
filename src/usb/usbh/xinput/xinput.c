@@ -128,6 +128,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, xinputh_i
         .dev_addr = dev_addr,
         .instance = instance,
         .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
         .buttons = buttons,
         .button_count = 10,  // Xbox: A, B, X, Y, LB, RB, LT, RT, L3, R3
         .analog = {analog_1x, analog_1y, analog_2x, analog_2y, 128, analog_l, analog_r, 128},
@@ -203,6 +204,7 @@ void xinput_task(void)
   for (int i = 0; i < playersCount; ++i)
   {
     if (players[i].dev_addr < 0) continue;  // Skip empty slots
+    if (players[i].transport != INPUT_TRANSPORT_USB) continue;  // USB only
 
     uint8_t dev_addr = players[i].dev_addr;
     uint8_t instance = players[i].instance;

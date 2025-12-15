@@ -390,8 +390,11 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         uint32_t buttons_pressed = event->buttons | event->keys;
         bool analog_active = analog_beyond_threshold(event);
         if (buttons_pressed || analog_active) {
-            player_index = add_player(event->dev_addr, event->instance);
-            // NOTE: printf removed - causes hang in __not_in_flash_func with BTstack
+            player_index = add_player(event->dev_addr, event->instance, event->transport);
+            if (player_index >= 0) {
+                printf("[router] Player %d assigned (dev_addr=%d, instance=%d)\n",
+                    player_index + 1, event->dev_addr, event->instance);
+            }
         }
     }
 
@@ -423,11 +426,10 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
         uint32_t buttons_pressed = event->buttons | event->keys;
         bool analog_active = analog_beyond_threshold(event);
         if (buttons_pressed || analog_active || event->type == INPUT_TYPE_MOUSE) {
-            player_index = add_player(event->dev_addr, event->instance);
+            player_index = add_player(event->dev_addr, event->instance, event->transport);
             if (player_index >= 0) {
-                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d, trigger=%s)\n",
-                    player_index + 1, event->dev_addr, event->instance,
-                    buttons_pressed ? "button" : (analog_active ? "analog" : "mouse"));
+                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
+                    player_index + 1, event->dev_addr, event->instance);
             }
         }
     }
@@ -575,7 +577,7 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
 }
 
 // Main input submission function (called by input drivers)
-void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
+void router_submit_input(const input_event_t* event) {
     if (!event) return;
     if (route_count == 0) return;
 

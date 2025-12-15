@@ -311,6 +311,10 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
           .dev_addr = dev_addr,
           .instance = instance,
           .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
           .buttons = buttons,
           .button_count = 10,  // B, A, Y, X, L, R, ZL, ZR, L3, R3
           .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},
@@ -405,6 +409,10 @@ void input_report_switch_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* 
       .dev_addr = dev_addr,
       .instance = is_root ? instance : -1,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .buttons = buttons,
       .button_count = 10,  // B, A, Y, X, L, R, ZL, ZR, L3, R3
       .analog = {leftX, leftY, rightX, rightY, 128, 0, 0, 128},

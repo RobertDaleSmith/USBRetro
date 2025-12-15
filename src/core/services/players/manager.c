@@ -129,7 +129,7 @@ player_slot_mode_t players_get_slot_mode(void)
 // ============================================================================
 
 // Find player by dev_addr and instance
-int __not_in_flash_func(find_player_index)(int dev_addr, int instance)
+int find_player_index(int dev_addr, int instance)
 {
   for(int i = 0; i < MAX_PLAYERS; i++)
   {
@@ -145,7 +145,7 @@ int __not_in_flash_func(find_player_index)(int dev_addr, int instance)
 }
 
 // Add player to array
-int __not_in_flash_func(add_player)(int dev_addr, int instance)
+int add_player(int dev_addr, int instance, input_transport_t transport)
 {
   int player_index = 0;
 
@@ -163,12 +163,17 @@ int __not_in_flash_func(add_player)(int dev_addr, int instance)
         break;
       }
     }
+    // Update playersCount for LED indication
+    if (player_index >= playersCount) {
+      playersCount = player_index + 1;
+    }
   }
 
   // Write to players[]
   players[player_index].dev_addr = dev_addr;
   players[player_index].instance = instance;
   players[player_index].player_number = player_index + 1;
+  players[player_index].transport = transport;
 
   return player_index;
 }
@@ -249,3 +254,4 @@ void remove_players_by_address(int dev_addr, int instance)
     router_reset_outputs();
   }
 }
+

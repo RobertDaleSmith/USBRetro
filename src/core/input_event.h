@@ -25,6 +25,18 @@ typedef enum {
 } input_device_type_t;
 
 // ============================================================================
+// Transport Type (how the device is connected)
+// ============================================================================
+
+typedef enum {
+    INPUT_TRANSPORT_NONE = 0,   // Empty slot / unknown
+    INPUT_TRANSPORT_USB,        // USB HID/XInput device
+    INPUT_TRANSPORT_BT_CLASSIC, // Bluetooth Classic (HID)
+    INPUT_TRANSPORT_BT_BLE,     // Bluetooth Low Energy (HOGP)
+    INPUT_TRANSPORT_NATIVE,     // Native protocol (3DO, SNES, etc.)
+} input_transport_t;
+
+// ============================================================================
 // Controller Button Layout Classification
 // ============================================================================
 // Used to describe the physical button arrangement on 6-button controllers.
@@ -80,9 +92,10 @@ typedef enum {
 
 typedef struct {
     // Device identification
-    uint8_t dev_addr;           // USB device address
+    uint8_t dev_addr;           // Device address (USB: 1-127, BT: conn_index, Native: port)
     int8_t instance;            // Instance number (for multi-controller devices)
     input_device_type_t type;   // Device type classification
+    input_transport_t transport; // Connection type (USB, BT, native)
     controller_layout_t layout; // Physical button layout (for 6-button controllers)
 
     // Digital inputs

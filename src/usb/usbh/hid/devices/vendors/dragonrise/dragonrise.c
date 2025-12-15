@@ -91,6 +91,10 @@ void process_dragonrise(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .layout = LAYOUT_UNKNOWN,  // DragonRise uses same report across various controller shapes
       .buttons = buttons,
       .button_count = 8,  // B, A, Y, X, L, R, C, Z (generic clone with 8 buttons in report)

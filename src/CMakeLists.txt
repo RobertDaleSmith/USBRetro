@@ -90,6 +90,7 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/sony/ds5_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/nintendo/switch_pro_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_bt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_ble.c
 )
 
 # BTstack sources
@@ -364,7 +365,7 @@ target_sources(usbretro_usb PUBLIC
     ${USB_HOST_SOURCES}
     ${USB_DEVICE_SOURCES}
     ${BTSTACK_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btstack_ble.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/btstack/btstack_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btstack_hal.c
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )
@@ -372,6 +373,8 @@ target_include_directories(usbretro_usb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
     # BTstack config (must be first)
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/btstack
+    # USB HCI transport header
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd
     # BTstack includes
     ${PICO_BTSTACK_PATH}/src

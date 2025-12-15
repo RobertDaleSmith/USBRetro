@@ -102,6 +102,10 @@ void process_logitech_wingman(uint8_t dev_addr, uint8_t instance, uint8_t const*
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .layout = LAYOUT_SEGA_6BUTTON,  // Genesis style: Top [X][Y][Z], Bottom [A][B][C]
       .buttons = buttons,
       .button_count = 7,  // A, B, C, X, Y, Z, L (no R shoulder)

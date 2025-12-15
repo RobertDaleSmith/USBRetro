@@ -1,11 +1,26 @@
 // bt_transport_usb.c - USB Bluetooth Dongle Transport
-// Implements bt_transport_t using BTstack
+// Implements bt_transport_t using BTstack with USB HCI transport
 
 #include "bt_transport.h"
 #include "bt/bthid/bthid.h"
-#include "usb/usbh/btd/btstack_ble.h"
+#include "bt/btstack/btstack_host.h"
 #include <string.h>
 #include <stdio.h>
+
+// USB HCI transport (TinyUSB-based)
+// Forward declare to avoid header conflicts
+const void* hci_transport_h2_tinyusb_instance(void);
+void hci_transport_h2_tinyusb_process(void);
+
+// ============================================================================
+// USB TRANSPORT PROCESS (called by btstack_host_process)
+// ============================================================================
+
+// Override weak function in btstack_hid.c to process USB transport
+void btstack_host_transport_process(void)
+{
+    hci_transport_h2_tinyusb_process();
+}
 
 // ============================================================================
 // STATIC DATA
@@ -20,8 +35,11 @@ static bt_connection_t usb_connections[BT_MAX_CONNECTIONS];
 static void usb_transport_init(void)
 {
     memset(usb_connections, 0, sizeof(usb_connections));
-    printf("[BT_USB] Transport init (BTstack)\n");
-    btstack_ble_init();
+    printf("[BT_USB] Transport init (BTstack + USB HCI)\n");
+
+    // Initialize BTstack with USB HCI transport
+    btstack_host_init(hci_transport_h2_tinyusb_instance());
+
     printf("[BT_USB] BTstack initialized, waiting for dongle...\n");
 }
 
@@ -33,13 +51,13 @@ static void usb_transport_task(void)
     if (task_counter == 1) {
         printf("[BT_USB] task started (BTstack)\n");
     }
-    btstack_ble_process();
+    btstack_host_process();
     bthid_task();  // Run BT HID device driver tasks
 }
 
 static bool usb_transport_is_ready(void)
 {
-    return btstack_ble_is_powered_on();
+    return btstack_host_is_powered_on();
 }
 
 static uint8_t usb_transport_get_connection_count(void)
@@ -94,22 +112,22 @@ static bool usb_transport_send_interrupt(uint8_t conn_index, const uint8_t* data
 
 static void usb_transport_disconnect(uint8_t conn_index)
 {
-    // TODO: Implement disconnect in btstack_ble.c
+    // TODO: Implement disconnect in btstack_hid.c
     (void)conn_index;
 }
 
 static void usb_transport_set_pairing_mode(bool enable)
 {
     if (enable) {
-        btstack_ble_start_scan();
+        btstack_host_start_scan();
     } else {
-        btstack_ble_stop_scan();
+        btstack_host_stop_scan();
     }
 }
 
 static bool usb_transport_is_pairing_mode(void)
 {
-    return btstack_ble_is_scanning();
+    return btstack_host_is_scanning();
 }
 
 // ============================================================================

@@ -12,7 +12,8 @@
 // CONSTANTS
 // ============================================================================
 
-#define BT_MAX_CONNECTIONS      4
+// 4 Classic + 2 BLE connections (BLE uses conn_index 4-5)
+#define BT_MAX_CONNECTIONS      6
 #define BT_MAX_NAME_LEN         32
 
 // ============================================================================

@@ -91,6 +91,10 @@ void process_triple_adapter_v1(uint8_t dev_addr, uint8_t instance, uint8_t const
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .buttons = buttons,
       .button_count = 6,  // B, A, Y, X, L, R (SNES-style)
       .analog = {128, 128, 128, 128, 128, 0, 0, 128},

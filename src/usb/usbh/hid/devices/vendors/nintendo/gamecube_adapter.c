@@ -96,6 +96,10 @@ void input_gamecube_adapter(uint8_t dev_addr, uint8_t instance, uint8_t const* r
             .dev_addr = dev_addr,
             .instance = i,
             .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
             .buttons = buttons,
             .button_count = 6,  // GC: B, A, Y, X, L, R (Z is mapped to S1)
             .analog = {

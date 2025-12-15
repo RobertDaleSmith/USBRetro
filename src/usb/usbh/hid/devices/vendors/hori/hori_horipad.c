@@ -101,6 +101,10 @@ void process_hori_horipad(uint8_t dev_addr, uint8_t instance, uint8_t const* rep
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .layout = LAYOUT_SEGA_6BUTTON,  // Switch 6-btn layout matches Genesis: Top [Y][X][R], Bottom [B][A][ZR]
       .buttons = buttons,
       .button_count = 10,  // B, A, Y, X, L, R, ZL, ZR, L3, R3

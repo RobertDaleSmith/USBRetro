@@ -94,6 +94,10 @@ void process_sega_astrocity(uint8_t dev_addr, uint8_t instance, uint8_t const* r
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .layout = LAYOUT_ASTROCITY,  // 6-button: Top [A][B][C], Bottom [D][E][F]
       .buttons = buttons,
       .button_count = 7,  // A, B, C, D, E, F, L (no R shoulder)

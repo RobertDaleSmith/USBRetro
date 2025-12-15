@@ -172,7 +172,13 @@ static bool ds4_match(const char* device_name, const uint8_t* class_of_device)
         return false;
     }
 
+    // Don't match Xbox controllers
+    if (strstr(device_name, "Xbox") != NULL) {
+        return false;
+    }
+
     // Match known DS4 device names
+    // Note: DS4 advertises as just "Wireless Controller" (no "Sony" prefix)
     if (strstr(device_name, "Wireless Controller") != NULL) {
         return true;
     }

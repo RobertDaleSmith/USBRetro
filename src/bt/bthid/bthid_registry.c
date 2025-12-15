@@ -11,6 +11,7 @@
 #include "devices/vendors/sony/ds5_bt.h"
 #include "devices/vendors/nintendo/switch_pro_bt.h"
 #include "devices/vendors/microsoft/xbox_bt.h"
+#include "devices/vendors/microsoft/xbox_ble.h"
 
 void bthid_registry_init(void)
 {
@@ -28,7 +29,8 @@ void bthid_registry_init(void)
     // Nintendo controllers
     switch_pro_bt_register();
 
-    // Microsoft controllers
+    // Microsoft controllers (BLE first since it's more specific)
+    xbox_ble_register();
     xbox_bt_register();
 
     // Generic gamepad driver (fallback, lowest priority)

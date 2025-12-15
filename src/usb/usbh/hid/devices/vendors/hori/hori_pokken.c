@@ -86,6 +86,10 @@ void process_hori_pokken(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .buttons = buttons,
       .button_count = 8,  // B, A, Y, X, L, R, ZL, ZR
       .analog = {axis_x, axis_y, axis_z, axis_rz, 128, 0, 0, 128},

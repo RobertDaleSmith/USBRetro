@@ -436,6 +436,9 @@ void process_hid_keyboard(uint8_t dev_addr, uint8_t instance, uint8_t const* hid
     .dev_addr = dev_addr,
     .instance = instance,
     .type = INPUT_TYPE_KEYBOARD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
     .buttons = buttons,
     .button_count = 6,  // Keyboard maps to 6 face buttons (B1-B4, L1, R1)
     .analog = {analog_left_x, analog_left_y, analog_right_x, analog_right_y, 128, analog_l, analog_r, 128},

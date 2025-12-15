@@ -867,8 +867,8 @@ bool btstack_driver_set_config(uint8_t dev_addr, uint8_t itf_num)
 #if USE_BTSTACK
     // Now that dongle is connected, power on BTstack
     printf("[HCI_USB] Powering on BTstack...\n");
-    extern void btstack_ble_power_on(void);
-    btstack_ble_power_on();
+    extern void btstack_host_power_on(void);
+    btstack_host_power_on();
 #else
     // Standalone test mode - auto-init and send HCI Reset
     hci_transport_h2_tinyusb_test_init();

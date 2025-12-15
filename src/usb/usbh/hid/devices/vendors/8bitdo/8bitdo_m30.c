@@ -95,6 +95,10 @@ void process_8bitdo_m30(uint8_t dev_addr, uint8_t instance, uint8_t const* repor
       .dev_addr = dev_addr,
       .instance = instance,
       .type = INPUT_TYPE_GAMEPAD,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
+        .transport = INPUT_TRANSPORT_USB,
       .layout = LAYOUT_SEGA_6BUTTON,  // Genesis/Saturn: Top [X][Y][Z], Bottom [A][B][C]
       .buttons = buttons,
       .button_count = 10,  // A, B, C, X, Y, Z (6 face) + L2, R2, L3, R3
