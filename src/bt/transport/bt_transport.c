@@ -13,6 +13,11 @@ const bt_transport_t* bt_transport = NULL;
 
 void bt_init(const bt_transport_t* transport)
 {
+    printf("[BT] bt_init called, transport=%p\n", (void*)transport);
+    if (transport) {
+        printf("[BT] transport name=%s task=%p\n", transport->name, (void*)transport->task);
+    }
+    fflush(stdout);
     bt_transport = transport;
 
     // Initialize BTHID registry (registers all drivers)
@@ -21,6 +26,8 @@ void bt_init(const bt_transport_t* transport)
     if (bt_transport && bt_transport->init) {
         printf("[BT] Initializing transport: %s\n", bt_transport->name);
         bt_transport->init();
+    } else {
+        printf("[BT] No transport init function!\n");
     }
 }
 

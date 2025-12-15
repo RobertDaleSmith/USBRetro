@@ -391,11 +391,7 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         bool analog_active = analog_beyond_threshold(event);
         if (buttons_pressed || analog_active) {
             player_index = add_player(event->dev_addr, event->instance);
-            if (player_index >= 0) {
-                printf("[router] Player %d assigned (dev_addr=%d, instance=%d, trigger=%s)\n",
-                    player_index + 1, event->dev_addr, event->instance,
-                    buttons_pressed ? "button" : "analog");
-            }
+            // NOTE: printf removed - causes hang in __not_in_flash_func with BTstack
         }
     }
 
@@ -409,7 +405,7 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         // Store transformed event (atomic write)
         router_outputs[output][player_index].current_state = transformed;
         router_outputs[output][player_index].updated = true;
-        router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;  // Default for now
+        router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;
 
         // Notify tap if registered (for push-based outputs like UART)
         if (output_taps[output]) {
@@ -417,6 +413,7 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         }
     }
 }
+
 
 // MERGE MODE: Multiple inputs → single output
 static inline void router_merge_mode(const input_event_t* event, output_target_t output) {
@@ -580,31 +577,15 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
 // Main input submission function (called by input drivers)
 void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
     if (!event) return;
+    if (route_count == 0) return;
 
-    // Determine output target from routing table (configured by apps)
-    // Apps call router_add_route() during app_init() to set up routing
-    output_target_t output;
-
-    // Use first active route to determine output
-    // Apps are responsible for configuring at least one route
-    if (route_count > 0) {
-        // Find first active route
-        bool found = false;
-        for (uint8_t i = 0; i < MAX_ROUTES; i++) {
-            if (routing_table[i].active) {
-                output = routing_table[i].output;
-                found = true;
-                break;
-            }
+    // Find first active route to determine output target
+    output_target_t output = OUTPUT_TARGET_USB_DEVICE;
+    for (uint8_t i = 0; i < MAX_ROUTES; i++) {
+        if (routing_table[i].active) {
+            output = routing_table[i].output;
+            break;
         }
-        if (!found) {
-            // No active routes - this is an error, app should have configured routes
-            return;
-        }
-    } else {
-        // No routes configured - app didn't call router_add_route()
-        // This is a fatal error - app must configure routing
-        return;
     }
 
     // Route based on mode
@@ -618,37 +599,28 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
             break;
 
         case ROUTING_MODE_BROADCAST:
-            // Broadcast: 1:N - single input to multiple outputs
-            // Used for multi-output products (e.g., USB → GC + USB Device + BLE)
             if (active_output_count > 0) {
-                // Route to all active outputs
                 for (uint8_t i = 0; i < active_output_count; i++) {
                     router_simple_mode(event, active_outputs[i]);
                 }
             } else {
-                // No active outputs configured, fall back to first route
                 router_simple_mode(event, output);
             }
             break;
 
         case ROUTING_MODE_CONFIGURABLE:
-            // N:M configurable routing - full flexibility
-            // Each route can specify: input filters, output target, player slot
             {
                 route_entry_t matches[MAX_ROUTES];
                 uint8_t match_count = router_find_routes(event, matches, MAX_ROUTES);
 
                 if (match_count == 0) {
-                    // No routes found - fall back to first configured route
                     router_simple_mode(event, output);
                 } else {
-                    // Route to all matching outputs
                     for (uint8_t i = 0; i < match_count; i++) {
                         output_target_t target = matches[i].output;
                         uint8_t target_player = matches[i].output_player_id;
 
                         if (target_player != 0xFF && target_player < MAX_PLAYERS_PER_OUTPUT) {
-                            // Fixed player slot assignment
                             input_event_t transformed = *event;
                             apply_transformations(&transformed, target, target_player);
 
@@ -656,12 +628,10 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
                             router_outputs[target][target_player].updated = true;
                             router_outputs[target][target_player].source = INPUT_SOURCE_USB_HOST;
 
-                            // Notify tap if registered
                             if (output_taps[target]) {
                                 output_taps[target](target, target_player, &transformed);
                             }
                         } else {
-                            // Auto-assign player slot (standard behavior)
                             router_simple_mode(event, target);
                         }
                     }
@@ -669,11 +639,6 @@ void __not_in_flash_func(router_submit_input)(const input_event_t* event) {
             }
             break;
     }
-
-    // Signal Core 1 that new data is available
-    // Note: In current architecture, update_output() is called by post_input_event()
-    // which we're replacing. For now, Core 1 will poll router_get_output().
-    // Future: Add explicit signaling mechanism.
 }
 
 // ============================================================================

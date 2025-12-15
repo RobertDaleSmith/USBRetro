@@ -129,6 +129,19 @@ typedef struct __attribute__((packed)) {
     uint8_t rand[8];
 } smp_master_ident_t;
 
+// Pairing Public Key (65 bytes) - Secure Connections
+typedef struct __attribute__((packed)) {
+    uint8_t code;
+    uint8_t x[32];  // Public key X coordinate (big-endian)
+    uint8_t y[32];  // Public key Y coordinate (big-endian)
+} smp_pairing_public_key_t;
+
+// Pairing DHKey Check (17 bytes) - Secure Connections
+typedef struct __attribute__((packed)) {
+    uint8_t code;
+    uint8_t check[16];
+} smp_pairing_dhkey_check_t;
+
 // ============================================================================
 // SMP STATE
 // ============================================================================
@@ -137,8 +150,16 @@ typedef enum {
     SMP_STATE_IDLE,
     SMP_STATE_PAIRING_REQ_SENT,
     SMP_STATE_PAIRING_RSP_RECEIVED,
+    // Legacy pairing states
     SMP_STATE_CONFIRM_SENT,
     SMP_STATE_RANDOM_SENT,
+    // Secure Connections states
+    SMP_STATE_SC_PUBKEY_SENT,
+    SMP_STATE_SC_PUBKEY_RECEIVED,
+    SMP_STATE_SC_CONFIRM_SENT,
+    SMP_STATE_SC_RANDOM_SENT,
+    SMP_STATE_SC_DHKEY_CHECK_SENT,
+    // Common final states
     SMP_STATE_KEY_EXCHANGE,
     SMP_STATE_ENCRYPTED,
     SMP_STATE_FAILED
@@ -153,16 +174,29 @@ typedef struct {
     uint8_t io_capability;
     uint8_t auth_req;
     uint8_t max_key_size;
+    bool    use_sc;         // True if using Secure Connections
 
-    // Pairing data
+    // Pairing data (common)
     uint8_t preq[7];        // Pairing Request we sent
     uint8_t pres[7];        // Pairing Response we received
     uint8_t tk[16];         // Temporary Key (all zeros for Just Works)
-    uint8_t mrand[16];      // Our random value (initiator)
-    uint8_t srand[16];      // Their random value (responder)
-    uint8_t mconfirm[16];   // Our confirm value
+    uint8_t mrand[16];      // Our random value (initiator) - Na in SC
+    uint8_t srand[16];      // Their random value (responder) - Nb in SC
+    uint8_t mconfirm[16];   // Our confirm value - Ca/Cb in SC
     uint8_t sconfirm[16];   // Their confirm value
-    uint8_t stk[16];        // Short Term Key (result of pairing)
+    uint8_t stk[16];        // Short Term Key (Legacy only)
+
+    // Secure Connections ECDH data
+    uint8_t local_sk[32];   // Our private key
+    uint8_t local_pk_x[32]; // Our public key X
+    uint8_t local_pk_y[32]; // Our public key Y
+    uint8_t peer_pk_x[32];  // Peer public key X
+    uint8_t peer_pk_y[32];  // Peer public key Y
+    uint8_t dhkey[32];      // ECDH shared secret
+    uint8_t mackey[16];     // MacKey (from f5)
+    uint8_t sc_ltk[16];     // LTK (from f5)
+    uint8_t ea[16];         // DHKey check value (initiator)
+    uint8_t eb[16];         // DHKey check value (responder)
 
     // Long Term Key (for reconnection)
     uint8_t ltk[16];
@@ -201,5 +235,12 @@ extern void smp_on_encrypted(uint8_t conn_index);
 
 // Called when HCI encryption change event indicates success
 void smp_on_encryption_enabled(uint8_t conn_index);
+
+// Hardware P-256 callbacks (from HCI LE events)
+void smp_on_hw_public_key(const uint8_t* pk_x, const uint8_t* pk_y);
+void smp_on_hw_dhkey(const uint8_t* dhkey);
+
+// Enable hardware P-256 mode (uses HCI commands instead of software crypto)
+void smp_enable_hw_p256(bool enable);
 
 #endif // SMP_H

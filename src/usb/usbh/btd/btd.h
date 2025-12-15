@@ -8,8 +8,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "hci_cmd.h"
-#include "hci_event.h"
+#include "btd_hci_cmd.h"
+#include "btd_hci_event.h"
 
 // ============================================================================
 // USB BLUETOOTH DONGLE IDENTIFICATION
@@ -230,6 +230,10 @@ bool btd_hci_le_start_encryption(uint16_t handle, const uint8_t* random,
                                   uint16_t ediv, const uint8_t* ltk);
 bool btd_hci_le_ltk_reply(uint16_t handle, const uint8_t* ltk);
 bool btd_hci_le_ltk_neg_reply(uint16_t handle);
+
+// LE P-256 Hardware Crypto (Bluetooth 4.2+)
+bool btd_hci_le_read_local_p256_public_key(void);
+bool btd_hci_le_generate_dhkey(const uint8_t* remote_pk_x, const uint8_t* remote_pk_y);
 
 // LE Extended Scanning (Bluetooth 5.0+)
 bool btd_hci_le_set_ext_scan_parameters(uint8_t scan_type, uint16_t interval, uint16_t window);

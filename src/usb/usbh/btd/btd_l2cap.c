@@ -3,7 +3,7 @@
 //
 // Reference: Bluetooth Core Specification v5.3, Vol 3, Part A
 
-#include "l2cap.h"
+#include "btd_l2cap.h"
 #include "btd.h"
 #include <string.h>
 #include <stdio.h>

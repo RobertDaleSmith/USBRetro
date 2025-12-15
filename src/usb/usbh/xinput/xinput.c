@@ -20,7 +20,16 @@ __attribute__((weak)) void xbone_auth_report_received(uint8_t dev_addr, uint8_t 
 
 // BTD driver for Bluetooth dongles
 #if CFG_TUH_BTD
+// USE_BTSTACK_TRANSPORT: 0 = old btd.c driver, 1 = new BTstack HCI transport
+#ifndef USE_BTSTACK_TRANSPORT
+#define USE_BTSTACK_TRANSPORT 0
+#endif
+
+#if USE_BTSTACK_TRANSPORT
+#include "usb/usbh/btd/hci_transport_h2_tinyusb.h"
+#else
 #include "usb/usbh/btd/btd.h"
+#endif
 #endif
 
 uint32_t buttons;
@@ -61,7 +70,11 @@ usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count) {
         memcpy(&drivers[idx++], &usbh_xinput_driver, sizeof(usbh_class_driver_t));
 #endif
 #if CFG_TUH_BTD
+#if USE_BTSTACK_TRANSPORT
+        memcpy(&drivers[idx++], &usbh_btstack_driver, sizeof(usbh_class_driver_t));
+#else
         memcpy(&drivers[idx++], &usbh_btd_driver, sizeof(usbh_class_driver_t));
+#endif
 #endif
         drivers_initialized = true;
     }

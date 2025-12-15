@@ -3,9 +3,9 @@
 
 #include "btd.h"
 #include "btd_linkkey.h"
-#include "l2cap.h"
-#include "att.h"
-#include "smp.h"
+#include "btd_l2cap.h"
+#include "btd_att.h"
+#include "btd_smp.h"
 #include "bt/transport/bt_transport.h"
 #include <stdio.h>
 #include <string.h>
@@ -315,8 +315,13 @@ void btd_on_le_connection(uint8_t conn_index)
     // Initialize SMP layer for this connection
     smp_on_connect(conn_index, conn->handle);
 
-    // Initialize ATT layer for this connection
+    // Initialize ATT layer for this connection (but don't start discovery yet)
     att_on_connect(conn_index, conn->handle);
+
+    // Start SMP pairing immediately for BLE HID devices (like Xbox)
+    // Most BLE HID devices require encryption before allowing any ATT access
+    printf("[BTD_GLUE] Starting SMP pairing immediately...\n");
+    smp_start_pairing(conn_index);
 }
 
 void btd_on_le_disconnection(uint8_t conn_index)

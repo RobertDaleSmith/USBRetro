@@ -1,10 +1,10 @@
 // att.c - Attribute Protocol (ATT) implementation for BLE
 // Implements GATT client for HID over GATT Profile (HOGP)
 
-#include "att.h"
+#include "btd_att.h"
 #include "btd.h"
-#include "l2cap.h"
-#include "smp.h"
+#include "btd_l2cap.h"
+#include "btd_smp.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -75,9 +75,9 @@ void att_on_connect(uint8_t conn_index, uint16_t handle)
         return;
     }
 
-    // Start discovery after a short delay (let connection stabilize)
-    // For now, start immediately
-    att_start_discovery(conn_index);
+    // Don't start discovery immediately - wait for encryption
+    // Discovery will be started by smp_on_encrypted() callback
+    // or manually via att_start_discovery() for devices that don't require encryption
 }
 
 void att_on_disconnect(uint8_t conn_index)

@@ -147,46 +147,28 @@ int __not_in_flash_func(find_player_index)(int dev_addr, int instance)
 // Add player to array
 int __not_in_flash_func(add_player)(int dev_addr, int instance)
 {
-  int player_index = -1;
+  int player_index = 0;
 
   if (current_slot_mode == PLAYER_SLOT_SHIFT) {
-    // SHIFT MODE: Add to end (original behavior)
     if (playersCount >= MAX_PLAYERS) {
-      printf("[players] ERROR: All %d slots full (SHIFT mode)\n", MAX_PLAYERS);
       return -1;
     }
-
     player_index = playersCount;
     playersCount++;
-
   } else {
-    // FIXED MODE: Find first empty slot (dev_addr == -1)
+    // FIXED MODE: Find first empty slot
     for (int i = 0; i < MAX_PLAYERS; i++) {
       if (players[i].dev_addr == -1) {
         player_index = i;
         break;
       }
     }
-
-    if (player_index < 0) {
-      printf("[players] ERROR: All %d slots full (FIXED mode)\n", MAX_PLAYERS);
-      return -1;
-    }
-
-    // Update playersCount to highest occupied slot + 1
-    if (player_index >= playersCount) {
-      playersCount = player_index + 1;
-    }
   }
 
-  // Initialize the player slot
+  // Write to players[]
   players[player_index].dev_addr = dev_addr;
   players[player_index].instance = instance;
   players[player_index].player_number = player_index + 1;
-
-  printf("[players] Player %d assigned (dev_addr=%d, instance=%d, mode=%s)\n",
-      players[player_index].player_number, dev_addr, instance,
-      current_slot_mode == PLAYER_SLOT_SHIFT ? "SHIFT" : "FIXED");
 
   return player_index;
 }

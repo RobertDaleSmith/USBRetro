@@ -81,10 +81,12 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_linkkey.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/l2cap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_l2cap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/att.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/smp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_att.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_smp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/p256.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/hci_transport_h2_tinyusb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/transport/bt_transport_usb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/bthid.c
@@ -95,6 +97,57 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/sony/ds5_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/nintendo/switch_pro_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_bt.c
+)
+
+# BTD files that conflict with BTstack (excluded when USE_BTSTACK=1)
+# These are our own implementations that BTstack replaces
+set(BTD_CONFLICTING_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_l2cap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_smp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_att.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btd_glue.c
+)
+
+# BTstack sources (when USE_BTSTACK=1)
+set(PICO_BTSTACK_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/pico-sdk/lib/btstack)
+set(BTSTACK_SOURCES
+    # Core
+    ${PICO_BTSTACK_PATH}/src/btstack_linked_list.c
+    ${PICO_BTSTACK_PATH}/src/btstack_memory.c
+    ${PICO_BTSTACK_PATH}/src/btstack_memory_pool.c
+    ${PICO_BTSTACK_PATH}/src/btstack_run_loop.c
+    ${PICO_BTSTACK_PATH}/src/btstack_run_loop_base.c
+    ${PICO_BTSTACK_PATH}/src/btstack_util.c
+    ${PICO_BTSTACK_PATH}/src/btstack_tlv.c
+    ${PICO_BTSTACK_PATH}/src/btstack_tlv_none.c
+    ${PICO_BTSTACK_PATH}/src/btstack_crypto.c
+    ${PICO_BTSTACK_PATH}/src/hci.c
+    ${PICO_BTSTACK_PATH}/src/hci_cmd.c
+    ${PICO_BTSTACK_PATH}/src/hci_dump.c
+    ${PICO_BTSTACK_PATH}/src/hci_event.c
+    ${PICO_BTSTACK_PATH}/src/hci_event_builder.c
+    ${PICO_BTSTACK_PATH}/src/l2cap.c
+    ${PICO_BTSTACK_PATH}/src/l2cap_signaling.c
+    ${PICO_BTSTACK_PATH}/src/ad_parser.c
+    # BLE
+    ${PICO_BTSTACK_PATH}/src/ble/sm.c
+    ${PICO_BTSTACK_PATH}/src/ble/att_dispatch.c
+    ${PICO_BTSTACK_PATH}/src/ble/att_db.c
+    ${PICO_BTSTACK_PATH}/src/ble/gatt_client.c
+    ${PICO_BTSTACK_PATH}/src/ble/gatt_service_client.c
+    ${PICO_BTSTACK_PATH}/src/ble/le_device_db_memory.c
+    # BLE GATT services
+    ${PICO_BTSTACK_PATH}/src/ble/gatt-service/hids_client.c
+    # Classic (for HID Host)
+    ${PICO_BTSTACK_PATH}/src/classic/sdp_client.c
+    ${PICO_BTSTACK_PATH}/src/classic/sdp_util.c
+    ${PICO_BTSTACK_PATH}/src/classic/hid_host.c
+    # 3rd party
+    ${PICO_BTSTACK_PATH}/3rd-party/micro-ecc/uECC.c
+    ${PICO_BTSTACK_PATH}/3rd-party/rijndael/rijndael.c
+    # Platform
+    ${PICO_BTSTACK_PATH}/platform/embedded/btstack_run_loop_embedded.c
+    ${PICO_BTSTACK_PATH}/platform/embedded/hci_dump_embedded_stdout.c
 )
 
 # USB Device sources (for USB output apps)
@@ -302,6 +355,15 @@ usbretro_target_common(usbretro_uart)
 # ============================================================================
 
 # --- USB to USB (Feather USB Host) ---
+# Full BTstack integration for BLE (Xbox controller support)
+# - USE_BTSTACK_TRANSPORT=1: Our TinyUSB HCI transport
+# - USE_BTSTACK=1: BTstack for BLE (SM, GATT client)
+# - Our existing btd_l2cap.c etc. still used for Classic BT
+
+# Create filtered source list - exclude files that conflict with BTstack
+set(USB_HOST_SOURCES_BTSTACK ${USB_HOST_SOURCES})
+list(REMOVE_ITEM USB_HOST_SOURCES_BTSTACK ${BTD_CONFLICTING_SOURCES})
+
 add_executable(usbretro_usb)
 target_compile_definitions(usbretro_usb PRIVATE
     CONFIG_USB=1
@@ -313,13 +375,37 @@ target_compile_definitions(usbretro_usb PRIVATE
     PICO_DEFAULT_UART=0
     PICO_DEFAULT_UART_TX_PIN=0
     PICO_DEFAULT_UART_RX_PIN=1
+    # BTstack integration
+    USE_BTSTACK_TRANSPORT=1
+    USE_BTSTACK=1
+    # BTstack feature flags
+    ENABLE_BLE=1
+    ENABLE_CLASSIC=1
+    ENABLE_LE_CENTRAL=1
+    ENABLE_LE_SECURE_CONNECTIONS=1
+    ENABLE_SOFTWARE_AES128=1
+    ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS=1
 )
-target_sources(usbretro_usb PUBLIC ${COMMON_SOURCES} ${USB_DEVICE_SOURCES}
+target_sources(usbretro_usb PUBLIC
+    ${CORE_SOURCES}
+    ${USB_HOST_SOURCES_BTSTACK}
+    ${USB_DEVICE_SOURCES}
+    ${BTSTACK_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btstack_ble.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd/btstack_hal.c
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb/app.c
 )
 target_include_directories(usbretro_usb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2usb
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+    # BTstack config (must be first)
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/btd
+    # BTstack includes
+    ${PICO_BTSTACK_PATH}/src
+    ${PICO_BTSTACK_PATH}/src/ble
+    ${PICO_BTSTACK_PATH}/platform/embedded
+    ${PICO_BTSTACK_PATH}/3rd-party/micro-ecc
+    ${PICO_BTSTACK_PATH}/3rd-party/rijndael
 )
 target_link_libraries(usbretro_usb PRIVATE ${COMMON_LIBRARIES} tinyusb_device tinyusb_pico_pio_usb)
 usbretro_target_common(usbretro_usb)

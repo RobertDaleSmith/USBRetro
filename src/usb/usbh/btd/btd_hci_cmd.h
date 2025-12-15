@@ -289,6 +289,10 @@ typedef struct __attribute__((packed)) {
 #define HCI_LE_LTK_REQUEST_REPLY            HCI_OPCODE(0x08, 0x001A)
 #define HCI_LE_LTK_REQUEST_NEG_REPLY        HCI_OPCODE(0x08, 0x001B)
 
+// LE Secure Connections P-256 (Bluetooth 4.2+)
+#define HCI_LE_READ_LOCAL_P256_PUBLIC_KEY   HCI_OPCODE(0x08, 0x0025)
+#define HCI_LE_GENERATE_DHKEY               HCI_OPCODE(0x08, 0x0026)
+
 // LE Extended Advertising (Bluetooth 5.0+)
 #define HCI_LE_SET_EXT_SCAN_PARAMETERS      HCI_OPCODE(0x08, 0x0041)
 #define HCI_LE_SET_EXT_SCAN_ENABLE          HCI_OPCODE(0x08, 0x0042)

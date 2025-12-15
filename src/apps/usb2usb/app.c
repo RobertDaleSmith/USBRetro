@@ -175,8 +175,18 @@ void app_init(void)
 // APP TASK (Optional - called from main loop)
 // ============================================================================
 
+static uint32_t app_task_counter = 0;
+
 void app_task(void)
 {
+    app_task_counter++;
+    if (app_task_counter == 1) {
+        printf("[app] first task, bt_transport=%p\n", (void*)bt_transport);
+        if (bt_transport) {
+            printf("[app] bt_transport->task=%p\n", (void*)bt_transport->task);
+        }
+    }
+
     // Process button input
     button_task();
 

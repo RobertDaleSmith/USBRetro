@@ -5,9 +5,9 @@
 
 #include "btd.h"
 #include "btd_linkkey.h"
-#include "l2cap.h"
-#include "att.h"
-#include "smp.h"
+#include "btd_l2cap.h"
+#include "btd_att.h"
+#include "btd_smp.h"
 #include "tusb.h"
 #include "host/usbh_pvt.h"
 #include <string.h>
@@ -74,8 +74,10 @@ void btd_init(void)
 // Heartbeat counter for debug
 static uint32_t btd_task_counter = 0;
 
-// Forward declaration for glue layer task
+// Forward declaration for glue layer task (not used when BTstack is enabled)
+#if !USE_BTSTACK
 extern void btd_glue_task(void);
+#endif
 
 // Forward declaration for endpoint busy check
 extern bool usbh_edpt_busy(uint8_t dev_addr, uint8_t ep_addr);
@@ -85,8 +87,10 @@ void btd_task(void)
     // Handle link key flash saves (debounced)
     btd_linkkey_task();
 
-    // Process pending L2CAP connections
+#if !USE_BTSTACK
+    // Process pending L2CAP connections (not used when BTstack is enabled)
     btd_glue_task();
+#endif
 
     if (!btd_ctx.dongle_connected) {
         return;
@@ -708,6 +712,26 @@ bool btd_hci_le_ltk_neg_reply(uint16_t handle)
 
     uint8_t params[2] = { handle & 0xFF, (handle >> 8) & 0xFF };
     return btd_send_hci_cmd(HCI_LE_LTK_REQUEST_NEG_REPLY, params, 2);
+}
+
+// ============================================================================
+// HCI LE P-256 HARDWARE CRYPTO (Bluetooth 4.2+)
+// ============================================================================
+
+bool btd_hci_le_read_local_p256_public_key(void)
+{
+    printf("[BTD] Requesting hardware P-256 public key generation...\n");
+    return btd_send_hci_cmd(HCI_LE_READ_LOCAL_P256_PUBLIC_KEY, NULL, 0);
+}
+
+bool btd_hci_le_generate_dhkey(const uint8_t* remote_pk_x, const uint8_t* remote_pk_y)
+{
+    printf("[BTD] Requesting hardware DHKey generation...\n");
+    // The command takes 64 bytes: remote public key X (32) + Y (32)
+    uint8_t params[64];
+    memcpy(&params[0], remote_pk_x, 32);
+    memcpy(&params[32], remote_pk_y, 32);
+    return btd_send_hci_cmd(HCI_LE_GENERATE_DHKEY, params, 64);
 }
 
 // ============================================================================
@@ -1594,6 +1618,33 @@ static void btd_process_event(const uint8_t* data, uint16_t len)
 
                         // Move to next report
                         ptr += sizeof(hci_le_ext_adv_report_entry_t) + entry->data_length;
+                    }
+                    break;
+                }
+
+                case 0x08: {
+                    // LE Read Local P256 Public Key Complete
+                    uint8_t status = le_meta->params[0];
+                    printf("[BTD] LE P256 Public Key Complete: status=0x%02X\n", status);
+                    if (status == 0 && evt->param_len >= 66) {
+                        // params[1..32] = X coordinate, params[33..64] = Y coordinate
+                        // Keys are in little-endian (wire format)
+                        smp_on_hw_public_key(&le_meta->params[1], &le_meta->params[33]);
+                    } else {
+                        printf("[BTD] ERROR: P256 key generation failed\n");
+                    }
+                    break;
+                }
+
+                case 0x09: {
+                    // LE Generate DHKey Complete
+                    uint8_t status = le_meta->params[0];
+                    printf("[BTD] LE DHKey Complete: status=0x%02X\n", status);
+                    if (status == 0 && evt->param_len >= 33) {
+                        // params[1..32] = DHKey in little-endian
+                        smp_on_hw_dhkey(&le_meta->params[1]);
+                    } else {
+                        printf("[BTD] ERROR: DHKey generation failed\n");
                     }
                     break;
                 }
