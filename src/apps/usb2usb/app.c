@@ -14,11 +14,8 @@
 #include "usb/usbh/usbh.h"
 #include "usb/usbd/usbd.h"
 
-// TODO: Implement with BTstack's link key storage
-static void btd_linkkey_delete_all(void) {
-    // BTstack manages link keys internally
-}
 #include "bt/transport/bt_transport.h"
+#include "bt/btstack/btstack_host.h"
 #include "tusb.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
@@ -88,9 +85,7 @@ static void on_button_event(button_event_t event)
 
         case BUTTON_EVENT_HOLD:
             // Long press to clear all Bluetooth bonds
-            printf("[app:usb2usb] Button hold - clearing all Bluetooth bonds...\n");
-            btd_linkkey_delete_all();
-            printf("[app:usb2usb] All Bluetooth bonds cleared. Devices will need to re-pair.\n");
+            btstack_host_delete_all_bonds();
             break;
 
         default:

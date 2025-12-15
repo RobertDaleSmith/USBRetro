@@ -1231,3 +1231,24 @@ uint8_t btstack_classic_get_connection_count(void)
     }
     return count;
 }
+
+// ============================================================================
+// BOND MANAGEMENT
+// ============================================================================
+
+void btstack_host_delete_all_bonds(void)
+{
+    printf("[BTSTACK_HOST] Deleting all Bluetooth bonds...\n");
+
+    // Delete all Classic BT link keys
+    gap_delete_all_link_keys();
+    printf("[BTSTACK_HOST] Classic BT link keys deleted\n");
+
+    // Delete all BLE bonds by re-initializing the LE device database
+    // le_device_db_init() clears all stored bonds
+    int ble_count = le_device_db_count();
+    le_device_db_init();
+    printf("[BTSTACK_HOST] BLE bonds deleted (was %d devices)\n", ble_count);
+
+    printf("[BTSTACK_HOST] All bonds cleared. Devices will need to re-pair.\n");
+}

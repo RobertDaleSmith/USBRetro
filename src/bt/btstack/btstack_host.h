@@ -88,6 +88,14 @@ uint8_t btstack_classic_get_connection_count(void);
 bool btstack_classic_send_report(uint8_t conn_index, uint8_t report_id,
                                   const uint8_t* data, uint16_t len);
 
+// ============================================================================
+// BOND MANAGEMENT
+// ============================================================================
+
+// Delete all stored BT bonds (Classic and BLE)
+// Devices will need to re-pair after this
+void btstack_host_delete_all_bonds(void);
+
 #ifdef __cplusplus
 }
 #endif
