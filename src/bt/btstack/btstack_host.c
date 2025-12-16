@@ -536,6 +536,20 @@ static void sdp_query_vid_pid_callback(uint8_t packet_type, uint16_t channel, ui
         case SDP_EVENT_QUERY_COMPLETE:
             printf("[BTSTACK_HOST] SDP query complete: VID=0x%04X PID=0x%04X\n",
                    classic_state.pending_vid, classic_state.pending_pid);
+
+            // Update the connection struct with VID/PID
+            if (classic_state.pending_vid || classic_state.pending_pid) {
+                for (int i = 0; i < MAX_CLASSIC_CONNECTIONS; i++) {
+                    classic_connection_t* conn = &classic_state.connections[i];
+                    if (conn->active && memcmp(conn->addr, classic_state.pending_addr, 6) == 0) {
+                        conn->vendor_id = classic_state.pending_vid;
+                        conn->product_id = classic_state.pending_pid;
+                        printf("[BTSTACK_HOST] Updated conn[%d] VID/PID: 0x%04X/0x%04X\n",
+                               i, conn->vendor_id, conn->product_id);
+                        break;
+                    }
+                }
+            }
             break;
     }
 }
@@ -847,6 +861,19 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                     memcmp(name_addr, classic_state.pending_addr, 6) == 0) {
                     strncpy(classic_state.pending_name, name, sizeof(classic_state.pending_name) - 1);
                     classic_state.pending_name[sizeof(classic_state.pending_name) - 1] = '\0';
+                }
+
+                // Also update any active connection with this address
+                for (int i = 0; i < MAX_CLASSIC_CONNECTIONS; i++) {
+                    classic_connection_t* conn = &classic_state.connections[i];
+                    if (conn->active && memcmp(conn->addr, name_addr, 6) == 0) {
+                        if (conn->name[0] == '\0') {
+                            strncpy(conn->name, name, sizeof(conn->name) - 1);
+                            conn->name[sizeof(conn->name) - 1] = '\0';
+                            printf("[BTSTACK_HOST] Updated conn[%d] name: %s\n", i, conn->name);
+                        }
+                        break;
+                    }
                 }
             }
             break;
@@ -1373,6 +1400,23 @@ static void hid_host_packet_handler(uint8_t packet_type, uint16_t channel, uint8
             classic_connection_t* conn = find_classic_connection_by_cid(hid_cid);
             if (conn) {
                 conn->hid_ready = true;
+
+                // For outgoing connections, query SDP for VID/PID if we don't have it yet
+                if (conn->vendor_id == 0 && conn->product_id == 0) {
+                    // Store pending info for SDP callback
+                    memcpy(classic_state.pending_addr, conn->addr, 6);
+                    classic_state.pending_vid = 0;
+                    classic_state.pending_pid = 0;
+
+                    // Query VID/PID via SDP (PnP Information service)
+                    sdp_client_query_uuid16(&sdp_query_vid_pid_callback, conn->addr,
+                                            BLUETOOTH_SERVICE_CLASS_PNP_INFORMATION);
+
+                    // Also request remote name if we don't have it
+                    if (conn->name[0] == '\0') {
+                        gap_remote_name_request(conn->addr, 0, 0);
+                    }
+                }
             }
             break;
         }
