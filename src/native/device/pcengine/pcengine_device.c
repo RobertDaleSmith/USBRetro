@@ -201,10 +201,18 @@ void __not_in_flash_func(read_inputs)(void)
 
     // Build normal byte (d-pad + buttons)
     uint8_t normal = 0xFF;
+    
+    // D-pad from digital buttons
     if (event->buttons & JP_BUTTON_DU) normal &= ~(1 << 0);
     if (event->buttons & JP_BUTTON_DR) normal &= ~(1 << 1);
     if (event->buttons & JP_BUTTON_DD) normal &= ~(1 << 2);
     if (event->buttons & JP_BUTTON_DL) normal &= ~(1 << 3);
+    
+    // D-pad from left analog stick (threshold at 64/192 from center 128)
+    if (event->analog[0] < 64)  normal &= ~(1 << 3);  // Left
+    if (event->analog[0] > 192) normal &= ~(1 << 1);  // Right
+    if (event->analog[1] < 64)  normal &= ~(1 << 0);  // Up
+    if (event->analog[1] > 192) normal &= ~(1 << 2);  // Down
     if (event->buttons & JP_BUTTON_B2) normal &= ~(1 << 4);  // I
     if (event->buttons & JP_BUTTON_B1) normal &= ~(1 << 5);  // II
     if (event->buttons & JP_BUTTON_S1) normal &= ~(1 << 6);  // Select
