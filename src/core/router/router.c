@@ -485,6 +485,7 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                 output_state_t* out = &router_outputs[output][0];
 
                 // Start with neutral state (all buttons released)
+                // Note: deltas are cleared here but accumulated fresh from blend devices
                 init_input_event(&out->current_state);
 
                 // Blend all active devices
@@ -519,9 +520,11 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                         }
                     }
 
-                    // Mouse deltas: accumulate from all
+                    // Mouse deltas: accumulate from all, then clear device to prevent re-adding
                     out->current_state.delta_x += dev->delta_x;
                     out->current_state.delta_y += dev->delta_y;
+                    dev->delta_x = 0;
+                    dev->delta_y = 0;
 
                     // Motion: use first device that has motion data
                     if (dev->has_motion && !out->current_state.has_motion) {
@@ -647,6 +650,9 @@ void router_submit_input(const input_event_t* event) {
 // OUTPUT RETRIEVAL (Core 1 - Poll or Event Driven)
 // ============================================================================
 
+// Static buffer for returning copies (so we can clear original deltas)
+static input_event_t router_output_copy[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
+
 const input_event_t* __not_in_flash_func(router_get_output)(output_target_t output, uint8_t player_id) {
     if (output >= MAX_OUTPUTS || player_id >= MAX_PLAYERS_PER_OUTPUT) {
         return NULL;
@@ -654,11 +660,19 @@ const input_event_t* __not_in_flash_func(router_get_output)(output_target_t outp
 
     if (router_outputs[output][player_id].updated) {
         router_outputs[output][player_id].updated = false;  // Mark as read
-        return &router_outputs[output][player_id].current_state;
+        
+        // Copy to static buffer so caller gets the deltas
+        router_output_copy[output][player_id] = router_outputs[output][player_id].current_state;
+        
+        // Clear deltas from original (they've been consumed)
+        router_outputs[output][player_id].current_state.delta_x = 0;
+        router_outputs[output][player_id].current_state.delta_y = 0;
+        
+        return &router_output_copy[output][player_id];
     }
 
-    // Return current state even if not updated (for continuous polling)
-    return &router_outputs[output][player_id].current_state;
+    // No update - return NULL (don't re-process same deltas)
+    return NULL;
 }
 
 bool router_has_updates(output_target_t output) {

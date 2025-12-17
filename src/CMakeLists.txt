@@ -275,7 +275,7 @@ target_include_directories(usbretro_pce PUBLIC
 )
 target_link_libraries(usbretro_pce PRIVATE ${COMMON_LIBRARIES})
 usbretro_target_common(usbretro_pce)
-usbretro_add_btstack(usbretro_pce)  # TODO: BTstack causes boot crash on console targets
+usbretro_add_btstack(usbretro_pce)
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio)
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/clock.pio)
 pico_generate_pio_header(usbretro_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/select.pio)
@@ -296,7 +296,7 @@ target_include_directories(usbretro_ngc PUBLIC
 )
 target_link_libraries(usbretro_ngc PRIVATE ${COMMON_LIBRARIES} hardware_flash)
 usbretro_target_common(usbretro_ngc)
-usbretro_add_btstack(usbretro_ngc)  # Re-enabled for investigation
+usbretro_add_btstack(usbretro_ngc)
 pico_generate_pio_header(usbretro_ngc ${CMAKE_CURRENT_LIST_DIR}/lib/joybus-pio/src/joybus.pio)
 
 # --- Nuon ---

@@ -3,6 +3,29 @@
 #include "pcengine_device.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
+#include "hardware/structs/iobank0.h"
+#include "hardware/structs/padsbank0.h"
+#include "hardware/structs/sio.h"
+
+// Early init constructor - runs before main() to set output pins HIGH
+// This prevents "all buttons pressed" state during boot
+__attribute__((constructor(101)))
+static void pce_early_gpio_init(void)
+{
+    // Direct register access for fastest possible init
+    // Set output pins as outputs with HIGH value
+    // OUTD0_PIN through OUTD0_PIN+3 (either 4-7 for Pico or 26-29 for KB2040)
+    
+    #ifdef RPI_PICO_BUILD
+    const uint32_t pin_mask = (1u << 4) | (1u << 5) | (1u << 6) | (1u << 7);
+    #else
+    const uint32_t pin_mask = (1u << 26) | (1u << 27) | (1u << 28) | (1u << 29);
+    #endif
+    
+    // Enable outputs and set HIGH
+    sio_hw->gpio_oe_set = pin_mask;
+    sio_hw->gpio_set = pin_mask;
+}
 
 #if CFG_TUSB_DEBUG >= 1
 #include "hardware/uart.h"
@@ -48,6 +71,10 @@ volatile uint32_t output_word_1 = 0;
 
 volatile int state = 0; // countdown sequence for shift-register position (shared between cores)
 
+// Timing for scan boundary detection (needed for mouse - like PCEMouse)
+static volatile absolute_time_t init_time;
+static const int64_t reset_period = 600; // at 600us of no CLK edges, scan is complete
+
 // Console-local state (not input data)
 #include "core/router/router.h"
 #include "core/input_event.h"
@@ -59,15 +86,19 @@ static struct {
     volatile uint8_t normal_byte[MAX_PLAYERS];  // Cached normal output byte (d-pad + buttons)
     volatile uint8_t ext_byte[MAX_PLAYERS];     // Cached 6-button extended byte
     volatile bool is_mouse[MAX_PLAYERS];
-    volatile uint8_t mouse_x[MAX_PLAYERS];
-    volatile uint8_t mouse_y[MAX_PLAYERS];
+    volatile int16_t mouse_global_x[MAX_PLAYERS];  // Accumulated X deltas (like PCEMouse global_x)
+    volatile int16_t mouse_global_y[MAX_PLAYERS];  // Accumulated Y deltas (like PCEMouse global_y)
+    volatile int16_t mouse_output_x[MAX_PLAYERS];  // Output X being sent (like PCEMouse output_x)
+    volatile int16_t mouse_output_y[MAX_PLAYERS];  // Output Y being sent (like PCEMouse output_y)
 } pce_state = {
     .button_mode = {BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2},
     .normal_byte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
     .ext_byte = {0xF0, 0xF0, 0xF0, 0xF0, 0xF0},
     .is_mouse = {false},
-    .mouse_x = {0},
-    .mouse_y = {0}
+    .mouse_global_x = {0},
+    .mouse_global_y = {0},
+    .mouse_output_x = {0},
+    .mouse_output_y = {0}
 };
 
 // No timers needed - state cycles event-driven on CLK edges
@@ -79,6 +110,21 @@ void assemble_output(void);
 // init for pcengine communication
 void pce_init()
 {
+  // Set output pins HIGH immediately to prevent "all buttons pressed" during boot
+  // This must happen BEFORE PIO takes over the pins
+  gpio_init(OUTD0_PIN);
+  gpio_init(OUTD0_PIN + 1);
+  gpio_init(OUTD0_PIN + 2);
+  gpio_init(OUTD0_PIN + 3);
+  gpio_set_dir(OUTD0_PIN, GPIO_OUT);
+  gpio_set_dir(OUTD0_PIN + 1, GPIO_OUT);
+  gpio_set_dir(OUTD0_PIN + 2, GPIO_OUT);
+  gpio_set_dir(OUTD0_PIN + 3, GPIO_OUT);
+  gpio_put(OUTD0_PIN, 1);
+  gpio_put(OUTD0_PIN + 1, 1);
+  gpio_put(OUTD0_PIN + 2, 1);
+  gpio_put(OUTD0_PIN + 3, 1);
+
   #if CFG_TUSB_DEBUG >= 1
   // Initialize chosen UART
   uart_init(UART_ID, BAUD_RATE);
@@ -119,6 +165,9 @@ void pce_init()
   // Prime the PIO FIFO - plex program starts at pull block waiting for data
   pio_sm_put(pio, sm1, output_word_1);
   pio_sm_put(pio, sm1, output_word_0);
+  
+  // Initialize timing (like PCEMouse)
+  init_time = get_absolute_time();
 }
 
 // init turbo button timings
@@ -134,6 +183,15 @@ void turbo_init()
 // task process - runs on core0, keeps cached button values fresh
 void pce_task()
 {
+  // Check for scan boundary timeout (like PCEMouse process_signals)
+  // After 600us of no CLK edges, the scan is complete - unlock for updates
+  // Note: don't reset state here - let core1 handle state transitions
+  absolute_time_t current_time = get_absolute_time();
+  if (absolute_time_diff_us(init_time, current_time) > reset_period) {
+    output_exclude = false;  // Allow core0 to update output values
+    init_time = current_time;
+  }
+  
   // Continuously read input and cache it - core1 will use cached values
   read_inputs();
 }
@@ -154,19 +212,38 @@ void __not_in_flash_func(core1_task)(void)
     // wait for CLK rising edge (from clock.pio via sm2)
     rx_bit = pio_sm_get_blocking(pio, sm2);
 
-    // Only push data when plex has consumed previous data (FIFO has room)
-    // This synchronizes our state changes with actual scan boundaries
+    // Lock output values during scan (like PCEMouse)
+    output_exclude = true;
+
+    // Assemble output for CURRENT state using cached button values
+    assemble_output();
+    
+    // Push to PIO and advance state ONLY when FIFO has room
+    // This synchronizes state with actual console reads (critical for 6-button!)
     if (!pio_sm_is_tx_fifo_full(pio, sm1)) {
-      // Assemble output for CURRENT state using cached button values
-      assemble_output();
-      
-      // Push to PIO - plex will pull these at next scan start
       pio_sm_put(pio, sm1, output_word_1);
       pio_sm_put(pio, sm1, output_word_0);
-
-      // Advance state only when we actually pushed data
-      // This ensures state changes per-scan, not per-CLK
-      state = (state > 0) ? state - 1 : 3;
+      
+      // Advance state: 3 → 2 → 1 → 0 → 3 → ...
+      if (state != 0) {
+        state--;
+        // Renew countdown timeframe (like PCEMouse)
+        init_time = get_absolute_time();
+      } else {
+        // State 0: reset mouse outputs (matching PCEMouse exactly)
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+          if (pce_state.is_mouse[i]) {
+            pce_state.mouse_global_x[i] -= pce_state.mouse_output_x[i];
+            pce_state.mouse_global_y[i] -= pce_state.mouse_output_y[i];
+            pce_state.mouse_output_x[i] = 0;
+            pce_state.mouse_output_y[i] = 0;
+          }
+        }
+        // Reset to state 3 for next cycle
+        state = 3;
+        // Keep output_exclude = true for mouse - pce_task timeout will clear it
+        output_exclude = true;
+      }
     }
   }
 }
@@ -192,10 +269,20 @@ void __not_in_flash_func(read_inputs)(void)
   {
     const input_event_t* event = router_get_output(OUTPUT_TARGET_PCENGINE, i);
 
-    if (!event || i >= playersCount) {
+    // Player slot out of range - reset to neutral (including mouse state)
+    if (i >= playersCount) {
       pce_state.normal_byte[i] = 0xFF;
       pce_state.ext_byte[i] = 0xF0;
       pce_state.is_mouse[i] = false;
+      pce_state.mouse_global_x[i] = 0;
+      pce_state.mouse_global_y[i] = 0;
+      pce_state.mouse_output_x[i] = 0;
+      pce_state.mouse_output_y[i] = 0;
+      continue;
+    }
+    
+    // No new event - keep existing state (important for mouse!)
+    if (!event) {
       continue;
     }
 
@@ -209,10 +296,11 @@ void __not_in_flash_func(read_inputs)(void)
     if (event->buttons & JP_BUTTON_DL) normal &= ~(1 << 3);
     
     // D-pad from left analog stick (threshold at 64/192 from center 128)
+    // Note: Y-axis is inverted (low = down, high = up) to match controller convention
     if (event->analog[0] < 64)  normal &= ~(1 << 3);  // Left
     if (event->analog[0] > 192) normal &= ~(1 << 1);  // Right
-    if (event->analog[1] < 64)  normal &= ~(1 << 0);  // Up
-    if (event->analog[1] > 192) normal &= ~(1 << 2);  // Down
+    if (event->analog[1] < 64)  normal &= ~(1 << 2);  // Down (Y-inverted)
+    if (event->analog[1] > 192) normal &= ~(1 << 0);  // Up (Y-inverted)
     if (event->buttons & JP_BUTTON_B2) normal &= ~(1 << 4);  // I
     if (event->buttons & JP_BUTTON_B1) normal &= ~(1 << 5);  // II
     if (event->buttons & JP_BUTTON_S1) normal &= ~(1 << 6);  // Select
@@ -270,11 +358,39 @@ void __not_in_flash_func(read_inputs)(void)
     if (event->buttons & JP_BUTTON_L1) ext &= ~(1 << 6);  // V
     if (event->buttons & JP_BUTTON_R1) ext &= ~(1 << 7);  // VI
 
-    // Mouse handling
+    // Mouse handling - accumulate deltas exactly like PCEMouse post_globals
+    bool was_mouse = pce_state.is_mouse[i];
     pce_state.is_mouse[i] = (event->type == INPUT_TYPE_MOUSE);
+    
+    // Clear mouse state when device type changes (prevents drift on disconnect)
+    if (was_mouse && !pce_state.is_mouse[i]) {
+      pce_state.mouse_global_x[i] = 0;
+      pce_state.mouse_global_y[i] = 0;
+      pce_state.mouse_output_x[i] = 0;
+      pce_state.mouse_output_y[i] = 0;
+    }
+    
     if (pce_state.is_mouse[i]) {
-      pce_state.mouse_x[i] = (0 - event->analog[0]) & 0xff;
-      pce_state.mouse_y[i] = (0 - event->analog[1]) & 0xff;
+      // Negate deltas to match PCE direction convention
+      uint8_t delta_x = (uint8_t)(-(int8_t)event->delta_x);
+      uint8_t delta_y = (uint8_t)(-(int8_t)event->delta_y);
+      
+      // Accumulate into signed 16-bit (same logic as PCEMouse post_globals)
+      if (delta_x >= 128)
+        pce_state.mouse_global_x[i] -= (256 - delta_x);
+      else
+        pce_state.mouse_global_x[i] += delta_x;
+      
+      if (delta_y >= 128)
+        pce_state.mouse_global_y[i] -= (256 - delta_y);
+      else
+        pce_state.mouse_global_y[i] += delta_y;
+      
+      // Only copy global to output when not in a scan (like PCEMouse)
+      if (!output_exclude) {
+        pce_state.mouse_output_x[i] = pce_state.mouse_global_x[i];
+        pce_state.mouse_output_y[i] = pce_state.mouse_global_y[i];
+      }
     }
 
     pce_state.normal_byte[i] = normal;
@@ -297,13 +413,15 @@ void __not_in_flash_func(assemble_output)(void)
     if (pce_state.is_mouse[i]) {
       // Mouse: buttons in upper nibble, position data in lower nibble
       byte = pce_state.normal_byte[i] & 0xF0;
-      uint8_t mx = pce_state.mouse_x[i];
-      uint8_t my = pce_state.mouse_y[i];
+      
+      // Scale down for modern high-DPI mice (total >>2 = divide by 4)
+      int16_t ox = pce_state.mouse_output_x[i] >> 1;
+      int16_t oy = pce_state.mouse_output_y[i] >> 1;
       switch (state) {
-        case 3: byte |= (((mx>>1) & 0xf0) >> 4); break;
-        case 2: byte |= (((mx>>1) & 0x0f)); break;
-        case 1: byte |= (((my>>1) & 0xf0) >> 4); break;
-        case 0: byte |= (((my>>1) & 0x0f)); break;
+        case 3: byte |= (((ox >> 1) & 0xf0) >> 4); break;  // X MSN
+        case 2: byte |= (((ox >> 1) & 0x0f));      break;  // X LSN
+        case 1: byte |= (((oy >> 1) & 0xf0) >> 4); break;  // Y MSN
+        case 0: byte |= (((oy >> 1) & 0x0f));      break;  // Y LSN
       }
     } else if (pce_state.button_mode[i] == BUTTON_MODE_6 && (state == 2 || state == 0)) {
       // 6-button mode, states 2 and 0: output extended byte (with signature)

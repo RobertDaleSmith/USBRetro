@@ -37,8 +37,8 @@
 #define MERGE_MODE MERGE_ALL
 #define MAX_ROUTES 5
 
-// Input transformations
-#define TRANSFORM_FLAGS (TRANSFORM_MOUSE_TO_ANALOG)  // Mouse → analog stick (for Populous)
+// Input transformations - NONE for PCE, we output native mouse protocol directly
+#define TRANSFORM_FLAGS 0
 
 // ============================================================================
 // PLAYER MANAGEMENT
