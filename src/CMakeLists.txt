@@ -312,7 +312,7 @@ target_include_directories(usbretro_nuon PUBLIC
 )
 target_link_libraries(usbretro_nuon PRIVATE ${COMMON_LIBRARIES} pico_bit_ops)
 usbretro_target_common(usbretro_nuon)
-# usbretro_add_btstack(usbretro_nuon)  # TODO: BTstack causes boot crash on console targets
+usbretro_add_btstack(usbretro_nuon)
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_read.pio)
 pico_generate_pio_header(usbretro_nuon ${CMAKE_CURRENT_LIST_DIR}/native/device/nuon/polyface_send.pio)
 
@@ -329,7 +329,7 @@ target_include_directories(usbretro_loopy PUBLIC
 )
 target_link_libraries(usbretro_loopy PRIVATE ${COMMON_LIBRARIES} pico_bit_ops)
 usbretro_target_common(usbretro_loopy)
-# usbretro_add_btstack(usbretro_loopy)  # TODO: BTstack causes boot crash on console targets
+usbretro_add_btstack(usbretro_loopy)
 pico_generate_pio_header(usbretro_loopy ${CMAKE_CURRENT_LIST_DIR}/native/device/loopy/loopy.pio)
 
 # --- 3DO ---
@@ -345,7 +345,7 @@ target_include_directories(usbretro_3do PUBLIC
 )
 target_link_libraries(usbretro_3do PRIVATE ${COMMON_LIBRARIES} hardware_dma)
 usbretro_target_common(usbretro_3do)
-# usbretro_add_btstack(usbretro_3do)  # TODO: BTstack causes boot crash on console targets
+usbretro_add_btstack(usbretro_3do)
 pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/sampling.pio)
 pico_generate_pio_header(usbretro_3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/output.pio)
 
@@ -365,7 +365,7 @@ target_include_directories(usbretro_snes3do PUBLIC
 )
 target_link_libraries(usbretro_snes3do PRIVATE ${COMMON_LIBRARIES} hardware_dma)
 usbretro_target_common(usbretro_snes3do)
-# usbretro_add_btstack(usbretro_snes3do)  # TODO: BTstack causes boot crash on console targets
+# No BTstack for snes3do - uses SNES input, not USB host
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/sampling.pio)
 pico_generate_pio_header(usbretro_snes3do ${CMAKE_CURRENT_LIST_DIR}/native/device/3do/output.pio)
 
@@ -382,7 +382,7 @@ target_include_directories(usbretro_uart PUBLIC
 )
 target_link_libraries(usbretro_uart PRIVATE ${COMMON_LIBRARIES} hardware_uart)
 usbretro_target_common(usbretro_uart)
-# usbretro_add_btstack(usbretro_uart)  # TODO: BTstack causes boot crash on console targets
+usbretro_add_btstack(usbretro_uart)
 
 # ============================================================================
 # USB HOST TO USB DEVICE APPS (USB input -> USB output)
@@ -434,7 +434,7 @@ target_include_directories(usbretro_usb_rp2040zero PUBLIC
 )
 target_link_libraries(usbretro_usb_rp2040zero PRIVATE ${COMMON_LIBRARIES} tinyusb_device tinyusb_pico_pio_usb)
 usbretro_target_common(usbretro_usb_rp2040zero)
-# usbretro_add_btstack(usbretro_usb_rp2040zero)  # TODO: BTstack causes boot crash - investigate
+usbretro_add_btstack(usbretro_usb_rp2040zero)
 
 # --- SNES to USB ---
 add_executable(usbretro_snes2usb)

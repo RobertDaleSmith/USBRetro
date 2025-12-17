@@ -3,6 +3,83 @@
 // This implements the BTstack hci_transport_t interface using TinyUSB's
 // USB host stack. Allows BTstack to communicate with USB Bluetooth dongles
 // on RP2040 and other TinyUSB-supported platforms.
+//
+// ============================================================================
+// BLUETOOTH DONGLE COMPATIBILITY GUIDE
+// ============================================================================
+//
+// Not all USB Bluetooth dongles work on embedded systems. The key factor is
+// whether the dongle has firmware in ROM or requires host-side firmware loading.
+//
+// CHIPSET COMPATIBILITY:
+// ----------------------
+// ✅ BROADCOM (Manufacturer ID 0x000F)
+//    - Firmware in ROM, works out of the box
+//    - Common chips: BCM20702A0 (BT 4.0)
+//    - Recommended for embedded use
+//
+// ✅ CSR/Cambridge Silicon Radio (Manufacturer ID 0x000A)
+//    - Firmware in ROM, should work out of the box
+//    - Common chips: CSR8510 A10 (BT 4.0)
+//    - WARNING: Many cheap Amazon CSR8510 dongles are COUNTERFEIT CLONES
+//      that may have pairing/discovery issues. Buy from reputable sources
+//      like Adafruit. Linux kernel 5.9+ added workarounds for clones.
+//
+// ❌ REALTEK (Manufacturer ID 0x005D)
+//    - Firmware must be loaded by host at every boot
+//    - Common chips: RTL8761B, RTL8761BU, RTL8761BUV (BT 5.0)
+//    - Dominates the BT 5.0+ market - almost all cheap BT 5.0 dongles are Realtek
+//    - Works on Linux/Windows (kernel/driver loads firmware automatically)
+//    - Does NOT work on embedded without implementing firmware loading
+//    - BTstack has btstack_chipset_realtek module but requires ~50KB firmware blob
+//
+// TESTED DONGLES:
+// ---------------
+// ✅ WORKS:
+//    - Amazon Basics (VID 0x33FA, PID 0x0010)
+//      Class 0xE0 (standard), Chip 0x08E7 (unknown Chinese), BT 4.0
+//
+//    - Kinivo BTD-400 (VID 0x0A5C, PID 0x21E8)
+//      Class 0xFF (vendor), Chip 0x000F (Broadcom BCM20702A0), BT 4.0
+//
+//    - Panda PBU40 (VID 0x0A5C, PID 0x21E8) - same as Kinivo
+//      Broadcom BCM20702A0, BT 4.0, explicitly supports Linux/Raspberry Pi
+//
+//    - ASUS USB-BT400 (Broadcom BCM20702, BT 4.0) - should work (untested)
+//
+//    - Adafruit Bluetooth 4.0 USB Module #1327 (CSR8510 A10)
+//      Genuine CSR from reputable source, should work (untested)
+//
+// ❌ DOES NOT WORK (needs firmware loading):
+//    - TP-Link UB400/UB500 (VID 0x2357, PID 0x0604)
+//      Chip 0x005D (Realtek RTL8761B), BT 5.0
+//
+//    - ASUS USB-BT500 (Realtek RTL8761B, BT 5.0)
+//
+//    - UGREEN BT 5.0 adapters (Realtek RTL8761BUV)
+//
+//    - Maxuni BT 5.3 adapters (Realtek)
+//
+//    - Avantree DG45 (Realtek RTL8761BW)
+//
+//    - Zexmte BT 5.0 (Realtek RTL8761B)
+//
+//    - Basically ALL Bluetooth 5.0+ dongles are Realtek and won't work
+//
+// BUYING RECOMMENDATIONS:
+// -----------------------
+// 1. Look for BT 4.0 dongles with Broadcom or genuine CSR chips
+// 2. Kinivo BTD-400 and Panda PBU40 are safe choices (~$12)
+// 3. Adafruit #1327 is a trustworthy CSR8510 source (~$13)
+// 4. Avoid random "CSR8510" listings on Amazon - likely counterfeits
+// 5. BT 5.0+ dongles are almost all Realtek - avoid for embedded use
+//
+// USB CLASS IDENTIFICATION:
+// -------------------------
+// Standard BT dongles: Class 0xE0 (Wireless Controller), SubClass 0x01, Protocol 0x01
+// Broadcom dongles:    Class 0xFF (Vendor Specific), SubClass 0x01, Protocol 0x01
+//
+// ============================================================================
 
 #ifndef HCI_TRANSPORT_H2_TINYUSB_H
 #define HCI_TRANSPORT_H2_TINYUSB_H
@@ -20,8 +97,21 @@ const hci_transport_t* hci_transport_h2_tinyusb_instance(void);
 
 // USB Bluetooth dongle identification
 #define USB_CLASS_WIRELESS_CTRL     0xE0
+#define USB_CLASS_VENDOR_SPECIFIC   0xFF
 #define USB_SUBCLASS_RF             0x01
 #define USB_PROTOCOL_BLUETOOTH      0x01
+
+// Vendor IDs for dongles that use vendor-specific class instead of standard BT class
+#define USB_VID_BROADCOM            0x0A5C
+
+// Bluetooth chip manufacturer IDs (from hci_get_manufacturer())
+#define BT_MANUFACTURER_CSR         0x000A  // Cambridge Silicon Radio
+#define BT_MANUFACTURER_BROADCOM    0x000F  // Broadcom
+#define BT_MANUFACTURER_REALTEK     0x005D  // Realtek (needs firmware loading)
+#define BT_MANUFACTURER_INTEL       0x0002  // Intel
+#define BT_MANUFACTURER_QUALCOMM    0x001D  // Qualcomm
+#define BT_MANUFACTURER_TI          0x000D  // Texas Instruments
+#define BT_MANUFACTURER_MEDIATEK    0x0046  // MediaTek
 
 // Buffer sizes
 #define HCI_USB_CMD_BUF_SIZE        264     // HCI command buffer

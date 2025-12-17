@@ -14,6 +14,9 @@
 // AUTO-ASSIGN CONFIGURATION
 // ============================================================================
 
+// Log tag for consistent logging
+#define LOG_TAG "[ROUTER]"
+
 // Threshold for analog stick movement to trigger player auto-assign
 // Value is distance from center (128). Range 0-127.
 // 50 means stick must move to < 78 or > 178 to trigger (about 40% deflection)
@@ -94,24 +97,24 @@ static router_tap_callback_t output_taps[MAX_OUTPUTS] = {NULL};
 
 void router_init(const router_config_t* config) {
     if (!config) {
-        printf("[router] ERROR: NULL config\n");
+        printf(LOG_TAG "ERROR: NULL config\n");
         return;
     }
 
     // Copy configuration
     router_config = *config;
 
-    printf("[router] Initializing router\n");
-    printf("[router]   Mode: %s\n",
+    printf(LOG_TAG "Initializing router\n");
+    printf(LOG_TAG "  Mode: %s\n",
         config->mode == ROUTING_MODE_SIMPLE ? "SIMPLE" :
         config->mode == ROUTING_MODE_MERGE ? "MERGE" :
         config->mode == ROUTING_MODE_BROADCAST ? "BROADCAST" : "CONFIGURABLE");
 
     if (config->mode == ROUTING_MODE_MERGE) {
-        printf("[router]   Merge mode: %s\n",
+        printf(LOG_TAG "  Merge mode: %s\n",
             config->merge_mode == MERGE_PRIORITY ? "PRIORITY" :
             config->merge_mode == MERGE_BLEND ? "BLEND" : "ALL");
-        printf("[router]   Merge all inputs: %s\n", config->merge_all_inputs ? "YES" : "NO");
+        printf(LOG_TAG "  Merge all inputs: %s\n", config->merge_all_inputs ? "YES" : "NO");
     }
 
     // Initialize output states
@@ -146,17 +149,17 @@ void router_init(const router_config_t* config) {
     // Initialize routing table
     router_clear_routes();
 
-    printf("[router] Initialized successfully\n");
+    printf(LOG_TAG "Initialized successfully\n");
     if (config->transform_flags) {
-        printf("[router]   Transformations enabled: 0x%02x\n", config->transform_flags);
+        printf(LOG_TAG "  Transformations enabled: 0x%02x\n", config->transform_flags);
         if (config->transform_flags & TRANSFORM_MOUSE_TO_ANALOG) {
-            printf("[router]     - Mouse-to-analog (target_x=%d, target_y=%d, drain=%d)\n",
+            printf(LOG_TAG "    - Mouse-to-analog (target_x=%d, target_y=%d, drain=%d)\n",
                    config->mouse_target_x, config->mouse_target_y, config->mouse_drain_rate);
         }
         if (config->transform_flags & TRANSFORM_MERGE_INSTANCES)
-            printf("[router]     - Instance merging\n");
+            printf(LOG_TAG "    - Instance merging\n");
         if (config->transform_flags & TRANSFORM_SPINNER)
-            printf("[router]     - Spinner accumulation\n");
+            printf(LOG_TAG "    - Spinner accumulation\n");
     }
 }
 
@@ -267,7 +270,7 @@ static void apply_transformations(input_event_t* event, output_target_t output, 
 // Add simple route (input → output)
 bool router_add_route(input_source_t input, output_target_t output, uint8_t priority) {
     if (route_count >= MAX_ROUTES) {
-        printf("[router] ERROR: Routing table full (%d routes)\n", MAX_ROUTES);
+        printf(LOG_TAG "ERROR: Routing table full (%d routes)\n", MAX_ROUTES);
         return false;
     }
 
@@ -280,7 +283,7 @@ bool router_add_route(input_source_t input, output_target_t output, uint8_t prio
     routing_table[route_count].output_player_id = 0xFF; // Auto-assign
 
     route_count++;
-    printf("[router] Route added: %s → %s (priority=%d)\n",
+    printf(LOG_TAG "Route added: %s → %s (priority=%d)\n",
         input == INPUT_SOURCE_USB_HOST ? "USB" : "?",
         output == OUTPUT_TARGET_GAMECUBE ? "GameCube" :
         output == OUTPUT_TARGET_PCENGINE ? "PCEngine" :
@@ -295,7 +298,7 @@ bool router_add_route(input_source_t input, output_target_t output, uint8_t prio
 // Add route with filters (advanced)
 bool router_add_route_filtered(const route_entry_t* route) {
     if (!route || route_count >= MAX_ROUTES) {
-        printf("[router] ERROR: Cannot add filtered route\n");
+        printf(LOG_TAG "ERROR: Cannot add filtered route\n");
         return false;
     }
 
@@ -303,7 +306,7 @@ bool router_add_route_filtered(const route_entry_t* route) {
     routing_table[route_count].active = true;
     route_count++;
 
-    printf("[router] Filtered route added (dev_addr=%d, instance=%d, player=%d)\n",
+    printf(LOG_TAG "Filtered route added (dev_addr=%d, instance=%d, player=%d)\n",
         route->input_dev_addr, route->input_instance, route->output_player_id);
 
     return true;
@@ -314,7 +317,7 @@ void router_remove_route(uint8_t route_index) {
     if (route_index >= MAX_ROUTES || !routing_table[route_index].active) return;
 
     routing_table[route_index].active = false;
-    printf("[router] Route %d removed\n", route_index);
+    printf(LOG_TAG "Route %d removed\n", route_index);
 }
 
 // Clear all routes
@@ -323,7 +326,7 @@ void router_clear_routes(void) {
         routing_table[i].active = false;
     }
     route_count = 0;
-    printf("[router] All routes cleared\n");
+    printf(LOG_TAG "All routes cleared\n");
 }
 
 // Get number of active routes
@@ -392,7 +395,7 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
         if (buttons_pressed || analog_active) {
             player_index = add_player(event->dev_addr, event->instance, event->transport);
             if (player_index >= 0) {
-                printf("[router] Player %d assigned (dev_addr=%d, instance=%d)\n",
+                printf(LOG_TAG "Player %d assigned (dev_addr=%d, instance=%d)\n",
                     player_index + 1, event->dev_addr, event->instance);
             }
         }
@@ -428,7 +431,7 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
         if (buttons_pressed || analog_active || event->type == INPUT_TYPE_MOUSE) {
             player_index = add_player(event->dev_addr, event->instance, event->transport);
             if (player_index >= 0) {
-                printf("[router] Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
+                printf(LOG_TAG "Player %d assigned in merge mode (dev_addr=%d, instance=%d)\n",
                     player_index + 1, event->dev_addr, event->instance);
             }
         }
@@ -700,7 +703,7 @@ uint8_t router_get_player_count(output_target_t output) {
 
 void router_set_merge_mode(output_target_t output, merge_mode_t mode) {
     router_config.merge_mode = mode;
-    printf("[router] Merge mode set: %s\n",
+    printf(LOG_TAG "Merge mode set: %s\n",
         mode == MERGE_PRIORITY ? "PRIORITY" :
         mode == MERGE_BLEND ? "BLEND" : "ALL");
 }
@@ -713,7 +716,7 @@ void router_set_active_outputs(output_target_t* outputs, uint8_t count) {
         active_outputs[i] = outputs[i];
     }
 
-    printf("[router] Active outputs set: count=%d\n", count);
+    printf(LOG_TAG "Active outputs set: count=%d\n", count);
 }
 
 output_target_t router_get_primary_output(void) {
@@ -739,7 +742,7 @@ output_target_t router_get_primary_output(void) {
 void router_set_tap(output_target_t output, router_tap_callback_t callback) {
     if (output >= 0 && output < MAX_OUTPUTS) {
         output_taps[output] = callback;
-        printf("[router] Tap %s for output %d\n",
+        printf(LOG_TAG "Tap %s for output %d\n",
                callback ? "registered" : "unregistered", output);
     }
 }
@@ -755,7 +758,7 @@ output_state_t* router_get_state_ptr(output_target_t output) {
 
 // Reset all output states to neutral (call when all controllers disconnect)
 void router_reset_outputs(void) {
-    printf("[router] Resetting all outputs to neutral\n");
+    printf(LOG_TAG "Resetting all outputs to neutral\n");
 
     // Reset all output states
     for (uint8_t output = 0; output < MAX_OUTPUTS; output++) {

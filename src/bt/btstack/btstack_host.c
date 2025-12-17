@@ -467,7 +467,6 @@ void btstack_host_register_connect_callback(btstack_host_connect_callback_t call
 // MAIN LOOP
 // ============================================================================
 
-static uint32_t process_counter = 0;
 
 // Transport-specific process function (weak, overridden by transport)
 __attribute__((weak)) void btstack_host_transport_process(void) {
@@ -477,12 +476,6 @@ __attribute__((weak)) void btstack_host_transport_process(void) {
 void btstack_host_process(void)
 {
     if (!hid_state.initialized) return;
-
-    process_counter++;
-    if ((process_counter % 100000) == 1) {
-        printf("[BTSTACK_HOST] process loop %lu, powered=%d, scanning=%d\n",
-               (unsigned long)process_counter, hid_state.powered_on, hid_state.scan_active);
-    }
 
     // Process transport-specific tasks (e.g., USB polling)
     btstack_host_transport_process();
@@ -588,6 +581,20 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 printf("[BTSTACK_HOST] Local BD_ADDR: %02X:%02X:%02X:%02X:%02X:%02X\n",
                        local_addr[0], local_addr[1], local_addr[2],
                        local_addr[3], local_addr[4], local_addr[5]);
+
+                // Print chip info (see hci_transport_h2_tinyusb.h for dongle compatibility guide)
+                uint16_t manufacturer = hci_get_manufacturer();
+                printf("[BTSTACK_HOST] Chip Manufacturer: 0x%04X", manufacturer);
+                switch (manufacturer) {
+                    case 0x000A: printf(" (CSR) - OK\n"); break;
+                    case 0x000D: printf(" (TI)\n"); break;
+                    case 0x000F: printf(" (Broadcom) - OK\n"); break;
+                    case 0x001D: printf(" (Qualcomm)\n"); break;
+                    case 0x0046: printf(" (MediaTek)\n"); break;
+                    case 0x005D: printf(" (Realtek) - NEEDS FIRMWARE!\n"); break;
+                    case 0x0002: printf(" (Intel)\n"); break;
+                    default: printf("\n"); break;
+                }
 
                 // Set local name (for devices that want to see us)
                 gap_set_local_name("Joypad Adapter");
@@ -1016,6 +1023,15 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             if (status == ERROR_CODE_SUCCESS) {
                 printf("[BTSTACK_HOST] SM: Re-encryption successful! Registering HID listener...\n");
                 register_ble_hid_listener(handle);
+            } else {
+                // Re-encryption failed - remote likely lost bonding info
+                // Delete local bonding and request fresh pairing
+                printf("[BTSTACK_HOST] SM: Re-encryption failed, deleting bond and re-pairing...\n");
+                bd_addr_t addr;
+                sm_event_reencryption_complete_get_address(packet, addr);
+                bd_addr_type_t addr_type = sm_event_reencryption_complete_get_addr_type(packet);
+                gap_delete_bonding(addr_type, addr);
+                sm_request_pairing(handle);
             }
             break;
         }

@@ -776,9 +776,21 @@ bool btstack_driver_open(uint8_t rhport, uint8_t dev_addr,
     (void)rhport;
 
     // Check if this is a Bluetooth device
-    if (desc_itf->bInterfaceClass != USB_CLASS_WIRELESS_CTRL ||
-        desc_itf->bInterfaceSubClass != USB_SUBCLASS_RF ||
-        desc_itf->bInterfaceProtocol != USB_PROTOCOL_BLUETOOTH) {
+    // Standard BT class: 0xE0/0x01/0x01
+    // Some Broadcom dongles use vendor-specific class: 0xFF/0x01/0x01
+    bool is_standard_bt = (desc_itf->bInterfaceClass == USB_CLASS_WIRELESS_CTRL &&
+                           desc_itf->bInterfaceSubClass == USB_SUBCLASS_RF &&
+                           desc_itf->bInterfaceProtocol == USB_PROTOCOL_BLUETOOTH);
+
+    uint16_t vid, pid;
+    tuh_vid_pid_get(dev_addr, &vid, &pid);
+    bool is_broadcom_bt = (vid == USB_VID_BROADCOM &&
+                           desc_itf->bInterfaceClass == USB_CLASS_VENDOR_SPECIFIC &&
+                           desc_itf->bInterfaceSubClass == USB_SUBCLASS_RF &&
+                           desc_itf->bInterfaceProtocol == USB_PROTOCOL_BLUETOOTH &&
+                           desc_itf->bInterfaceNumber == 0);  // Only claim interface 0
+
+    if (!is_standard_bt && !is_broadcom_bt) {
         return false;
     }
 
