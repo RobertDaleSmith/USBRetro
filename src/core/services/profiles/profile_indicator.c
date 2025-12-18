@@ -56,17 +56,17 @@ void profile_indicator_trigger_player(uint8_t player_index, uint8_t profile_inde
     // Number of blinks = profile_index + 1 (profile 0 = 1 blink, etc.)
     uint8_t blink_count = profile_index + 1;
 
-    // Start rumble pattern
+    // Start rumble pattern (use internal setter to bypass indicator check)
     rumble_blinks_remaining = blink_count;
     rumble_is_on = true;
     rumble_state_change_time = get_absolute_time();
-    feedback_set_rumble(player_index, 255, 255);
+    feedback_set_rumble_internal(player_index, 255, 255);
 
-    // Start LED pattern
+    // Start LED pattern (use internal setter to bypass indicator check)
     led_blinks_remaining = blink_count;
     led_is_on = true;
     led_state_change_time = get_absolute_time();
-    feedback_set_led_player(player_index, profile_index + 1);
+    feedback_set_led_player_internal(player_index, profile_index + 1);
 }
 
 void profile_indicator_trigger(uint8_t profile_index, uint8_t player_count)
@@ -98,6 +98,11 @@ bool profile_indicator_is_active(void)
     return (rumble_blinks_remaining > 0 || led_blinks_remaining > 0);
 }
 
+bool profile_indicator_is_active_for_player(uint8_t player_index)
+{
+    return profile_indicator_is_active() && (indicating_player == player_index);
+}
+
 int8_t profile_indicator_get_display_player_index(int8_t actual_player_index)
 {
     if (led_blinks_remaining > 0) {
@@ -110,7 +115,7 @@ void profile_indicator_task(void)
 {
     absolute_time_t now = get_absolute_time();
 
-    // Handle rumble state machine
+    // Handle rumble state machine (use internal setters to bypass indicator check)
     if (rumble_blinks_remaining > 0) {
         int64_t elapsed = absolute_time_diff_us(rumble_state_change_time, now);
 
@@ -119,17 +124,17 @@ void profile_indicator_task(void)
             rumble_is_on = false;
             rumble_blinks_remaining--;
             rumble_state_change_time = now;
-            feedback_set_rumble(indicating_player, 0, 0);
+            feedback_set_rumble_internal(indicating_player, 0, 0);
         }
         else if (!rumble_is_on && elapsed >= RUMBLE_OFF_TIME_US && rumble_blinks_remaining > 0) {
             // Turn on rumble for next pulse
             rumble_is_on = true;
             rumble_state_change_time = now;
-            feedback_set_rumble(indicating_player, 255, 255);
+            feedback_set_rumble_internal(indicating_player, 255, 255);
         }
     }
 
-    // Handle LED state machine
+    // Handle LED state machine (use internal setters to bypass indicator check)
     if (led_blinks_remaining > 0) {
         int64_t elapsed = absolute_time_diff_us(led_state_change_time, now);
 
@@ -139,13 +144,13 @@ void profile_indicator_task(void)
             led_blinks_remaining--;
             led_state_change_time = now;
             // Set LED to "off" state (could be all off or dim)
-            feedback_set_led_rgb(indicating_player, 0, 0, 0);
+            feedback_set_led_rgb_internal(indicating_player, 0, 0, 0);
         }
         else if (!led_is_on && elapsed >= LED_OFF_TIME_US && led_blinks_remaining > 0) {
             // Turn on LED for next blink
             led_is_on = true;
             led_state_change_time = now;
-            feedback_set_led_player(indicating_player, profile_to_indicate + 1);
+            feedback_set_led_player_internal(indicating_player, profile_to_indicate + 1);
         }
     }
 }

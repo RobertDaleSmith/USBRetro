@@ -36,6 +36,9 @@ uint8_t profile_indicator_get_player_led(uint8_t player_count);
 // Check if profile indicator is currently active
 bool profile_indicator_is_active(void);
 
+// Check if profile indicator is active for a specific player
+bool profile_indicator_is_active_for_player(uint8_t player_index);
+
 // Get the player index to display (overrides actual player index during indication)
 // Returns -1 for OFF state, profile_index for ON state, or actual_player_index when not active
 int8_t profile_indicator_get_display_player_index(int8_t actual_player_index);

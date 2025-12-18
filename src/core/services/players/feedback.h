@@ -100,14 +100,19 @@ void feedback_init(void);
 // Get feedback state for a player (0-based index)
 feedback_state_t* feedback_get_state(uint8_t player_index);
 
-// Set rumble for a player
+// Set rumble for a player (external calls are blocked during profile indication)
 void feedback_set_rumble(uint8_t player_index, uint8_t left, uint8_t right);
 void feedback_set_rumble_ext(uint8_t player_index, const feedback_rumble_t* rumble);
 
-// Set LED for a player
+// Set LED for a player (external calls are blocked during profile indication)
 void feedback_set_led_player(uint8_t player_index, uint8_t player_num);  // Simple player number
 void feedback_set_led_rgb(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b);
 void feedback_set_led(uint8_t player_index, const feedback_led_t* led);
+
+// Internal setters (bypass profile indicator check - for profile_indicator.c use only)
+void feedback_set_rumble_internal(uint8_t player_index, uint8_t left, uint8_t right);
+void feedback_set_led_player_internal(uint8_t player_index, uint8_t player_num);
+void feedback_set_led_rgb_internal(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b);
 
 // Set adaptive triggers for a player
 void feedback_set_trigger(uint8_t player_index, bool left, const feedback_trigger_t* trigger);

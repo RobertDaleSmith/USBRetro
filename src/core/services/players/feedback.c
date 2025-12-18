@@ -6,6 +6,7 @@
 
 #include "core/services/players/feedback.h"
 #include "core/services/players/manager.h"
+#include "core/services/profiles/profile_indicator.h"
 #include <string.h>
 
 // ============================================================================
@@ -46,7 +47,8 @@ feedback_state_t* feedback_get_state(uint8_t player_index)
     return &feedback_states[player_index];
 }
 
-void feedback_set_rumble(uint8_t player_index, uint8_t left, uint8_t right)
+// Internal rumble setter (bypasses indicator check - for profile_indicator use)
+void feedback_set_rumble_internal(uint8_t player_index, uint8_t left, uint8_t right)
 {
     if (player_index >= MAX_PLAYERS) return;
 
@@ -57,6 +59,18 @@ void feedback_set_rumble(uint8_t player_index, uint8_t left, uint8_t right)
         state->rumble.right = right;
         state->rumble_dirty = true;
     }
+}
+
+void feedback_set_rumble(uint8_t player_index, uint8_t left, uint8_t right)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    // Don't allow external updates to overwrite profile indicator feedback
+    if (profile_indicator_is_active_for_player(player_index)) {
+        return;
+    }
+
+    feedback_set_rumble_internal(player_index, left, right);
 }
 
 void feedback_set_rumble_ext(uint8_t player_index, const feedback_rumble_t* rumble)
@@ -71,7 +85,8 @@ void feedback_set_rumble_ext(uint8_t player_index, const feedback_rumble_t* rumb
     }
 }
 
-void feedback_set_led_player(uint8_t player_index, uint8_t player_num)
+// Internal LED player setter (bypasses indicator check - for profile_indicator use)
+void feedback_set_led_player_internal(uint8_t player_index, uint8_t player_num)
 {
     if (player_index >= MAX_PLAYERS) return;
 
@@ -101,7 +116,20 @@ void feedback_set_led_player(uint8_t player_index, uint8_t player_num)
     }
 }
 
-void feedback_set_led_rgb(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b)
+void feedback_set_led_player(uint8_t player_index, uint8_t player_num)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    // Don't allow external updates to overwrite profile indicator feedback
+    if (profile_indicator_is_active_for_player(player_index)) {
+        return;
+    }
+
+    feedback_set_led_player_internal(player_index, player_num);
+}
+
+// Internal LED RGB setter (bypasses indicator check - for profile_indicator use)
+void feedback_set_led_rgb_internal(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b)
 {
     if (player_index >= MAX_PLAYERS) return;
 
@@ -113,6 +141,18 @@ void feedback_set_led_rgb(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b)
         state->led.b = b;
         state->led_dirty = true;
     }
+}
+
+void feedback_set_led_rgb(uint8_t player_index, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (player_index >= MAX_PLAYERS) return;
+
+    // Don't allow external updates to overwrite profile indicator feedback
+    if (profile_indicator_is_active_for_player(player_index)) {
+        return;
+    }
+
+    feedback_set_led_rgb_internal(player_index, r, g, b);
 }
 
 void feedback_set_led(uint8_t player_index, const feedback_led_t* led)
