@@ -85,6 +85,15 @@ static gip_input_report_t xbone_report;
 // Current XAC report (for Xbox Adaptive Controller compatible mode)
 static xac_in_report_t xac_report;
 
+// ============================================================================
+// EVENT-DRIVEN OUTPUT STATE
+// ============================================================================
+
+// Pending input events (queued by tap callback, sent when USB ready)
+#define USB_MAX_PLAYERS 4
+static input_event_t pending_events[USB_MAX_PLAYERS];
+static bool pending_flags[USB_MAX_PLAYERS] = {false};
+
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
 static char usb_serial_str[USB_SERIAL_LEN + 1];
@@ -324,6 +333,24 @@ const char* usbd_get_mode_name(usb_output_mode_t mode)
 }
 
 // ============================================================================
+// EVENT-DRIVEN TAP CALLBACK
+// ============================================================================
+
+// Called by router immediately when input arrives (push-based notification)
+static void usbd_on_input(output_target_t output, uint8_t player_index, const input_event_t* event)
+{
+    (void)output;  // Always USB_DEVICE
+
+    if (player_index >= USB_MAX_PLAYERS || !event) {
+        return;
+    }
+
+    // Queue the event for sending when USB is ready
+    pending_events[player_index] = *event;
+    pending_flags[player_index] = true;
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
@@ -463,6 +490,9 @@ void usbd_init(void)
         cdc_init();
     }
 
+    // Register tap callback for event-driven input (push-based notification)
+    router_set_tap(OUTPUT_TARGET_USB_DEVICE, usbd_on_input);
+
     printf("[usbd] Initialization complete\n");
 }
 
@@ -559,12 +589,13 @@ static bool usbd_send_xid_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -604,12 +635,13 @@ static bool usbd_send_hid_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -652,12 +684,13 @@ static bool usbd_send_xinput_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -709,12 +742,13 @@ static bool usbd_send_switch_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -758,12 +792,13 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -863,12 +898,13 @@ static bool usbd_send_psclassic_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -929,12 +965,13 @@ static bool usbd_send_ps4_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;
@@ -1012,12 +1049,13 @@ static bool usbd_send_xbone_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Clear report
     memset(&xbone_report, 0, sizeof(gip_input_report_t));
@@ -1077,12 +1115,13 @@ static bool usbd_send_xac_report(uint8_t player_index)
         return false;
     }
 
-    const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
-
-    // No update - don't send a report (keeps previous state on host)
-    if (!event) {
+    // Check for pending event (event-driven from tap callback)
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) {
         return false;
     }
+
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;  // Clear after consumption
 
     // Apply profile (combos, button remaps)
     profile_output_t profile_out;

@@ -17,10 +17,41 @@
 
 #include "tusb.h"
 #include "pico/stdlib.h"
+#include "pico/cyw43_arch.h"
 #include <stdio.h>
 
 // External: CYW43 transport
 extern const bt_transport_t bt_transport_cyw43;
+
+// ============================================================================
+// LED STATUS
+// ============================================================================
+
+static uint32_t led_last_toggle = 0;
+static bool led_state = false;
+
+// Update LED based on connection status
+// - Slow blink (1Hz): No controllers connected, waiting
+// - Solid on: Controller connected
+static void led_status_update(void)
+{
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    if (playersCount > 0) {
+        // Controller connected - solid on
+        if (!led_state) {
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+            led_state = true;
+        }
+    } else {
+        // No controllers - slow blink (500ms on/off = 1Hz)
+        if (now - led_last_toggle >= 500) {
+            led_state = !led_state;
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state ? 1 : 0);
+            led_last_toggle = now;
+        }
+    }
+}
 
 // ============================================================================
 // BUTTON EVENT HANDLER
@@ -178,6 +209,9 @@ void app_task(void)
 
     // Process Bluetooth transport
     bt_task();
+
+    // Update LED status
+    led_status_update();
 
     // Route feedback from USB device output to BT controllers
     if (usbd_output_interface.get_feedback) {

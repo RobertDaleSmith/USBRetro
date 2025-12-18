@@ -732,20 +732,27 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 }
             }
 
+            // Log all BLE advertisements with names for debugging
+            if (name[0] != 0) {
+                printf("[BTSTACK_HOST] BLE adv: %02X:%02X:%02X:%02X:%02X:%02X name=\"%s\"\n",
+                       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0], name);
+            }
+
             // Check for controllers
             bool is_xbox = (strstr(name, "Xbox") != NULL);
             bool is_nintendo = (strstr(name, "Pro Controller") != NULL ||
                                strstr(name, "Joy-Con") != NULL);
-            bool is_controller = is_xbox || is_nintendo;
+            bool is_stadia = (strstr(name, "Stadia") != NULL);
+            bool is_controller = is_xbox || is_nintendo || is_stadia;
 
             // Only log potential controllers to reduce spam
             if (is_controller && name[0] != 0) {
                 printf("[BTSTACK_HOST] BLE controller: %02X:%02X:%02X:%02X:%02X:%02X name=\"%s\"\n",
                        addr[5], addr[4], addr[3], addr[2], addr[1], addr[0], name);
 
-                // Auto-connect to Xbox controllers
-                if (is_xbox && hid_state.state == BLE_STATE_SCANNING) {
-                    printf("[BTSTACK_HOST] Connecting to Xbox...\n");
+                // Auto-connect to supported BLE controllers
+                if ((is_xbox || is_stadia) && hid_state.state == BLE_STATE_SCANNING) {
+                    printf("[BTSTACK_HOST] Connecting to %s...\n", is_xbox ? "Xbox" : "Stadia");
                     // Save name for when connection completes
                     strncpy(hid_state.pending_name, name, sizeof(hid_state.pending_name) - 1);
                     hid_state.pending_name[sizeof(hid_state.pending_name) - 1] = '\0';
@@ -1068,8 +1075,20 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             printf("[BTSTACK_HOST] SM: Pairing complete, handle=0x%04X status=0x%02X\n", handle, status);
 
             if (status == ERROR_CODE_SUCCESS) {
-                printf("[BTSTACK_HOST] SM: Pairing successful! Registering HID listener...\n");
-                register_ble_hid_listener(handle);
+                printf("[BTSTACK_HOST] SM: Pairing successful!\n");
+                ble_connection_t* conn = find_connection_by_handle(handle);
+                if (conn) {
+                    // Xbox controllers: use fast-path with known handle 0x001E
+                    // Other controllers: do proper GATT discovery
+                    bool is_xbox = (strstr(conn->name, "Xbox") != NULL);
+                    if (is_xbox) {
+                        printf("[BTSTACK_HOST] Xbox detected - using fast-path HID listener\n");
+                        register_ble_hid_listener(handle);
+                    } else {
+                        printf("[BTSTACK_HOST] Non-Xbox BLE controller - starting GATT discovery\n");
+                        start_hids_client(conn);
+                    }
+                }
             } else {
                 printf("[BTSTACK_HOST] SM: Pairing FAILED\n");
             }
@@ -1085,8 +1104,18 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             uint8_t status = sm_event_reencryption_complete_get_status(packet);
             printf("[BTSTACK_HOST] SM: Re-encryption complete, handle=0x%04X status=0x%02X\n", handle, status);
             if (status == ERROR_CODE_SUCCESS) {
-                printf("[BTSTACK_HOST] SM: Re-encryption successful! Registering HID listener...\n");
-                register_ble_hid_listener(handle);
+                printf("[BTSTACK_HOST] SM: Re-encryption successful!\n");
+                ble_connection_t* conn = find_connection_by_handle(handle);
+                if (conn) {
+                    bool is_xbox = (strstr(conn->name, "Xbox") != NULL);
+                    if (is_xbox) {
+                        printf("[BTSTACK_HOST] Xbox detected - using fast-path HID listener\n");
+                        register_ble_hid_listener(handle);
+                    } else {
+                        printf("[BTSTACK_HOST] Non-Xbox BLE controller - starting GATT discovery\n");
+                        start_hids_client(conn);
+                    }
+                }
             } else {
                 // Re-encryption failed - remote likely lost bonding info
                 // Delete local bonding and request fresh pairing
@@ -1330,6 +1359,20 @@ static void hids_client_handler(uint8_t packet_type, uint16_t channel, uint8_t *
                 ble_connection_t *conn = find_connection_by_handle(hid_state.gatt_handle);
                 if (conn) {
                     conn->state = BLE_STATE_READY;
+                    conn->hid_ready = true;
+
+                    // Assign conn_index if not already set
+                    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+                        if (&hid_state.connections[i] == conn) {
+                            conn->conn_index = BLE_CONN_INDEX_OFFSET + i;
+                            break;
+                        }
+                    }
+
+                    // Notify bthid layer that device is ready
+                    printf("[BTSTACK_HOST] Calling bt_on_hid_ready(%d) for BLE device '%s'\n",
+                           conn->conn_index, conn->name);
+                    bt_on_hid_ready(conn->conn_index);
                 }
 
                 // Explicitly enable notifications

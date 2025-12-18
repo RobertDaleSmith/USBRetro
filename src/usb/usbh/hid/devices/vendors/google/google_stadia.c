@@ -64,6 +64,12 @@ static bool init_google_stadia(uint8_t dev_addr, uint8_t instance) {
 
 // Process input reports
 static void process_google_stadia(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+    // Skip report ID if present (0x03 for input report)
+    if (len == sizeof(stadia_report_t) + 1 && report[0] == 0x03) {
+        report++;
+        len--;
+    }
+
     if (len < sizeof(stadia_report_t)) return;
 
     stadia_report_t stadia_report;
