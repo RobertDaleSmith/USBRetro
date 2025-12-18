@@ -115,6 +115,10 @@ bthid_device_t* bthid_get_device(uint8_t conn_index);
 // Get device count
 uint8_t bthid_get_device_count(void);
 
+// Re-evaluate driver for a device (call when VID/PID or name becomes available)
+void bthid_update_device_info(uint8_t conn_index, const char* name,
+                               uint16_t vendor_id, uint16_t product_id);
+
 // ============================================================================
 // DRIVER REGISTRATION
 // ============================================================================

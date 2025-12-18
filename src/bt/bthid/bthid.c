@@ -158,6 +158,67 @@ uint8_t bthid_get_device_count(void)
 }
 
 // ============================================================================
+// DEVICE INFO UPDATE (VID/PID available after SDP query)
+// ============================================================================
+
+void bthid_update_device_info(uint8_t conn_index, const char* name,
+                               uint16_t vendor_id, uint16_t product_id)
+{
+    bthid_device_t* device = bthid_get_device(conn_index);
+    if (!device) {
+        return;
+    }
+
+    // Update name if provided
+    if (name && name[0]) {
+        strncpy(device->name, name, BTHID_MAX_NAME_LEN - 1);
+        device->name[BTHID_MAX_NAME_LEN - 1] = '\0';
+    }
+
+    // Check if we should re-evaluate the driver now that VID/PID is known
+    if (vendor_id || product_id) {
+        const bthid_driver_t* current = (const bthid_driver_t*)device->driver;
+        const bthid_driver_t* new_driver = NULL;
+
+        // Look for a better driver match with the new VID/PID
+        // Skip if we already have a specific driver (not generic gamepad)
+        if (current == &bthid_gamepad_driver) {
+            // Get COD from transport if available
+            const bt_connection_t* conn = bt_get_connection(conn_index);
+            const uint8_t* cod = conn ? conn->class_of_device : NULL;
+
+            // Try to find a specific driver
+            for (int i = 0; i < driver_count; i++) {
+                if (drivers[i] != &bthid_gamepad_driver &&
+                    drivers[i]->match && drivers[i]->match(device->name, cod, vendor_id, product_id)) {
+                    new_driver = drivers[i];
+                    break;
+                }
+            }
+
+            if (new_driver) {
+                printf("[BTHID] Re-selecting driver: %s -> %s (VID=0x%04X PID=0x%04X)\n",
+                       current->name, new_driver->name, vendor_id, product_id);
+
+                // Disconnect old driver
+                if (current && current->disconnect) {
+                    current->disconnect(device);
+                }
+
+                // Clear driver data
+                device->driver_data = NULL;
+
+                // Initialize new driver
+                device->driver = new_driver;
+                if (new_driver->init) {
+                    new_driver->init(device);
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
 // DRIVER MATCHING
 // ============================================================================
 

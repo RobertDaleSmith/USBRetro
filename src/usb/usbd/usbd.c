@@ -561,50 +561,38 @@ static bool usbd_send_xid_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Digital buttons (DPAD, Start, Back, L3, R3)
-        xid_report.buttons = convert_xid_digital_buttons(buttons);
-
-        // Analog face buttons (0 = not pressed, 255 = fully pressed)
-        xid_report.a     = (buttons & JP_BUTTON_B1) ? 0xFF : 0x00;
-        xid_report.b     = (buttons & JP_BUTTON_B2) ? 0xFF : 0x00;
-        xid_report.x     = (buttons & JP_BUTTON_B3) ? 0xFF : 0x00;
-        xid_report.y     = (buttons & JP_BUTTON_B4) ? 0xFF : 0x00;
-        xid_report.black = (buttons & JP_BUTTON_L1) ? 0xFF : 0x00;  // L1 -> Black
-        xid_report.white = (buttons & JP_BUTTON_R1) ? 0xFF : 0x00;  // R1 -> White
-
-        // Analog triggers (0-255)
-        // Use profile analog values, fall back to digital if analog is 0 but button pressed
-        xid_report.trigger_l = profile_out.l2_analog;
-        xid_report.trigger_r = profile_out.r2_analog;
-        if (xid_report.trigger_l == 0 && (buttons & JP_BUTTON_L2)) xid_report.trigger_l = 0xFF;
-        if (xid_report.trigger_r == 0 && (buttons & JP_BUTTON_R2)) xid_report.trigger_r = 0xFF;
-
-        // Analog sticks (signed 16-bit, -32768 to +32767)
-        xid_report.stick_lx = convert_axis_to_s16(profile_out.left_x);
-        xid_report.stick_ly = convert_axis_to_s16(profile_out.left_y);
-        xid_report.stick_rx = convert_axis_to_s16(profile_out.right_x);
-        xid_report.stick_ry = convert_axis_to_s16(profile_out.right_y);
-    } else {
-        // No input - send neutral state
-        xid_report.buttons = 0;
-        xid_report.a = 0;
-        xid_report.b = 0;
-        xid_report.x = 0;
-        xid_report.y = 0;
-        xid_report.black = 0;
-        xid_report.white = 0;
-        xid_report.trigger_l = 0;
-        xid_report.trigger_r = 0;
-        xid_report.stick_lx = 0;
-        xid_report.stick_ly = 0;
-        xid_report.stick_rx = 0;
-        xid_report.stick_ry = 0;
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Digital buttons (DPAD, Start, Back, L3, R3)
+    xid_report.buttons = convert_xid_digital_buttons(buttons);
+
+    // Analog face buttons (0 = not pressed, 255 = fully pressed)
+    xid_report.a     = (buttons & JP_BUTTON_B1) ? 0xFF : 0x00;
+    xid_report.b     = (buttons & JP_BUTTON_B2) ? 0xFF : 0x00;
+    xid_report.x     = (buttons & JP_BUTTON_B3) ? 0xFF : 0x00;
+    xid_report.y     = (buttons & JP_BUTTON_B4) ? 0xFF : 0x00;
+    xid_report.black = (buttons & JP_BUTTON_L1) ? 0xFF : 0x00;  // L1 -> Black
+    xid_report.white = (buttons & JP_BUTTON_R1) ? 0xFF : 0x00;  // R1 -> White
+
+    // Analog triggers (0-255)
+    // Use profile analog values, fall back to digital if analog is 0 but button pressed
+    xid_report.trigger_l = profile_out.l2_analog;
+    xid_report.trigger_r = profile_out.r2_analog;
+    if (xid_report.trigger_l == 0 && (buttons & JP_BUTTON_L2)) xid_report.trigger_l = 0xFF;
+    if (xid_report.trigger_r == 0 && (buttons & JP_BUTTON_R2)) xid_report.trigger_r = 0xFF;
+
+    // Analog sticks (signed 16-bit, -32768 to +32767)
+    xid_report.stick_lx = convert_axis_to_s16(profile_out.left_x);
+    xid_report.stick_ly = convert_axis_to_s16(profile_out.left_y);
+    xid_report.stick_rx = convert_axis_to_s16(profile_out.right_x);
+    xid_report.stick_ry = convert_axis_to_s16(profile_out.right_y);
 
     return tud_xid_send_report(&xid_report);
 }
@@ -618,45 +606,40 @@ static bool usbd_send_hid_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t processed_buttons = apply_usbd_profile(event, &profile_out);
-
-        // Convert processed buttons to HID report
-        uint16_t buttons = convert_buttons(processed_buttons);
-        hid_report.buttons = buttons;
-        hid_report.hat = convert_dpad_to_hat(processed_buttons);
-
-        // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
-        hid_report.lx = profile_out.left_x;
-        hid_report.ly = profile_out.left_y;
-        hid_report.rx = profile_out.right_x;
-        hid_report.ry = profile_out.right_y;
-
-        // PS3 pressure axes (0x00 = released, 0xFF = fully pressed)
-        hid_report.pressure_dpad_right = (processed_buttons & JP_BUTTON_DR) ? 0xFF : 0x00;
-        hid_report.pressure_dpad_left  = (processed_buttons & JP_BUTTON_DL) ? 0xFF : 0x00;
-        hid_report.pressure_dpad_up    = (processed_buttons & JP_BUTTON_DU) ? 0xFF : 0x00;
-        hid_report.pressure_dpad_down  = (processed_buttons & JP_BUTTON_DD) ? 0xFF : 0x00;
-        hid_report.pressure_triangle   = (buttons & USB_GAMEPAD_MASK_B4) ? 0xFF : 0x00;
-        hid_report.pressure_circle     = (buttons & USB_GAMEPAD_MASK_B2) ? 0xFF : 0x00;
-        hid_report.pressure_cross      = (buttons & USB_GAMEPAD_MASK_B1) ? 0xFF : 0x00;
-        hid_report.pressure_square     = (buttons & USB_GAMEPAD_MASK_B3) ? 0xFF : 0x00;
-        hid_report.pressure_l1         = (buttons & USB_GAMEPAD_MASK_L1) ? 0xFF : 0x00;
-        hid_report.pressure_r1         = (buttons & USB_GAMEPAD_MASK_R1) ? 0xFF : 0x00;
-        // Use analog values for L2/R2 triggers
-        hid_report.pressure_l2         = profile_out.l2_analog;
-        hid_report.pressure_r2         = profile_out.r2_analog;
-    } else {
-        // No input - send neutral state
-        memset(&hid_report, 0, sizeof(hid_report));
-        hid_report.hat = HID_HAT_CENTER;
-        hid_report.lx = 128;
-        hid_report.ly = 128;
-        hid_report.rx = 128;
-        hid_report.ry = 128;
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t processed_buttons = apply_usbd_profile(event, &profile_out);
+
+    // Convert processed buttons to HID report
+    uint16_t buttons = convert_buttons(processed_buttons);
+    hid_report.buttons = buttons;
+    hid_report.hat = convert_dpad_to_hat(processed_buttons);
+
+    // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
+    hid_report.lx = profile_out.left_x;
+    hid_report.ly = profile_out.left_y;
+    hid_report.rx = profile_out.right_x;
+    hid_report.ry = profile_out.right_y;
+
+    // PS3 pressure axes (0x00 = released, 0xFF = fully pressed)
+    hid_report.pressure_dpad_right = (processed_buttons & JP_BUTTON_DR) ? 0xFF : 0x00;
+    hid_report.pressure_dpad_left  = (processed_buttons & JP_BUTTON_DL) ? 0xFF : 0x00;
+    hid_report.pressure_dpad_up    = (processed_buttons & JP_BUTTON_DU) ? 0xFF : 0x00;
+    hid_report.pressure_dpad_down  = (processed_buttons & JP_BUTTON_DD) ? 0xFF : 0x00;
+    hid_report.pressure_triangle   = (buttons & USB_GAMEPAD_MASK_B4) ? 0xFF : 0x00;
+    hid_report.pressure_circle     = (buttons & USB_GAMEPAD_MASK_B2) ? 0xFF : 0x00;
+    hid_report.pressure_cross      = (buttons & USB_GAMEPAD_MASK_B1) ? 0xFF : 0x00;
+    hid_report.pressure_square     = (buttons & USB_GAMEPAD_MASK_B3) ? 0xFF : 0x00;
+    hid_report.pressure_l1         = (buttons & USB_GAMEPAD_MASK_L1) ? 0xFF : 0x00;
+    hid_report.pressure_r1         = (buttons & USB_GAMEPAD_MASK_R1) ? 0xFF : 0x00;
+    // Use analog values for L2/R2 triggers
+    hid_report.pressure_l2         = profile_out.l2_analog;
+    hid_report.pressure_r2         = profile_out.r2_analog;
 
     return tud_hid_report(0, &hid_report, sizeof(hid_report));
 }
@@ -671,56 +654,49 @@ static bool usbd_send_xinput_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Digital buttons byte 0 (DPAD, Start, Back, L3, R3)
-        xinput_report.buttons0 = 0;
-        if (buttons & JP_BUTTON_DU) xinput_report.buttons0 |= XINPUT_BTN_DPAD_UP;
-        if (buttons & JP_BUTTON_DD) xinput_report.buttons0 |= XINPUT_BTN_DPAD_DOWN;
-        if (buttons & JP_BUTTON_DL) xinput_report.buttons0 |= XINPUT_BTN_DPAD_LEFT;
-        if (buttons & JP_BUTTON_DR) xinput_report.buttons0 |= XINPUT_BTN_DPAD_RIGHT;
-        if (buttons & JP_BUTTON_S2) xinput_report.buttons0 |= XINPUT_BTN_START;
-        if (buttons & JP_BUTTON_S1) xinput_report.buttons0 |= XINPUT_BTN_BACK;
-        if (buttons & JP_BUTTON_L3) xinput_report.buttons0 |= XINPUT_BTN_L3;
-        if (buttons & JP_BUTTON_R3) xinput_report.buttons0 |= XINPUT_BTN_R3;
-
-        // Digital buttons byte 1 (LB, RB, Guide, A, B, X, Y)
-        xinput_report.buttons1 = 0;
-        if (buttons & JP_BUTTON_L1) xinput_report.buttons1 |= XINPUT_BTN_LB;
-        if (buttons & JP_BUTTON_R1) xinput_report.buttons1 |= XINPUT_BTN_RB;
-        if (buttons & JP_BUTTON_A1) xinput_report.buttons1 |= XINPUT_BTN_GUIDE;
-        if (buttons & JP_BUTTON_B1) xinput_report.buttons1 |= XINPUT_BTN_A;
-        if (buttons & JP_BUTTON_B2) xinput_report.buttons1 |= XINPUT_BTN_B;
-        if (buttons & JP_BUTTON_B3) xinput_report.buttons1 |= XINPUT_BTN_X;
-        if (buttons & JP_BUTTON_B4) xinput_report.buttons1 |= XINPUT_BTN_Y;
-
-        // Analog triggers (0-255)
-        // Use analog values, fall back to digital if analog is 0 but button pressed
-        xinput_report.trigger_l = profile_out.l2_analog;
-        xinput_report.trigger_r = profile_out.r2_analog;
-        if (xinput_report.trigger_l == 0 && (buttons & JP_BUTTON_L2)) xinput_report.trigger_l = 0xFF;
-        if (xinput_report.trigger_r == 0 && (buttons & JP_BUTTON_R2)) xinput_report.trigger_r = 0xFF;
-
-        // Analog sticks (signed 16-bit, -32768 to +32767)
-        // Y-axis inverted: input 0=down, XInput convention positive=up
-        xinput_report.stick_lx = convert_axis_to_s16(profile_out.left_x);
-        xinput_report.stick_ly = convert_axis_to_s16_inverted(profile_out.left_y);
-        xinput_report.stick_rx = convert_axis_to_s16(profile_out.right_x);
-        xinput_report.stick_ry = convert_axis_to_s16_inverted(profile_out.right_y);
-    } else {
-        // No input - send neutral state
-        xinput_report.buttons0 = 0;
-        xinput_report.buttons1 = 0;
-        xinput_report.trigger_l = 0;
-        xinput_report.trigger_r = 0;
-        xinput_report.stick_lx = 0;
-        xinput_report.stick_ly = 0;
-        xinput_report.stick_rx = 0;
-        xinput_report.stick_ry = 0;
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Digital buttons byte 0 (DPAD, Start, Back, L3, R3)
+    xinput_report.buttons0 = 0;
+    if (buttons & JP_BUTTON_DU) xinput_report.buttons0 |= XINPUT_BTN_DPAD_UP;
+    if (buttons & JP_BUTTON_DD) xinput_report.buttons0 |= XINPUT_BTN_DPAD_DOWN;
+    if (buttons & JP_BUTTON_DL) xinput_report.buttons0 |= XINPUT_BTN_DPAD_LEFT;
+    if (buttons & JP_BUTTON_DR) xinput_report.buttons0 |= XINPUT_BTN_DPAD_RIGHT;
+    if (buttons & JP_BUTTON_S2) xinput_report.buttons0 |= XINPUT_BTN_START;
+    if (buttons & JP_BUTTON_S1) xinput_report.buttons0 |= XINPUT_BTN_BACK;
+    if (buttons & JP_BUTTON_L3) xinput_report.buttons0 |= XINPUT_BTN_L3;
+    if (buttons & JP_BUTTON_R3) xinput_report.buttons0 |= XINPUT_BTN_R3;
+
+    // Digital buttons byte 1 (LB, RB, Guide, A, B, X, Y)
+    xinput_report.buttons1 = 0;
+    if (buttons & JP_BUTTON_L1) xinput_report.buttons1 |= XINPUT_BTN_LB;
+    if (buttons & JP_BUTTON_R1) xinput_report.buttons1 |= XINPUT_BTN_RB;
+    if (buttons & JP_BUTTON_A1) xinput_report.buttons1 |= XINPUT_BTN_GUIDE;
+    if (buttons & JP_BUTTON_B1) xinput_report.buttons1 |= XINPUT_BTN_A;
+    if (buttons & JP_BUTTON_B2) xinput_report.buttons1 |= XINPUT_BTN_B;
+    if (buttons & JP_BUTTON_B3) xinput_report.buttons1 |= XINPUT_BTN_X;
+    if (buttons & JP_BUTTON_B4) xinput_report.buttons1 |= XINPUT_BTN_Y;
+
+    // Analog triggers (0-255)
+    // Use analog values, fall back to digital if analog is 0 but button pressed
+    xinput_report.trigger_l = profile_out.l2_analog;
+    xinput_report.trigger_r = profile_out.r2_analog;
+    if (xinput_report.trigger_l == 0 && (buttons & JP_BUTTON_L2)) xinput_report.trigger_l = 0xFF;
+    if (xinput_report.trigger_r == 0 && (buttons & JP_BUTTON_R2)) xinput_report.trigger_r = 0xFF;
+
+    // Analog sticks (signed 16-bit, -32768 to +32767)
+    // Y-axis inverted: input 0=down, XInput convention positive=up
+    xinput_report.stick_lx = convert_axis_to_s16(profile_out.left_x);
+    xinput_report.stick_ly = convert_axis_to_s16_inverted(profile_out.left_y);
+    xinput_report.stick_rx = convert_axis_to_s16(profile_out.right_x);
+    xinput_report.stick_ry = convert_axis_to_s16_inverted(profile_out.right_y);
 
     return tud_xinput_send_report(&xinput_report);
 }
@@ -735,48 +711,42 @@ static bool usbd_send_switch_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Buttons (16-bit) - position-based mapping (matches GP2040-CE)
-        switch_report.buttons = 0;
-        if (buttons & JP_BUTTON_B1) switch_report.buttons |= SWITCH_MASK_B;  // B1 (bottom) → B
-        if (buttons & JP_BUTTON_B2) switch_report.buttons |= SWITCH_MASK_A;  // B2 (right)  → A
-        if (buttons & JP_BUTTON_B3) switch_report.buttons |= SWITCH_MASK_Y;  // B3 (left)   → Y
-        if (buttons & JP_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_X;  // B4 (top)    → X
-        if (buttons & JP_BUTTON_L1) switch_report.buttons |= SWITCH_MASK_L;  // L
-        if (buttons & JP_BUTTON_R1) switch_report.buttons |= SWITCH_MASK_R;  // R
-        if (buttons & JP_BUTTON_L2) switch_report.buttons |= SWITCH_MASK_ZL; // ZL
-        if (buttons & JP_BUTTON_R2) switch_report.buttons |= SWITCH_MASK_ZR; // ZR
-        if (buttons & JP_BUTTON_S1) switch_report.buttons |= SWITCH_MASK_MINUS;  // Minus
-        if (buttons & JP_BUTTON_S2) switch_report.buttons |= SWITCH_MASK_PLUS;   // Plus
-        if (buttons & JP_BUTTON_L3) switch_report.buttons |= SWITCH_MASK_L3;
-        if (buttons & JP_BUTTON_R3) switch_report.buttons |= SWITCH_MASK_R3;
-        if (buttons & JP_BUTTON_A1) switch_report.buttons |= SWITCH_MASK_HOME;
-        if (buttons & JP_BUTTON_A2) switch_report.buttons |= SWITCH_MASK_CAPTURE;
-
-        // D-pad as hat switch
-        switch_report.hat = convert_dpad_to_hat(buttons);
-
-        // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
-        switch_report.lx = profile_out.left_x;
-        switch_report.ly = profile_out.left_y;
-        switch_report.rx = profile_out.right_x;
-        switch_report.ry = profile_out.right_y;
-
-        switch_report.vendor = 0;
-    } else {
-        // No input - send neutral state
-        switch_report.buttons = 0;
-        switch_report.hat = SWITCH_HAT_CENTER;
-        switch_report.lx = SWITCH_JOYSTICK_MID;
-        switch_report.ly = SWITCH_JOYSTICK_MID;
-        switch_report.rx = SWITCH_JOYSTICK_MID;
-        switch_report.ry = SWITCH_JOYSTICK_MID;
-        switch_report.vendor = 0;
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Buttons (16-bit) - position-based mapping (matches GP2040-CE)
+    switch_report.buttons = 0;
+    if (buttons & JP_BUTTON_B1) switch_report.buttons |= SWITCH_MASK_B;  // B1 (bottom) → B
+    if (buttons & JP_BUTTON_B2) switch_report.buttons |= SWITCH_MASK_A;  // B2 (right)  → A
+    if (buttons & JP_BUTTON_B3) switch_report.buttons |= SWITCH_MASK_Y;  // B3 (left)   → Y
+    if (buttons & JP_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_X;  // B4 (top)    → X
+    if (buttons & JP_BUTTON_L1) switch_report.buttons |= SWITCH_MASK_L;  // L
+    if (buttons & JP_BUTTON_R1) switch_report.buttons |= SWITCH_MASK_R;  // R
+    if (buttons & JP_BUTTON_L2) switch_report.buttons |= SWITCH_MASK_ZL; // ZL
+    if (buttons & JP_BUTTON_R2) switch_report.buttons |= SWITCH_MASK_ZR; // ZR
+    if (buttons & JP_BUTTON_S1) switch_report.buttons |= SWITCH_MASK_MINUS;  // Minus
+    if (buttons & JP_BUTTON_S2) switch_report.buttons |= SWITCH_MASK_PLUS;   // Plus
+    if (buttons & JP_BUTTON_L3) switch_report.buttons |= SWITCH_MASK_L3;
+    if (buttons & JP_BUTTON_R3) switch_report.buttons |= SWITCH_MASK_R3;
+    if (buttons & JP_BUTTON_A1) switch_report.buttons |= SWITCH_MASK_HOME;
+    if (buttons & JP_BUTTON_A2) switch_report.buttons |= SWITCH_MASK_CAPTURE;
+
+    // D-pad as hat switch
+    switch_report.hat = convert_dpad_to_hat(buttons);
+
+    // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
+    switch_report.lx = profile_out.left_x;
+    switch_report.ly = profile_out.left_y;
+    switch_report.rx = profile_out.right_x;
+    switch_report.ry = profile_out.right_y;
+
+    switch_report.vendor = 0;
 
     return tud_hid_report(0, &switch_report, sizeof(switch_report));
 }
@@ -790,99 +760,87 @@ static bool usbd_send_ps3_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
+    }
 
-        // Digital buttons byte 0
-        ps3_report.buttons[0] = 0;
-        if (buttons & JP_BUTTON_S1) ps3_report.buttons[0] |= PS3_BTN_SELECT;
-        if (buttons & JP_BUTTON_L3) ps3_report.buttons[0] |= PS3_BTN_L3;
-        if (buttons & JP_BUTTON_R3) ps3_report.buttons[0] |= PS3_BTN_R3;
-        if (buttons & JP_BUTTON_S2) ps3_report.buttons[0] |= PS3_BTN_START;
-        if (buttons & JP_BUTTON_DU) ps3_report.buttons[0] |= PS3_BTN_DPAD_UP;
-        if (buttons & JP_BUTTON_DR) ps3_report.buttons[0] |= PS3_BTN_DPAD_RIGHT;
-        if (buttons & JP_BUTTON_DD) ps3_report.buttons[0] |= PS3_BTN_DPAD_DOWN;
-        if (buttons & JP_BUTTON_DL) ps3_report.buttons[0] |= PS3_BTN_DPAD_LEFT;
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
 
-        // Digital buttons byte 1
-        ps3_report.buttons[1] = 0;
-        if (buttons & JP_BUTTON_L2) ps3_report.buttons[1] |= PS3_BTN_L2;
-        if (buttons & JP_BUTTON_R2) ps3_report.buttons[1] |= PS3_BTN_R2;
-        if (buttons & JP_BUTTON_L1) ps3_report.buttons[1] |= PS3_BTN_L1;
-        if (buttons & JP_BUTTON_R1) ps3_report.buttons[1] |= PS3_BTN_R1;
-        if (buttons & JP_BUTTON_B4) ps3_report.buttons[1] |= PS3_BTN_TRIANGLE;
-        if (buttons & JP_BUTTON_B2) ps3_report.buttons[1] |= PS3_BTN_CIRCLE;
-        if (buttons & JP_BUTTON_B1) ps3_report.buttons[1] |= PS3_BTN_CROSS;
-        if (buttons & JP_BUTTON_B3) ps3_report.buttons[1] |= PS3_BTN_SQUARE;
+    // Digital buttons byte 0
+    ps3_report.buttons[0] = 0;
+    if (buttons & JP_BUTTON_S1) ps3_report.buttons[0] |= PS3_BTN_SELECT;
+    if (buttons & JP_BUTTON_L3) ps3_report.buttons[0] |= PS3_BTN_L3;
+    if (buttons & JP_BUTTON_R3) ps3_report.buttons[0] |= PS3_BTN_R3;
+    if (buttons & JP_BUTTON_S2) ps3_report.buttons[0] |= PS3_BTN_START;
+    if (buttons & JP_BUTTON_DU) ps3_report.buttons[0] |= PS3_BTN_DPAD_UP;
+    if (buttons & JP_BUTTON_DR) ps3_report.buttons[0] |= PS3_BTN_DPAD_RIGHT;
+    if (buttons & JP_BUTTON_DD) ps3_report.buttons[0] |= PS3_BTN_DPAD_DOWN;
+    if (buttons & JP_BUTTON_DL) ps3_report.buttons[0] |= PS3_BTN_DPAD_LEFT;
 
-        // Digital buttons byte 2 (PS button)
-        ps3_report.buttons[2] = 0;
-        if (buttons & JP_BUTTON_A1) ps3_report.buttons[2] |= PS3_BTN_PS;
+    // Digital buttons byte 1
+    ps3_report.buttons[1] = 0;
+    if (buttons & JP_BUTTON_L2) ps3_report.buttons[1] |= PS3_BTN_L2;
+    if (buttons & JP_BUTTON_R2) ps3_report.buttons[1] |= PS3_BTN_R2;
+    if (buttons & JP_BUTTON_L1) ps3_report.buttons[1] |= PS3_BTN_L1;
+    if (buttons & JP_BUTTON_R1) ps3_report.buttons[1] |= PS3_BTN_R1;
+    if (buttons & JP_BUTTON_B4) ps3_report.buttons[1] |= PS3_BTN_TRIANGLE;
+    if (buttons & JP_BUTTON_B2) ps3_report.buttons[1] |= PS3_BTN_CIRCLE;
+    if (buttons & JP_BUTTON_B1) ps3_report.buttons[1] |= PS3_BTN_CROSS;
+    if (buttons & JP_BUTTON_B3) ps3_report.buttons[1] |= PS3_BTN_SQUARE;
 
-        // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
-        ps3_report.lx = profile_out.left_x;
-        ps3_report.ly = profile_out.left_y;
-        ps3_report.rx = profile_out.right_x;
-        ps3_report.ry = profile_out.right_y;
+    // Digital buttons byte 2 (PS button)
+    ps3_report.buttons[2] = 0;
+    if (buttons & JP_BUTTON_A1) ps3_report.buttons[2] |= PS3_BTN_PS;
 
-        // Pressure-sensitive buttons - use actual pressure data if available
-        if (profile_out.has_pressure) {
-            // D-pad pressure
-            ps3_report.pressure_up    = profile_out.pressure[0];
-            ps3_report.pressure_right = profile_out.pressure[1];
-            ps3_report.pressure_down  = profile_out.pressure[2];
-            ps3_report.pressure_left  = profile_out.pressure[3];
-            // Triggers/bumpers pressure
-            ps3_report.pressure_l2    = profile_out.pressure[4];
-            ps3_report.pressure_r2    = profile_out.pressure[5];
-            ps3_report.pressure_l1    = profile_out.pressure[6];
-            ps3_report.pressure_r1    = profile_out.pressure[7];
-            // Face buttons pressure
-            ps3_report.pressure_triangle = profile_out.pressure[8];
-            ps3_report.pressure_circle   = profile_out.pressure[9];
-            ps3_report.pressure_cross    = profile_out.pressure[10];
-            ps3_report.pressure_square   = profile_out.pressure[11];
-        } else {
-            // Fall back to digital (0xFF pressed, 0x00 released)
-            ps3_report.pressure_up    = (buttons & JP_BUTTON_DU) ? 0xFF : 0x00;
-            ps3_report.pressure_right = (buttons & JP_BUTTON_DR) ? 0xFF : 0x00;
-            ps3_report.pressure_down  = (buttons & JP_BUTTON_DD) ? 0xFF : 0x00;
-            ps3_report.pressure_left  = (buttons & JP_BUTTON_DL) ? 0xFF : 0x00;
-            ps3_report.pressure_l2    = profile_out.l2_analog;
-            ps3_report.pressure_r2    = profile_out.r2_analog;
-            ps3_report.pressure_l1    = (buttons & JP_BUTTON_L1) ? 0xFF : 0x00;
-            ps3_report.pressure_r1    = (buttons & JP_BUTTON_R1) ? 0xFF : 0x00;
-            ps3_report.pressure_triangle = (buttons & JP_BUTTON_B4) ? 0xFF : 0x00;
-            ps3_report.pressure_circle   = (buttons & JP_BUTTON_B2) ? 0xFF : 0x00;
-            ps3_report.pressure_cross    = (buttons & JP_BUTTON_B1) ? 0xFF : 0x00;
-            ps3_report.pressure_square   = (buttons & JP_BUTTON_B3) ? 0xFF : 0x00;
-        }
+    // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
+    ps3_report.lx = profile_out.left_x;
+    ps3_report.ly = profile_out.left_y;
+    ps3_report.rx = profile_out.right_x;
+    ps3_report.ry = profile_out.right_y;
 
-        // Motion data (SIXAXIS) - big-endian 16-bit values
-        if (event->has_motion) {
-            ps3_report.accel_x = __builtin_bswap16((uint16_t)event->accel[0]);
-            ps3_report.accel_y = __builtin_bswap16((uint16_t)event->accel[1]);
-            ps3_report.accel_z = __builtin_bswap16((uint16_t)event->accel[2]);
-            ps3_report.gyro_z  = __builtin_bswap16((uint16_t)event->gyro[2]);
-        } else {
-            // Neutral motion (center at 511 = 0x01FF, big-endian = 0xFF01)
-            ps3_report.accel_x = 0xFF01;
-            ps3_report.accel_y = 0xFF01;
-            ps3_report.accel_z = 0xFF01;
-            ps3_report.gyro_z  = 0xFF01;
-        }
+    // Pressure-sensitive buttons - use actual pressure data if available
+    if (profile_out.has_pressure) {
+        // D-pad pressure
+        ps3_report.pressure_up    = profile_out.pressure[0];
+        ps3_report.pressure_right = profile_out.pressure[1];
+        ps3_report.pressure_down  = profile_out.pressure[2];
+        ps3_report.pressure_left  = profile_out.pressure[3];
+        // Triggers/bumpers pressure
+        ps3_report.pressure_l2    = profile_out.pressure[4];
+        ps3_report.pressure_r2    = profile_out.pressure[5];
+        ps3_report.pressure_l1    = profile_out.pressure[6];
+        ps3_report.pressure_r1    = profile_out.pressure[7];
+        // Face buttons pressure
+        ps3_report.pressure_triangle = profile_out.pressure[8];
+        ps3_report.pressure_circle   = profile_out.pressure[9];
+        ps3_report.pressure_cross    = profile_out.pressure[10];
+        ps3_report.pressure_square   = profile_out.pressure[11];
     } else {
-        // No input - keep neutral state (already initialized)
-        ps3_report.buttons[0] = 0;
-        ps3_report.buttons[1] = 0;
-        ps3_report.buttons[2] = 0;
-        ps3_report.lx = PS3_JOYSTICK_MID;
-        ps3_report.ly = PS3_JOYSTICK_MID;
-        ps3_report.rx = PS3_JOYSTICK_MID;
-        ps3_report.ry = PS3_JOYSTICK_MID;
-        memset(&ps3_report.pressure_up, 0, 12);  // Clear all 12 pressure bytes
+        // Fall back to digital (0xFF pressed, 0x00 released)
+        ps3_report.pressure_up    = (buttons & JP_BUTTON_DU) ? 0xFF : 0x00;
+        ps3_report.pressure_right = (buttons & JP_BUTTON_DR) ? 0xFF : 0x00;
+        ps3_report.pressure_down  = (buttons & JP_BUTTON_DD) ? 0xFF : 0x00;
+        ps3_report.pressure_left  = (buttons & JP_BUTTON_DL) ? 0xFF : 0x00;
+        ps3_report.pressure_l2    = profile_out.l2_analog;
+        ps3_report.pressure_r2    = profile_out.r2_analog;
+        ps3_report.pressure_l1    = (buttons & JP_BUTTON_L1) ? 0xFF : 0x00;
+        ps3_report.pressure_r1    = (buttons & JP_BUTTON_R1) ? 0xFF : 0x00;
+        ps3_report.pressure_triangle = (buttons & JP_BUTTON_B4) ? 0xFF : 0x00;
+        ps3_report.pressure_circle   = (buttons & JP_BUTTON_B2) ? 0xFF : 0x00;
+        ps3_report.pressure_cross    = (buttons & JP_BUTTON_B1) ? 0xFF : 0x00;
+        ps3_report.pressure_square   = (buttons & JP_BUTTON_B3) ? 0xFF : 0x00;
+    }
+
+    // Motion data (SIXAXIS) - big-endian 16-bit values
+    if (event->has_motion) {
+        ps3_report.accel_x = __builtin_bswap16((uint16_t)event->accel[0]);
+        ps3_report.accel_y = __builtin_bswap16((uint16_t)event->accel[1]);
+        ps3_report.accel_z = __builtin_bswap16((uint16_t)event->accel[2]);
+        ps3_report.gyro_z  = __builtin_bswap16((uint16_t)event->gyro[2]);
+    } else {
         // Neutral motion (center at 511 = 0x01FF, big-endian = 0xFF01)
         ps3_report.accel_x = 0xFF01;
         ps3_report.accel_y = 0xFF01;
@@ -907,46 +865,45 @@ static bool usbd_send_psclassic_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Start with D-pad centered
-        psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
-
-        // D-pad encoding (bits 10-13)
-        uint8_t up = (buttons & JP_BUTTON_DU) ? 1 : 0;
-        uint8_t down = (buttons & JP_BUTTON_DD) ? 1 : 0;
-        uint8_t left = (buttons & JP_BUTTON_DL) ? 1 : 0;
-        uint8_t right = (buttons & JP_BUTTON_DR) ? 1 : 0;
-
-        if (up && right)        psclassic_report.buttons = PSCLASSIC_DPAD_UP_RIGHT;
-        else if (up && left)    psclassic_report.buttons = PSCLASSIC_DPAD_UP_LEFT;
-        else if (down && right) psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_RIGHT;
-        else if (down && left)  psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_LEFT;
-        else if (up)            psclassic_report.buttons = PSCLASSIC_DPAD_UP;
-        else if (down)          psclassic_report.buttons = PSCLASSIC_DPAD_DOWN;
-        else if (left)          psclassic_report.buttons = PSCLASSIC_DPAD_LEFT;
-        else if (right)         psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
-
-        // Face buttons and shoulders (bits 0-9)
-        psclassic_report.buttons |=
-              (buttons & JP_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
-            | (buttons & JP_BUTTON_B2 ? PSCLASSIC_MASK_CIRCLE   : 0)
-            | (buttons & JP_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
-            | (buttons & JP_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
-            | (buttons & JP_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
-            | (buttons & JP_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
-            | (buttons & JP_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
-            | (buttons & JP_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
-            | (buttons & JP_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
-            | (buttons & JP_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
-
-    } else {
-        // No input - neutral state
-        psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Start with D-pad centered
+    psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
+
+    // D-pad encoding (bits 10-13)
+    uint8_t up = (buttons & JP_BUTTON_DU) ? 1 : 0;
+    uint8_t down = (buttons & JP_BUTTON_DD) ? 1 : 0;
+    uint8_t left = (buttons & JP_BUTTON_DL) ? 1 : 0;
+    uint8_t right = (buttons & JP_BUTTON_DR) ? 1 : 0;
+
+    if (up && right)        psclassic_report.buttons = PSCLASSIC_DPAD_UP_RIGHT;
+    else if (up && left)    psclassic_report.buttons = PSCLASSIC_DPAD_UP_LEFT;
+    else if (down && right) psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_RIGHT;
+    else if (down && left)  psclassic_report.buttons = PSCLASSIC_DPAD_DOWN_LEFT;
+    else if (up)            psclassic_report.buttons = PSCLASSIC_DPAD_UP;
+    else if (down)          psclassic_report.buttons = PSCLASSIC_DPAD_DOWN;
+    else if (left)          psclassic_report.buttons = PSCLASSIC_DPAD_LEFT;
+    else if (right)         psclassic_report.buttons = PSCLASSIC_DPAD_RIGHT;
+
+    // Face buttons and shoulders (bits 0-9)
+    psclassic_report.buttons |=
+          (buttons & JP_BUTTON_B4 ? PSCLASSIC_MASK_TRIANGLE : 0)
+        | (buttons & JP_BUTTON_B2 ? PSCLASSIC_MASK_CIRCLE   : 0)
+        | (buttons & JP_BUTTON_B1 ? PSCLASSIC_MASK_CROSS    : 0)
+        | (buttons & JP_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
+        | (buttons & JP_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
+        | (buttons & JP_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
+        | (buttons & JP_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
+        | (buttons & JP_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
+        | (buttons & JP_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
+        | (buttons & JP_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
 
     return tud_hid_report(0, &psclassic_report, sizeof(psclassic_report));
 }
@@ -974,84 +931,74 @@ static bool usbd_send_ps4_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Byte 0: Report ID
-        ps4_report_buffer[0] = 0x01;
-
-        // Bytes 1-4: Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
-        ps4_report_buffer[1] = profile_out.left_x;          // LX
-        ps4_report_buffer[2] = profile_out.left_y;          // LY
-        ps4_report_buffer[3] = profile_out.right_x;         // RX
-        ps4_report_buffer[4] = profile_out.right_y;         // RY
-
-        // Byte 5: D-pad (bits 0-3) + face buttons (bits 4-7)
-        uint8_t up = (buttons & JP_BUTTON_DU) ? 1 : 0;
-        uint8_t down = (buttons & JP_BUTTON_DD) ? 1 : 0;
-        uint8_t left = (buttons & JP_BUTTON_DL) ? 1 : 0;
-        uint8_t right = (buttons & JP_BUTTON_DR) ? 1 : 0;
-
-        uint8_t dpad;
-        if (up && right)        dpad = PS4_HAT_UP_RIGHT;
-        else if (up && left)    dpad = PS4_HAT_UP_LEFT;
-        else if (down && right) dpad = PS4_HAT_DOWN_RIGHT;
-        else if (down && left)  dpad = PS4_HAT_DOWN_LEFT;
-        else if (up)            dpad = PS4_HAT_UP;
-        else if (down)          dpad = PS4_HAT_DOWN;
-        else if (left)          dpad = PS4_HAT_LEFT;
-        else if (right)         dpad = PS4_HAT_RIGHT;
-        else                    dpad = PS4_HAT_NOTHING;
-
-        uint8_t face_buttons = 0;
-        if (buttons & JP_BUTTON_B3) face_buttons |= 0x10;  // Square
-        if (buttons & JP_BUTTON_B1) face_buttons |= 0x20;  // Cross
-        if (buttons & JP_BUTTON_B2) face_buttons |= 0x40;  // Circle
-        if (buttons & JP_BUTTON_B4) face_buttons |= 0x80;  // Triangle
-
-        ps4_report_buffer[5] = dpad | face_buttons;
-
-        // Byte 6: Shoulder buttons + other buttons
-        uint8_t byte6 = 0;
-        if (buttons & JP_BUTTON_L1) byte6 |= 0x01;  // L1
-        if (buttons & JP_BUTTON_R1) byte6 |= 0x02;  // R1
-        if (buttons & JP_BUTTON_L2) byte6 |= 0x04;  // L2 (digital)
-        if (buttons & JP_BUTTON_R2) byte6 |= 0x08;  // R2 (digital)
-        if (buttons & JP_BUTTON_S1) byte6 |= 0x10;  // Share
-        if (buttons & JP_BUTTON_S2) byte6 |= 0x20;  // Options
-        if (buttons & JP_BUTTON_L3) byte6 |= 0x40;  // L3
-        if (buttons & JP_BUTTON_R3) byte6 |= 0x80;  // R3
-        ps4_report_buffer[6] = byte6;
-
-        // Byte 7: PS + Touchpad + Counter (6-bit)
-        uint8_t byte7 = 0;
-        if (buttons & JP_BUTTON_A1) byte7 |= 0x01;  // PS button
-        if (buttons & JP_BUTTON_A2) byte7 |= 0x02;  // Touchpad click
-        byte7 |= ((ps4_report_counter++ & 0x3F) << 2);       // Counter in bits 2-7
-        ps4_report_buffer[7] = byte7;
-
-        // Bytes 8-9: Analog triggers
-        ps4_report_buffer[8] = profile_out.l2_analog;  // Left trigger
-        ps4_report_buffer[9] = profile_out.r2_analog;  // Right trigger
-
-        // Bytes 10-11: Timestamp (we can just increment)
-        // Bytes 12-63: Leave as initialized (sensor data, touchpad, padding)
-
-    } else {
-        // No input - reset to neutral state
-        ps4_report_buffer[0] = 0x01;  // Report ID
-        ps4_report_buffer[1] = 0x80;  // LX center
-        ps4_report_buffer[2] = 0x80;  // LY center
-        ps4_report_buffer[3] = 0x80;  // RX center
-        ps4_report_buffer[4] = 0x80;  // RY center
-        ps4_report_buffer[5] = PS4_HAT_NOTHING;  // D-pad neutral (0x0F), no buttons
-        ps4_report_buffer[6] = 0x00;  // No buttons
-        ps4_report_buffer[7] = ((ps4_report_counter++ & 0x3F) << 2);  // Just counter
-        ps4_report_buffer[8] = 0x00;  // L2 trigger
-        ps4_report_buffer[9] = 0x00;  // R2 trigger
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Byte 0: Report ID
+    ps4_report_buffer[0] = 0x01;
+
+    // Bytes 1-4: Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
+    ps4_report_buffer[1] = profile_out.left_x;          // LX
+    ps4_report_buffer[2] = profile_out.left_y;          // LY
+    ps4_report_buffer[3] = profile_out.right_x;         // RX
+    ps4_report_buffer[4] = profile_out.right_y;         // RY
+
+    // Byte 5: D-pad (bits 0-3) + face buttons (bits 4-7)
+    uint8_t up = (buttons & JP_BUTTON_DU) ? 1 : 0;
+    uint8_t down = (buttons & JP_BUTTON_DD) ? 1 : 0;
+    uint8_t left = (buttons & JP_BUTTON_DL) ? 1 : 0;
+    uint8_t right = (buttons & JP_BUTTON_DR) ? 1 : 0;
+
+    uint8_t dpad;
+    if (up && right)        dpad = PS4_HAT_UP_RIGHT;
+    else if (up && left)    dpad = PS4_HAT_UP_LEFT;
+    else if (down && right) dpad = PS4_HAT_DOWN_RIGHT;
+    else if (down && left)  dpad = PS4_HAT_DOWN_LEFT;
+    else if (up)            dpad = PS4_HAT_UP;
+    else if (down)          dpad = PS4_HAT_DOWN;
+    else if (left)          dpad = PS4_HAT_LEFT;
+    else if (right)         dpad = PS4_HAT_RIGHT;
+    else                    dpad = PS4_HAT_NOTHING;
+
+    uint8_t face_buttons = 0;
+    if (buttons & JP_BUTTON_B3) face_buttons |= 0x10;  // Square
+    if (buttons & JP_BUTTON_B1) face_buttons |= 0x20;  // Cross
+    if (buttons & JP_BUTTON_B2) face_buttons |= 0x40;  // Circle
+    if (buttons & JP_BUTTON_B4) face_buttons |= 0x80;  // Triangle
+
+    ps4_report_buffer[5] = dpad | face_buttons;
+
+    // Byte 6: Shoulder buttons + other buttons
+    uint8_t byte6 = 0;
+    if (buttons & JP_BUTTON_L1) byte6 |= 0x01;  // L1
+    if (buttons & JP_BUTTON_R1) byte6 |= 0x02;  // R1
+    if (buttons & JP_BUTTON_L2) byte6 |= 0x04;  // L2 (digital)
+    if (buttons & JP_BUTTON_R2) byte6 |= 0x08;  // R2 (digital)
+    if (buttons & JP_BUTTON_S1) byte6 |= 0x10;  // Share
+    if (buttons & JP_BUTTON_S2) byte6 |= 0x20;  // Options
+    if (buttons & JP_BUTTON_L3) byte6 |= 0x40;  // L3
+    if (buttons & JP_BUTTON_R3) byte6 |= 0x80;  // R3
+    ps4_report_buffer[6] = byte6;
+
+    // Byte 7: PS + Touchpad + Counter (6-bit)
+    uint8_t byte7 = 0;
+    if (buttons & JP_BUTTON_A1) byte7 |= 0x01;  // PS button
+    if (buttons & JP_BUTTON_A2) byte7 |= 0x02;  // Touchpad click
+    byte7 |= ((ps4_report_counter++ & 0x3F) << 2);       // Counter in bits 2-7
+    ps4_report_buffer[7] = byte7;
+
+    // Bytes 8-9: Analog triggers
+    ps4_report_buffer[8] = profile_out.l2_analog;  // Left trigger
+    ps4_report_buffer[9] = profile_out.r2_analog;  // Right trigger
+
+    // Bytes 10-11: Timestamp (we can just increment)
+    // Bytes 12-63: Leave as initialized (sensor data, touchpad, padding)
 
     // Send with report_id=0x01, letting TinyUSB prepend it
     // Skip byte 0 of buffer (our report_id) and send 63 bytes of data
@@ -1067,55 +1014,58 @@ static bool usbd_send_xbone_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
+    }
+
     // Clear report
     memset(&xbone_report, 0, sizeof(gip_input_report_t));
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
 
-        // Buttons
-        xbone_report.a = (buttons & JP_BUTTON_B1) ? 1 : 0;
-        xbone_report.b = (buttons & JP_BUTTON_B2) ? 1 : 0;
-        xbone_report.x = (buttons & JP_BUTTON_B3) ? 1 : 0;
-        xbone_report.y = (buttons & JP_BUTTON_B4) ? 1 : 0;
+    // Buttons
+    xbone_report.a = (buttons & JP_BUTTON_B1) ? 1 : 0;
+    xbone_report.b = (buttons & JP_BUTTON_B2) ? 1 : 0;
+    xbone_report.x = (buttons & JP_BUTTON_B3) ? 1 : 0;
+    xbone_report.y = (buttons & JP_BUTTON_B4) ? 1 : 0;
 
-        xbone_report.left_shoulder = (buttons & JP_BUTTON_L1) ? 1 : 0;
-        xbone_report.right_shoulder = (buttons & JP_BUTTON_R1) ? 1 : 0;
+    xbone_report.left_shoulder = (buttons & JP_BUTTON_L1) ? 1 : 0;
+    xbone_report.right_shoulder = (buttons & JP_BUTTON_R1) ? 1 : 0;
 
-        xbone_report.back = (buttons & JP_BUTTON_S1) ? 1 : 0;
-        xbone_report.start = (buttons & JP_BUTTON_S2) ? 1 : 0;
+    xbone_report.back = (buttons & JP_BUTTON_S1) ? 1 : 0;
+    xbone_report.start = (buttons & JP_BUTTON_S2) ? 1 : 0;
 
-        xbone_report.guide = (buttons & JP_BUTTON_A1) ? 1 : 0;
-        xbone_report.sync = (buttons & JP_BUTTON_A2) ? 1 : 0;
+    xbone_report.guide = (buttons & JP_BUTTON_A1) ? 1 : 0;
+    xbone_report.sync = (buttons & JP_BUTTON_A2) ? 1 : 0;
 
-        xbone_report.left_thumb = (buttons & JP_BUTTON_L3) ? 1 : 0;
-        xbone_report.right_thumb = (buttons & JP_BUTTON_R3) ? 1 : 0;
+    xbone_report.left_thumb = (buttons & JP_BUTTON_L3) ? 1 : 0;
+    xbone_report.right_thumb = (buttons & JP_BUTTON_R3) ? 1 : 0;
 
-        xbone_report.dpad_up = (buttons & JP_BUTTON_DU) ? 1 : 0;
-        xbone_report.dpad_down = (buttons & JP_BUTTON_DD) ? 1 : 0;
-        xbone_report.dpad_left = (buttons & JP_BUTTON_DL) ? 1 : 0;
-        xbone_report.dpad_right = (buttons & JP_BUTTON_DR) ? 1 : 0;
+    xbone_report.dpad_up = (buttons & JP_BUTTON_DU) ? 1 : 0;
+    xbone_report.dpad_down = (buttons & JP_BUTTON_DD) ? 1 : 0;
+    xbone_report.dpad_left = (buttons & JP_BUTTON_DL) ? 1 : 0;
+    xbone_report.dpad_right = (buttons & JP_BUTTON_DR) ? 1 : 0;
 
-        // Triggers (0-1023)
-        // Map from profile analog (0-255) to Xbox One range (0-1023)
-        xbone_report.left_trigger = (uint16_t)profile_out.l2_analog * 4;
-        xbone_report.right_trigger = (uint16_t)profile_out.r2_analog * 4;
+    // Triggers (0-1023)
+    // Map from profile analog (0-255) to Xbox One range (0-1023)
+    xbone_report.left_trigger = (uint16_t)profile_out.l2_analog * 4;
+    xbone_report.right_trigger = (uint16_t)profile_out.r2_analog * 4;
 
-        // Fallback to digital if analog is 0 but button pressed
-        if (xbone_report.left_trigger == 0 && (buttons & JP_BUTTON_L2))
-            xbone_report.left_trigger = 1023;
-        if (xbone_report.right_trigger == 0 && (buttons & JP_BUTTON_R2))
-            xbone_report.right_trigger = 1023;
+    // Fallback to digital if analog is 0 but button pressed
+    if (xbone_report.left_trigger == 0 && (buttons & JP_BUTTON_L2))
+        xbone_report.left_trigger = 1023;
+    if (xbone_report.right_trigger == 0 && (buttons & JP_BUTTON_R2))
+        xbone_report.right_trigger = 1023;
 
-        // Analog sticks (signed 16-bit, -32768 to +32767)
-        // Y-axis inverted: input 0=down, output positive=up
-        xbone_report.left_stick_x = convert_axis_to_s16(profile_out.left_x);
-        xbone_report.left_stick_y = -convert_axis_to_s16(profile_out.left_y);
-        xbone_report.right_stick_x = convert_axis_to_s16(profile_out.right_x);
-        xbone_report.right_stick_y = -convert_axis_to_s16(profile_out.right_y);
-    }
+    // Analog sticks (signed 16-bit, -32768 to +32767)
+    // Y-axis inverted: input 0=down, output positive=up
+    xbone_report.left_stick_x = convert_axis_to_s16(profile_out.left_x);
+    xbone_report.left_stick_y = -convert_axis_to_s16(profile_out.left_y);
+    xbone_report.right_stick_x = convert_axis_to_s16(profile_out.right_x);
+    xbone_report.right_stick_y = -convert_axis_to_s16(profile_out.right_y);
 
     return tud_xbone_send_report(&xbone_report);
 }
@@ -1129,41 +1079,41 @@ static bool usbd_send_xac_report(uint8_t player_index)
 
     const input_event_t* event = router_get_output(OUTPUT_TARGET_USB_DEVICE, player_index);
 
-    if (event) {
-        // Apply profile (combos, button remaps)
-        profile_output_t profile_out;
-        uint32_t buttons = apply_usbd_profile(event, &profile_out);
-
-        // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
-        xac_report.lx = profile_out.left_x;
-        xac_report.ly = profile_out.left_y;
-        xac_report.rx = profile_out.right_x;
-        xac_report.ry = profile_out.right_y;
-
-        // D-pad as hat switch
-        xac_report.hat = convert_dpad_to_hat(buttons);
-
-        // Buttons (12 total, split into low 4 bits and high 8 bits)
-        uint16_t xac_buttons = 0;
-        if (buttons & JP_BUTTON_B1) xac_buttons |= XAC_MASK_B1;  // A
-        if (buttons & JP_BUTTON_B2) xac_buttons |= XAC_MASK_B2;  // B
-        if (buttons & JP_BUTTON_B3) xac_buttons |= XAC_MASK_B3;  // X
-        if (buttons & JP_BUTTON_B4) xac_buttons |= XAC_MASK_B4;  // Y
-        if (buttons & JP_BUTTON_L1) xac_buttons |= XAC_MASK_L1;  // LB
-        if (buttons & JP_BUTTON_R1) xac_buttons |= XAC_MASK_R1;  // RB
-        if (buttons & JP_BUTTON_L2) xac_buttons |= XAC_MASK_L2;  // LT (digital)
-        if (buttons & JP_BUTTON_R2) xac_buttons |= XAC_MASK_R2;  // RT (digital)
-        if (buttons & JP_BUTTON_S1) xac_buttons |= XAC_MASK_S1;  // Back
-        if (buttons & JP_BUTTON_S2) xac_buttons |= XAC_MASK_S2;  // Start
-        if (buttons & JP_BUTTON_L3) xac_buttons |= XAC_MASK_L3;  // LS
-        if (buttons & JP_BUTTON_R3) xac_buttons |= XAC_MASK_R3;  // RS
-
-        xac_report.buttons_lo = xac_buttons & 0x0F;
-        xac_report.buttons_hi = (xac_buttons >> 4) & 0xFF;
-    } else {
-        // No input - send neutral state
-        xac_init_report(&xac_report);
+    // No update - don't send a report (keeps previous state on host)
+    if (!event) {
+        return false;
     }
+
+    // Apply profile (combos, button remaps)
+    profile_output_t profile_out;
+    uint32_t buttons = apply_usbd_profile(event, &profile_out);
+
+    // Analog sticks (HID convention: 0=up, 255=down - no inversion needed)
+    xac_report.lx = profile_out.left_x;
+    xac_report.ly = profile_out.left_y;
+    xac_report.rx = profile_out.right_x;
+    xac_report.ry = profile_out.right_y;
+
+    // D-pad as hat switch
+    xac_report.hat = convert_dpad_to_hat(buttons);
+
+    // Buttons (12 total, split into low 4 bits and high 8 bits)
+    uint16_t xac_buttons = 0;
+    if (buttons & JP_BUTTON_B1) xac_buttons |= XAC_MASK_B1;  // A
+    if (buttons & JP_BUTTON_B2) xac_buttons |= XAC_MASK_B2;  // B
+    if (buttons & JP_BUTTON_B3) xac_buttons |= XAC_MASK_B3;  // X
+    if (buttons & JP_BUTTON_B4) xac_buttons |= XAC_MASK_B4;  // Y
+    if (buttons & JP_BUTTON_L1) xac_buttons |= XAC_MASK_L1;  // LB
+    if (buttons & JP_BUTTON_R1) xac_buttons |= XAC_MASK_R1;  // RB
+    if (buttons & JP_BUTTON_L2) xac_buttons |= XAC_MASK_L2;  // LT (digital)
+    if (buttons & JP_BUTTON_R2) xac_buttons |= XAC_MASK_R2;  // RT (digital)
+    if (buttons & JP_BUTTON_S1) xac_buttons |= XAC_MASK_S1;  // Back
+    if (buttons & JP_BUTTON_S2) xac_buttons |= XAC_MASK_S2;  // Start
+    if (buttons & JP_BUTTON_L3) xac_buttons |= XAC_MASK_L3;  // LS
+    if (buttons & JP_BUTTON_R3) xac_buttons |= XAC_MASK_R3;  // RS
+
+    xac_report.buttons_lo = xac_buttons & 0x0F;
+    xac_report.buttons_hi = (xac_buttons >> 4) & 0xFF;
 
     return tud_hid_report(0, &xac_report, sizeof(xac_report));
 }

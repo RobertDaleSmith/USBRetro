@@ -54,6 +54,8 @@ extern void btstack_memory_init(void);
 extern void bt_on_hid_ready(uint8_t conn_index);
 extern void bt_on_disconnect(uint8_t conn_index);
 extern void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len);
+extern void bthid_update_device_info(uint8_t conn_index, const char* name,
+                                      uint16_t vendor_id, uint16_t product_id);
 
 #include <stdio.h>
 #include <string.h>
@@ -614,6 +616,11 @@ static void sdp_query_vid_pid_callback(uint8_t packet_type, uint16_t channel, ui
                         conn->product_id = classic_state.pending_pid;
                         printf("[BTSTACK_HOST] Updated conn[%d] VID/PID: 0x%04X/0x%04X\n",
                                i, conn->vendor_id, conn->product_id);
+
+                        // Notify bthid to re-evaluate driver selection with new VID/PID
+                        bthid_update_device_info(i, conn->name,
+                                                  classic_state.pending_vid,
+                                                  classic_state.pending_pid);
                         break;
                     }
                 }
