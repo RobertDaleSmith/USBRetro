@@ -156,8 +156,9 @@ void app_init(void)
     players_init_with_config(&player_cfg);
 
     // Initialize Bluetooth transport (CYW43)
+    // Must use bt_init() to set global transport pointer and register drivers
     printf("[app:bt2usb] Initializing Bluetooth...\n");
-    bt_transport_cyw43.init();
+    bt_init(&bt_transport_cyw43);
 
     printf("[app:bt2usb] Initialization complete\n");
     printf("[app:bt2usb]   Routing: Bluetooth -> USB Device (HID Gamepad)\n");
@@ -176,7 +177,7 @@ void app_task(void)
     button_task();
 
     // Process Bluetooth transport
-    bt_transport_cyw43.task();
+    bt_task();
 
     // Route feedback from USB device output to BT controllers
     if (usbd_output_interface.get_feedback) {
