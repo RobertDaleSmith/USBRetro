@@ -365,9 +365,7 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
     bool can_trigger = combo->p_initial_trigger_done || (hold_duration >= INITIAL_HOLD_TIME_MS);
 
     if (!can_trigger) {
-        // Still waiting for initial hold - but track D-pad state
-        combo->p_dpad_up_was_pressed = dpad_up_pressed;
-        combo->p_dpad_down_was_pressed = dpad_down_pressed;
+        // Still waiting for initial hold
         return;
     }
 
@@ -380,9 +378,23 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
         return;  // Still rumbling from last switch
     }
 
+    // Initial trigger: when 2-second hold completes, trigger immediately if D-pad is held
+    // Subsequent triggers: require rising edge (release and press again)
+    bool trigger_up = false;
+    bool trigger_down = false;
+
+    if (!combo->p_initial_trigger_done) {
+        // Initial trigger - just check if D-pad is currently pressed
+        trigger_up = dpad_up_pressed;
+        trigger_down = dpad_down_pressed;
+    } else {
+        // Subsequent triggers - require rising edge
+        trigger_up = dpad_up_pressed && !combo->p_dpad_up_was_pressed;
+        trigger_down = dpad_down_pressed && !combo->p_dpad_down_was_pressed;
+    }
+
     // D-pad Up - cycle profile forward
-    // On first trigger after hold, allow if D-pad is held (no rising edge needed)
-    if (dpad_up_pressed && (!combo->p_dpad_up_was_pressed || !combo->p_initial_trigger_done)) {
+    if (trigger_up) {
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_player_next(output, player_index);
@@ -392,7 +404,7 @@ void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
     combo->p_dpad_up_was_pressed = dpad_up_pressed;
 
     // D-pad Down - cycle profile backward
-    if (dpad_down_pressed && (!combo->p_dpad_down_was_pressed || !combo->p_initial_trigger_done)) {
+    if (trigger_down && !trigger_up) {  // Don't trigger both directions
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_player_prev(output, player_index);
@@ -450,7 +462,6 @@ void profile_check_switch_combo(uint32_t buttons)
         // Select just pressed - start timer
         select_hold_start = current_time;
         select_was_held = true;
-        // D-pad state will be tracked in the wait period below
     }
 
     uint32_t select_hold_duration = current_time - select_hold_start;
@@ -459,11 +470,7 @@ void profile_check_switch_combo(uint32_t buttons)
     bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
 
     if (!can_trigger) {
-        // Still waiting for initial 2-second hold - but track D-pad state
-        dpad_up_was_pressed = dpad_up_pressed;
-        dpad_down_was_pressed = dpad_down_pressed;
-        dpad_left_was_pressed = dpad_left_pressed;
-        dpad_right_was_pressed = dpad_right_pressed;
+        // Still waiting for initial 2-second hold
         return;
     }
 
@@ -477,10 +484,23 @@ void profile_check_switch_combo(uint32_t buttons)
         return;
     }
 
+    // Initial trigger: when 2-second hold completes, trigger immediately if D-pad is held
+    // Subsequent triggers: require rising edge (release and press again)
+    bool trigger_up = false;
+    bool trigger_down = false;
+
+    if (!initial_trigger_done) {
+        // Initial trigger - just check if D-pad is currently pressed
+        trigger_up = dpad_up_pressed;
+        trigger_down = dpad_down_pressed;
+    } else {
+        // Subsequent triggers - require rising edge
+        trigger_up = dpad_up_pressed && !dpad_up_was_pressed;
+        trigger_down = dpad_down_pressed && !dpad_down_was_pressed;
+    }
+
     // D-pad Up - cycle profile forward
-    // On first trigger after 2-second hold, allow if D-pad is held (no rising edge needed)
-    // After that, require rising edge for subsequent triggers
-    if (dpad_up_pressed && (!dpad_up_was_pressed || !initial_trigger_done)) {
+    if (trigger_up) {
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_next(output);
@@ -490,7 +510,7 @@ void profile_check_switch_combo(uint32_t buttons)
     dpad_up_was_pressed = dpad_up_pressed;
 
     // D-pad Down - cycle profile backward
-    if (dpad_down_pressed && (!dpad_down_was_pressed || !initial_trigger_done)) {
+    if (trigger_down && !trigger_up) {  // Don't trigger both directions
         uint8_t count = profile_get_count(output);
         if (count > 1) {
             profile_cycle_prev(output);

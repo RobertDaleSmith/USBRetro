@@ -1,6 +1,7 @@
 // hid.c - HID protocol handler (TinyUSB HID host callbacks)
 #include "tusb.h"
 #include "core/buttons.h"
+#include "core/output_interface.h"
 #include "core/services/players/manager.h"
 #include "core/services/players/feedback.h"
 #include "core/services/profiles/profile_indicator.h"
@@ -68,12 +69,18 @@ void hid_task(void)
           // Override player_index during profile indication
           int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
 
+          // Get trigger threshold from output interface (profile-based adaptive triggers)
+          uint8_t trigger_threshold = 0;
+          if (active_output && active_output->get_trigger_threshold) {
+            trigger_threshold = active_output->get_trigger_threshold();
+          }
+
           // Build legacy device output configuration from feedback state
           device_output_config_t config = {
             .player_index = display_player_index,
             .rumble = fb ? (fb->rumble.left > fb->rumble.right ? fb->rumble.left : fb->rumble.right) : 0,
             .leds = fb ? fb->led.pattern : 0,
-            .trigger_threshold = fb ? fb->left_trigger.strength : 0,
+            .trigger_threshold = trigger_threshold,
             .test = test_counter
           };
 

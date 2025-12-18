@@ -40,6 +40,9 @@ static uint8_t output_count = 0;
 static const InputInterface** inputs = NULL;
 static uint8_t input_count = 0;
 
+// Active/primary output interface (accessible from other modules)
+const OutputInterface* active_output = NULL;
+
 // Core 0 main loop - pinned in SRAM for consistent timing
 static void __not_in_flash_func(core0_main)(void)
 {
@@ -90,6 +93,9 @@ int main(void)
 
   // Get and initialize output interfaces from app
   outputs = app_get_output_interfaces(&output_count);
+  if (output_count > 0 && outputs[0]) {
+    active_output = outputs[0];  // Set primary output for other modules
+  }
   for (uint8_t i = 0; i < output_count; i++) {
     if (outputs[i] && outputs[i]->init) {
       printf("[joypad] Initializing output: %s\n", outputs[i]->name);

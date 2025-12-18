@@ -318,13 +318,23 @@ static void map_usbr_to_gc_report(const profile_output_t* output, gc_report_t* r
 void __not_in_flash_func(update_output)(void)
 {
   static bool kbModeButtonHeld = false;
+  static uint32_t last_buttons = 0;  // Remember last button state for combo detection
 
   // Get input from router (GameCube uses MERGE mode, all inputs merged to player 0)
   const input_event_t* event = router_get_output(OUTPUT_TARGET_GAMECUBE, 0);
-  if (!event || playersCount == 0) return;  // No input available
 
-  // Check for profile switching combo (delegated to core)
-  profile_check_switch_combo(event->buttons);
+  // Update last_buttons when we have new input
+  if (event) {
+    last_buttons = event->buttons;
+  }
+
+  // Always check profile switching combo with last known state
+  // This ensures combo detection works even when controller doesn't send updates while buttons held
+  if (playersCount > 0) {
+    profile_check_switch_combo(last_buttons);
+  }
+
+  if (!event || playersCount == 0) return;  // No new input to process
 
   // Build report locally to avoid Core 1 reading partial updates
   gc_report_t new_report;
