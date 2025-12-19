@@ -192,6 +192,11 @@ output_target_t router_get_primary_output(void);
 // Reset all output states to neutral (call when all controllers disconnect)
 void router_reset_outputs(void);
 
+// Clean up router state when a device disconnects
+// This clears the device's output state and removes it from blend tracking
+// Call this BEFORE removing the player from the player manager
+void router_device_disconnected(uint8_t dev_addr, int8_t instance);
+
 // ============================================================================
 // OUTPUT TAP (Push-based notification)
 // ============================================================================

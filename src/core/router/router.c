@@ -776,3 +776,92 @@ void router_reset_outputs(void) {
         }
     }
 }
+
+// Clean up router state when a device disconnects
+void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
+    printf(LOG_TAG "Device disconnected: dev_addr=%d, instance=%d\n", dev_addr, instance);
+
+    // Find the player index for this device
+    int player_index = find_player_index(dev_addr, instance);
+
+    // Find first active route to determine output target
+    output_target_t output = OUTPUT_TARGET_USB_DEVICE;
+    for (uint8_t i = 0; i < MAX_ROUTES; i++) {
+        if (routing_table[i].active) {
+            output = routing_table[i].output;
+            break;
+        }
+    }
+
+    // Clear blend device tracking for this device (MERGE_BLEND mode)
+    for (uint8_t out = 0; out < MAX_OUTPUTS; out++) {
+        for (uint8_t i = 0; i < MAX_BLEND_DEVICES; i++) {
+            if (blend_devices[out][i].active &&
+                blend_devices[out][i].dev_addr == dev_addr &&
+                blend_devices[out][i].instance == instance) {
+                blend_devices[out][i].active = false;
+                blend_devices[out][i].dev_addr = 0;
+                blend_devices[out][i].instance = -1;
+                init_input_event(&blend_devices[out][i].state);
+                printf(LOG_TAG "Cleared blend device slot %d for output %d\n", i, out);
+            }
+        }
+    }
+
+    // For MERGE mode, all inputs go to player 0 - re-blend remaining devices
+    if (router_config.mode == ROUTING_MODE_MERGE) {
+        output_state_t* out_state = &router_outputs[output][0];
+        init_input_event(&out_state->current_state);
+
+        if (router_config.merge_mode == MERGE_BLEND) {
+            // Re-blend all remaining active devices
+            for (uint8_t i = 0; i < MAX_BLEND_DEVICES; i++) {
+                if (!blend_devices[output][i].active) continue;
+
+                input_event_t* dev = &blend_devices[output][i].state;
+
+                // Buttons: OR together
+                out_state->current_state.buttons |= dev->buttons;
+                out_state->current_state.keys |= dev->keys;
+
+                // Analog: use furthest from center for sticks, max for triggers
+                for (int j = 0; j < 8; j++) {
+                    if (j == 4 || j == 7) continue;
+                    if (j >= 5) {
+                        if (dev->analog[j] > out_state->current_state.analog[j]) {
+                            out_state->current_state.analog[j] = dev->analog[j];
+                        }
+                    } else {
+                        int8_t cur_delta = (int8_t)(out_state->current_state.analog[j] - 128);
+                        int8_t dev_delta = (int8_t)(dev->analog[j] - 128);
+                        if (abs(dev_delta) > abs(cur_delta)) {
+                            out_state->current_state.analog[j] = dev->analog[j];
+                        }
+                    }
+                }
+            }
+        }
+
+        out_state->updated = true;
+
+        // Always notify tap with current state (zeroed or re-blended)
+        if (output_taps[output]) {
+            output_taps[output](output, 0, &out_state->current_state);
+        }
+
+        printf(LOG_TAG "Updated merged output (player 0)\n");
+    } else {
+        // SIMPLE/BROADCAST mode: clear this player's specific output state
+        if (player_index >= 0 && player_index < MAX_PLAYERS_PER_OUTPUT) {
+            init_input_event(&router_outputs[output][player_index].current_state);
+            router_outputs[output][player_index].updated = true;
+
+            // Notify tap if registered (sends zeroed state to USB/UART output)
+            if (output_taps[output]) {
+                output_taps[output](output, player_index, &router_outputs[output][player_index].current_state);
+            }
+
+            printf(LOG_TAG "Cleared output state for player %d\n", player_index);
+        }
+    }
+}

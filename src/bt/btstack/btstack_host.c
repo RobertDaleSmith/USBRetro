@@ -982,7 +982,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             printf("[BTSTACK_HOST] Disconnected: handle=0x%04X reason=0x%02X\n", handle, reason);
 
             ble_connection_t *conn = find_connection_by_handle(handle);
-            if (conn) {
+            if (conn && conn->conn_index > 0) {
+                // Notify bthid layer before clearing connection
+                // conn_index for BLE uses BLE_CONN_INDEX_OFFSET to distinguish from Classic
+                printf("[BTSTACK_HOST] BLE disconnect: notifying bthid (conn_index=%d)\n", conn->conn_index);
+                bt_on_disconnect(conn->conn_index);
                 memset(conn, 0, sizeof(*conn));
             }
 

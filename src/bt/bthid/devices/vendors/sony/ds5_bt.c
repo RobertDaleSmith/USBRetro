@@ -550,6 +550,8 @@ static void ds5_disconnect(bthid_device_t* device)
 
     ds5_bt_data_t* ds5 = (ds5_bt_data_t*)device->driver_data;
     if (ds5) {
+        // Clear router state first (sends zeroed input report)
+        router_device_disconnected(ds5->event.dev_addr, ds5->event.instance);
         // Remove player assignment
         remove_players_by_address(ds5->event.dev_addr, ds5->event.instance);
 

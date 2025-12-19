@@ -431,6 +431,8 @@ static void ds4_disconnect(bthid_device_t* device)
 
     ds4_bt_data_t* ds4 = (ds4_bt_data_t*)device->driver_data;
     if (ds4) {
+        // Clear router state first (sends zeroed input report)
+        router_device_disconnected(ds4->event.dev_addr, ds4->event.instance);
         // Remove player assignment
         remove_players_by_address(ds4->event.dev_addr, ds4->event.instance);
 

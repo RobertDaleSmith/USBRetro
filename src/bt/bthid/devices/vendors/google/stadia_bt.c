@@ -191,6 +191,8 @@ static void stadia_disconnect(bthid_device_t* device)
 
     stadia_bt_data_t* sd = (stadia_bt_data_t*)device->driver_data;
     if (sd) {
+        // Clear router state first (sends zeroed input report)
+        router_device_disconnected(sd->event.dev_addr, sd->event.instance);
         remove_players_by_address(sd->event.dev_addr, sd->event.instance);
         init_input_event(&sd->event);
         sd->initialized = false;

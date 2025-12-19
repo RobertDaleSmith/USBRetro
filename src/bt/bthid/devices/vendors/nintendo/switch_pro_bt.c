@@ -9,6 +9,7 @@
 #include "core/input_event.h"
 #include "core/router/router.h"
 #include "core/buttons.h"
+#include "core/services/players/manager.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -362,6 +363,11 @@ static void switch_disconnect(bthid_device_t* device)
 
     switch_bt_data_t* sw = (switch_bt_data_t*)device->driver_data;
     if (sw) {
+        // Clear router state first (sends zeroed input report)
+        router_device_disconnected(sw->event.dev_addr, sw->event.instance);
+        // Remove player assignment
+        remove_players_by_address(sw->event.dev_addr, sw->event.instance);
+
         init_input_event(&sw->event);
         sw->initialized = false;
     }

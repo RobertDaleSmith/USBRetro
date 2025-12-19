@@ -478,9 +478,9 @@ target_link_libraries(joypad_usb_rp2040zero PRIVATE ${COMMON_LIBRARIES} tinyusb_
 joypad_target_common(joypad_usb_rp2040zero)
 joypad_add_btstack(joypad_usb_rp2040zero)
 
-# --- BT to USB (Pico W built-in Bluetooth) ---
-# Only build when targeting Pico W
-if (PICO_BOARD STREQUAL "pico_w")
+# --- BT to USB (Pico W / Pico 2 W built-in Bluetooth) ---
+# Only build when targeting Pico W or Pico 2 W
+if (PICO_BOARD STREQUAL "pico_w" OR PICO_BOARD STREQUAL "pico2_w")
     add_executable(joypad_bt2usb)
     target_compile_definitions(joypad_bt2usb PRIVATE
         CONFIG_BT2USB=1

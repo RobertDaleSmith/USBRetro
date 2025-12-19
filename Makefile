@@ -38,6 +38,7 @@ export PICO_TINYUSB_PATH := $(CURDIR)/src/lib/tinyusb
 # Board-specific build scripts
 BOARD_SCRIPT_pico := boards/build_rpi_pico.sh
 BOARD_SCRIPT_pico_w := boards/build_pico_w.sh
+BOARD_SCRIPT_pico2_w := boards/build_pico2_w.sh
 BOARD_SCRIPT_kb2040 := boards/build_ada_kb2040.sh
 BOARD_SCRIPT_qtpy := boards/build_ada_qtpy.sh
 BOARD_SCRIPT_rp2040zero := boards/build_waveshare_rp2040_zero.sh
@@ -75,6 +76,7 @@ APP_usb2uart_kb2040 := kb2040 uart usb2uart_kb2040 USB/BT UART
 APP_usb2usb_feather := feather_usbhost usb usb2usb_feather USB/BT USB
 APP_usb2usb_rp2040zero := rp2040zero usb_rp2040zero usb2usb_rp2040zero USB/BT USB
 APP_bt2usb_pico_w := pico_w bt2usb bt2usb_pico_w Bluetooth USB
+APP_bt2usb_pico2_w := pico2_w bt2usb bt2usb_pico2_w Bluetooth USB
 APP_snes2usb_kb2040 := kb2040 snes2usb snes2usb_kb2040 SNES USB
 APP_controller_fisherprice_kb2040 := kb2040 controller_fisherprice controller_fisherprice_kb2040 GPIO USB
 APP_controller_fisherprice_analog_kb2040 := kb2040 controller_fisherprice_analog controller_fisherprice_analog_kb2040 GPIO/ADC USB
@@ -82,7 +84,7 @@ APP_controller_alpakka_pico := pico controller_alpakka controller_alpakka_pico G
 APP_controller_macropad := macropad controller_macropad controller_macropad GPIO USB
 
 # All apps (note: controller_macropad not included - build explicitly with 'make controller_macropad')
-APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2loopy_kb2040 usb23do_rp2040zero snes23do_rp2040zero usb2uart_kb2040 usb2usb_feather usb2usb_rp2040zero bt2usb_pico_w snes2usb_kb2040 controller_fisherprice_kb2040 controller_alpakka_pico
+APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2loopy_kb2040 usb23do_rp2040zero snes23do_rp2040zero usb2uart_kb2040 usb2usb_feather usb2usb_rp2040zero bt2usb_pico_w bt2usb_pico2_w snes2usb_kb2040 controller_fisherprice_kb2040 controller_alpakka_pico
 
 # Stable apps for release
 RELEASE_APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2loopy_kb2040 usb23do_rp2040zero usb2usb_feather usb2usb_rp2040zero bt2usb_pico_w snes2usb_kb2040 snes23do_rp2040zero
@@ -240,6 +242,10 @@ usb2usb_rp2040zero:
 .PHONY: bt2usb_pico_w
 bt2usb_pico_w:
 	$(call build_app,bt2usb_pico_w)
+
+.PHONY: bt2usb_pico2_w
+bt2usb_pico2_w:
+	$(call build_app,bt2usb_pico2_w)
 
 .PHONY: snes2usb_kb2040
 snes2usb_kb2040:
