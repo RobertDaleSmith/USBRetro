@@ -67,8 +67,20 @@ void hid_task(void)
           // Get per-player feedback state
           feedback_state_t* fb = (player_index >= 0) ? feedback_get_state(player_index) : NULL;
 
-          // Override player_index during profile indication
-          int8_t display_player_index = profile_indicator_get_display_player_index(player_index);
+          // Derive player LED index from feedback pattern (for USB output passthrough)
+          // Pattern: 0x01=P1, 0x02=P2, 0x04=P3, 0x08=P4
+          int8_t led_player_index = -1;
+          if (fb && fb->led.pattern) {
+            if (fb->led.pattern & 0x01) led_player_index = 0;
+            else if (fb->led.pattern & 0x02) led_player_index = 1;
+            else if (fb->led.pattern & 0x04) led_player_index = 2;
+            else if (fb->led.pattern & 0x08) led_player_index = 3;
+          }
+
+          // Use feedback LED player if set, otherwise use profile indicator display
+          int8_t display_player_index = (led_player_index >= 0)
+            ? led_player_index
+            : profile_indicator_get_display_player_index(player_index);
 
           // Get trigger threshold from output interface (profile-based adaptive triggers)
           uint8_t trigger_threshold = 0;

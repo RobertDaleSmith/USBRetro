@@ -548,45 +548,42 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
 
       // } else if (switch_devices[dev_addr].instances[instance].imu_enabled) {
       } else if (switch_devices[dev_addr].instances[instance].full_report_enabled) {
-        // For Joy-Con pairs, use root instance player index; otherwise use config value
-        uint8_t instance_count = switch_devices[dev_addr].instance_count;
-        uint8_t instance_index = instance_count == 1 ? instance : switch_devices[dev_addr].instance_root;
-        int player_index = find_player_index(dev_addr, instance_index);
+        // Use player_index from USB output interface config
+        int player_index = config->player_index;
 
         if (config->test ||
           switch_devices[dev_addr].instances[instance].player_led_set != player_index
         ) {
-          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d\r\n", dev_addr, instance, player_index+1);
+          TU_LOG1("SWITCH[%d|%d]: CMD_AND_RUMBLE, CMD_LED, %d (was %d)\r\n",
+                  dev_addr, instance, player_index,
+                  switch_devices[dev_addr].instances[instance].player_led_set);
 
           report_size = 12;
 
-          report[0x01] = output_sequence_counter++;
           report[0x00] = CMD_AND_RUMBLE; // COMMAND
+          report[0x01] = output_sequence_counter++;
+
+          // Include current rumble state in CMD_AND_RUMBLE
+          encode_rumble(config->rumble, &report[0x02]);      // Left motor
+          encode_rumble(config->rumble, &report[0x02 + 4]);  // Right motor
+
           report[0x0A + 0] = CMD_LED;    // SUB_COMMAND
 
-          // SUB_COMMAND ARGS
-          switch (player_index+1)
-          {
-          case 1:
-          case 2:
-          case 3:
-          case 4:
-          case 5:
-            report[0x0A + 1] = PLAYER_LEDS[player_index+1];
-            break;
-
-          default: // unassigned - turn all leds on
-            //
+          // SUB_COMMAND ARGS - use PLAYER_LEDS pattern based on player index
+          if (player_index >= 0 && player_index < 5) {
+            report[0x0A + 1] = PLAYER_LEDS[player_index + 1];
+          } else {
+            // unassigned - turn all leds on
             report[0x0A + 1] = 0x0f;
-            break;
           }
 
-          // fun
-          if (player_index+1 && config->test) {
+          // test mode override
+          if (config->test) {
             report[0x0A + 1] = (config->test & 0b00001111);
           }
 
           switch_devices[dev_addr].instances[instance].player_led_set = player_index;
+          switch_devices[dev_addr].instances[instance].rumble = config->rumble;  // Track rumble too
 
           tuh_hid_send_report(dev_addr, instance, 0, report, report_size);
         }
@@ -632,6 +629,10 @@ static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
   TU_LOG1("SWITCH[%d|%d]: Mounted\r\n", dev_addr, instance);
 
   switch_devices[dev_addr].instances[instance].command_ack = true;
+  // Initialize to 0xFF so first config comparison triggers output
+  switch_devices[dev_addr].instances[instance].rumble = 0xFF;
+  switch_devices[dev_addr].instances[instance].player_led_set = 0xFF;
+
   if ((++switch_devices[dev_addr].instance_count) == 1) {
     switch_devices[dev_addr].instance_root = instance; // save initial root instance to merge extras into
   }
@@ -642,6 +643,8 @@ static inline bool init_switch_pro(uint8_t dev_addr, uint8_t instance)
   if (pid == 0x2009) {  // Switch Pro
     switch_devices[dev_addr].is_pro = true;
   }
+
+  return true;
 }
 
 DeviceInterface switch_pro_interface = {
