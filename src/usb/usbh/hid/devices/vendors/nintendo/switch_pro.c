@@ -49,11 +49,12 @@ typedef struct
 static switch_device_t switch_devices[MAX_DEVICES] = { 0 };
 
 // Encode HD Rumble data for one motor (4 bytes)
-// Switch Pro HD Rumble format:
-//   Byte 0: HF freq low (0x00)
-//   Byte 1: HF amplitude (0x01-0xFF)
-//   Byte 2: LF freq (0x60 = 160Hz)
-//   Byte 3: LF amplitude (0x40-0xFF)
+// Format from OGX-Mini (working implementation):
+//   Byte 0: Amplitude (0x40-0xC0 range for active, 0x00 for off)
+//   Byte 1: HF freq constant (0x88 for active, 0x01 for off)
+//   Byte 2: Amplitude/2 (half of byte 0, 0x40 for off)
+//   Byte 3: LF freq constant (0x61 for active, 0x40 for off)
+// Neutral state: [00 01 40 40]
 // intensity: 0 = off, 1-255 = rumble strength
 static void encode_rumble(uint8_t intensity, uint8_t* out) {
   if (intensity == 0) {
@@ -65,21 +66,17 @@ static void encode_rumble(uint8_t intensity, uint8_t* out) {
     return;
   }
 
-  // Boost low intensity values to minimum perceptible
-  if (intensity < 64) {
-    intensity = 64;
-  }
+  // Scale intensity to amplitude (exact OGX-Mini formula)
+  // ((intensity/255) * 0.8 + 0.5) * (0xC0 - 0x40) + 0x40
+  // = ((intensity/255) * 0.8 + 0.5) * 128 + 64
+  // Range: 0x80 (at intensity=1) to 0xE6 (at intensity=255)
+  uint16_t scaled = ((uint16_t)intensity * 102) / 255 + 64;  // 0.8 * 128 = 102.4
+  uint8_t amplitude = (uint8_t)(scaled + 64);  // +0.5*128 + 0x40
 
-  // Scale intensity to amplitude ranges
-  // HF amplitude: 0x01-0xFF
-  uint8_t hf_amp = 0x01 + ((uint16_t)intensity * 0xFE) / 255;
-  // LF amplitude: 0x40-0xFF
-  uint8_t lf_amp = 0x40 + ((uint16_t)intensity * 0xBF) / 255;
-
-  out[0] = 0x00;        // HF freq low
-  out[1] = hf_amp;      // HF amplitude
-  out[2] = 0x60;        // LF freq (~160Hz)
-  out[3] = lf_amp;      // LF amplitude
+  out[0] = amplitude;       // Amplitude
+  out[1] = 0x88;            // HF freq constant
+  out[2] = amplitude / 2;   // Half amplitude
+  out[3] = 0x61;            // LF freq constant
 }
 
 // check if device is Nintendo Switch
