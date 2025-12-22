@@ -76,6 +76,7 @@ typedef struct {
   bool xfer_pending;
   uint8_t rumble;
   uint8_t player_led;
+  uint32_t last_haptic_ms;  // Timestamp of last haptic send
   // Stick calibration (captured on first reports assuming sticks at rest)
   stick_cal_t cal_lx, cal_ly, cal_rx, cal_ry;
   uint8_t cal_samples;  // Number of samples collected for calibration
@@ -92,6 +93,10 @@ static switch2_device_t switch2_devices[MAX_DEVICES] = { 0 };
 // Static buffers for USB operations
 static uint8_t switch2_config_buf[256] CFG_TUH_MEM_ALIGN;
 static uint8_t switch2_cmd_buf[32] CFG_TUH_MEM_ALIGN;
+static uint8_t switch2_haptic_buf[64] CFG_TUH_MEM_ALIGN;
+
+// Haptic output packet counter (0x50-0x5F)
+static uint8_t haptic_counter = 0;
 
 // Check if device is Switch 2 Pro controller
 // TODO: Add bcdDevice check to distinguish from Switch 1 Pro
@@ -120,6 +125,35 @@ static uint8_t scale_analog_calibrated(uint16_t val, uint16_t center) {
 
   // Convert to 0-255 with 128 as center
   return (uint8_t)(scaled + 128);
+}
+
+// Encode haptic data for one motor (5 bytes)
+// Switch 2 Pro haptic format:
+//   Byte 0: Amplitude (high band)
+//   Byte 1: Frequency (high band) - 0x60 for felt rumble
+//   Byte 2: Amplitude (low band)
+//   Byte 3: Frequency (low band) - 0x60 for felt rumble
+//   Byte 4: Flags/mode - 0x00
+// intensity: 0 = off, 1-255 = rumble strength
+static void encode_haptic(uint8_t intensity, uint8_t* out) {
+  if (intensity == 0) {
+    out[0] = 0x00;
+    out[1] = 0x00;
+    out[2] = 0x00;
+    out[3] = 0x00;
+    out[4] = 0x00;
+    return;
+  }
+
+  // Scale intensity (1-255) to amplitude (0x40-0xFF)
+  // amp = 0x40 + (intensity / 255) * 0xBF
+  uint8_t amp = 0x40 + ((uint16_t)intensity * 0xBF) / 255;
+
+  out[0] = amp;   // High band amplitude
+  out[1] = 0x60;  // High band frequency (felt rumble)
+  out[2] = amp;   // Low band amplitude
+  out[3] = 0x60;  // Low band frequency (felt rumble)
+  out[4] = 0x00;  // Flags
 }
 
 // Get initialization command by index
@@ -314,12 +348,113 @@ void input_switch2_pro(uint8_t dev_addr, uint8_t instance, uint8_t const* report
   router_submit_input(&event);
 }
 
-// Task function - handles initialization state machine
+// Send haptic/rumble output to controller
+// Haptic report format (Report ID 0x02, 64 bytes):
+//   Byte 0: Report ID (0x02)
+//   Byte 1: Counter (0x50-0x5F)
+//   Bytes 2-6: Left haptic data (5 bytes)
+//   Byte 17: Counter (duplicate)
+//   Bytes 18-22: Right haptic data (5 bytes)
+// Haptic update interval (ms) - send continuously while rumble active
+#define HAPTIC_INTERVAL_MS 50
+
+static void output_rumble(uint8_t dev_addr, uint8_t instance, uint8_t rumble) {
+  switch2_instance_t* inst = &switch2_devices[dev_addr].instances[instance];
+  uint32_t now = to_ms_since_boot(get_absolute_time());
+
+  // Check if we need to send:
+  // - Always send on change
+  // - Send periodically while rumble is active
+  bool changed = (inst->rumble != rumble);
+  bool periodic = (rumble && (now - inst->last_haptic_ms >= HAPTIC_INTERVAL_MS));
+
+  if (!changed && !periodic) {
+    return;
+  }
+
+  if (changed) {
+    printf("[SWITCH2] Rumble: %d -> %d\r\n", inst->rumble, rumble);
+  }
+  inst->rumble = rumble;
+  inst->last_haptic_ms = now;
+
+  // Build haptic report
+  memset(switch2_haptic_buf, 0, sizeof(switch2_haptic_buf));
+
+  switch2_haptic_buf[0] = 0x02;  // Report ID
+  switch2_haptic_buf[1] = 0x50 | (haptic_counter & 0x0F);
+  switch2_haptic_buf[17] = switch2_haptic_buf[1];  // Duplicate counter
+  haptic_counter = (haptic_counter + 1) & 0x0F;
+
+  // Use actual intensity value from host (0-255)
+  // If intensity is very low (<16), boost to minimum perceptible level
+  uint8_t intensity = rumble;
+  if (intensity > 0 && intensity < 64) {
+    intensity = 64;  // Minimum perceptible threshold
+  }
+  encode_haptic(intensity, &switch2_haptic_buf[2]);   // Left motor: bytes 2-6
+  encode_haptic(intensity, &switch2_haptic_buf[18]);  // Right motor: bytes 18-22
+
+  // Send via HID (Report ID 0x02)
+  tuh_hid_send_report(dev_addr, instance, 0x02, switch2_haptic_buf + 1, 63);
+}
+
+// Send player LED update via bulk endpoint
+// LED command format: [0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, pattern, ...]
+static void output_player_led(uint8_t dev_addr, uint8_t instance, uint8_t player_index) {
+  switch2_instance_t* inst = &switch2_devices[dev_addr].instances[instance];
+
+  // Only send if player LED changed
+  if (inst->player_led == player_index) {
+    return;
+  }
+
+  // Check endpoint is valid
+  if (inst->ep_out == 0) {
+    printf("[SWITCH2] LED: No bulk endpoint!\r\n");
+    return;
+  }
+
+  // Check if endpoint is busy from previous transfer
+  if (usbh_edpt_busy(dev_addr, inst->ep_out)) {
+    // Try again next task cycle
+    return;
+  }
+
+  printf("[SWITCH2] Player LED: %d -> %d\r\n", inst->player_led, player_index);
+  inst->player_led = player_index;
+
+  // Build LED command
+  static uint8_t led_cmd[16];
+  led_cmd[0] = 0x09;
+  led_cmd[1] = 0x91;
+  led_cmd[2] = 0x00;
+  led_cmd[3] = 0x07;
+  led_cmd[4] = 0x00;
+  led_cmd[5] = 0x08;
+  led_cmd[6] = 0x00;
+  led_cmd[7] = 0x00;
+  led_cmd[8] = (player_index < 4) ? SWITCH2_LED_PATTERNS[player_index] : 0x01;
+  memset(&led_cmd[9], 0, 7);
+
+  // Send via bulk endpoint
+  bool sent = send_command(dev_addr, inst->ep_out, led_cmd, 16);
+  printf("[SWITCH2] LED send: %s (ep=0x%02X)\r\n", sent ? "OK" : "FAIL", inst->ep_out);
+}
+
+// Task function - handles initialization state machine and output
 void task_switch2_pro(uint8_t dev_addr, uint8_t instance, device_output_config_t* config) {
   switch2_instance_t* inst = &switch2_devices[dev_addr].instances[instance];
 
+  // Handle rumble and player LED when ready
+  if (inst->state == SWITCH2_STATE_READY) {
+    output_rumble(dev_addr, instance, config->rumble);
+    output_player_led(dev_addr, instance, config->player_index);
+    return;
+  }
+
+  // Not in init sequence, nothing to do
   if (inst->state != SWITCH2_STATE_INIT_SEQUENCE) {
-    // TODO: Handle rumble/LED updates after init
     return;
   }
 
@@ -361,6 +496,10 @@ static bool init_switch2_pro(uint8_t dev_addr, uint8_t instance) {
 
   switch2_instance_t* inst = &switch2_devices[dev_addr].instances[instance];
   memset(inst, 0, sizeof(*inst));
+
+  // Initialize to invalid values so first output triggers a send
+  inst->rumble = 0xFF;
+  inst->player_led = 0xFF;
 
   switch2_devices[dev_addr].instance_count++;
 

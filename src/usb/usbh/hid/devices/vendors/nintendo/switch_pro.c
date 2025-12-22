@@ -48,6 +48,40 @@ typedef struct
 
 static switch_device_t switch_devices[MAX_DEVICES] = { 0 };
 
+// Encode HD Rumble data for one motor (4 bytes)
+// Switch Pro HD Rumble format:
+//   Byte 0: HF freq low (0x00)
+//   Byte 1: HF amplitude (0x01-0xFF)
+//   Byte 2: LF freq (0x60 = 160Hz)
+//   Byte 3: LF amplitude (0x40-0xFF)
+// intensity: 0 = off, 1-255 = rumble strength
+static void encode_rumble(uint8_t intensity, uint8_t* out) {
+  if (intensity == 0) {
+    // Neutral/off state
+    out[0] = 0x00;
+    out[1] = 0x01;
+    out[2] = 0x40;
+    out[3] = 0x40;
+    return;
+  }
+
+  // Boost low intensity values to minimum perceptible
+  if (intensity < 64) {
+    intensity = 64;
+  }
+
+  // Scale intensity to amplitude ranges
+  // HF amplitude: 0x01-0xFF
+  uint8_t hf_amp = 0x01 + ((uint16_t)intensity * 0xFE) / 255;
+  // LF amplitude: 0x40-0xFF
+  uint8_t lf_amp = 0x40 + ((uint16_t)intensity * 0xBF) / 255;
+
+  out[0] = 0x00;        // HF freq low
+  out[1] = hf_amp;      // HF amplitude
+  out[2] = 0x60;        // LF freq (~160Hz)
+  out[3] = lf_amp;      // LF amplitude
+}
+
 // check if device is Nintendo Switch
 static inline bool is_switch_pro(uint16_t vid, uint16_t pid)
 {
@@ -564,35 +598,13 @@ void output_switch_pro(uint8_t dev_addr, uint8_t instance, device_output_config_
           TU_LOG1("SWITCH[%d|%d]: CMD_RUMBLE_ONLY, %d\r\n", dev_addr, instance, config->rumble);
 
           report_size = 10;
-          
+
           report[0x01] = output_sequence_counter++;
           report[0x00] = CMD_RUMBLE_ONLY; // COMMAND
-          
-          if (config->rumble) {
-            // Left config->rumble ON data
-            report[0x02 + 0] = 0x20;
-            report[0x02 + 1] = 0x78;
-            report[0x02 + 2] = 0x28;
-            report[0x02 + 3] = 0x5e;
 
-            // Right config->rumble ON data
-            report[0x02 + 4] = 0x20;
-            report[0x02 + 5] = 0x78;
-            report[0x02 + 6] = 0x28;
-            report[0x02 + 7] = 0x5e;
-          } else {
-            // Left config->rumble OFF data
-            report[0x02 + 0] = 0x00;
-            report[0x02 + 1] = 0x01;
-            report[0x02 + 2] = 0x40;
-            report[0x02 + 3] = 0x40;
-
-            // Right config->rumble OFF data
-            report[0x02 + 4] = 0x00;
-            report[0x02 + 5] = 0x01;
-            report[0x02 + 6] = 0x40;
-            report[0x02 + 7] = 0x40;
-          }
+          // Encode rumble with intensity passthrough
+          encode_rumble(config->rumble, &report[0x02]);      // Left motor
+          encode_rumble(config->rumble, &report[0x02 + 4]);  // Right motor
 
           switch_devices[dev_addr].instances[instance].rumble = config->rumble;
 
