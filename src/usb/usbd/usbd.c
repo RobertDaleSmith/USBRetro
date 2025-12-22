@@ -882,11 +882,11 @@ static bool usbd_send_ps3_report(uint8_t player_index)
         ps3_report.accel_z = __builtin_bswap16((uint16_t)event->accel[2]);
         ps3_report.gyro_z  = __builtin_bswap16((uint16_t)event->gyro[2]);
     } else {
-        // Neutral motion (center at 511 = 0x01FF, big-endian = 0xFF01)
-        ps3_report.accel_x = 0xFF01;
-        ps3_report.accel_y = 0xFF01;
-        ps3_report.accel_z = 0xFF01;
-        ps3_report.gyro_z  = 0xFF01;
+        // Neutral motion (center at 512 = 0x0200, big-endian = 0x0002)
+        ps3_report.accel_x = PS3_SIXAXIS_MID_BE;
+        ps3_report.accel_y = PS3_SIXAXIS_MID_BE;
+        ps3_report.accel_z = PS3_SIXAXIS_MID_BE;
+        ps3_report.gyro_z  = PS3_SIXAXIS_MID_BE;
     }
 
     // Send full report including report_id

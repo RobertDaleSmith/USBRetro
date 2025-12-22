@@ -27,7 +27,8 @@
 // ============================================================================
 
 #define PS3_JOYSTICK_MID     0x7F
-#define PS3_SIXAXIS_MID      0x01FF  // 511 - center for accelerometer/gyro
+#define PS3_SIXAXIS_MID      0x0200  // 512 - center for accelerometer/gyro (10-bit ADC)
+#define PS3_SIXAXIS_MID_BE   0x0002  // Big-endian representation of 512
 
 // Motion data byte offsets (relative to report start, after report ID)
 // Motion data is big-endian 16-bit values
@@ -358,11 +359,11 @@ static inline void ps3_init_report(ps3_in_report_t* report)
     report->plugged = PS3_PLUGGED;
     report->power = PS3_POWER_FULL;
     report->rumble_status = PS3_RUMBLE_WIRED;
-    // Sixaxis neutral (big-endian 0x01FF = 511)
-    report->accel_x = 0xFF01;
-    report->accel_y = 0xFF01;
-    report->accel_z = 0xFF01;
-    report->gyro_z = 0xFF01;
+    // Sixaxis neutral (big-endian 0x0200 = 512)
+    report->accel_x = PS3_SIXAXIS_MID_BE;
+    report->accel_y = PS3_SIXAXIS_MID_BE;
+    report->accel_z = PS3_SIXAXIS_MID_BE;
+    report->gyro_z = PS3_SIXAXIS_MID_BE;
 }
 
 #endif // PS3_DESCRIPTORS_H
