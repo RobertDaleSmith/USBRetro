@@ -476,8 +476,8 @@ void task_switch2_pro(uint8_t dev_addr, uint8_t instance, device_output_config_t
 
   // Send next command
   uint8_t cmd_len = 0;
-  int player_index = find_player_index(dev_addr, instance);
-  uint8_t player_led = (player_index >= 0 && player_index < 4) ? player_index : 0;
+  // Use player_index from output config (set by USB output interface feedback)
+  uint8_t player_led = (config->player_index >= 0 && config->player_index < 4) ? config->player_index : 0;
   const uint8_t* cmd = get_init_cmd(inst->cmd_index, &cmd_len, player_led);
 
   if (cmd && cmd_len > 0) {
