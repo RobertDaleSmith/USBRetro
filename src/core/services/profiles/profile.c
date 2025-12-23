@@ -673,7 +673,16 @@ void profile_apply(const profile_t* profile,
 
             // Check if all combo inputs are pressed (active-high: pressed = bit set)
             // All bits in combo->inputs must be set in input_buttons
-            if ((input_buttons & combo->inputs) == combo->inputs) {
+            bool combo_inputs_pressed = ((input_buttons & combo->inputs) == combo->inputs);
+
+            // For exclusive combos, also check that NO other buttons are pressed
+            bool combo_active = combo_inputs_pressed;
+            if (combo_active && combo->exclusive) {
+                // Exclusive: input_buttons must be EXACTLY combo->inputs (no extra buttons)
+                combo_active = (input_buttons == combo->inputs);
+            }
+
+            if (combo_active) {
                 // Combo is active - add output button(s)
                 // Set output bits to 1 (pressed) for combo outputs
                 output->buttons |= combo->output;

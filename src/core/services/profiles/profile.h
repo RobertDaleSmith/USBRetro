@@ -74,6 +74,7 @@ typedef struct {
     uint32_t inputs;            // JP_BUTTON_* inputs (OR'd together - all must be pressed)
     uint32_t output;            // JP_BUTTON_* output(s) when combo active
     bool consume_inputs;        // If true, remove input buttons from output when combo fires
+    bool exclusive;             // If true, combo only fires when EXACTLY these inputs are pressed (no other buttons)
 } button_combo_entry_t;
 
 // ============================================================================
@@ -348,11 +349,16 @@ uint32_t profile_apply_button_map(const profile_t* profile, uint32_t input_butto
 
 // Button combo: multiple inputs → output (consumes inputs by default)
 #define MAP_COMBO(ins, out) \
-    { .inputs = (ins), .output = (out), .consume_inputs = true }
+    { .inputs = (ins), .output = (out), .consume_inputs = true, .exclusive = false }
 
 // Button combo: multiple inputs → output (keeps inputs in output)
 #define MAP_COMBO_KEEP(ins, out) \
-    { .inputs = (ins), .output = (out), .consume_inputs = false }
+    { .inputs = (ins), .output = (out), .consume_inputs = false, .exclusive = false }
+
+// Button combo: ONLY these inputs → output (no other buttons pressed)
+// If additional buttons are held, combo doesn't fire and inputs pass through
+#define MAP_COMBO_EXCLUSIVE(ins, out) \
+    { .inputs = (ins), .output = (out), .consume_inputs = true, .exclusive = true }
 
 // Stick modifier: button → reduced sensitivity (consumes trigger by default)
 #define STICK_MODIFIER(btn, sens) \

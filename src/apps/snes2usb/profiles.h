@@ -13,9 +13,12 @@
 // BUTTON COMBOS
 // ============================================================================
 
-// S1 + S2 = A1 (Home/Guide button)
+// S1 + S2 (alone) = A1 (Home/Guide button)
+// Uses exclusive combo: only fires when S1+S2 are the ONLY buttons pressed
+// If any other buttons are held (e.g., S1+S2+L1+R2), combo doesn't fire
+// and all buttons pass through normally
 static const button_combo_entry_t snes2usb_combos[] = {
-    MAP_COMBO(JP_BUTTON_S1 | JP_BUTTON_S2, JP_BUTTON_A1),
+    MAP_COMBO_EXCLUSIVE(JP_BUTTON_S1 | JP_BUTTON_S2, JP_BUTTON_A1),
 };
 
 // ============================================================================

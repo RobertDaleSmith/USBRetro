@@ -27,7 +27,8 @@ uint32_t buttons;
 int last_player_count = 0; // used by xboxone
 
 // Chatpad keepalive tracking (per device/instance)
-static uint32_t chatpad_last_keepalive[CFG_TUH_DEVICE_MAX][CFG_TUH_XINPUT];
+// Size +1 because device addresses are 1-indexed (1 to CFG_TUH_DEVICE_MAX inclusive)
+static uint32_t chatpad_last_keepalive[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_XINPUT];
 
 uint8_t byteScaleAnalog(int16_t xbox_val);
 
