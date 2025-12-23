@@ -58,64 +58,108 @@ jobs:
           # Fix permissions (Docker creates files as root)
           sudo chown -R $(id -u):$(id -g) releases/
 
-      - name: Organize artifacts by board
+      - name: Organize artifacts by app
         run: |
           mkdir -p artifacts
           COMMIT_HASH=${{ steps.commit.outputs.hash }}
 
-          # Group files by board (board name is now at end of filename)
-          for board in kb2040 pico pico_w rp2040zero feather macropad; do
-            board_files=$(ls releases/joypad_*_${board}.uf2 2>/dev/null || true)
-            if [ -n "$board_files" ]; then
-              mkdir -p "artifacts/${board}"
-              cp $board_files "artifacts/${board}/"
-              echo "Created ${board} artifact with: $board_files"
+          # Group files by app name (extract app from joypad_<version>_<app>_<board>.uf2)
+          for file in releases/joypad_*.uf2; do
+            if [ -f "$file" ]; then
+              # Extract app name: remove prefix "joypad_<hash>_" and suffix "_<board>.uf2"
+              basename=$(basename "$file" .uf2)
+              # Remove joypad_<hash>_ prefix (first two underscore-separated parts)
+              app_board=${basename#joypad_*_}
+              # Remove _<board> suffix (last underscore-separated part)
+              app=${app_board%_*}
+
+              mkdir -p "artifacts/${app}"
+              cp "$file" "artifacts/${app}/"
+              echo "Added $file to ${app} artifact"
             fi
           done
 
           echo "Artifact structure:"
           find artifacts -type f -name "*.uf2"
 
-      - name: Upload kb2040 artifacts
+      - name: Upload app artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_kb2040
-          path: artifacts/kb2040/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2pce
+          path: artifacts/usb2pce/*.uf2
           if-no-files-found: ignore
 
-      - name: Upload pico artifacts
+      - name: Upload usb2gc artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_pico
-          path: artifacts/pico/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2gc
+          path: artifacts/usb2gc/*.uf2
           if-no-files-found: ignore
 
-      - name: Upload pico_w artifacts
+      - name: Upload usb2nuon artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_pico_w
-          path: artifacts/pico_w/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2nuon
+          path: artifacts/usb2nuon/*.uf2
           if-no-files-found: ignore
 
-      - name: Upload rp2040zero artifacts
+      - name: Upload usb2loopy artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_rp2040zero
-          path: artifacts/rp2040zero/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2loopy
+          path: artifacts/usb2loopy/*.uf2
           if-no-files-found: ignore
 
-      - name: Upload feather artifacts
+      - name: Upload usb23do artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_feather
-          path: artifacts/feather/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_usb23do
+          path: artifacts/usb23do/*.uf2
           if-no-files-found: ignore
 
-      - name: Upload macropad artifacts
+      - name: Upload snes23do artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: joypad_${{ steps.commit.outputs.hash }}_macropad
-          path: artifacts/macropad/*.uf2
+          name: joypad_${{ steps.commit.outputs.hash }}_snes23do
+          path: artifacts/snes23do/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload usb2uart artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2uart
+          path: artifacts/usb2uart/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload usb2usb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2usb
+          path: artifacts/usb2usb/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload bt2usb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_bt2usb
+          path: artifacts/bt2usb/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload snes2usb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_snes2usb
+          path: artifacts/snes2usb/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload controller artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_controllers
+          path: |
+            artifacts/controller_fisherprice/*.uf2
+            artifacts/controller_alpakka/*.uf2
+            artifacts/controller_macropad/*.uf2
           if-no-files-found: ignore
 
       - name: Build summary
