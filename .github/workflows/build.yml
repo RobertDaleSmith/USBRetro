@@ -63,15 +63,24 @@ jobs:
           mkdir -p artifacts
           COMMIT_HASH=${{ steps.commit.outputs.hash }}
 
+          # Known board suffixes (order matters - check longer suffixes first)
+          BOARDS="pico2_w pico_w rp2040zero kb2040 feather pico macropad"
+
           # Group files by app name (extract app from joypad_<version>_<app>_<board>.uf2)
           for file in releases/joypad_*.uf2; do
             if [ -f "$file" ]; then
-              # Extract app name: remove prefix "joypad_<hash>_" and suffix "_<board>.uf2"
+              # Extract app_board: remove prefix "joypad_<hash>_"
               basename=$(basename "$file" .uf2)
-              # Remove joypad_<hash>_ prefix (first two underscore-separated parts)
               app_board=${basename#joypad_*_}
-              # Remove _<board> suffix (last underscore-separated part)
-              app=${app_board%_*}
+
+              # Remove known board suffix to get app name
+              app="$app_board"
+              for board in $BOARDS; do
+                if [[ "$app_board" == *"_${board}" ]]; then
+                  app=${app_board%_${board}}
+                  break
+                fi
+              done
 
               mkdir -p "artifacts/${app}"
               cp "$file" "artifacts/${app}/"
