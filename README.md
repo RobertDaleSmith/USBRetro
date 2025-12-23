@@ -164,7 +164,7 @@ Joypad OS uses a modular architecture:
 
 ## Community & Support
 
-- **Discord**: [discord.joypad.com](https://discord.joypad.com/) - Community chat
+- **Discord**: [community.joypad.ai](http://community.joypad.ai/) - Community chat
 - **Issues**: [GitHub Issues](https://github.com/joypad-ai/joypad-os/issues) - Bug reports
 - **Email**: support@controlleradapter.com - Product support
 

@@ -360,6 +360,6 @@ See individual console documentation for pinouts:
 
 ## Community Builds
 
-Share your build on Discord: [discord.joypad.com](https://discord.joypad.com/)
+Share your build on Discord: [community.joypad.ai](http://community.joypad.ai/)
 
 See what others have built and get help with your project!

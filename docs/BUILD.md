@@ -324,4 +324,4 @@ make <target>
 
 - **Docs**: [README.md](../README.md), [HARDWARE.md](HARDWARE.md)
 - **Issues**: https://github.com/joypad-ai/joypad-os/issues
-- **Discord**: https://discord.joypad.com/
+- **Discord**: http://community.joypad.ai/

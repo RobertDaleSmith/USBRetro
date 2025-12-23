@@ -176,6 +176,6 @@ To reset adapter to default settings:
 
 ## Getting Help
 
-- **Discord**: [discord.joypad.com](https://discord.joypad.com/) - Community support
+- **Discord**: [community.joypad.ai](http://community.joypad.ai/) - Community support
 - **Issues**: [GitHub Issues](https://github.com/joypad-ai/joypad-os/issues) - Bug reports
 - **Email**: support@controlleradapter.com - Product support

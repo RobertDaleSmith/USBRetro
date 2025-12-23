@@ -86,7 +86,7 @@ The Loopy adapter is experimental:
 ## Contributing
 
 If you have a Casio Loopy and can help test:
-- Join Discord: [discord.joypad.com](https://discord.joypad.com/)
+- Join Discord: [community.joypad.ai](http://community.joypad.ai/)
 - Report issues on GitHub
 - Protocol documentation appreciated
 
