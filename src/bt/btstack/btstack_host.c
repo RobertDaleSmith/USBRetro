@@ -60,18 +60,27 @@ extern void bthid_update_device_info(uint8_t conn_index, const char* name,
 #include <stdio.h>
 #include <string.h>
 
+// For rumble feedback passthrough
+// Note: manager.h includes tusb.h which conflicts with BTstack, so forward declare
+extern int find_player_index(int dev_addr, int instance);
+#include "core/services/players/feedback.h"
+
 // ============================================================================
 // BLE HID REPORT ROUTING
 // ============================================================================
 
 // Deferred processing to avoid stack overflow in BTstack callback
-static uint8_t pending_ble_report[32];
+static uint8_t pending_ble_report[64];  // 64 bytes for Switch 2 reports
 static uint16_t pending_ble_report_len = 0;
 static uint8_t pending_ble_conn_index = 0;
 static volatile bool ble_report_pending = false;
 
 // Forward declare the function to route BLE reports through bthid layer
 static void route_ble_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len);
+
+// Forward declare Switch 2 functions (defined later with state machine)
+static void switch2_retry_init_if_needed(void);
+static void switch2_handle_feedback(void);
 
 // ============================================================================
 // CONFIGURATION
@@ -109,6 +118,9 @@ typedef struct {
     // Device info
     char name[32];
     bool is_xbox;
+    bool is_switch2;
+    uint16_t vid;
+    uint16_t pid;
 
     // Connection index for bthid layer (offset by MAX_CLASSIC_CONNECTIONS)
     uint8_t conn_index;
@@ -141,6 +153,9 @@ static struct {
     bd_addr_t pending_addr;
     bd_addr_type_t pending_addr_type;
     char pending_name[32];
+    bool pending_is_switch2;
+    uint16_t pending_vid;
+    uint16_t pending_pid;
 
     // Last connected device (for reconnection)
     bd_addr_t last_connected_addr;
@@ -179,6 +194,11 @@ static btstack_packet_callback_registration_t sm_event_callback_registration;
 static gatt_client_notification_t xbox_hid_notification_listener;
 static gatt_client_characteristic_t xbox_hid_characteristic;  // Fake characteristic for listener
 static void xbox_hid_notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
+
+// Direct notification listener for Switch 2 HID reports
+static gatt_client_notification_t switch2_hid_notification_listener;
+static gatt_client_characteristic_t switch2_hid_characteristic;
+static void switch2_hid_notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 
 // ============================================================================
 // CLASSIC BT HID HOST STATE
@@ -281,9 +301,10 @@ static int get_ble_conn_index_by_handle(hci_con_handle_t handle) {
 static void route_ble_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
 {
     // Build BTHID-compatible packet: DATA|INPUT header + report
-    static uint8_t hid_packet[64];
+    // Buffer needs to hold 1 byte header + up to 64 bytes of report data
+    static uint8_t hid_packet[65];
     hid_packet[0] = 0xA1;  // DATA | INPUT header
-    if (len < sizeof(hid_packet) - 1) {
+    if (len <= sizeof(hid_packet) - 1) {
         memcpy(hid_packet + 1, data, len);
         bt_on_hid_report(conn_index, hid_packet, len + 1);
     }
@@ -301,6 +322,7 @@ static ble_connection_t* find_connection_by_handle(hci_con_handle_t handle);
 static ble_connection_t* find_free_connection(void);
 static void start_hids_client(ble_connection_t *conn);
 static void register_ble_hid_listener(hci_con_handle_t con_handle);
+static void register_switch2_hid_listener(hci_con_handle_t con_handle);
 
 // ============================================================================
 // INITIALIZATION
@@ -575,6 +597,12 @@ void btstack_host_process(void)
         ble_report_pending = false;
         route_ble_hid_report(pending_ble_conn_index, pending_ble_report, pending_ble_report_len);
     }
+
+    // Retry Switch 2 init if stuck (no ACK received)
+    switch2_retry_init_if_needed();
+
+    // Handle Switch 2 rumble/LED feedback passthrough
+    switch2_handle_feedback();
 }
 
 // ============================================================================
@@ -724,8 +752,12 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             uint8_t adv_len = gap_event_advertising_report_get_data_length(packet);
             const uint8_t *adv_data = gap_event_advertising_report_get_data(packet);
 
-            // Parse name from advertising data
+            // Parse name and manufacturer data from advertising data
             char name[32] = {0};
+            bool is_switch2 = false;
+            uint16_t sw2_vid = 0;
+            uint16_t sw2_pid = 0;
+
             ad_context_t context;
             for (ad_iterator_init(&context, adv_len, adv_data); ad_iterator_has_more(&context); ad_iterator_next(&context)) {
                 uint8_t type = ad_iterator_get_data_type(&context);
@@ -736,7 +768,31 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                      type == BLUETOOTH_DATA_TYPE_SHORTENED_LOCAL_NAME) && len < sizeof(name)) {
                     memcpy(name, data, len);
                     name[len] = 0;
-                    break;
+                }
+
+                // Check for Switch 2 controller via manufacturer data
+                // Company ID 0x0553 (Nintendo for Switch 2)
+                // BlueRetro uses data[1] for company ID, data[6] for VID - their data includes length byte
+                // BTstack iterator strips length+type, so we use data[0] for company ID, data[5] for VID
+                if (type == BLUETOOTH_DATA_TYPE_MANUFACTURER_SPECIFIC_DATA && len >= 2) {
+                    uint16_t company_id = data[0] | (data[1] << 8);
+                    if (company_id == 0x0553) {
+                        is_switch2 = true;
+                        // Debug: print raw manufacturer data
+                        printf("[SW2_BLE] Mfr data (%d bytes):", len);
+                        for (int i = 0; i < len && i < 12; i++) {
+                            printf(" %02X", data[i]);
+                        }
+                        printf("\n");
+                        if (len >= 9) {
+                            // VID at bytes 5-6, PID at bytes 7-8 (relative to after company ID)
+                            // This matches BlueRetro's offsets accounting for length byte difference
+                            sw2_vid = data[5] | (data[6] << 8);
+                            sw2_pid = data[7] | (data[8] << 8);
+                        }
+                        printf("[BTSTACK_HOST] Switch 2 controller detected! VID=0x%04X PID=0x%04X\n",
+                               sw2_vid, sw2_pid);
+                    }
                 }
             }
 
@@ -746,21 +802,25 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                        addr[5], addr[4], addr[3], addr[2], addr[1], addr[0], name);
             }
 
-            // Check for controllers by name
+            // Check for controllers by name or manufacturer data
             bool is_xbox = (strstr(name, "Xbox") != NULL);
             bool is_nintendo = (strstr(name, "Pro Controller") != NULL ||
                                strstr(name, "Joy-Con") != NULL);
             bool is_stadia = (strstr(name, "Stadia") != NULL);
-            bool is_controller = is_xbox || is_nintendo || is_stadia;
+            bool is_controller = is_xbox || is_nintendo || is_stadia || is_switch2;
 
-            // Auto-connect to supported BLE controllers by name
+            // Auto-connect to supported BLE controllers
             if (hid_state.state == BLE_STATE_SCANNING && is_controller) {
-                if (is_xbox || is_stadia) {
+                if (is_xbox || is_stadia || is_switch2) {
                     printf("[BTSTACK_HOST] BLE controller: %02X:%02X:%02X:%02X:%02X:%02X name=\"%s\"\n",
                            addr[5], addr[4], addr[3], addr[2], addr[1], addr[0], name);
-                    printf("[BTSTACK_HOST] Connecting to %s...\n", is_xbox ? "Xbox" : "Stadia");
+                    const char* type_str = is_switch2 ? "Switch 2" : (is_xbox ? "Xbox" : "Stadia");
+                    printf("[BTSTACK_HOST] Connecting to %s...\n", type_str);
                     strncpy(hid_state.pending_name, name, sizeof(hid_state.pending_name) - 1);
                     hid_state.pending_name[sizeof(hid_state.pending_name) - 1] = '\0';
+                    hid_state.pending_is_switch2 = is_switch2;
+                    hid_state.pending_vid = sw2_vid;
+                    hid_state.pending_pid = sw2_pid;
                     btstack_host_connect_ble(addr, addr_type);
                 }
             }
@@ -940,12 +1000,22 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                         strncpy(conn->name, hid_state.pending_name, sizeof(conn->name) - 1);
                         conn->name[sizeof(conn->name) - 1] = '\0';
                         conn->is_xbox = (strstr(conn->name, "Xbox") != NULL);
+                        conn->is_switch2 = hid_state.pending_is_switch2;
+                        conn->vid = hid_state.pending_vid;
+                        conn->pid = hid_state.pending_pid;
 
-                        printf("[BTSTACK_HOST] Connection stored: name='%s'\n", conn->name);
+                        printf("[BTSTACK_HOST] Connection stored: name='%s' switch2=%d vid=0x%04X pid=0x%04X\n",
+                               conn->name, conn->is_switch2, conn->vid, conn->pid);
 
-                        // Request pairing (SM will handle Secure Connections)
-                        printf("[BTSTACK_HOST] Requesting pairing...\n");
-                        sm_request_pairing(handle);
+                        // Switch 2 uses custom pairing via ATT commands, not standard SM
+                        if (conn->is_switch2) {
+                            printf("[BTSTACK_HOST] Switch 2: Skipping SM pairing, using direct ATT setup\n");
+                            register_switch2_hid_listener(handle);
+                        } else {
+                            // Request pairing (SM will handle Secure Connections)
+                            printf("[BTSTACK_HOST] Requesting pairing...\n");
+                            sm_request_pairing(handle);
+                        }
                     }
 
                     hid_state.state = BLE_STATE_CONNECTED;
@@ -1125,12 +1195,15 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
                            conn->addr[5], conn->addr[4], conn->addr[3], conn->addr[2], conn->addr[1], conn->addr[0],
                            hid_state.last_connected_name);
 
-                    // Xbox controllers: use fast-path with known handle 0x001E
+                    // Xbox/Switch2 controllers: use fast-path with known handles
                     // Other controllers: do proper GATT discovery
                     bool is_xbox = (strstr(conn->name, "Xbox") != NULL);
                     if (is_xbox) {
                         printf("[BTSTACK_HOST] Xbox detected - using fast-path HID listener\n");
                         register_ble_hid_listener(handle);
+                    } else if (conn->is_switch2) {
+                        printf("[BTSTACK_HOST] Switch 2 detected - using fast-path notification enable\n");
+                        register_switch2_hid_listener(handle);
                     } else {
                         printf("[BTSTACK_HOST] Non-Xbox BLE controller - starting GATT discovery\n");
                         start_hids_client(conn);
@@ -1170,6 +1243,9 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
                     if (is_xbox) {
                         printf("[BTSTACK_HOST] Xbox detected - using fast-path HID listener\n");
                         register_ble_hid_listener(handle);
+                    } else if (conn->is_switch2) {
+                        printf("[BTSTACK_HOST] Switch 2 detected - using fast-path notification enable\n");
+                        register_switch2_hid_listener(handle);
                     } else {
                         printf("[BTSTACK_HOST] Non-Xbox BLE controller - starting GATT discovery\n");
                         start_hids_client(conn);
@@ -1383,6 +1459,633 @@ static void register_ble_hid_listener(hci_con_handle_t con_handle)
     // Notify bthid layer that device is ready
     printf("[BTSTACK_HOST] Calling bt_on_hid_ready(%d) for BLE device '%s'\n", conn->conn_index, conn->name);
     bt_on_hid_ready(conn->conn_index);
+}
+
+// ============================================================================
+// SWITCH 2 BLE HID NOTIFICATION HANDLER
+// ============================================================================
+
+// Switch 2 ATT handles (from protocol documentation)
+#define SW2_INPUT_REPORT_HANDLE     0x000A  // Input reports via notification
+#define SW2_CCC_HANDLE              0x000B  // Client Characteristic Configuration
+#define SW2_OUTPUT_REPORT_HANDLE    0x0012  // Rumble output
+#define SW2_CMD_HANDLE              0x0014  // Command output
+#define SW2_ACK_CCC_HANDLE          0x001B  // ACK notification CCC
+
+// Switch 2 command constants
+#define SW2_CMD_PAIRING             0x15
+#define SW2_CMD_SET_LED             0x09
+#define SW2_CMD_READ_SPI            0x02
+#define SW2_REQ_TYPE_REQ            0x91
+#define SW2_REQ_INT_BLE             0x01
+#define SW2_SUBCMD_SET_LED          0x07
+#define SW2_SUBCMD_READ_SPI         0x04
+// Pairing subcmds - sent in order: STEP1 -> STEP2 -> STEP3 -> STEP4
+// Note: Response ACK contains same subcmd as request
+#define SW2_SUBCMD_PAIRING_STEP1    0x01  // Send BD address
+#define SW2_SUBCMD_PAIRING_STEP2    0x04  // Send magic bytes 1
+#define SW2_SUBCMD_PAIRING_STEP3    0x02  // Send magic bytes 2
+#define SW2_SUBCMD_PAIRING_STEP4    0x03  // Complete pairing
+
+// Init state machine states (matching BlueRetro's sequence)
+typedef enum {
+    SW2_INIT_IDLE = 0,
+    SW2_INIT_READ_INFO,             // Read device info from SPI
+    SW2_INIT_READ_LTK,              // Read LTK to check if paired
+    SW2_INIT_PAIR_STEP1,            // Pairing step 1 (BD addr)
+    SW2_INIT_PAIR_STEP2,            // Pairing step 2
+    SW2_INIT_PAIR_STEP3,            // Pairing step 3
+    SW2_INIT_PAIR_STEP4,            // Pairing step 4
+    SW2_INIT_SET_LED,               // Set player LED
+    SW2_INIT_DONE                   // Init complete
+} sw2_init_state_t;
+
+// Handle Switch 2 HID notifications
+static void switch2_hid_notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != GATT_EVENT_NOTIFICATION) return;
+
+    hci_con_handle_t con_handle = gatt_event_notification_get_handle(packet);
+    uint16_t value_handle = gatt_event_notification_get_value_handle(packet);
+    uint16_t value_length = gatt_event_notification_get_value_length(packet);
+    const uint8_t *value = gatt_event_notification_get_value(packet);
+
+    // Debug first notification
+    static bool sw2_notif_debug = false;
+    if (!sw2_notif_debug) {
+        printf("[SW2_BLE] Notification: handle=0x%04X len=%d data=%02X %02X %02X %02X\n",
+               value_handle, value_length,
+               value_length > 0 ? value[0] : 0,
+               value_length > 1 ? value[1] : 0,
+               value_length > 2 ? value[2] : 0,
+               value_length > 3 ? value[3] : 0);
+        sw2_notif_debug = true;
+    }
+
+    // Switch 2 input reports are 64 bytes on handle 0x000A
+    if (value_handle != SW2_INPUT_REPORT_HANDLE) return;
+    if (value_length < 16 || value_length > sizeof(pending_ble_report)) return;
+
+    // Get conn_index for this BLE connection
+    int conn_index = get_ble_conn_index_by_handle(con_handle);
+    if (conn_index < 0) return;
+
+    // Defer processing to main loop to avoid stack overflow
+    memcpy(pending_ble_report, value, value_length);
+    pending_ble_report_len = value_length;
+    pending_ble_conn_index = (uint8_t)conn_index;
+    ble_report_pending = true;
+}
+
+// Forward declarations for Switch 2
+static void switch2_send_next_init_cmd(hci_con_handle_t con_handle);
+
+// CCC write completion handler for Switch 2 input reports
+static void switch2_ccc_write_callback(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != GATT_EVENT_QUERY_COMPLETE) return;
+
+    uint8_t status = gatt_event_query_complete_get_att_status(packet);
+    hci_con_handle_t handle = gatt_event_query_complete_get_handle(packet);
+
+    if (status == ATT_ERROR_SUCCESS) {
+        printf("[SW2_BLE] Input notifications enabled for handle 0x%04X\n", handle);
+
+        // Now register the notification listener
+        ble_connection_t* conn = find_connection_by_handle(handle);
+        if (conn) {
+            // Update bthid with VID/PID BEFORE calling bt_on_hid_ready
+            // so driver selection has correct info
+            printf("[SW2_BLE] Updating device info: VID=0x%04X PID=0x%04X\n", conn->vid, conn->pid);
+            bthid_update_device_info(conn->conn_index, conn->name, conn->vid, conn->pid);
+
+            // Notify bthid layer that device is ready
+            printf("[SW2_BLE] Calling bt_on_hid_ready(%d) for Switch 2 device\n", conn->conn_index);
+            bt_on_hid_ready(conn->conn_index);
+        }
+    } else {
+        printf("[SW2_BLE] Failed to enable input notifications: status=0x%02X\n", status);
+    }
+}
+
+// CCC write completion handler for Switch 2 ACK notifications
+static void switch2_ack_ccc_write_callback(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != GATT_EVENT_QUERY_COMPLETE) return;
+
+    uint8_t status = gatt_event_query_complete_get_att_status(packet);
+    hci_con_handle_t handle = gatt_event_query_complete_get_handle(packet);
+
+    if (status == ATT_ERROR_SUCCESS) {
+        printf("[SW2_BLE] ACK notifications enabled for handle 0x%04X\n", handle);
+
+        // Now enable input report notifications
+        static uint8_t ccc_enable[] = { 0x01, 0x00 };
+        printf("[SW2_BLE] Enabling input notifications on CCC handle 0x%04X\n", SW2_CCC_HANDLE);
+        gatt_client_write_value_of_characteristic(
+            switch2_ccc_write_callback, handle, SW2_CCC_HANDLE, sizeof(ccc_enable), ccc_enable);
+
+        // Start the pairing sequence
+        printf("[SW2_BLE] Starting pairing sequence\n");
+        switch2_send_next_init_cmd(handle);
+    } else {
+        printf("[SW2_BLE] Failed to enable ACK notifications: status=0x%02X\n", status);
+    }
+}
+
+// Switch 2 init state machine
+static sw2_init_state_t sw2_init_state = SW2_INIT_IDLE;
+static hci_con_handle_t sw2_init_handle = 0;
+
+// ACK notification listener for Switch 2 commands
+static gatt_client_notification_t switch2_ack_notification_listener;
+static gatt_client_characteristic_t switch2_ack_characteristic;
+
+// Forward declare
+static void switch2_send_init_cmd(hci_con_handle_t con_handle);
+
+static void switch2_ack_notification_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != GATT_EVENT_NOTIFICATION) return;
+
+    uint16_t value_handle = gatt_event_notification_get_value_handle(packet);
+    uint16_t value_length = gatt_event_notification_get_value_length(packet);
+    const uint8_t *value = gatt_event_notification_get_value(packet);
+    hci_con_handle_t con_handle = gatt_event_notification_get_handle(packet);
+
+    // Debug: print all notifications (not just 0x001A) to see what's coming in
+    static bool ack_notif_debug = false;
+    if (!ack_notif_debug && value_handle != SW2_INPUT_REPORT_HANDLE) {
+        printf("[SW2_BLE] ACK listener got notification: handle=0x%04X len=%d\n",
+               value_handle, value_length);
+        ack_notif_debug = true;
+    }
+
+    if (value_handle != 0x001A) return;  // ACK handle
+
+    if (value_length < 4) return;
+    uint8_t cmd = value[0];
+    uint8_t subcmd = value[3];
+
+    printf("[SW2_BLE] ACK: cmd=0x%02X subcmd=0x%02X state=%d len=%d\n",
+           cmd, subcmd, sw2_init_state, value_length);
+
+    // Handle ACK based on current init state
+    switch (cmd) {
+        case SW2_CMD_READ_SPI:
+            if (sw2_init_state == SW2_INIT_READ_INFO) {
+                // Got device info, extract VID/PID if needed
+                if (value_length >= 34) {
+                    uint16_t vid = value[30] | (value[31] << 8);
+                    uint16_t pid = value[32] | (value[33] << 8);
+                    printf("[SW2_BLE] Device info: VID=0x%04X PID=0x%04X\n", vid, pid);
+                }
+                // Skip LTK check for now, go straight to pairing
+                sw2_init_state = SW2_INIT_PAIR_STEP1;
+                switch2_send_init_cmd(con_handle);
+            } else if (sw2_init_state == SW2_INIT_READ_LTK) {
+                // Check LTK, for now just proceed to pairing
+                sw2_init_state = SW2_INIT_PAIR_STEP1;
+                switch2_send_init_cmd(con_handle);
+            }
+            break;
+
+        case SW2_CMD_PAIRING:
+            switch (subcmd) {
+                case SW2_SUBCMD_PAIRING_STEP1:
+                    if (sw2_init_state == SW2_INIT_PAIR_STEP1) {
+                        sw2_init_state = SW2_INIT_PAIR_STEP2;
+                        switch2_send_init_cmd(con_handle);
+                    }
+                    break;
+                case SW2_SUBCMD_PAIRING_STEP2:
+                    if (sw2_init_state == SW2_INIT_PAIR_STEP2) {
+                        sw2_init_state = SW2_INIT_PAIR_STEP3;
+                        switch2_send_init_cmd(con_handle);
+                    }
+                    break;
+                case SW2_SUBCMD_PAIRING_STEP3:
+                    if (sw2_init_state == SW2_INIT_PAIR_STEP3) {
+                        sw2_init_state = SW2_INIT_PAIR_STEP4;
+                        switch2_send_init_cmd(con_handle);
+                    }
+                    break;
+                case SW2_SUBCMD_PAIRING_STEP4:
+                    if (sw2_init_state == SW2_INIT_PAIR_STEP4) {
+                        printf("[SW2_BLE] Pairing complete! Setting LED...\n");
+                        sw2_init_state = SW2_INIT_SET_LED;
+                        switch2_send_init_cmd(con_handle);
+                    }
+                    break;
+            }
+            break;
+
+        case SW2_CMD_SET_LED:
+            if (sw2_init_state == SW2_INIT_SET_LED) {
+                printf("[SW2_BLE] LED set! Init done.\n");
+                sw2_init_state = SW2_INIT_DONE;
+            }
+            break;
+    }
+}
+
+static void switch2_send_init_cmd(hci_con_handle_t con_handle)
+{
+    printf("[SW2_BLE] Sending init cmd, state=%d\n", sw2_init_state);
+
+    switch (sw2_init_state) {
+        case SW2_INIT_READ_INFO: {
+            // Read device info from SPI (BlueRetro's first step)
+            uint8_t read_info[] = {
+                SW2_CMD_READ_SPI,       // 0x02
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_READ_SPI,    // 0x04
+                0x00, 0x08, 0x00, 0x00,
+                0x40,                   // Read length
+                0x7e, 0x00, 0x00,       // Address type
+                0x00, 0x30, 0x01, 0x00  // SPI address
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(read_info), read_info);
+            printf("[SW2_BLE] READ_INFO sent\n");
+            break;
+        }
+
+        case SW2_INIT_PAIR_STEP1: {
+            // Pairing step 1: Send our BD address
+            bd_addr_t local_addr;
+            gap_local_bd_addr(local_addr);
+            printf("[SW2_BLE] Pair Step 1: BD addr = %02X:%02X:%02X:%02X:%02X:%02X\n",
+                   local_addr[5], local_addr[4], local_addr[3],
+                   local_addr[2], local_addr[1], local_addr[0]);
+
+            uint8_t pair1[] = {
+                SW2_CMD_PAIRING,        // 0x15
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_PAIRING_STEP1, // 0x01
+                0x00, 0x0e, 0x00, 0x00, 0x00, 0x02,
+                // 6 bytes: our BD addr
+                local_addr[0], local_addr[1], local_addr[2],
+                local_addr[3], local_addr[4], local_addr[5],
+                // 6 bytes: our BD addr - 1
+                (uint8_t)(local_addr[0] - 1), local_addr[1], local_addr[2],
+                local_addr[3], local_addr[4], local_addr[5],
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(pair1), pair1);
+            break;
+        }
+
+        case SW2_INIT_PAIR_STEP2: {
+            // Pairing step 2: Magic bytes (from BlueRetro)
+            uint8_t pair2[] = {
+                SW2_CMD_PAIRING,        // 0x15
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_PAIRING_STEP2, // 0x04
+                0x00, 0x11, 0x00, 0x00, 0x00,
+                0xea, 0xbd, 0x47, 0x13, 0x89, 0x35, 0x42, 0xc6,
+                0x79, 0xee, 0x07, 0xf2, 0x53, 0x2c, 0x6c, 0x31
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(pair2), pair2);
+            printf("[SW2_BLE] Pair Step 2 sent\n");
+            break;
+        }
+
+        case SW2_INIT_PAIR_STEP3: {
+            // Pairing step 3: More magic bytes
+            uint8_t pair3[] = {
+                SW2_CMD_PAIRING,        // 0x15
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_PAIRING_STEP3, // 0x02
+                0x00, 0x11, 0x00, 0x00, 0x00,
+                0x40, 0xb0, 0x8a, 0x5f, 0xcd, 0x1f, 0x9b, 0x41,
+                0x12, 0x5c, 0xac, 0xc6, 0x3f, 0x38, 0xa0, 0x73
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(pair3), pair3);
+            printf("[SW2_BLE] Pair Step 3 sent\n");
+            break;
+        }
+
+        case SW2_INIT_PAIR_STEP4: {
+            // Pairing step 4: Completion
+            uint8_t pair4[] = {
+                SW2_CMD_PAIRING,        // 0x15
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_PAIRING_STEP4, // 0x03
+                0x00, 0x01, 0x00, 0x00, 0x00
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(pair4), pair4);
+            printf("[SW2_BLE] Pair Step 4 sent\n");
+            break;
+        }
+
+        case SW2_INIT_SET_LED: {
+            // Set player LED
+            uint8_t led_cmd[] = {
+                SW2_CMD_SET_LED,        // 0x09
+                SW2_REQ_TYPE_REQ,       // 0x91
+                SW2_REQ_INT_BLE,        // 0x01
+                SW2_SUBCMD_SET_LED,     // 0x07
+                0x00, 0x08, 0x00, 0x00,
+                0x01,  // Player 1 LED pattern
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            };
+            gatt_client_write_value_of_characteristic_without_response(
+                con_handle, SW2_CMD_HANDLE, sizeof(led_cmd), led_cmd);
+            printf("[SW2_BLE] LED command sent\n");
+            break;
+        }
+
+        default:
+            printf("[SW2_BLE] Unknown init state: %d\n", sw2_init_state);
+            break;
+    }
+}
+
+static void switch2_send_next_init_cmd(hci_con_handle_t con_handle)
+{
+    // Start the init sequence with READ_INFO (like BlueRetro does)
+    if (sw2_init_state == SW2_INIT_IDLE) {
+        printf("[SW2_BLE] Starting init sequence with READ_INFO...\n");
+        sw2_init_state = SW2_INIT_READ_INFO;
+        switch2_send_init_cmd(con_handle);
+    } else if (sw2_init_state == SW2_INIT_DONE) {
+        printf("[SW2_BLE] Init already done\n");
+    } else {
+        // Init in progress, wait for ACK
+        printf("[SW2_BLE] Init in progress (state=%d)\n", sw2_init_state);
+    }
+}
+
+// Retry init if stuck (called from main loop)
+static void switch2_retry_init_if_needed(void)
+{
+    static uint32_t retry_counter = 0;
+    retry_counter++;
+
+    if (sw2_init_state != SW2_INIT_IDLE && sw2_init_state != SW2_INIT_DONE && sw2_init_handle != 0) {
+        // Retry every ~500ms (assuming ~120Hz main loop = 60 counts)
+        if (retry_counter % 60 == 0) {
+            printf("[SW2_BLE] Retrying init cmd (state=%d, attempt=%lu)\n",
+                   sw2_init_state, (unsigned long)(retry_counter / 60));
+            switch2_send_init_cmd(sw2_init_handle);
+        }
+    }
+}
+
+// ============================================================================
+// SWITCH 2 RUMBLE/HAPTICS
+// ============================================================================
+// Switch 2 Pro Controller uses LRA (Linear Resonant Actuator) haptics.
+// Output goes to ATT handle 0x0012.
+// LRA ops format: 5 bytes per op (4-byte bitfield + 1-byte hf_amp)
+// Each side (L/R) has 1 state byte + 3 ops = 16 bytes
+// Total output: 1 + 16 + 16 + 9 padding = 42 bytes
+
+// Rumble state tracking
+static uint8_t sw2_last_rumble_left = 0;
+static uint8_t sw2_last_rumble_right = 0;
+static uint8_t sw2_rumble_tid = 0;
+static uint32_t sw2_rumble_send_counter = 0;
+
+// Player LED state tracking
+static uint8_t sw2_last_player_led = 0;
+
+// Player LED patterns (cumulative, matching joypad-web)
+static const uint8_t SW2_PLAYER_LED_PATTERNS[] = {
+    0x01,  // Player 1: 1 LED
+    0x03,  // Player 2: 2 LEDs
+    0x07,  // Player 3: 3 LEDs
+    0x0F,  // Player 4: 4 LEDs
+};
+
+// Send player LED command to Switch 2 controller
+static void switch2_send_player_led(hci_con_handle_t con_handle, uint8_t pattern)
+{
+    uint8_t led_cmd[] = {
+        SW2_CMD_SET_LED,        // 0x09
+        SW2_REQ_TYPE_REQ,       // 0x91
+        SW2_REQ_INT_BLE,        // 0x01
+        SW2_SUBCMD_SET_LED,     // 0x07
+        0x00, 0x08, 0x00, 0x00,
+        pattern,  // Player LED pattern
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    gatt_client_write_value_of_characteristic_without_response(
+        con_handle, SW2_CMD_HANDLE, sizeof(led_cmd), led_cmd);
+}
+
+// Encode haptic data for one motor (5 bytes)
+// Based on joypad-web's encodeSwitch2Haptic() function
+// Format: [amplitude, frequency, amplitude, frequency, flags]
+// Key: Lower frequency = more felt, higher frequency = audible tones
+// freq 0x60 = felt rumble, freq 0xFE = audible (avoid this)
+static void encode_haptic(uint8_t* out, uint8_t intensity)
+{
+    if (intensity == 0) {
+        // Off state
+        out[0] = 0x00;
+        out[1] = 0x00;
+        out[2] = 0x00;
+        out[3] = 0x00;
+        out[4] = 0x00;
+    } else {
+        // Active rumble - use low frequency for felt vibration
+        // Amplitude: scale from 0x40 to 0xFF based on intensity
+        uint8_t amp = 0x40 + ((intensity * 0xBF) / 255);
+        // Frequency: use 0x40-0x60 range for low rumble (more felt, less audible)
+        // Lower values = lower frequency = more physical sensation
+        uint8_t freq = 0x40;  // Low frequency for maximum felt rumble
+        out[0] = amp;   // High band amplitude
+        out[1] = freq;  // High band frequency (low value = felt)
+        out[2] = amp;   // Low band amplitude
+        out[3] = freq;  // Low band frequency
+        out[4] = 0x00;  // Flags
+    }
+}
+
+// Send rumble command to Switch 2 controller via BLE
+// Based on joypad-web USB Report ID 0x02 format, adapted for BLE
+static void switch2_send_rumble(hci_con_handle_t con_handle, uint8_t left, uint8_t right)
+{
+    // Output buffer format (matching joypad-web):
+    // [0]: padding/report byte
+    // [1]: Counter (0x5X)
+    // [2-6]: Left haptic (5 bytes)
+    // [7-16]: padding
+    // [17]: Counter duplicate
+    // [18-22]: Right haptic (5 bytes)
+    // [23-63]: padding (64 bytes total for USB, may be shorter for BLE)
+    uint8_t buf[64];
+    memset(buf, 0, sizeof(buf));
+
+    // Counter with state bits
+    uint8_t counter = 0x50 | (sw2_rumble_tid & 0x0F);
+    sw2_rumble_tid++;
+
+    buf[1] = counter;
+    buf[17] = counter;  // Duplicate counter
+
+    // Encode left motor haptic (bytes 2-6)
+    encode_haptic(&buf[2], left);
+
+    // Encode right motor haptic (bytes 18-22)
+    encode_haptic(&buf[18], right);
+
+    gatt_client_write_value_of_characteristic_without_response(
+        con_handle, SW2_OUTPUT_REPORT_HANDLE, sizeof(buf), buf);
+}
+
+// Check feedback system and send rumble/LED if needed (called from task loop)
+static void switch2_handle_feedback(void)
+{
+    // Only process if we have an active Switch 2 connection
+    if (sw2_init_state != SW2_INIT_DONE || sw2_init_handle == 0) return;
+
+    sw2_rumble_send_counter++;
+
+    // Get conn_index from HCI handle
+    int conn_index = get_ble_conn_index_by_handle(sw2_init_handle);
+    if (conn_index < 0) return;
+
+    // Find player index for this device
+    int player_idx = find_player_index(conn_index, 0);
+    if (player_idx < 0) return;
+
+    // Get feedback state
+    feedback_state_t* fb = feedback_get_state(player_idx);
+    if (!fb) return;
+
+    // --- Handle Player LED ---
+    if (fb->led_dirty) {
+        // Determine LED pattern from feedback
+        uint8_t led_pattern = 0x01;  // Default to player 1
+
+        if (fb->led.pattern != 0) {
+            // Use pattern bits directly (0x01=P1, 0x02=P2, 0x04=P3, 0x08=P4)
+            // Convert to cumulative pattern for Switch 2
+            if (fb->led.pattern & 0x08) led_pattern = SW2_PLAYER_LED_PATTERNS[3];
+            else if (fb->led.pattern & 0x04) led_pattern = SW2_PLAYER_LED_PATTERNS[2];
+            else if (fb->led.pattern & 0x02) led_pattern = SW2_PLAYER_LED_PATTERNS[1];
+            else led_pattern = SW2_PLAYER_LED_PATTERNS[0];
+        } else {
+            // Use player index if no explicit pattern
+            int idx = (player_idx >= 0 && player_idx < 4) ? player_idx : 0;
+            led_pattern = SW2_PLAYER_LED_PATTERNS[idx];
+        }
+
+        if (led_pattern != sw2_last_player_led) {
+            sw2_last_player_led = led_pattern;
+            switch2_send_player_led(sw2_init_handle, led_pattern);
+        }
+    }
+
+    // --- Handle Rumble ---
+    bool value_changed = (fb->rumble.left != sw2_last_rumble_left ||
+                          fb->rumble.right != sw2_last_rumble_right);
+
+    // Send rumble if:
+    // 1. Values changed, OR
+    // 2. Rumble is active and we need periodic refresh (every ~50ms at 120Hz = 6 ticks)
+    bool need_refresh = (sw2_last_rumble_left > 0 || sw2_last_rumble_right > 0) &&
+                        (sw2_rumble_send_counter % 6 == 0);
+
+    if (fb->rumble_dirty || value_changed || need_refresh) {
+        sw2_last_rumble_left = fb->rumble.left;
+        sw2_last_rumble_right = fb->rumble.right;
+
+        switch2_send_rumble(sw2_init_handle, fb->rumble.left, fb->rumble.right);
+    }
+
+    // Clear dirty flags after processing
+    if (fb->rumble_dirty || fb->led_dirty) {
+        feedback_clear_dirty(player_idx);
+    }
+}
+
+// Register Switch 2 notification listener and enable notifications
+static void register_switch2_hid_listener(hci_con_handle_t con_handle)
+{
+    printf("[SW2_BLE] Registering Switch 2 HID listener for handle 0x%04X\n", con_handle);
+
+    // Find the BLE connection
+    ble_connection_t* conn = find_connection_by_handle(con_handle);
+    if (!conn) {
+        printf("[SW2_BLE] ERROR: No connection for handle 0x%04X\n", con_handle);
+        return;
+    }
+
+    // Assign conn_index if not already set
+    int ble_index = -1;
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        if (&hid_state.connections[i] == conn) {
+            ble_index = i;
+            break;
+        }
+    }
+    if (ble_index < 0) return;
+
+    conn->conn_index = BLE_CONN_INDEX_OFFSET + ble_index;
+    conn->hid_ready = true;
+    sw2_init_handle = con_handle;
+    sw2_init_state = SW2_INIT_IDLE;
+
+    printf("[SW2_BLE] Connection: VID=0x%04X PID=0x%04X conn_index=%d\n",
+           conn->vid, conn->pid, conn->conn_index);
+
+    // Set up ACK notification listener (handle 0x001A)
+    memset(&switch2_ack_characteristic, 0, sizeof(switch2_ack_characteristic));
+    switch2_ack_characteristic.value_handle = 0x001A;
+    switch2_ack_characteristic.end_handle = 0x001A + 1;
+
+    gatt_client_listen_for_characteristic_value_updates(
+        &switch2_ack_notification_listener,
+        switch2_ack_notification_handler,
+        con_handle,
+        &switch2_ack_characteristic);
+
+    // Set up input report notification listener (handle 0x000A)
+    memset(&switch2_hid_characteristic, 0, sizeof(switch2_hid_characteristic));
+    switch2_hid_characteristic.value_handle = SW2_INPUT_REPORT_HANDLE;
+    switch2_hid_characteristic.end_handle = SW2_INPUT_REPORT_HANDLE + 1;
+
+    gatt_client_listen_for_characteristic_value_updates(
+        &switch2_hid_notification_listener,
+        switch2_hid_notification_handler,
+        con_handle,
+        &switch2_hid_characteristic);
+
+    printf("[SW2_BLE] Notification listeners registered\n");
+
+    // Enable notifications on ACK handle first (0x001B) - wait for confirmation
+    static uint8_t ccc_enable[] = { 0x01, 0x00 };
+    printf("[SW2_BLE] Enabling ACK notifications on CCC handle 0x%04X\n", SW2_ACK_CCC_HANDLE);
+    gatt_client_write_value_of_characteristic(
+        switch2_ack_ccc_write_callback, con_handle, SW2_ACK_CCC_HANDLE, sizeof(ccc_enable), ccc_enable);
 }
 
 static void start_hids_client(ble_connection_t *conn)
@@ -1755,8 +2458,9 @@ bool btstack_classic_get_connection(uint8_t conn_index, btstack_classic_conn_inf
         info->name[sizeof(info->name) - 1] = '\0';
         // BLE devices don't have class_of_device, set to zeros
         memset(info->class_of_device, 0, 3);
-        info->vendor_id = 0;   // TODO: Get from BLE Device ID if needed
-        info->product_id = 0;
+        // Use VID/PID from BLE manufacturer data (e.g., Switch 2)
+        info->vendor_id = conn->vid;
+        info->product_id = conn->pid;
         info->hid_ready = conn->hid_ready;
 
         return true;

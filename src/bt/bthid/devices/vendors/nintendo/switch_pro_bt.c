@@ -200,15 +200,23 @@ static bool switch_match(const char* device_name, const uint8_t* class_of_device
                          uint16_t vendor_id, uint16_t product_id)
 {
     (void)class_of_device;
-    (void)product_id;
 
-    // VID match - Nintendo vendor ID = 0x057E
-    // Pro Controller = 0x2009, Joy-Con L = 0x2006, Joy-Con R = 0x2007
+    // Match Switch 1 controllers by VID/PID
+    // Nintendo VID = 0x057E
+    // Switch 1 PIDs: Joy-Con L = 0x2006, Joy-Con R = 0x2007, Pro Controller = 0x2009
+    // Do NOT match Switch 2 PIDs (0x2066, 0x2067, 0x2069, 0x2073) - handled by switch2_ble
     if (vendor_id == 0x057E) {
-        return true;
+        switch (product_id) {
+            case 0x2006:  // Joy-Con L
+            case 0x2007:  // Joy-Con R
+            case 0x2009:  // Pro Controller
+                return true;
+        }
+        // Don't return true for unknown Nintendo PIDs
+        // Let specific drivers handle them
     }
 
-    // Name-based match (fallback)
+    // Name-based match (fallback for classic BT where VID/PID may be unavailable)
     if (device_name) {
         if (strstr(device_name, "Pro Controller") != NULL) {
             return true;
