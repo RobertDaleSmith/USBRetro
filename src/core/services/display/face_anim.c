@@ -940,9 +940,27 @@ static void style_astro(const face_pose* p, float bob) {
                 continue;
             }
 
-            // boundary LED: the outline clips it — bright crescent inside,
-            // this LED's shadow shade outside. Mid-morph the inside test is
-            // the blended field; at rest it is the exact cheap test.
+            // boundary LED. Mid-morph: per-dot approximation — the edge is
+            // moving, per-pixel clipping is invisible at speed, and its cost
+            // was tanking the frame rate (which stretched the 280ms morph
+            // into seconds via the dt clamp).
+            if (w < 1.0f) {
+                if (shade) {
+                    display_set_color(shade);
+                    fill_ellipse(x, y, dot_r, dot_r, 0.0f, true);
+                }
+                float t = (1.0f + dr_n - dmin) / (2.0f * dr_n);
+                if (t > 1.0f) t = 1.0f;
+                int rr = (int)(dot_r * t + 0.5f);
+                if (rr >= 1) {
+                    display_set_color(FACE_COLOR_MAIN);
+                    fill_ellipse(x, y, rr, rr, 0.0f, true);
+                }
+                continue;
+            }
+
+            // settled: the outline clips exactly — bright crescent inside,
+            // this LED's shadow shade outside
             int r2 = dot_r * dot_r;
             for (int py = y - dot_r; py <= y + dot_r; py++) {
                 if (py < 0 || py >= face_h) continue;
