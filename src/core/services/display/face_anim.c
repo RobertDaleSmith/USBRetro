@@ -187,7 +187,7 @@ void face_tick(uint32_t now_ms) {
     }
     // fixed-duration morph: a spring's exponential tail read as slow-motion
     // at the end; linear time + smoothstep (in the style) finishes crisply
-    morph_w += dt * (1.0f / 0.28f);
+    morph_w += dt * (1.0f / 0.18f);
     if (morph_w > 1.0f) morph_w = 1.0f;
 
     breathe_t += dt;
@@ -944,7 +944,7 @@ static void style_astro(const face_pose* p, float bob) {
             // moving, per-pixel clipping is invisible at speed, and its cost
             // was tanking the frame rate (which stretched the 280ms morph
             // into seconds via the dt clamp).
-            if (w < 1.0f) {
+            if (w < 0.90f) {
                 if (shade) {
                     display_set_color(shade);
                     fill_ellipse(x, y, dot_r, dot_r, 0.0f, true);
@@ -959,8 +959,9 @@ static void style_astro(const face_pose* p, float bob) {
                 continue;
             }
 
-            // settled: the outline clips exactly — bright crescent inside,
-            // this LED's shadow shade outside
+            // last 10% of the morph + settled: exact clip against the
+            // target outline — the handoff hides under the residual motion
+            // instead of snapping at the end
             int r2 = dot_r * dot_r;
             for (int py = y - dot_r; py <= y + dot_r; py++) {
                 if (py < 0 || py >= face_h) continue;
