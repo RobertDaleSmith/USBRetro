@@ -185,7 +185,10 @@ void face_tick(uint32_t now_ms) {
         morph_w = (shape_class(morph_from) != shape_class(morph_to))
                       ? 0.0f : 1.0f;
     }
-    ease(&morph_w, 1.0f, 8.0f, dt);
+    // fixed-duration morph: a spring's exponential tail read as slow-motion
+    // at the end; linear time + smoothstep (in the style) finishes crisply
+    morph_w += dt * (1.0f / 0.28f);
+    if (morph_w > 1.0f) morph_w = 1.0f;
 
     breathe_t += dt;
     speak_env -= dt * 3.0f; if (speak_env < 0) speak_env = 0;
@@ -871,12 +874,12 @@ static void style_astro(const face_pose* p, float bob) {
     astro_build(&cto, p, morph_to, Hf, cx0, gx, gy);
     static astro_ctx cfrom;                     // large (rlut) — keep off stack
     const astro_ctx* cf = &cto;
-    float w = morph_w;
-    if (w < 0.995f) {
+    float w = 1.0f;
+    if (morph_w < 1.0f) {
         astro_build(&cfrom, p, morph_from, Hf, cx0, gx, gy);
         cf = &cfrom;
-    } else {
-        w = 1.0f;
+        // ease-in-out over the fixed morph window
+        w = morph_w * morph_w * (3.0f - 2.0f * morph_w);
     }
 
     // Lattice metrics measured off the official visor: ~19 dot rows over the
@@ -972,7 +975,7 @@ static void style_astro(const face_pose* p, float bob) {
 
 bool face_settled(void)
 {
-    if (blinking || speak_env > 0.02f || morph_w < 0.995f) return false;
+    if (blinking || speak_env > 0.02f || morph_w < 1.0f) return false;
     float d = 0;
     d += fabsf(cur.eye_open_l - target.eye_open_l);
     d += fabsf(cur.eye_open_r - target.eye_open_r);
