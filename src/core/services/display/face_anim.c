@@ -621,6 +621,9 @@ static void style_taby(const face_pose* p, float bob) {
             int barc = (int)(ehw * 0.20f);            // scoop depth (subtle dip)
             if (barc > hh / 2) barc = hh / 2;
             float shear = (i ? 0.045f : -0.045f);
+            // angry lid: the eye's top is slashed along a line dropping
+            // toward the face center (springs in with the brow)
+            float slant = (p->brow > 0.25f) ? p->brow : 0.0f;
             for (int y = -hh; y <= hh; y++) {
                 int py = ecy + y; if (py < 0 || py >= face_h) continue;
                 int half = ehw;
@@ -637,6 +640,14 @@ static void style_taby(const face_pose* p, float bob) {
                 int xs = (int)(-(float)y * shear + (y < 0 ? -0.5f : 0.5f));
                 for (int x = -half; x <= half; x++) {
                     if (scoop && x > -scoop && x < scoop) continue;
+                    if (slant > 0.0f) {
+                        float in_t = ((i ? -(float)x : (float)x) + ehw)
+                                         / (2.0f * ehw);
+                        if (in_t < 0) in_t = 0;
+                        if (in_t > 1) in_t = 1;
+                        if ((float)y < -hh + slant * 1.15f * hh * in_t)
+                            continue;   // above the angry lid line
+                    }
                     int px = cx + x + xs;
                     if (px >= 0 && px < face_w) display_pixel((int16_t)px, (int16_t)py, true);
                 }
@@ -644,8 +655,17 @@ static void style_taby(const face_pose* p, float bob) {
         }
         // thin floating brow, anchored high like the video; rises w/ surprise
         int bcy = (int)(Hf * 0.121f) + gy / 2 - (int)(p->brow_h * Hf * 0.05f);
-        float bcurve = -(0.5f + p->brow_h * 0.5f - p->brow * 0.7f);  // arch
-        draw_mouth(cx, bcy, (int)(Hf * 0.092f), thin, bcurve, 0);
+        if (p->brow > 0.25f) {
+            // angry: straight brow slanting down toward the face center
+            int bw = (int)(Hf * 0.092f);
+            int drop = (int)(p->brow * Hf * 0.075f);
+            int xin = cx + (i ? -bw : bw);
+            int xout = cx + (i ? bw : -bw);
+            fill_stroke(xout, bcy - drop / 2, xin, bcy + drop, thin);
+        } else {
+            float bcurve = -(0.5f + p->brow_h * 0.5f - p->brow * 0.7f);  // arch
+            draw_mouth(cx, bcy, (int)(Hf * 0.092f), thin, bcurve, 0);
+        }
     }
 
     // mouth — follows gaze with the face. Rest = thin ‿ smile arc; talking
@@ -672,6 +692,7 @@ static void style_taby(const face_pose* p, float bob) {
         float ceff = (p->mouth_curve >= 0.0f)
                          ? (0.45f + p->mouth_curve * 0.55f)
                          : (p->mouth_curve * 0.8f);      // frown when sad
+        if (cur_emo == FACE_EMO_ANGRY) ceff = 0.0f;      // angry: flat line
         draw_mouth(mcx, mcy, (int)(Hf * 0.19f), thin + 1, ceff, 0);
     } else if (mo < 0.45f) {
         // teeth grin: white flat stadium with dark corner notches (mid-talk)
