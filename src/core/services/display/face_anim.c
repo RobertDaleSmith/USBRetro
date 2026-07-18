@@ -56,7 +56,7 @@ static const face_pose EMO[FACE_EMO_COUNT] = {
     [FACE_EMO_SAD]        = {0.88f,0.88f, 0,   0.18f,0.40f,-0.65f,-0.15f,0.05f,-0.65f,-0.10f},
     [FACE_EMO_ANGRY]      = {0.85f,0.85f, 0,  -0.05f,0.35f, 0.85f,-0.20f,0.12f,-0.40f, 0.00f},
     [FACE_EMO_SURPRISED]  = {1.00f,1.00f, 0,  -0.05f,1.00f, 0,   0.90f,0.30f, 0.00f,  0.10f},
-    [FACE_EMO_SLEEPY]     = {0.24f,0.24f, 0,   0.12f,0.35f,-0.10f,-0.35f,0.10f,-0.10f,-0.20f},
+    [FACE_EMO_SLEEPY]     = {0.13f,0.13f, 0,   0.12f,0.35f,-0.10f,-0.35f,0.10f,-0.10f,-0.20f},
     [FACE_EMO_SUSPICIOUS] = {0.42f,0.42f, 0.30f,0,  0.45f, 0.20f,-0.05f,0.05f,-0.15f, 0.00f},
     [FACE_EMO_EXCITED]    = {0.15f,0.15f, 0,  -0.05f,0.60f, 0,   0.30f,0.75f, 1.00f,  0.15f},
     [FACE_EMO_LOVE]       = {0.45f,0.45f, 0,   0.05f,0.60f, 0,   0.05f,0.00f, 0.60f,  0.05f},
@@ -870,8 +870,10 @@ static float astro_d_blend(const astro_ctx* a, const astro_ctx* b, float w,
 static void astro_build(astro_ctx* c, const face_pose* p, face_emotion emo,
                         float Hf, int cx0, float gx, float gy) {
     float eoff = Hf * 0.40f;                     // eye offset from center
-    c->rx = Hf * 0.27f * (1.0f - 0.12f * p->squash);
-    c->ry_base = Hf * 0.27f * (1.0f + 0.15f * p->squash);
+    // surprise: raised brows swell the discs (springs with the pose)
+    float swell = 1.0f + 0.15f * (p->brow_h > 0.0f ? p->brow_h : 0.0f);
+    c->rx = Hf * 0.27f * swell * (1.0f - 0.12f * p->squash);
+    c->ry_base = Hf * 0.27f * swell * (1.0f + 0.15f * p->squash);
     c->inv_rx = 1.0f / c->rx;
     c->excx[0] = cx0 - eoff + gx;
     c->excx[1] = cx0 + eoff + gx;
