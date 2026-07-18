@@ -15,7 +15,7 @@ export class FaceCard {
         this._babbleTimer = null;
     }
 
-    static STYLES = ['lil', 'tab', 'astro'];
+    static STYLES = ['eyes', 'face', 'astro'];
     static EMOTIONS = [
         ['neutral', '😐'], ['happy', '😊'], ['excited', '🤩'],
         ['love', '😍'], ['wink', '😉'], ['angry', '😠'],

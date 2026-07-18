@@ -15,7 +15,7 @@ static int face_w = 128, face_h = 64;
 
 static face_pose cur, target, vel;     // cur eased toward target; vel per field
 static face_emotion cur_emo = FACE_EMO_NEUTRAL;
-static face_style_id cur_style = FACE_STYLE_LIL;
+static face_style_id cur_style = FACE_STYLE_EYES;
 
 static float speak_env = 0.0f;         // lip-sync drive, decays on its own
 static uint32_t last_ms = 0;
@@ -363,7 +363,7 @@ static void effective(face_pose* p, float* bob_out) {
     }
 }
 
-static void style_lil(const face_pose* p, float bob) {
+static void style_eyes(const face_pose* p, float bob) {
     // Faithful port of the original eyes_anim look: ellipse eyes on a
     // pseudo-3D cylinder (width foreshortens on the side rotating away),
     // boba pupils with inward bias, outward shear, smile-arc fold, brow cuts.
@@ -597,7 +597,7 @@ static void draw_open_mouth(int cx, int cy, int hw, int hh, int rim, float open_
     display_set_color(FACE_COLOR_MAIN);
 }
 
-static void style_tab(const face_pose* p, float bob) {
+static void style_face(const face_pose* p, float bob) {
     // heytaby Taby, geometry measured from the reference video (fractions of
     // canvas HEIGHT, scaled 1.2x to fill the panel). All x-positions hang off
     // the canvas center so canvas aspect never distorts the face; the whole
@@ -1124,9 +1124,9 @@ void face_render(void) {
     face_pose p; float bob;
     effective(&p, &bob);
     switch (cur_style) {
-        case FACE_STYLE_TAB:  style_tab(&p, bob);  break;
+        case FACE_STYLE_FACE:  style_face(&p, bob);  break;
         case FACE_STYLE_ASTRO: style_astro(&p, bob); break;
-        case FACE_STYLE_LIL:
-        default:               style_lil(&p, bob); break;
+        case FACE_STYLE_EYES:
+        default:               style_eyes(&p, bob); break;
     }
 }

@@ -45,9 +45,9 @@ void display_pixel(int16_t x, int16_t y, bool on)
 static uint16_t style_color(face_style_id s)
 {
     switch (s) {
-        case FACE_STYLE_TAB:  return 0xFFFF;   // white (real Taby)
+        case FACE_STYLE_FACE:  return 0xFFFF;   // white (real Taby)
         case FACE_STYLE_ASTRO: return 0x5EBF;   // Astro core: light cyan-blue
-        case FACE_STYLE_LIL:
+        case FACE_STYLE_EYES:
         default:               return 0x07FF;   // cyan
     }
 }
@@ -55,11 +55,11 @@ static uint16_t style_color(face_style_id s)
 static uint16_t style_accent(face_style_id s)
 {
     switch (s) {
-        case FACE_STYLE_TAB:  return 0xE288;   // coral-red mouth interior
+        case FACE_STYLE_FACE:  return 0xE288;   // coral-red mouth interior
         case FACE_STYLE_ASTRO: return 0x0917;   // Astro glow: faint navy —
                                                 // the reference's spill-glow
                                                 // barely reads on the panel
-        case FACE_STYLE_LIL:
+        case FACE_STYLE_EYES:
         default:               return 0x0471;   // dark cyan pupil (~55% of main — visible on AMOLED)
     }
 }
@@ -113,10 +113,11 @@ bool face_remote_emotion(const char* name)
 bool face_remote_style(const char* name)
 {
     static const struct { const char* n; face_style_id st; } M[] = {
-        {"lil", FACE_STYLE_LIL},         {"tab", FACE_STYLE_TAB},
+        {"eyes", FACE_STYLE_EYES},       {"face", FACE_STYLE_FACE},
         {"astro", FACE_STYLE_ASTRO},
         // legacy aliases
-        {"classic", FACE_STYLE_LIL},     {"taby", FACE_STYLE_TAB},
+        {"lil", FACE_STYLE_EYES},        {"tab", FACE_STYLE_FACE},
+        {"classic", FACE_STYLE_EYES},    {"taby", FACE_STYLE_FACE},
     };
     for (size_t i = 0; i < sizeof(M) / sizeof(M[0]); i++) {
         if (strcmp(name, M[i].n) == 0) {
@@ -157,7 +158,7 @@ static void eyes_task(void* arg)
     }
 
     face_init(EYES_W, EYES_H);
-    face_set_style(FACE_STYLE_TAB);
+    face_set_style(FACE_STYLE_FACE);
 
     // Self-driving demo until wired to real events: cycle emotions to show the
     // interrupt-anytime spring transitions, and rotate through the styles.
@@ -168,7 +169,7 @@ static void eyes_task(void* arg)
         FACE_EMO_EXCITED, FACE_EMO_SAD, FACE_EMO_SLEEPY, FACE_EMO_ANGRY,
     };
     uint32_t next_emo = 4000, next_style = 0;
-    int burst_i = 0, style = FACE_STYLE_TAB;
+    int burst_i = 0, style = FACE_STYLE_FACE;
     bool in_burst = false;
 
     for (;;) {

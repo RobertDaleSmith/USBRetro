@@ -61,8 +61,8 @@ typedef enum {
 } face_emotion;
 
 typedef enum {
-    FACE_STYLE_LIL,   // rounded-ellipse eyes (the current look)
-    FACE_STYLE_TAB,       // big round eyes + expressive mouth
+    FACE_STYLE_EYES,   // rounded-ellipse eyes (the current look)
+    FACE_STYLE_FACE,       // big round eyes + expressive mouth
     FACE_STYLE_ASTRO,      // Astro-Bot-style visor eyes
     FACE_STYLE_COUNT,
 } face_style_id;
