@@ -173,8 +173,13 @@ static void nus_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     nus_connected = true;
                     printf("[ble_nus] NUS connected (handle=0x%04x, MTU=%d)\n",
                            nus_con_handle, att_server_get_mtu(nus_con_handle));
-                    // Request faster connection interval for streaming (7.5-15ms)
-                    gap_request_connection_parameter_update(nus_con_handle, 6, 12, 0, 200);
+                    // Connection params sized for the FULL rig: the central
+                    // (dongle) time-slices its one radio with a Classic DS5
+                    // link, so a 7.5ms interval + 2s supervision dropped
+                    // constantly under load. 30-50ms + 6s supervision rides
+                    // through coexistence stalls; lip-sync (20Hz envelope)
+                    // fits easily.
+                    gap_request_connection_parameter_update(nus_con_handle, 24, 40, 0, 600);
                     break;
 
                 case GATTSERVICE_SUBEVENT_SPP_SERVICE_DISCONNECTED:

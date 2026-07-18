@@ -129,6 +129,17 @@ static void led_status_update(void)
 {
     uint32_t now = platform_time_ms();
 
+    // Actively scanning (button press / pairing window): FAST blink so the
+    // press visibly took — even while other devices stay connected.
+    if (btstack_host_is_scanning()) {
+        if (now - led_last_toggle >= 110) {
+            led_state = !led_state;
+            platform_led_set(led_state);
+            led_last_toggle = now;
+        }
+        return;
+    }
+
     if (btstack_classic_get_connection_count() > 0) {
         // Device connected - solid on
         if (!led_state) {

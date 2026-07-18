@@ -548,6 +548,8 @@ static void register_switch2_hid_listener(hci_con_handle_t con_handle);
 static void mp_nus_mark_pending(hci_con_handle_t handle);
 static void mp_nus_disconnected(hci_con_handle_t handle);
 static void mp_nus_periodic(void);
+static void ble_liveness_periodic(void);
+static void ble_liveness_rssi_seen(hci_con_handle_t handle);
 
 // Deferred post-HID setup sequencer. After HID report notifications are
 // enabled (0x1C), the hids_client needs a moment to return to CONNECTED before
@@ -1143,6 +1145,7 @@ void btstack_host_process(void)
 
     // Kick off / advance MouthPad NUS discovery once HID has settled
     mp_nus_periodic();
+    ble_liveness_periodic();
 
     // Handle Switch 2 rumble/LED feedback passthrough
     switch2_handle_feedback();
@@ -1455,6 +1458,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 btstack_host_start_scan();
 #endif
             }
+            break;
+
+        case GAP_EVENT_RSSI_MEASUREMENT:
+            ble_liveness_rssi_seen(
+                gap_event_rssi_measurement_get_con_handle(packet));
             break;
 
         case GAP_EVENT_ADVERTISING_REPORT: {
@@ -3059,6 +3067,58 @@ static void mp_nus_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* 
                        mp_nus.tx_char.value_handle, mp_nus.rx_value_handle);
             }
             break;
+        }
+    }
+}
+
+// Liveness: a radio-dead BLE link can die without a disconnect event,
+// leaving stale "connected" entries that block the relay and make scans
+// look broken. Poll RSSI every 4s; two consecutive unanswered polls =>
+// force-disconnect the zombie so cleanup + reconnection run.
+static uint8_t  live_miss[MAX_BLE_CONNECTIONS];
+static bool     live_pending[MAX_BLE_CONNECTIONS];
+
+static void ble_liveness_periodic(void)
+{
+    static uint32_t next_ms = 0;
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if (now < next_ms) return;
+    next_ms = now + 4000;
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        ble_connection_t* bc = &hid_state.connections[i];
+        if (bc->handle == HCI_CON_HANDLE_INVALID) {
+            live_pending[i] = false;
+            live_miss[i] = 0;
+            continue;
+        }
+        if (live_pending[i] && ++live_miss[i] >= 2) {
+            printf("[BTSTACK_HOST] Link 0x%04X unresponsive — dropping zombie\n",
+                   bc->handle);
+            if (hci_connection_for_handle(bc->handle) != NULL) {
+                gap_disconnect(bc->handle);
+            } else {
+                // HCI already gone: synthesize the cleanup the missing
+                // disconnect event would have done
+                bt_on_disconnect(bc->conn_index);
+                memset(bc, 0, sizeof(*bc));
+                bc->handle = HCI_CON_HANDLE_INVALID;
+                mp_nus_disconnected(bc->handle);
+            }
+            live_pending[i] = false;
+            live_miss[i] = 0;
+            continue;
+        }
+        live_pending[i] = true;
+        gap_read_rssi(bc->handle);
+    }
+}
+
+static void ble_liveness_rssi_seen(hci_con_handle_t handle)
+{
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        if (hid_state.connections[i].handle == handle) {
+            live_pending[i] = false;
+            live_miss[i] = 0;
         }
     }
 }
