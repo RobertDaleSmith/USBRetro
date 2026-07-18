@@ -386,19 +386,6 @@ static void style_eyes(const face_pose* p, float bob) {
 
     int pdx = (int)((gx * 5.0f + pj_x) * k), pdy = (int)((gy * 4.0f + pj_y) * k);
 
-    if (cur_emo == FACE_EMO_FRUSTRATED) {
-        // >_< — each eye is a chevron pointing inward
-        int hw2 = (int)(2.6f * k); if (hw2 < 2) hw2 = 2;
-        int sw = (int)(11.0f * k), sh = (int)(13.0f * k);
-        for (int i = 0; i < 2; i++) {
-            int cx = (int)((i ? x_r : x_l) + 0.5f);
-            int tip = cx + (i ? -sw : sw);        // chevron tip faces center
-            int back = cx + (i ? sw : -sw);
-            fill_stroke(back, ecy_base - sh, tip, ecy_base, hw2);
-            fill_stroke(back, ecy_base + sh, tip, ecy_base, hw2);
-        }
-        return;
-    }
 
     for (int i = 0; i < 2; i++) {
         float open = i ? p->eye_open_r : p->eye_open_l;
@@ -408,9 +395,9 @@ static void style_eyes(const face_pose* p, float bob) {
         // bottom (never reaching the top), pupils kept
         float h_pct = open;
         int curve = 0;
-        bool pinch = (cur_emo == FACE_EMO_EXCITED);   // eager squint
+        bool pinch = (cur_emo == FACE_EMO_FRUSTRATED); // pinched squint
         if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE && !pinch) {
-            curve = (int)(p->mouth_curve * 45.0f);
+            curve = (int)(p->mouth_curve * 30.0f);
             if (h_pct < 0.85f) h_pct = 0.85f;
         }
         if (pinch && h_pct < 0.72f) h_pct = 0.72f;
