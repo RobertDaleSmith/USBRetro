@@ -38,6 +38,9 @@ static face_emotion morph_from = FACE_EMO_NEUTRAL;
 static face_emotion morph_to = FACE_EMO_NEUTRAL;
 static float morph_w = 1.0f;
 
+// excited entrance dance: a moment of bobbing + side-to-side rocking
+static uint32_t dance_until = 0;
+
 // idle life
 static float breathe_t = 0.0f;
 static uint32_t next_wander_ms = 3000;
@@ -110,6 +113,7 @@ face_style_id face_get_style(void) { return cur_style; }
 void face_set_emotion(face_emotion e) {
     if (e >= FACE_EMO_COUNT) return;
     cur_emo = e;
+    if (e == FACE_EMO_EXCITED) dance_until = last_ms + 1700;  // happy dance!
     // Adopt the emotion pose as the new target, but keep whatever gaze the
     // caller has steered (gaze is its own concern).
     float gx = target.gaze_x, gy = target.gaze_y;
@@ -342,6 +346,14 @@ static void effective(face_pose* p, float* bob_out) {
     // breathing bob + subtle squash
     *bob_out = sinf(breathe_t * 1.6f) * (face_h * 0.012f);
     p->squash += sinf(breathe_t * 1.6f) * 0.03f;
+    // excited entrance dance: bob + rock, easing out over its window
+    if (last_ms < dance_until) {
+        float amp = (float)(dance_until - last_ms) / 1700.0f;
+        float ph = (float)last_ms * 0.001f;
+        *bob_out += sinf(ph * 18.8f) * (face_h * 0.035f) * amp;
+        p->gaze_x += sinf(ph * 9.4f) * 0.50f * amp;
+        p->squash += sinf(ph * 18.8f + 1.5f) * 0.12f * amp;
+    }
 }
 
 static void style_lil(const face_pose* p, float bob) {
@@ -1084,6 +1096,7 @@ static void style_astro(const face_pose* p, float bob) {
 bool face_settled(void)
 {
     if (blinking || speak_env > 0.02f || morph_w < 1.0f) return false;
+    if (last_ms < dance_until) return false;   // dancing: render full rate
     float d = 0;
     d += fabsf(cur.eye_open_l - target.eye_open_l);
     d += fabsf(cur.eye_open_r - target.eye_open_r);
