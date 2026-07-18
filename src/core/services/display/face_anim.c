@@ -821,8 +821,9 @@ static void astro_build(astro_ctx* c, const face_pose* p, face_emotion emo,
     if (!c->hearts && !c->arrows && !wink && fold <= 0.0f &&
         fabsf(p->brow) > 0.25f) {
         // brow slash, signed by the pose: angry cuts down toward the face
-        // center on rounded-box eyes; sad droops outward on round teardrops
-        c->quad = (p->brow > 0.0f);
+        // center, sad droops outward — both on ROUND eyes (same radius as
+        // the neutral discs; the boxy base read too square at the bottom)
+        c->quad = false;
         float k = 0.47f * p->brow;
         for (int e = 0; e < 2; e++) {
             float s_in = e ? -1.0f : 1.0f;
