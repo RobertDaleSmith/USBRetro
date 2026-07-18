@@ -38,6 +38,9 @@ static face_emotion morph_from = FACE_EMO_NEUTRAL;
 static face_emotion morph_to = FACE_EMO_NEUTRAL;
 static float morph_w = 1.0f;
 
+// surprised entrance pop: eyes overshoot huge, then pull back
+static uint32_t pop_start = 0;
+
 // excited entrance dance: an ear-to-ear rock — the face ROLLS about a
 // pivot at the neck (below the screen). Styles consume dance_roll (rad,
 // differential eye height) and dance_dx (the lateral arc that a low pivot
@@ -119,6 +122,7 @@ void face_set_emotion(face_emotion e) {
     if (e >= FACE_EMO_COUNT) return;
     cur_emo = e;
     if (e == FACE_EMO_EXCITED) dance_until = last_ms + 2200;  // happy dance!
+    if (e == FACE_EMO_SURPRISED) pop_start = last_ms;          // pop!
     // Adopt the emotion pose as the new target, but keep whatever gaze the
     // caller has steered (gaze is its own concern).
     float gx = target.gaze_x, gy = target.gaze_y;
@@ -412,6 +416,14 @@ static void style_eyes(const face_pose* p, float bob) {
         int eh = (int)(48.0f * k * h_pct);
         if (eh < 2) eh = 2;
         int ew = (int)((i ? w_r : w_l) + 0.5f);
+        if (cur_emo == FACE_EMO_SURPRISED && last_ms - pop_start < 1300) {
+            // quick pop of surprise: ~70ms swell, gradual pull-back
+            float tt = (float)(last_ms - pop_start);
+            float atk = tt < 70.0f ? tt / 70.0f : 1.0f;
+            float pop = 1.0f + 0.32f * atk * expf(-tt / 380.0f);
+            eh = (int)(eh * pop);
+            ew = (int)(ew * pop);
+        }
         int cx = (int)((i ? x_r : x_l) + dance_dx + 0.5f);
         int ecy = ecy_base + (int)(-dance_roll * ((i ? x_r : x_l) - cx0));
         float shear = i ? 0.18f : -0.18f;
@@ -1114,6 +1126,8 @@ bool face_settled(void)
 {
     if (blinking || speak_env > 0.02f || morph_w < 1.0f) return false;
     if (last_ms < dance_until) return false;   // dancing: render full rate
+    if (cur_emo == FACE_EMO_SURPRISED && last_ms - pop_start < 1300)
+        return false;                          // popping: render full rate
     float d = 0;
     d += fabsf(cur.eye_open_l - target.eye_open_l);
     d += fabsf(cur.eye_open_r - target.eye_open_r);
