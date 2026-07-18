@@ -389,7 +389,7 @@ static void style_lil(const face_pose* p, float bob) {
         float h_pct = open;
         int curve = 0;
         if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE) {
-            curve = (int)(p->mouth_curve * 85.0f);
+            curve = (int)(p->mouth_curve * 100.0f);
             if (h_pct < 0.58f) h_pct = 0.58f * p->mouth_curve + h_pct * (1.0f - p->mouth_curve);
         }
         // Curve-blink (the old classic signature): a closing eye folds into
@@ -415,7 +415,7 @@ static void style_lil(const face_pose* p, float bob) {
         if (base_r < (int)(2 * k)) base_r = (int)(2 * k);
         if (base_r > (int)(10 * k)) base_r = (int)(10 * k);
         int pr = (int)(base_r * (0.8f + 0.4f * p->pupil));
-        if (pr >= 1 && (open > 0.35f || curve < 40)) {
+        if (pr >= 1 && open > 0.35f && curve < 40) {
             int margin = (int)k + 1;
             int max_dx = rx - pr - margin, max_dy = ry - pr - margin;
             if (max_dx < 0) max_dx = 0;
