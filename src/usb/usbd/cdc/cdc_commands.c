@@ -477,6 +477,35 @@ static void cmd_face_forward(const char* json)
     if (btstack_host_nus_send(pkt, (uint16_t)(5 + len + 2))) send_ok();
     else send_error("no face connected");
 }
+
+// NUS.* — forward non-FACE commands to the paired face board. The face's NUS
+// feeds the same framed command parser, so the dongle can reboot it, drop it
+// into the ROM bootloader for a reflash, or change its USB mode even when the
+// face has no usable USB of its own (e.g. a broken CDC descriptor — the exact
+// situation these were added to dig out of).
+static void cmd_nus_reboot(const char* json)
+{
+    (void)json;
+    cmd_face_forward("{\"cmd\":\"REBOOT\"}");
+}
+
+static void cmd_nus_bootsel(const char* json)
+{
+    (void)json;
+    cmd_face_forward("{\"cmd\":\"BOOTSEL\"}");
+}
+
+static void cmd_nus_mode(const char* json)
+{
+    int mode;
+    if (!json_get_int(json, "mode", &mode)) {
+        send_error("missing mode");
+        return;
+    }
+    char inner[48];
+    snprintf(inner, sizeof(inner), "{\"cmd\":\"MODE.SET\",\"mode\":%d}", mode);
+    cmd_face_forward(inner);
+}
 #endif // BOARD_LILYGO_TDISPLAY_S3_AMOLED
 
 #ifdef PLATFORM_ESP32
@@ -3552,6 +3581,10 @@ static const cmd_entry_t commands[] = {
     {"FACE.BRIGHT", cmd_face_forward},
     {"FACE.OFFSET", cmd_face_forward},
     {"FACE.STYLE", cmd_face_forward},
+    // Remote management of the paired face over the same NUS tunnel.
+    {"NUS.REBOOT", cmd_nus_reboot},
+    {"NUS.BOOTSEL", cmd_nus_bootsel},
+    {"NUS.MODE", cmd_nus_mode},
 #endif
     {"OTA", cmd_ota},
     {"MODE.GET", cmd_mode_get},

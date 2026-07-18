@@ -1673,10 +1673,16 @@ static const uint8_t desc_frag_cdc0[] = {
 #endif
 };
 
-// CDC-only fragment (no HID interfaces — CDC starts at interface 0)
-#define EPNUM_CDC_ONLY_NOTIF  0x81
-#define EPNUM_CDC_ONLY_OUT    0x01
-#define EPNUM_CDC_ONLY_IN     0x82
+// CDC-only fragment (no HID interfaces — CDC starts at interface 0).
+// KNOWN BUG (open): on ESP32-S3 this mode enumerates far enough for the host
+// to read strings but never configures (macOS: device stuck !matched, no
+// serial port; invisible to libusb). Not the EP numbers — 0x81/0x01/0x82 and
+// the composite's proven 0x82/0x03/0x83 both fail identically. Works on
+// RP2040 (gc2eth/CONFIG_NGC). Until root-caused, don't ship ESP32 boards
+// defaulted to this mode; NUS.MODE via a paired dongle is the escape hatch.
+#define EPNUM_CDC_ONLY_NOTIF  0x82
+#define EPNUM_CDC_ONLY_OUT    0x03
+#define EPNUM_CDC_ONLY_IN     0x83
 static const uint8_t desc_frag_cdc_only[] = {
     TUD_CDC_DESCRIPTOR(0, 4, EPNUM_CDC_ONLY_NOTIF, 8, EPNUM_CDC_ONLY_OUT, EPNUM_CDC_ONLY_IN, 64),
 };

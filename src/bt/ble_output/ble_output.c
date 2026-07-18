@@ -24,6 +24,7 @@ extern const uint8_t *ble_xbox_profile_data;
 #include "core/services/players/feedback.h"
 #include "core/services/storage/flash.h"
 #include "usb/usbd/cdc/cdc_commands.h"
+#include "usb/usbd/usbd.h"
 #include "platform/platform.h"
 
 // Forward declare to avoid pulling in manager.h (TinyUSB type conflicts)
@@ -278,11 +279,14 @@ extern bool tud_mounted(void);
 static bool ble_usb_host(void)
 {
 #ifdef CONFIG_BLE_USB_COEXIST
-    // Face/companion boards must stay a BLE device even with a USB data host
-    // attached — bench power + CDC debug can't make the board invisible to
-    // the dongle it relays for.
+    // Dedicated face/companion board: its whole job is being a BLE device,
+    // so BT never yields to a USB host (bench power + CDC debug included).
     return false;
 #else
+    // CDC-only USB is a config/debug link, not a controller role — BT stays
+    // alive so a bench-powered board (web config) still advertises. HID
+    // modes = the USB host owns us as a controller, so BT yields as before.
+    if (usbd_get_mode() == USB_OUTPUT_MODE_CDC) return false;
     return platform_usb_powered() && tud_mounted();
 #endif
 }
