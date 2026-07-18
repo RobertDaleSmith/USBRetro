@@ -367,13 +367,6 @@ static void style_lil(const face_pose* p, float bob) {
 
     int pdx = (int)((gx * 5.0f + pj_x) * k), pdy = (int)((gy * 4.0f + pj_y) * k);
 
-    if (cur_emo == FACE_EMO_LOVE) {
-        // heart eyes (breathe a little with the squash)
-        int hs = (int)(20.0f * k * (1.0f + 0.06f * p->squash));
-        fill_heart((int)(x_l + 0.5f), ecy, hs);
-        fill_heart((int)(x_r + 0.5f), ecy, hs);
-        return;
-    }
     if (cur_emo == FACE_EMO_FRUSTRATED) {
         // >_< — each eye is a chevron pointing inward
         int hw2 = (int)(2.6f * k); if (hw2 < 2) hw2 = 2;
@@ -390,10 +383,12 @@ static void style_lil(const face_pose* p, float bob) {
 
     for (int i = 0; i < 2; i++) {
         float open = i ? p->eye_open_r : p->eye_open_l;
+        // love: eyes stay big and unfolded — the hearts live in the pupils
+        if (cur_emo == FACE_EMO_LOVE && open > 0.45f) open = 0.95f;
         // happy fold keeps the eye at ~60% with a deep smile-arc cut
         float h_pct = open;
         int curve = 0;
-        if (p->mouth_curve > 0.30f) {
+        if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE) {
             curve = (int)(p->mouth_curve * 85.0f);
             if (h_pct < 0.58f) h_pct = 0.58f * p->mouth_curve + h_pct * (1.0f - p->mouth_curve);
         }
@@ -433,9 +428,14 @@ static void style_lil(const face_pose* p, float bob) {
             if (dy < -max_dy) dy = -max_dy;
             int xshift = (int)(-(float)dy * shear + (dy < 0 ? -0.5f : 0.5f));
             // pupil in the accent class: backends map it to a darker shade
-            // of the eye color (reads as an iris, not a hole)
+            // of the eye color (reads as an iris, not a hole). Love keeps
+            // the base eyes and turns the pupils into hearts.
             display_set_color(FACE_COLOR_ACCENT);
-            fill_ellipse(cx + dx + xshift, ecy + dy, pr, pr, 0.0f, true);
+            if (cur_emo == FACE_EMO_LOVE) {
+                fill_heart(cx + dx + xshift, ecy + dy, pr);
+            } else {
+                fill_ellipse(cx + dx + xshift, ecy + dy, pr, pr, 0.0f, true);
+            }
             display_set_color(FACE_COLOR_MAIN);
         }
 
