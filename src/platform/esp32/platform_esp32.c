@@ -194,7 +194,9 @@ bool platform_deep_sleep(uint8_t wake_gpio, bool wake_active_high)
 
 uint32_t platform_last_reset_reason(void)
 {
-    return 0;
+    // esp_reset_reason: 1=poweron 3=sw 4=panic 5=int_wdt 6=task_wdt
+    // 7=other_wdt 8=deepsleep 9=brownout 10=sdio
+    return (uint32_t)esp_reset_reason();
 }
 
 int platform_battery_millivolts(void)

@@ -195,13 +195,18 @@ static void eyes_task(void* arg)
                              style_color(face_get_style()),
                              style_accent(face_get_style()));
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // ~30fps cap: the full render+blit hammers PSRAM/cache hard enough
+        // to disturb the BLE controller's timing (supervision timeouts mid-
+        // morph); a 3x lower duty cycle keeps the radio fed
+        vTaskDelay(pdMS_TO_TICKS(33));
     }
 }
 
 void eyes_start(void)
 {
-    xTaskCreate(eyes_task, "eyes", 8192, NULL, 3, NULL);
+    // Pin to core 1 (APP): the BT controller lives on core 0 — keep the
+    // heavy render workload off its core entirely.
+    xTaskCreatePinnedToCore(eyes_task, "eyes", 8192, NULL, 3, NULL, 1);
 }
 
 #endif // BOARD_LILYGO_TDISPLAY_S3_AMOLED

@@ -19,3 +19,6 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions_lilygo_16mb.csv"
 # No auto-reset circuit (native USB): enter download manually (hold BOOT, tap
 # RST), then esptool/idf.py flash uses no-reset. Matches xiao/feather boards.
 CONFIG_ESPTOOLPY_BEFORE_NORESET=y
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y

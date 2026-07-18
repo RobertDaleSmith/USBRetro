@@ -18,3 +18,9 @@ bool btstack_host_nus_send(const uint8_t *data, uint16_t len)
     (void)len;
     return false;
 }
+
+int btstack_host_nus_debug(int* gatt_ready)
+{
+    if (gatt_ready) *gatt_ready = -1;
+    return 0;   // MP_NUS_IDLE — no central NUS client on a peripheral
+}

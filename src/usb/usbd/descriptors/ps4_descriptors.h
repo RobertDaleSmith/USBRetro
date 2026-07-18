@@ -271,10 +271,13 @@ static const uint8_t ps4_report_descriptor[] = {
     0x95, 0x01,        //   Report Count (1)
     0x81, 0x02,        //   Input (Data,Var,Abs)
 
-    // Triggers (Z, Rz) - Standard PS4
+    // Triggers (Rx, Ry) - Standard PS4 (L2 = Rx, R2 = Ry).
+    // Must NOT reuse Z/Rz here: those are the right stick above. Reusing them
+    // makes generic HID hosts (WebHID, DInput) collapse both onto the same
+    // fields, pinning the right stick to the triggers' resting value.
     0x05, 0x01,        //   Usage Page (Generic Desktop Ctrls)
-    0x09, 0x32,        //   Usage (Z)
-    0x09, 0x35,        //   Usage (Rz)
+    0x09, 0x33,        //   Usage (Rx)  -> byte 8 = L2 analog
+    0x09, 0x34,        //   Usage (Ry)  -> byte 9 = R2 analog
     0x15, 0x00,        //   Logical Minimum (0)
     0x26, 0xFF, 0x00,  //   Logical Maximum (255)
     0x75, 0x08,        //   Report Size (8)

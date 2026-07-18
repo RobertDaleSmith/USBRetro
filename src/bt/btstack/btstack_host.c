@@ -3079,6 +3079,8 @@ static void mp_nus_periodic(void)
         for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
             ble_connection_t* bc = &hid_state.connections[i];
             if (bc->handle == HCI_CON_HANDLE_INVALID) continue;
+            if (hci_connection_for_handle(bc->handle) == NULL)
+                continue;   // stale entry — never operate on a dead handle
             if (strstr(bc->name, "MouthPad") != NULL ||
                 strstr(bc->name, "JoypadOS") != NULL ||
                 (bc->vid == 0x1915 && bc->pid == 0xEEEE) ||
@@ -3098,8 +3100,15 @@ static void mp_nus_periodic(void)
         // an ungraceful reconnect), NUS can never arm and the relay is dead
         // despite a live link. Force a clean reconnect.
         if ((btstack_run_loop_get_time_ms() - mp_nus.pending_since) > 15000) {
-            printf("[MP_NUS] GATT client wedged for 15s — forcing reconnect\n");
-            gap_disconnect(mp_nus.handle);
+            // only touch the link if the HCI connection actually still
+            // exists — gap_disconnect on a stale handle asserts inside
+            // BTstack (crash-reboots the dongle)
+            if (hci_connection_for_handle(mp_nus.handle) != NULL) {
+                printf("[MP_NUS] GATT client wedged for 15s — forcing reconnect\n");
+                gap_disconnect(mp_nus.handle);
+            } else {
+                printf("[MP_NUS] Wedged on a stale handle — resetting client\n");
+            }
             mp_nus_reset();
         }
         return;   // another query in flight

@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include "driver/i2c_master.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define PMU_SDA 3
 #define PMU_SCL 2
@@ -29,6 +31,9 @@ static bool reg_write(uint8_t reg, uint8_t val)
     uint8_t buf[2] = { reg, val };
     return s_dev && i2c_master_transmit(s_dev, buf, 2, 50) == ESP_OK;
 }
+
+static volatile int s_batt_mv, s_vbus_mv, s_chg_state, s_chg_ma;
+static void pmu_poll_task(void* arg);
 
 bool pmu_init(void)
 {
@@ -72,39 +77,38 @@ bool pmu_init(void)
     // replacing the 2048mA power-on default
     uint8_t r04;
     if (reg_read(0x04, &r04)) reg_write(0x04, (r04 & 0x80) | 5);
+    // Prime the cache once (still init context), then hand ALL I2C to the
+    // poller so no other task ever touches the bus.
+    uint8_t v;
+    if (reg_read(0x11, &v)) s_vbus_mv = 2600 + (v & 0x7F) * 100;
+    if (reg_read(0x0E, &v)) s_batt_mv = 2304 + (v & 0x7F) * 20;
+    xTaskCreate(pmu_poll_task, "pmu", 3072, NULL, 2, NULL);
     return true;
 }
 
-// Battery voltage in mV (0 if unavailable). REG0E BATV: 2304mV + 20mV/LSB.
-int pmu_batt_mv(void)
+// ---------------------------------------------------------------------------
+// Cached telemetry. The getters below are called from MANY contexts —
+// including the BTstack task (usb-dominance timer, NUS-relayed INFO/BATT) —
+// and a live I2C transaction there overflowed its stack (panic loop while
+// BLE-connected). A dedicated low-priority poller owns ALL I2C after init;
+// getters just read the cache.
+// ---------------------------------------------------------------------------
+static void pmu_poll_task(void* arg)
 {
-    uint8_t v;
-    if (!reg_read(0x0E, &v)) return 0;
-    return 2304 + (v & 0x7F) * 20;
+    (void)arg;
+    for (;;) {
+        uint8_t v;
+        if (reg_read(0x0E, &v)) s_batt_mv = 2304 + (v & 0x7F) * 20;
+        if (reg_read(0x11, &v)) s_vbus_mv = 2600 + (v & 0x7F) * 100;
+        if (reg_read(0x0B, &v)) s_chg_state = (v >> 3) & 0x3;
+        if (reg_read(0x12, &v)) s_chg_ma = (v & 0x7F) * 50;
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
 }
 
-// VBUS voltage in mV (0 if unavailable). REG11 VBUSV: 2600mV + 100mV/LSB.
-int pmu_vbus_mv(void)
-{
-    uint8_t v;
-    if (!reg_read(0x11, &v)) return 0;
-    return 2600 + (v & 0x7F) * 100;
-}
-
-// Charge status: 0=not charging, 1=pre-charge, 2=fast charge, 3=done.
-int pmu_charge_state(void)
-{
-    uint8_t v;
-    if (!reg_read(0x0B, &v)) return 0;
-    return (v >> 3) & 0x3;
-}
-
-// Charge current in mA (REG12 ICHGR: 50mA/LSB).
-int pmu_charge_ma(void)
-{
-    uint8_t v;
-    if (!reg_read(0x12, &v)) return 0;
-    return (v & 0x7F) * 50;
-}
+int pmu_batt_mv(void)      { return s_batt_mv; }
+int pmu_vbus_mv(void)      { return s_vbus_mv; }
+int pmu_charge_state(void) { return s_chg_state; }
+int pmu_charge_ma(void)    { return s_chg_ma; }
 
 #endif // BOARD_LILYGO_TDISPLAY_S3_AMOLED

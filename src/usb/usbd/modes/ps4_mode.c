@@ -170,8 +170,8 @@ static bool ps4_mode_send_report(uint8_t player_index,
     byte7 |= ((ps4_report_counter++ & 0x3F) << 2);       // Counter in bits 2-7
     ps4_report_buffer[7] = byte7;
 
-    // Bytes 8-9: Analog triggers (L2 duplica R2 para teste)
-    ps4_report_buffer[8] = r2_val;
+    // Bytes 8-9: Analog triggers (L2, R2)
+    ps4_report_buffer[8] = l2_val;
     ps4_report_buffer[9] = r2_val;
 
     // Bytes 10-11: Timestamp (milissegundos, como GP2040-CE)

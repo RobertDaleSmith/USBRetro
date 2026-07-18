@@ -447,6 +447,7 @@ endif()
 # Component requirements
 set(ESP_REQUIRES
     nvs_flash
+    espcoredump
     esp_driver_gpio
     esp_adc
     esp_driver_i2c

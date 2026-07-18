@@ -479,6 +479,32 @@ static void cmd_face_forward(const char* json)
 }
 #endif // BOARD_LILYGO_TDISPLAY_S3_AMOLED
 
+#ifdef PLATFORM_ESP32
+// COREDUMP.SUM — panic PC + backtrace from the flash coredump (esp-idf).
+// addr2line the addresses against the matching .elf on the host.
+#include "esp_core_dump.h"
+static void cmd_coredump_sum(const char* json)
+{
+    (void)json;
+    esp_core_dump_summary_t sum;
+    if (esp_core_dump_get_summary(&sum) != ESP_OK) {
+        send_error("no coredump");
+        return;
+    }
+    int pos = snprintf(response_buf, sizeof(response_buf),
+                       "{\"task\":\"%s\",\"pc\":\"0x%08lx\",\"bt\":[",
+                       sum.exc_task, (unsigned long)sum.exc_pc);
+    for (uint32_t i = 0; i < sum.exc_bt_info.depth && i < 16; i++) {
+        pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
+                        "%s\"0x%08lx\"", i ? "," : "",
+                        (unsigned long)sum.exc_bt_info.bt[i]);
+    }
+    snprintf(response_buf + pos, sizeof(response_buf) - pos,
+             "],\"corrupt\":%s}", sum.exc_bt_info.corrupted ? "true" : "false");
+    send_json(response_buf);
+}
+#endif
+
 static void cmd_bootsel(const char* json)
 {
     (void)json;
@@ -2338,6 +2364,13 @@ static void cmd_settings_reset(const char* json)
 static void cmd_bt_status(const char* json)
 {
     (void)json;
+#ifdef ENABLE_BTSTACK
+    extern int btstack_host_nus_debug(int*);
+    int gattfree = -2;
+    int nus_state = btstack_host_nus_debug(&gattfree);
+#else
+    int gattfree = -2, nus_state = -1;
+#endif
     // Determine transport at compile time
 #if defined(BTSTACK_USE_CYW43)
     const char* transport = "Onboard (CYW43, Classic + BLE)";
@@ -2359,12 +2392,12 @@ static void cmd_bt_status(const char* json)
     btstack_host_get_crash_info(&crash_pc, &crash_lr);
 #endif
     int pos = snprintf(response_buf, sizeof(response_buf),
-             "{\"enabled\":%s,\"scanning\":%s,\"connections\":%d,\"transport\":\"%s\","
+             "{\"enabled\":%s,\"scanning\":%s,\"connections\":%d,\"nus\":%d,\"gattfree\":%d,\"transport\":\"%s\","
              "\"up_s\":%lu,\"crash_pc\":\"%08lx\",\"crash_lr\":\"%08lx\",\"devices\":[",
              btstack_host_is_initialized() ? "true" : "false",
              btstack_host_is_scanning() ? "true" : "false",
              btstack_classic_get_connection_count(),
-             transport,
+             nus_state, gattfree, transport,
              (unsigned long)(platform_time_ms() / 1000),
              (unsigned long)crash_pc, (unsigned long)crash_lr);
 
@@ -3498,6 +3531,9 @@ static const cmd_entry_t commands[] = {
     {"PING", cmd_ping},
     {"REBOOT", cmd_reboot},
     {"BOOTSEL", cmd_bootsel},
+#ifdef PLATFORM_ESP32
+    {"COREDUMP.SUM", cmd_coredump_sum},
+#endif
 #ifdef BOARD_LILYGO_TDISPLAY_S3_AMOLED
     {"FACE.SPEAK", cmd_face_speak},
     {"FACE.STATE", cmd_face_state},
