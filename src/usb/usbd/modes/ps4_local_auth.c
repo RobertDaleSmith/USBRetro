@@ -537,7 +537,14 @@ void ps4_local_auth_task(void)
         return;
     }
 
-    // ---- Dispatch signing (Core 0 blocking for debug) ----
+    // ---- Dispatch signing to Core 1 ----
+    // RSA-PSS signing takes ~1.7 s. Running it on Core 0 blocks the main loop
+    // for that whole time — no input updates, no rumble updates, no tud_task —
+    // so every time the PS4 re-challenges auth (every couple of minutes) the
+    // last input freezes "stuck sending" and rumble sticks until the sign
+    // finishes and it snaps back. Hand the sign to Core 1 instead (idle on
+    // USB-output apps, .core1_task = NULL) via core1_idle_hook(); Core 0 keeps
+    // servicing USB/input/rumble and picks up the result in the branches above.
     if (!s_signing_requested || !s_rsa_valid) return;
 
     s_signing_requested = false;
@@ -545,32 +552,16 @@ void ps4_local_auth_task(void)
     s_sign_ret          = 0;
     s_page_cursor       = 0;
 
-    // Snapshot the nonce
+    // Snapshot the nonce so a new one arriving on Core 0 can't corrupt the sign.
     memcpy(s_sign_nonce, s_nonce, NONCE_SIZE);
 
-    printf("[ps4_local_auth] Signing on Core 0 (blocking, nonce_id=%d)...\n", s_nonce_id);
-    ps4_log("SIGN start C0");
+    printf("[ps4_local_auth] Dispatching sign to Core 1 (nonce_id=%d)...\n", s_nonce_id);
+    ps4_log("SIGN start C1");
     s_sign_start_ms = platform_time_ms();
 
-    // Sign directly on Core 0 — blocks the main loop but eliminates all
-    // multicore timing issues for debugging.
-    ps4_do_sign();
-
-    uint32_t duration = platform_time_ms() - s_sign_start_ms;
-    s_sign_start_ms = 0;
-
-    if (s_sign_ret != 0) {
-        printf("[ps4_local_auth] Sign failed ret=%d (%lums)\n", s_sign_ret, (unsigned long)duration);
-        char logmsg[40];
-        snprintf(logmsg, sizeof(logmsg), "SIGN FAIL ret=%d %lums", s_sign_ret, (unsigned long)duration);
-        ps4_log(logmsg);
-    } else {
-        printf("[ps4_local_auth] Sign OK (%lums)\n", (unsigned long)duration);
-        char logmsg[32];
-        snprintf(logmsg, sizeof(logmsg), "SIGN done %lums", (unsigned long)duration);
-        ps4_log(logmsg);
-    }
-    s_signature_ready = true;
+    __dmb();                  // publish snapshot + cleared flags before the kick
+    s_core1_signing = true;   // Core 1's idle hook runs ps4_do_sign()
+    __sev();                  // wake Core 1 from __wfe()
 }
 
 // ============================================================================
