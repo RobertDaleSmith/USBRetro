@@ -408,10 +408,12 @@ static void style_eyes(const face_pose* p, float bob) {
         // bottom (never reaching the top), pupils kept
         float h_pct = open;
         int curve = 0;
-        if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE) {
+        bool pinch = (cur_emo == FACE_EMO_EXCITED);   // eager squint
+        if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE && !pinch) {
             curve = (int)(p->mouth_curve * 45.0f);
             if (h_pct < 0.85f) h_pct = 0.85f;
         }
+        if (pinch && h_pct < 0.72f) h_pct = 0.72f;
         // Curve-blink (the old classic signature): a closing eye folds into
         // the ⌒ smile-arc instead of squashing flat — keeps character shut.
         if (open < 0.55f && p->mouth_curve <= 0.30f) {
@@ -466,9 +468,12 @@ static void style_eyes(const face_pose* p, float bob) {
             int depth = (curve * eh) / 100;
             cut_smile_arc(cx, ecy + ry, rx, depth);
         }
-        // brow cuts: angry = triangular top cut toward center; sad = inner wedge
-        if (p->brow > 0.1f) {
-            int t = (int)(p->brow * 90.0f);
+        // brow cuts: angry = triangular top cut toward center; excited
+        // pinches with the SAME cut mirrored on the bottom (eager squint)
+        float browcut = p->brow;
+        if (pinch && browcut < 0.30f) browcut = 0.30f;
+        if (browcut > 0.1f) {
+            int t = (int)(browcut * 90.0f);
             int max_depth = ((eh - 2) * (t > 100 ? 100 : t)) / 100;
             bool inner_left = (i == 1);
             for (int x = 0; x < ew && max_depth > 0; x++) {
@@ -481,6 +486,14 @@ static void style_eyes(const face_pose* p, float bob) {
                     int px = cx - rx + x + xs;
                     if (px >= 0 && px < face_w && py >= 0 && py < face_h)
                         display_pixel((int16_t)px, (int16_t)py, false);
+                    if (pinch) {
+                        int py2 = ecy + ry - y;
+                        int yfc2 = py2 - ecy;
+                        int xs2 = (int)(-(float)yfc2 * shear + (yfc2 < 0 ? -0.5f : 0.5f));
+                        int px2 = cx - rx + x + xs2;
+                        if (px2 >= 0 && px2 < face_w && py2 >= 0 && py2 < face_h)
+                            display_pixel((int16_t)px2, (int16_t)py2, false);
+                    }
                 }
             }
         }
