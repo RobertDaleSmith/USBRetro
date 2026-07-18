@@ -60,7 +60,7 @@ static const face_pose EMO[FACE_EMO_COUNT] = {
     [FACE_EMO_SUSPICIOUS] = {0.42f,0.42f, 0.30f,0,  0.45f, 0.20f,-0.05f,0.05f,-0.15f, 0.00f},
     [FACE_EMO_EXCITED]    = {0.15f,0.15f, 0,  -0.05f,0.60f, 0,   0.30f,0.75f, 1.00f,  0.15f},
     [FACE_EMO_LOVE]       = {0.45f,0.45f, 0,   0.05f,0.60f, 0,   0.05f,0.00f, 0.60f,  0.05f},
-    [FACE_EMO_WINK]       = {0.90f,0.60f, 0,   0,   0.45f, 0,   0.05f,0.06f, 0.30f,  0.00f},
+    [FACE_EMO_WINK]       = {0.90f,0.30f, 0,   0,   0.45f, 0,   0.05f,0.06f, 0.30f,  0.00f},
     [FACE_EMO_FRUSTRATED] = {0.90f,0.90f, 0,   0,   0.45f, 0,  -0.10f,0.10f,-0.20f,  0.00f},
 };
 
@@ -215,6 +215,44 @@ static void fill_ellipse(int cx, int cy, int rx, int ry, float shear, bool on) {
     }
 }
 
+// Heart size relative to the eye box (bigger scale = smaller heart; the
+// implicit heart spans ~|1.15| in its own units).
+#define HEART_SCALE 1.15f
+
+static inline bool heart_inside(float u, float v);
+static inline float seg_d2(float px, float py,
+                           float ax, float ay, float bx, float by);
+
+// Filled heart centered (cx,cy), half-size `hs` canvas px (any color class).
+static void fill_heart(int cx, int cy, int hs) {
+    int box = (int)(hs * 1.35f);
+    for (int y = -box; y <= box; y++) {
+        int py = cy + y; if (py < 0 || py >= face_h) continue;
+        for (int x = -box; x <= box; x++) {
+            int px = cx + x; if (px < 0 || px >= face_w) continue;
+            if (heart_inside((float)x / hs * HEART_SCALE,
+                             -(float)y / hs * HEART_SCALE))
+                display_pixel((int16_t)px, (int16_t)py, true);
+        }
+    }
+}
+
+// Thick line segment (capsule) between two points, half-width hw.
+static void fill_stroke(int x0, int y0, int x1, int y1, int hw) {
+    int lx = (x0 < x1 ? x0 : x1) - hw, hx = (x0 > x1 ? x0 : x1) + hw;
+    int ly = (y0 < y1 ? y0 : y1) - hw, hy = (y0 > y1 ? y0 : y1) + hw;
+    float hw2 = (float)hw * hw;
+    for (int y = ly; y <= hy; y++) {
+        if (y < 0 || y >= face_h) continue;
+        for (int x = lx; x <= hx; x++) {
+            if (x < 0 || x >= face_w) continue;
+            if (seg_d2((float)x, (float)y, (float)x0, (float)y0,
+                       (float)x1, (float)y1) <= hw2)
+                display_pixel((int16_t)x, (int16_t)y, true);
+        }
+    }
+}
+
 // Vertical capsule (rounded rect, full-round ends) — for Astro eyes.
 static void fill_capsule(int cx, int cy, int hw, int hh, bool on) {
     int r = hw; // full round ends
@@ -328,6 +366,27 @@ static void style_classic(const face_pose* p, float bob) {
     int ecy = (int)(face_h * 0.5f + bob + gy * 6.0f * k);
 
     int pdx = (int)((gx * 5.0f + pj_x) * k), pdy = (int)((gy * 4.0f + pj_y) * k);
+
+    if (cur_emo == FACE_EMO_LOVE) {
+        // heart eyes (breathe a little with the squash)
+        int hs = (int)(20.0f * k * (1.0f + 0.06f * p->squash));
+        fill_heart((int)(x_l + 0.5f), ecy, hs);
+        fill_heart((int)(x_r + 0.5f), ecy, hs);
+        return;
+    }
+    if (cur_emo == FACE_EMO_FRUSTRATED) {
+        // >_< — each eye is a chevron pointing inward
+        int hw2 = (int)(2.6f * k); if (hw2 < 2) hw2 = 2;
+        int sw = (int)(11.0f * k), sh = (int)(13.0f * k);
+        for (int i = 0; i < 2; i++) {
+            int cx = (int)((i ? x_r : x_l) + 0.5f);
+            int tip = cx + (i ? -sw : sw);        // chevron tip faces center
+            int back = cx + (i ? sw : -sw);
+            fill_stroke(back, ecy - sh, tip, ecy, hw2);
+            fill_stroke(back, ecy + sh, tip, ecy, hw2);
+        }
+        return;
+    }
 
     for (int i = 0; i < 2; i++) {
         float open = i ? p->eye_open_r : p->eye_open_l;
@@ -537,8 +596,17 @@ static void style_taby(const face_pose* p, float bob) {
     for (int i = 0; i < 2; i++) {
         int cx = cx0 + (i ? eoff : -eoff) + gx;
         float open = i ? p->eye_open_r : p->eye_open_l;
-        if (open < 0.40f && p->mouth_curve > 0.45f) {
-            // happy squint only: the ‿ closed-eye arc
+        if (cur_emo == FACE_EMO_FRUSTRATED) {
+            // >_< — chevron pointing inward, in Taby's thin-stroke language
+            int hw2 = thin + 1;
+            int sw = (int)(ehw * 0.9f), sh = (int)(ehh * 0.62f);
+            int tip = cx + (i ? -sw : sw);
+            int back = cx + (i ? sw : -sw);
+            fill_stroke(back, ecy - sh, tip, ecy, hw2);
+            fill_stroke(back, ecy + sh, tip, ecy, hw2);
+        } else if (open < 0.40f &&
+                   (p->mouth_curve > 0.45f || cur_emo == FACE_EMO_WINK)) {
+            // happy squint / wink: the ‿ closed-eye arc
             draw_closed_eye(cx, ecy - (int)(ehh * 0.25f), (int)(ehw * 1.25f),
                             (int)(ehh * 0.55f), thin);
         } else {
@@ -622,10 +690,6 @@ static void style_taby(const face_pose* p, float bob) {
     }
 }
 
-
-// Heart size relative to the eye box (bigger scale = smaller heart; the
-// implicit heart spans ~|1.15| in its own units).
-#define HEART_SCALE 1.15f
 
 // Astro shape context — one description of the eyes' TRUE current shape
 // (disc, squint dome, or heart) that BOTH the LED clip and the drop-shadow
@@ -852,6 +916,7 @@ static void astro_build(astro_ctx* c, const face_pose* p, face_emotion emo,
         float open = (e ? p->eye_open_r : p->eye_open_l) * (1.0f / 0.90f);
         if (open > 1.0f) open = 1.0f;
         if (c->hearts || c->arrows) open = 1.0f;
+        if (wink && e == 1 && open < 0.66f) open = 0.66f;  // crescent body
         c->ry_e[e] = c->ry_base * (fold > 0.0f ? (0.85f + 0.15f * open) : open);
         if (c->ry_e[e] < c->ry_base * 0.06f) c->ry_e[e] = c->ry_base * 0.06f;
         c->inv_ry_e[e] = 1.0f / c->ry_e[e];
