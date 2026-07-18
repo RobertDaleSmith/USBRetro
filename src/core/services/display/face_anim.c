@@ -404,12 +404,13 @@ static void style_eyes(const face_pose* p, float bob) {
         float open = i ? p->eye_open_r : p->eye_open_l;
         // love: eyes stay big and unfolded — the hearts live in the pupils
         if (cur_emo == FACE_EMO_LOVE && open > 0.45f) open = 0.95f;
-        // happy fold keeps the eye at ~60% with a deep smile-arc cut
+        // happy: near-full eye with a shallow concave smile bite from the
+        // bottom (never reaching the top), pupils kept
         float h_pct = open;
         int curve = 0;
         if (p->mouth_curve > 0.30f && cur_emo != FACE_EMO_LOVE) {
-            curve = (int)(p->mouth_curve * 100.0f);
-            if (h_pct < 0.58f) h_pct = 0.58f * p->mouth_curve + h_pct * (1.0f - p->mouth_curve);
+            curve = (int)(p->mouth_curve * 45.0f);
+            if (h_pct < 0.85f) h_pct = 0.85f;
         }
         // Curve-blink (the old classic signature): a closing eye folds into
         // the ⌒ smile-arc instead of squashing flat — keeps character shut.
@@ -435,7 +436,8 @@ static void style_eyes(const face_pose* p, float bob) {
         if (base_r < (int)(2 * k)) base_r = (int)(2 * k);
         if (base_r > (int)(10 * k)) base_r = (int)(10 * k);
         int pr = (int)(base_r * (0.8f + 0.4f * p->pupil));
-        if (pr >= 1 && open > 0.35f && curve < 40) {
+        if (pr >= 1 && (open > 0.35f ||
+                        (p->mouth_curve > 0.30f && curve <= 50))) {
             int margin = (int)k + 1;
             int max_dx = rx - pr - margin, max_dy = ry - pr - margin;
             if (max_dx < 0) max_dx = 0;
