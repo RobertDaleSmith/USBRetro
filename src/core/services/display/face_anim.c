@@ -459,10 +459,13 @@ static void style_eyes(const face_pose* p, float bob) {
         // pinches with the SAME cut mirrored on the bottom (eager squint)
         float browcut = p->brow;
         if (pinch && browcut < 0.30f) browcut = 0.30f;
-        if (browcut > 0.1f) {
-            int t = (int)(browcut * 90.0f);
+        bool droop = (browcut < -0.10f);   // sad: lids slant down-OUTWARD
+        if (browcut > 0.1f || droop) {
+            float mag = droop ? -browcut * 0.80f : browcut;
+            int t = (int)(mag * 90.0f);
             int max_depth = ((eh - 2) * (t > 100 ? 100 : t)) / 100;
-            bool inner_left = (i == 1);
+            // angry cuts deepest toward the center; sad deepest outward
+            bool inner_left = droop ? (i == 0) : (i == 1);
             for (int x = 0; x < ew && max_depth > 0; x++) {
                 int dist = inner_left ? (ew - 1 - x) : x;
                 int depth = (dist * max_depth) / (ew - 1 > 0 ? ew - 1 : 1);
