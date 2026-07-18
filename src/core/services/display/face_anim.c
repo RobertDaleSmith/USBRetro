@@ -38,8 +38,13 @@ static face_emotion morph_from = FACE_EMO_NEUTRAL;
 static face_emotion morph_to = FACE_EMO_NEUTRAL;
 static float morph_w = 1.0f;
 
-// excited entrance dance: a moment of bobbing + side-to-side rocking
+// excited entrance dance: an ear-to-ear rock — the face ROLLS about a
+// pivot at the neck (below the screen). Styles consume dance_roll (rad,
+// differential eye height) and dance_dx (the lateral arc that a low pivot
+// produces).
 static uint32_t dance_until = 0;
+static float dance_roll = 0.0f;
+static float dance_dx = 0.0f;
 
 // idle life
 static float breathe_t = 0.0f;
@@ -113,7 +118,7 @@ face_style_id face_get_style(void) { return cur_style; }
 void face_set_emotion(face_emotion e) {
     if (e >= FACE_EMO_COUNT) return;
     cur_emo = e;
-    if (e == FACE_EMO_EXCITED) dance_until = last_ms + 1700;  // happy dance!
+    if (e == FACE_EMO_EXCITED) dance_until = last_ms + 2200;  // happy dance!
     // Adopt the emotion pose as the new target, but keep whatever gaze the
     // caller has steered (gaze is its own concern).
     float gx = target.gaze_x, gy = target.gaze_y;
@@ -346,13 +351,15 @@ static void effective(face_pose* p, float* bob_out) {
     // breathing bob + subtle squash
     *bob_out = sinf(breathe_t * 1.6f) * (face_h * 0.012f);
     p->squash += sinf(breathe_t * 1.6f) * 0.03f;
-    // excited entrance dance: bob + rock, easing out over its window
+    // excited entrance dance: roll about the neck, easing out
     if (last_ms < dance_until) {
-        float amp = (float)(dance_until - last_ms) / 1700.0f;
+        float amp = (float)(dance_until - last_ms) / 2200.0f;
         float ph = (float)last_ms * 0.001f;
-        *bob_out += sinf(ph * 18.8f) * (face_h * 0.035f) * amp;
-        p->gaze_x += sinf(ph * 9.4f) * 0.50f * amp;
-        p->squash += sinf(ph * 18.8f + 1.5f) * 0.12f * amp;
+        dance_roll = sinf(ph * 8.0f) * 0.17f * amp;
+        dance_dx = -dance_roll * (float)face_h * 0.65f;  // neck pivot arc
+    } else {
+        dance_roll = 0.0f;
+        dance_dx = 0.0f;
     }
 }
 
@@ -375,7 +382,7 @@ static void style_lil(const face_pose* p, float bob) {
     int cx0 = face_w / 2;
     float x_l = (float)(cx0 - 19.0f * k) + sinf(ang_l) * cylr - sinf(-0.55f) * cylr;
     float x_r = (float)(cx0 + 19.0f * k) + sinf(ang_r) * cylr - sinf(0.55f) * cylr;
-    int ecy = (int)(face_h * 0.5f + bob + gy * 6.0f * k);
+    int ecy_base = (int)(face_h * 0.5f + bob + gy * 6.0f * k);
 
     int pdx = (int)((gx * 5.0f + pj_x) * k), pdy = (int)((gy * 4.0f + pj_y) * k);
 
@@ -387,8 +394,8 @@ static void style_lil(const face_pose* p, float bob) {
             int cx = (int)((i ? x_r : x_l) + 0.5f);
             int tip = cx + (i ? -sw : sw);        // chevron tip faces center
             int back = cx + (i ? sw : -sw);
-            fill_stroke(back, ecy - sh, tip, ecy, hw2);
-            fill_stroke(back, ecy + sh, tip, ecy, hw2);
+            fill_stroke(back, ecy_base - sh, tip, ecy_base, hw2);
+            fill_stroke(back, ecy_base + sh, tip, ecy_base, hw2);
         }
         return;
     }
@@ -415,7 +422,8 @@ static void style_lil(const face_pose* p, float bob) {
         int eh = (int)(48.0f * k * h_pct);
         if (eh < 2) eh = 2;
         int ew = (int)((i ? w_r : w_l) + 0.5f);
-        int cx = (int)((i ? x_r : x_l) + 0.5f);
+        int cx = (int)((i ? x_r : x_l) + dance_dx + 0.5f);
+        int ecy = ecy_base + (int)(-dance_roll * ((i ? x_r : x_l) - cx0));
         float shear = i ? 0.18f : -0.18f;
         int rx = ew / 2, ry = eh / 2;
         if (rx < 2) rx = 2;
@@ -602,11 +610,12 @@ static void style_tab(const face_pose* p, float bob) {
     int ehw  = (int)(Hf * 0.144f);            // eye half-width
     int ehh  = (int)(Hf * 0.211f);            // eye half-height (open)
     int eoff = (int)(Hf * 0.463f);            // eye center offset from middle
-    int ecy  = (int)(Hf * 0.478f + bob) + gy;
+    int ecy_base = (int)(Hf * 0.478f + bob) + gy;
     int thin = (int)(Hf * 0.020f) + 1;
 
     for (int i = 0; i < 2; i++) {
-        int cx = cx0 + (i ? eoff : -eoff) + gx;
+        int cx = cx0 + (i ? eoff : -eoff) + gx + (int)dance_dx;
+        int ecy = ecy_base + (int)(-dance_roll * (float)(i ? eoff : -eoff));
         float open = i ? p->eye_open_r : p->eye_open_l;
         if (cur_emo == FACE_EMO_FRUSTRATED) {
             // >_< — chevron pointing inward, in Taby's thin-stroke language
@@ -683,14 +692,14 @@ static void style_tab(const face_pose* p, float bob) {
     // mouth — follows gaze with the face. Rest = thin ‿ smile arc; talking
     // opens through a teeth grin into the open teeth+tongue mouth (video-exact
     // sequence). Never an oval.
-    int mcx = cx0 + gx;
+    int mcx = cx0 + gx + (int)dance_dx;
     int mcy = (int)(Hf * 0.784f + bob) + gy;
     float mo = p->mouth_open;
     if (cur_emo == FACE_EMO_LOVE) {
         // Taby blush face: ω mouth + pink blush ticks beside the eyes
         draw_omega(mcx, mcy - (int)(Hf * 0.02f), (int)(Hf * 0.10f), thin);
         int bl = (int)(Hf * 0.07f);
-        int bcy2 = ecy + (int)(ehh * 0.55f);
+        int bcy2 = ecy_base + (int)(ehh * 0.55f);
         draw_blush_ticks(cx0 - eoff - (int)(ehw * 1.9f) + gx, bcy2, bl, +1);
         draw_blush_ticks(cx0 + eoff + (int)(ehw * 1.9f) + gx, bcy2, bl, -1);
         return;
@@ -731,6 +740,7 @@ typedef struct {
     float excx[2];        // eye centers x
     float ecy;            // eye center y
     float rx, inv_rx;     // horizontal radius
+    float ecy_e2[2];      // per-eye center y (dance roll tilts the pair)
     float ry_e[2];        // per-eye vertical radius (blink squash)
     float inv_ry_e[2];
     float ry_base;
@@ -794,7 +804,7 @@ static inline float arrow_d2(float nx, float ny) {
 // (1.0 = on the boundary; >1 outside). Used per-DOT (sqrt/atan ok here).
 static float astro_eye_d(const astro_ctx* c, float pxf, float pyf, int e) {
     float nx = (pxf - c->excx[e]) * c->inv_rx;
-    float ny = (pyf - c->ecy) * c->inv_ry_e[e];
+    float ny = (pyf - c->ecy_e2[e]) * c->inv_ry_e[e];
     if (c->hearts) {
         float r = sqrtf(nx * nx + ny * ny);
         int bin = (int)((atan2f(-ny, nx) + (float)M_PI) * (64.0f / (2.0f * (float)M_PI)));
@@ -839,7 +849,7 @@ static float astro_eye_d(const astro_ctx* c, float pxf, float pyf, int e) {
 static bool astro_px_in(const astro_ctx* c, float pxf, float pyf) {
     for (int e = 0; e < 2; e++) {
         float nx = (pxf - c->excx[e]) * c->inv_rx;
-        float ny = (pyf - c->ecy) * c->inv_ry_e[e];
+        float ny = (pyf - c->ecy_e2[e]) * c->inv_ry_e[e];
         if (c->hearts) {
             if (heart_inside(nx * HEART_SCALE, -ny * HEART_SCALE)) return true;
             continue;
@@ -887,8 +897,10 @@ static void astro_build(astro_ctx* c, const face_pose* p, face_emotion emo,
     c->rx = Hf * 0.27f * swell * (1.0f - 0.12f * p->squash);
     c->ry_base = Hf * 0.27f * swell * (1.0f + 0.15f * p->squash);
     c->inv_rx = 1.0f / c->rx;
-    c->excx[0] = cx0 - eoff + gx;
-    c->excx[1] = cx0 + eoff + gx;
+    c->excx[0] = cx0 - eoff + gx + dance_dx;
+    c->excx[1] = cx0 + eoff + gx + dance_dx;
+    c->ecy_e2[0] = Hf * 0.50f + gy - dance_roll * (-eoff);
+    c->ecy_e2[1] = Hf * 0.50f + gy - dance_roll * (+eoff);
     c->ecy = Hf * 0.50f + gy;
 
     // squint fold (concave smile carve) — disabled for whole shapes
