@@ -277,7 +277,14 @@ static bool sleep_wake_active_high = false;
 extern bool tud_mounted(void);
 static bool ble_usb_host(void)
 {
+#ifdef CONFIG_BLE_USB_COEXIST
+    // Face/companion boards must stay a BLE device even with a USB data host
+    // attached — bench power + CDC debug can't make the board invisible to
+    // the dongle it relays for.
+    return false;
+#else
     return platform_usb_powered() && tud_mounted();
+#endif
 }
 
 // Tracked advertising state so we can enable/disable idempotently.

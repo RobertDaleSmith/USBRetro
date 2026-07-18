@@ -1265,6 +1265,37 @@ void btstack_host_process(void)
         hid_state.pending_name[sizeof(hid_state.pending_name) - 1] = '\0';
         btstack_host_connect_ble(hid_state.last_connected_addr, hid_state.last_connected_addr_type);
     }
+
+    // Bonded-device reconnect while IDLE. The scan-gated path above never runs
+    // once scanning stops, and every scan-resume path is gated on zero Classic
+    // connections — so with a DualSense up, a dropped bonded BLE device could
+    // never re-pair. A direct gap_connect needs no scan (and is kinder to
+    // Classic coexistence than scanning), so keep dialing the bonded device
+    // whenever its link is down.
+    static uint32_t idle_reconnect_ms;
+    if (hid_state.state == BLE_STATE_IDLE &&
+        hid_state.powered_on &&
+        !scan_suppressed &&
+        hid_state.has_last_connected &&
+        hid_state.reconnect_attempt_time == 0) {
+        bool bonded_up = false;
+        for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+            if (hid_state.connections[i].handle != HCI_CON_HANDLE_INVALID &&
+                memcmp(hid_state.connections[i].addr, hid_state.last_connected_addr, 6) == 0) {
+                bonded_up = true;
+                break;
+            }
+        }
+        uint32_t now = btstack_run_loop_get_time_ms();
+        if (!bonded_up && (now - idle_reconnect_ms) >= BLE_RECONNECT_INTERVAL_MS) {
+            idle_reconnect_ms = now;
+            printf("[BTSTACK_HOST] Idle reconnection to bonded device '%s'\n",
+                   hid_state.last_connected_name);
+            strncpy(hid_state.pending_name, hid_state.last_connected_name, sizeof(hid_state.pending_name) - 1);
+            hid_state.pending_name[sizeof(hid_state.pending_name) - 1] = '\0';
+            btstack_host_connect_ble(hid_state.last_connected_addr, hid_state.last_connected_addr_type);
+        }
+    }
 }
 
 // ============================================================================

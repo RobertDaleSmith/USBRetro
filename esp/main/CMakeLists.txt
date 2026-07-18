@@ -533,7 +533,8 @@ endif()
 if(CONFIG_BOARD STREQUAL "lilygo_tdisplay_s3_amoled")
     target_compile_definitions(${COMPONENT_LIB} PUBLIC
         BOARD_LILYGO_TDISPLAY_S3_AMOLED=1
-        EYES_SCALE=6)
+        EYES_SCALE=6
+        CONFIG_BLE_USB_COEXIST=1)
 endif()
 
 # App-specific definitions
