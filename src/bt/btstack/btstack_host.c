@@ -2450,11 +2450,16 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             printf("[BTSTACK_HOST] Disconnected: handle=0x%04X reason=0x%02X\n", handle, reason);
 
             ble_connection_t *conn = find_connection_by_handle(handle);
-            if (conn && conn->conn_index > 0) {
-                // Notify bthid layer before clearing connection
-                // conn_index for BLE uses BLE_CONN_INDEX_OFFSET to distinguish from Classic
-                printf("[BTSTACK_HOST] BLE disconnect: notifying bthid (conn_index=%d)\n", conn->conn_index);
-                bt_on_disconnect(conn->conn_index);
+            if (conn) {
+                // Run FULL BLE cleanup whenever the handle matches a BLE
+                // entry — even if setup never finished (conn_index still 0).
+                // A half-open connection that dropped mid-discovery used to
+                // fall into the Classic branch below and leak its entry +
+                // wedged HIDS client, poisoning every reconnect after it.
+                if (conn->conn_index > 0) {
+                    printf("[BTSTACK_HOST] BLE disconnect: notifying bthid (conn_index=%d)\n", conn->conn_index);
+                    bt_on_disconnect(conn->conn_index);
+                }
                 uint16_t dcid = conn->hids_cid;   // capture before the memset clears it
                 memset(conn, 0, sizeof(*conn));
                 conn->handle = HCI_CON_HANDLE_INVALID;
@@ -2906,6 +2911,16 @@ bool btstack_host_mouthpad_nus_ready(void)
     return mp_nus.state == MP_NUS_READY;
 }
 
+// Diagnostic: NUS client state + whether the GATT client is free (0 = busy).
+int btstack_host_nus_debug(int* gatt_ready)
+{
+    if (gatt_ready) {
+        *gatt_ready = (mp_nus.handle != HCI_CON_HANDLE_INVALID)
+                          ? (int)gatt_client_is_ready(mp_nus.handle) : -1;
+    }
+    return (int)mp_nus.state;
+}
+
 // Generic aliases: the client serves any recognized NUS peer (MouthPad or
 // JoypadOS face controller), so new callers get peer-neutral names.
 bool btstack_host_nus_ready(void)
@@ -3051,9 +3066,44 @@ static void mp_nus_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* 
 // Periodic: kick off discovery once the HID side has settled.
 static void mp_nus_periodic(void)
 {
+    if (mp_nus.state == MP_NUS_IDLE) {
+        // Self-heal: a NUS peer is connected but the client is unarmed —
+        // discovery failed once (e.g. raced the HIDS client right after a
+        // reconnect) or the arming event was missed. Without this the FACE
+        // relay stays dead while the BLE link is perfectly healthy. Re-arm
+        // with a gentle backoff.
+        static uint32_t next_rearm_ms = 0;
+        uint32_t now = btstack_run_loop_get_time_ms();
+        if (now < next_rearm_ms) return;
+        next_rearm_ms = now + 3000;
+        for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+            ble_connection_t* bc = &hid_state.connections[i];
+            if (bc->handle == HCI_CON_HANDLE_INVALID) continue;
+            if (strstr(bc->name, "MouthPad") != NULL ||
+                strstr(bc->name, "JoypadOS") != NULL ||
+                (bc->vid == 0x1915 && bc->pid == 0xEEEE) ||
+                (bc->vid == 0x2E8A && bc->pid == 0x10C6)) {
+                printf("[MP_NUS] Re-arming NUS for connected peer '%s'\n",
+                       bc->name);
+                mp_nus_mark_pending(bc->handle);
+                break;
+            }
+        }
+        return;
+    }
     if (mp_nus.state != MP_NUS_PENDING) return;
     if ((btstack_run_loop_get_time_ms() - mp_nus.pending_since) < 1500) return;
-    if (gatt_client_is_ready(mp_nus.handle) == 0) return;   // another query in flight
+    if (gatt_client_is_ready(mp_nus.handle) == 0) {
+        // Watchdog: if the GATT client stays busy (a wedged HIDS query after
+        // an ungraceful reconnect), NUS can never arm and the relay is dead
+        // despite a live link. Force a clean reconnect.
+        if ((btstack_run_loop_get_time_ms() - mp_nus.pending_since) > 15000) {
+            printf("[MP_NUS] GATT client wedged for 15s — forcing reconnect\n");
+            gap_disconnect(mp_nus.handle);
+            mp_nus_reset();
+        }
+        return;   // another query in flight
+    }
     mp_nus.state = MP_NUS_DISC_SERVICE;
     mp_nus.service.start_group_handle = 0;
     printf("[MP_NUS] Starting NUS discovery on 0x%04X\n", mp_nus.handle);
