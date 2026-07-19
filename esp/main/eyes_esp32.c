@@ -41,9 +41,30 @@ void display_pixel(int16_t x, int16_t y, bool on)
     s_fb[(size_t)x * EYES_H + y] = on ? s_color : 0;   // column-major (blit-friendly)
 }
 
-// Per-style main + accent colors (RGB565).
+// Per-style main + accent colors (RGB565). A runtime tint (FACE.COLOR)
+// overrides main and derives the accent at the style's stock main:accent
+// brightness ratio, so pupils/glow keep their relationship to the new hue.
+static uint16_t s_tint = 0;             // RGB565 override; 0 = style default
+
+void eyes_set_color(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint16_t c = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+    s_tint = c ? c : 0x0841;            // near-black asked for: darkest visible
+}
+
+void eyes_reset_color(void) { s_tint = 0; }
+
+static uint16_t scale565(uint16_t c, float k)
+{
+    int r = (int)(((c >> 11) & 31) * k);
+    int g = (int)(((c >> 5) & 63) * k);
+    int b = (int)((c & 31) * k);
+    return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
 static uint16_t style_color(face_style_id s)
 {
+    if (s_tint) return s_tint;
     switch (s) {
         case FACE_STYLE_FACE:  return 0xFFFF;   // white (real Taby)
         case FACE_STYLE_ASTRO: return 0x5EBF;   // Astro core: light cyan-blue
@@ -54,6 +75,11 @@ static uint16_t style_color(face_style_id s)
 
 static uint16_t style_accent(face_style_id s)
 {
+    if (s_tint) {
+        // astro's glow is a faint spill (~18% of main); other styles run
+        // their accent (pupil / mouth interior) at ~55%
+        return scale565(s_tint, s == FACE_STYLE_ASTRO ? 0.18f : 0.55f);
+    }
     switch (s) {
         case FACE_STYLE_FACE:  return 0xE288;   // coral-red mouth interior
         case FACE_STYLE_ASTRO: return 0x0917;   // Astro glow: faint navy —

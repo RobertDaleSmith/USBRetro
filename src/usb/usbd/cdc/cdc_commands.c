@@ -448,6 +448,31 @@ static void cmd_face_bright(const char* json)
     amoled_brightness((uint8_t)v);
     send_ok();
 }
+
+// FACE.COLOR {"r","g","b"} tints the current style's palette (accent derived);
+// {"reset":1} returns to the style's stock colors.
+extern void eyes_set_color(uint8_t r, uint8_t g, uint8_t b);
+extern void eyes_reset_color(void);
+static void cmd_face_color(const char* json)
+{
+    int reset = 0;
+    json_get_int(json, "reset", &reset);
+    if (reset) {
+        eyes_reset_color();
+        send_ok();
+        return;
+    }
+    int r = 0, g = 0, b = 0;
+    bool any = json_get_int(json, "r", &r);
+    any |= json_get_int(json, "g", &g);
+    any |= json_get_int(json, "b", &b);
+    if (!any) {
+        send_error("missing r/g/b");
+        return;
+    }
+    eyes_set_color((uint8_t)(r & 255), (uint8_t)(g & 255), (uint8_t)(b & 255));
+    send_ok();
+}
 #elif defined(ENABLE_BTSTACK)
 // --- FACE.* on a dongle build: relay to an untethered JoypadOS face.
 // No local display here — a paired JoypadOS BLE controller (e.g. the AMOLED
@@ -3583,6 +3608,7 @@ static const cmd_entry_t commands[] = {
     {"FACE.BRIGHT", cmd_face_bright},
     {"FACE.OFFSET", cmd_face_offset},
     {"FACE.STYLE", cmd_face_style},
+    {"FACE.COLOR", cmd_face_color},
     {"BATT.GET", cmd_batt_get},
 #elif defined(ENABLE_BTSTACK)
     // Relay every FACE.* command to a paired JoypadOS face over BLE NUS.
@@ -3593,6 +3619,7 @@ static const cmd_entry_t commands[] = {
     {"FACE.BRIGHT", cmd_face_forward},
     {"FACE.OFFSET", cmd_face_forward},
     {"FACE.STYLE", cmd_face_forward},
+    {"FACE.COLOR", cmd_face_forward},
     // Remote management of the paired face over the same NUS tunnel.
     {"NUS.REBOOT", cmd_nus_reboot},
     {"NUS.BOOTSEL", cmd_nus_bootsel},
