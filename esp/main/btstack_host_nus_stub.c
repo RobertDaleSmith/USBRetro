@@ -24,3 +24,8 @@ int btstack_host_nus_debug(int* gatt_ready)
     if (gatt_ready) *gatt_ready = -1;
     return 0;   // MP_NUS_IDLE — no central NUS client on a peripheral
 }
+
+void btstack_host_ble_drop_all(uint32_t holdoff_ms)
+{
+    (void)holdoff_ms;   // central-side bench tool; no-op on peripheral builds
+}

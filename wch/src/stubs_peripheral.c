@@ -25,6 +25,7 @@ __attribute__((weak)) void wiimote_set_orient_mode(uint8_t mode) { (void)mode; }
 // btstack_host (cdc_commands.c)
 __attribute__((weak)) void btstack_host_delete_all_bonds(void) {}
 __attribute__((weak)) bool btstack_host_is_initialized(void) { return false; }
+__attribute__((weak)) void btstack_host_ble_drop_all(uint32_t holdoff_ms) { (void)holdoff_ms; }
 __attribute__((weak)) bool btstack_host_is_scanning(void) { return false; }
 __attribute__((weak)) uint8_t btstack_classic_get_connection_count(void) { return 0; }
 __attribute__((weak)) bool btstack_host_get_last_connected(uint8_t bd_addr_out[6], char name_out[48])

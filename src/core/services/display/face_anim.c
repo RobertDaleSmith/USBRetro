@@ -41,6 +41,11 @@ static float morph_w = 1.0f;
 // surprised entrance pop: eyes overshoot huge, then pull back
 static uint32_t pop_start = 0;
 
+// wink one-shot: snap shut, hold, reopen. A static half-closed pose was
+// invisible inside short choreography beats; a timed cycle reads as a
+// deliberate wink in every style (re-trigger to wink again).
+static uint32_t wink_start = 0;
+
 // excited entrance dance: an ear-to-ear rock — the face ROLLS about a
 // pivot at the neck (below the screen). Styles consume dance_roll (rad,
 // differential eye height) and dance_dx (the lateral arc that a low pivot
@@ -123,6 +128,7 @@ void face_set_emotion(face_emotion e) {
     cur_emo = e;
     if (e == FACE_EMO_EXCITED) dance_until = last_ms + 2200;  // happy dance!
     if (e == FACE_EMO_SURPRISED) pop_start = last_ms;          // pop!
+    if (e == FACE_EMO_WINK) wink_start = last_ms;              // ;)
     // Adopt the emotion pose as the new target, but keep whatever gaze the
     // caller has steered (gaze is its own concern).
     float gx = target.gaze_x, gy = target.gaze_y;
@@ -349,6 +355,16 @@ static void effective(face_pose* p, float* bob_out) {
         if (amt < 0) amt = 0; if (amt > 1) amt = 1;
         p->eye_open_l *= (1.0f - amt);
         p->eye_open_r *= (1.0f - amt);
+    }
+    // wink cycle: overrides the eased pose so the shut phase is unmistakable
+    if (cur_emo == FACE_EMO_WINK) {
+        float t = (float)(last_ms - wink_start);
+        float o;
+        if      (t < 160.0f)  o = 0.90f - 0.80f * (t / 160.0f);   // snap shut
+        else if (t < 820.0f)  o = 0.10f;                          // hold
+        else if (t < 1120.0f) o = 0.10f + 0.80f * ((t - 820.0f) / 300.0f);
+        else                  o = 0.90f;                          // done — open
+        p->eye_open_r = o;
     }
     // lip-sync: mouth opens to the louder of pose vs speech envelope
     if (speak_env > p->mouth_open) p->mouth_open = speak_env;
@@ -938,8 +954,10 @@ static void astro_build(astro_ctx* c, const face_pose* p, face_emotion emo,
             c->cut_cy[e] = apex + 1.25f;
         }
     }
-    if (wink) {
-        // right eye: squashed crescent (deep smile carve); left stays open
+    if (wink && p->eye_open_r < 0.55f) {
+        // right eye: squashed crescent (deep smile carve); left stays open.
+        // Only while the wink cycle actually has the eye shut — after it
+        // reopens the eye is a normal round disc again.
         c->cut_r[1] = 1.15f;
         c->cut_cy[1] = 0.15f + 1.15f;
     }
