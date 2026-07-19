@@ -1054,6 +1054,28 @@ void btstack_host_suppress_scan(bool suppress)
     }
 }
 
+// Diagnostic/bench tool: drop every BLE link and hold off all reconnection
+// (rapid retries, idle ticker, scanning) for a window, so radio-contention
+// A/B tests can run against a genuinely BLE-quiet dongle. The periodic task
+// clears the holdoff (and un-suppresses scanning) when it expires.
+static uint32_t ble_drop_holdoff_until;
+
+void btstack_host_ble_drop_all(uint32_t holdoff_ms)
+{
+    ble_drop_holdoff_until = btstack_run_loop_get_time_ms() + holdoff_ms;
+    scan_suppressed = true;
+    if (btstack_host_is_scanning()) {
+        btstack_host_stop_scan();
+    }
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        if (hid_state.connections[i].handle != HCI_CON_HANDLE_INVALID) {
+            gap_disconnect(hid_state.connections[i].handle);
+        }
+    }
+    printf("[BTSTACK_HOST] BLE drop: all links down, reconnect held %lums\n",
+           (unsigned long)holdoff_ms);
+}
+
 // ============================================================================
 // CONNECTION
 // ============================================================================
@@ -1217,6 +1239,14 @@ void btstack_host_process(void)
         (btstack_run_loop_get_time_ms() - classic_state.recovery_start_time) >= 10000) {
         printf("[BTSTACK_HOST] No BT activity after connection timeout recovery, rebooting\n");
         platform_reboot();
+    }
+
+    // BLE.DROP holdoff expiry: restore normal reconnect/scan behavior.
+    if (ble_drop_holdoff_until != 0 &&
+        (int32_t)(btstack_run_loop_get_time_ms() - ble_drop_holdoff_until) >= 0) {
+        ble_drop_holdoff_until = 0;
+        scan_suppressed = false;
+        printf("[BTSTACK_HOST] BLE drop holdoff expired, reconnect resumed\n");
     }
 
     // Safety net: if idle with no active connections and not scanning, resume scan.
@@ -2152,6 +2182,12 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
                     printf("[BTSTACK_HOST] Connected! handle=0x%04X\n", handle);
 
+                    // The attempt is over — clear its timestamp. Leaving it
+                    // stale disabled the idle bonded-reconnect ticker (its
+                    // "no attempt in flight" guard) after the first
+                    // successful connect between reboots.
+                    hid_state.reconnect_attempt_time = 0;
+
                     // Find or create connection entry
                     ble_connection_t *conn = find_free_connection();
                     if (conn) {
@@ -2527,7 +2563,8 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 hid_state.state = BLE_STATE_IDLE;
 
                 // Try to reconnect to last connected device if we have one stored
-                if (hid_state.has_last_connected && hid_state.reconnect_attempts < 5) {
+                if (hid_state.has_last_connected && hid_state.reconnect_attempts < 5 &&
+                    ble_drop_holdoff_until == 0) {
                     hid_state.reconnect_attempts++;
                     printf("[BTSTACK_HOST] Attempting BLE reconnection to stored device (attempt %d)...\n",
                            hid_state.reconnect_attempts);

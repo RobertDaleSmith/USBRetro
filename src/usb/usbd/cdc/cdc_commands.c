@@ -2390,6 +2390,18 @@ static void cmd_settings_reset(const char* json)
 }
 
 #ifdef ENABLE_BTSTACK
+// BLE.DROP {"ms":60000} — drop all BLE links, hold reconnection off for the
+// window. Bench tool for radio-contention A/B tests (e.g. DS5 audio with and
+// without the face link) without unpairing anything.
+static void cmd_ble_drop(const char* json)
+{
+    int ms = 60000;
+    json_get_int(json, "ms", &ms);
+    if (ms < 1000) ms = 1000;
+    btstack_host_ble_drop_all((uint32_t)ms);
+    send_ok();
+}
+
 static void cmd_bt_status(const char* json)
 {
     (void)json;
@@ -3647,6 +3659,7 @@ static const cmd_entry_t commands[] = {
     {"VOICE.STATE", cmd_voice_state},
 #endif
     {"BT.STATUS", cmd_bt_status},
+    {"BLE.DROP", cmd_ble_drop},
     {"BT.BONDS.CLEAR", cmd_bt_bonds_clear},
     {"BT.FORGET", cmd_bt_forget},
     {"WIIMOTE.ORIENT.GET", cmd_wiimote_orient_get},
