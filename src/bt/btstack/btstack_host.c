@@ -1234,11 +1234,25 @@ void btstack_host_process(void)
     }
 
     // Recovery watchdog: if we cleaned up a stuck connection but BT transport
-    // appears dead (no inquiry events received within 10s), force a reboot.
+    // appears dead, force a reboot. Two guards keep this from nuking live
+    // sessions (it caused mid-session "stealth reboots", crash_pc=0):
+    //   - any active Classic or BLE link proves the transport works — a
+    //     stalled single connection setup is not a dead radio;
+    //   - a GIAC inquiry takes ~10.24s, so a 10.0s deadline rebooted before
+    //     the all-clear (GAP_EVENT_INQUIRY_COMPLETE) could ever land. 20s
+    //     gives the inquiry room to finish.
     if (classic_state.recovery_start_time != 0 &&
-        (btstack_run_loop_get_time_ms() - classic_state.recovery_start_time) >= 10000) {
-        printf("[BTSTACK_HOST] No BT activity after connection timeout recovery, rebooting\n");
-        platform_reboot();
+        (btstack_run_loop_get_time_ms() - classic_state.recovery_start_time) >= 20000) {
+        bool any_link = btstack_classic_get_connection_count() > 0;
+        for (int i = 0; !any_link && i < MAX_BLE_CONNECTIONS; i++) {
+            any_link = hid_state.connections[i].handle != HCI_CON_HANDLE_INVALID;
+        }
+        if (any_link) {
+            classic_state.recovery_start_time = 0;   // transport demonstrably alive
+        } else {
+            printf("[BTSTACK_HOST] No BT activity after connection timeout recovery, rebooting\n");
+            platform_reboot();
+        }
     }
 
     // BLE.DROP holdoff expiry: restore normal reconnect/scan behavior.
@@ -1519,6 +1533,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             break;
 
         case GAP_EVENT_ADVERTISING_REPORT: {
+            classic_state.recovery_start_time = 0;  // radio demonstrably alive
             bd_addr_t addr;
             gap_event_advertising_report_get_address(packet, addr);
             bd_addr_type_t addr_type = gap_event_advertising_report_get_address_type(packet);
