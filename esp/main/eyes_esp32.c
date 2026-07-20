@@ -96,12 +96,68 @@ static uint16_t style_accent(face_style_id s)
 static volatile uint32_t s_remote_until = 0;
 #define REMOTE_HOLD_MS 15000
 
+void face_track_cancel(void);
 void face_remote_speak(int level)
 {
+    face_track_cancel();                 // live streaming wins over a track
     if (level < 0) level = 0;
     if (level > 100) level = 100;
     face_set_speaking((float)level / 100.0f);
     s_remote_until = platform_time_ms() + REMOTE_HOLD_MS;
+}
+
+// ---- pre-shipped lip-sync track (FACE.TRACK) ----
+// The bridge knows a reply's whole mouth envelope before playback starts, so
+// it ships it once (chunked) and the face plays it on ITS OWN clock — zero
+// radio traffic during speech and no per-frame link jitter. A live
+// FACE.SPEAK (legacy streaming) cancels the track: live always wins.
+#define FACE_TRACK_MAX 2048
+static uint8_t  s_trk[FACE_TRACK_MAX];
+static volatile int      s_trk_len = 0;     // playing length (0 = idle)
+static int               s_trk_fill = 0;    // load cursor
+static volatile uint32_t s_trk_step = 64;   // ms per envelope value
+static volatile uint32_t s_trk_start = 0;   // playback start (platform ms)
+
+void face_track_reset(void)
+{
+    s_trk_len = 0; s_trk_start = 0; s_trk_fill = 0;
+}
+
+bool face_track_append(const uint8_t* d, int n)
+{
+    if (n <= 0 || s_trk_fill + n > FACE_TRACK_MAX) return false;
+    memcpy(s_trk + s_trk_fill, d, (size_t)n);
+    s_trk_fill += n;
+    return true;
+}
+
+void face_track_go(int step_ms, int delay_ms)
+{
+    if (s_trk_fill <= 0) return;
+    s_trk_step = (step_ms > 0) ? (uint32_t)step_ms : 64;
+    s_trk_start = platform_time_ms() + (uint32_t)(delay_ms > 0 ? delay_ms : 0);
+    s_trk_len = s_trk_fill;
+}
+
+void face_track_cancel(void)
+{
+    s_trk_len = 0; s_trk_start = 0;
+}
+
+// Called every render tick; returns true while the track owns the mouth.
+static bool face_track_tick(uint32_t now)
+{
+    if (s_trk_len <= 0 || s_trk_start == 0) return false;
+    if ((int32_t)(now - s_trk_start) < 0) return true;   // armed, waiting
+    uint32_t idx = (now - s_trk_start) / s_trk_step;
+    if (idx >= (uint32_t)s_trk_len) {
+        face_set_speaking(0.0f);
+        s_trk_len = 0; s_trk_start = 0;
+        return false;
+    }
+    int v = s_trk[idx];
+    face_set_speaking((float)(v > 100 ? 100 : v) / 100.0f);
+    return true;
 }
 
 void face_remote_state(const char* state)
@@ -200,6 +256,9 @@ static void eyes_task(void* arg)
 
     for (;;) {
         uint32_t now = platform_time_ms();
+        if (face_track_tick(now)) {
+            s_remote_until = now + REMOTE_HOLD_MS;   // pause the idle demo
+        }
         if (now < s_remote_until) {
             next_emo = now + 2000;   // demo paused: companion is driving
         } else if (now >= next_emo) {

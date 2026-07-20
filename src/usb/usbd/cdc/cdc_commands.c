@@ -449,6 +449,59 @@ static void cmd_face_bright(const char* json)
     send_ok();
 }
 
+// FACE.TRACK: pre-shipped lip-sync envelope, played on the face's own clock
+// (zero radio traffic during speech). Chunked to fit the NUS relay:
+//   {"cmd":"FACE.TRACK","seq":0,"d":"<b64 bytes>"}   seq 0 resets the buffer
+//   {"cmd":"FACE.TRACK.GO","step":64,"delay":580}    starts playback
+extern void face_track_reset(void);
+extern bool face_track_append(const uint8_t* d, int n);
+extern void face_track_go(int step_ms, int delay_ms);
+
+static int face_b64_val(char c)
+{
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
+}
+
+static void cmd_face_track(const char* json)
+{
+    int seq = 0;
+    json_get_int(json, "seq", &seq);
+    if (seq == 0) face_track_reset();
+    int dlen = 0;
+    const char* d = json_get_string(json, "d", &dlen);
+    if (!d || dlen <= 0) {
+        send_error("missing d");
+        return;
+    }
+    uint8_t out[144];
+    int o = 0, acc = 0, bits = 0;
+    for (int i = 0; i < dlen && o < (int)sizeof(out); i++) {
+        int v = face_b64_val(d[i]);
+        if (v < 0) continue;                    // skip '=' / whitespace
+        acc = (acc << 6) | v; bits += 6;
+        if (bits >= 8) { bits -= 8; out[o++] = (uint8_t)(acc >> bits); }
+    }
+    if (!face_track_append(out, o)) {
+        send_error("track overflow");
+        return;
+    }
+    send_ok();
+}
+
+static void cmd_face_track_go(const char* json)
+{
+    int step = 64, delay = 0;
+    json_get_int(json, "step", &step);
+    json_get_int(json, "delay", &delay);
+    face_track_go(step, delay);
+    send_ok();
+}
+
 // FACE.COLOR {"r","g","b"} tints the current style's palette (accent derived);
 // {"reset":1} returns to the style's stock colors.
 extern void eyes_set_color(uint8_t r, uint8_t g, uint8_t b);
@@ -667,7 +720,9 @@ static void cmd_mode_set(const char* json)
     platform_sleep_ms(50);
     tud_task();
 #endif
-    usbd_set_mode((usb_output_mode_t)mode);
+    if (!usbd_set_mode((usb_output_mode_t)mode)) {
+        send_error("mode switch rejected");
+    }
 }
 
 static void cmd_mode_list(const char* json)
@@ -3609,6 +3664,8 @@ static const cmd_entry_t commands[] = {
     {"FACE.OFFSET", cmd_face_offset},
     {"FACE.STYLE", cmd_face_style},
     {"FACE.COLOR", cmd_face_color},
+    {"FACE.TRACK", cmd_face_track},
+    {"FACE.TRACK.GO", cmd_face_track_go},
     {"BATT.GET", cmd_batt_get},
 #elif defined(ENABLE_BTSTACK)
     // Relay every FACE.* command to a paired JoypadOS face over BLE NUS.
@@ -3620,6 +3677,8 @@ static const cmd_entry_t commands[] = {
     {"FACE.OFFSET", cmd_face_forward},
     {"FACE.STYLE", cmd_face_forward},
     {"FACE.COLOR", cmd_face_forward},
+    {"FACE.TRACK", cmd_face_forward},
+    {"FACE.TRACK.GO", cmd_face_forward},
     // Remote management of the paired face over the same NUS tunnel.
     {"NUS.REBOOT", cmd_nus_reboot},
     {"NUS.BOOTSEL", cmd_nus_bootsel},
@@ -3976,4 +4035,3 @@ void cdc_commands_send_disconnect_event(uint8_t port)
              "{\"type\":\"disconnect\",\"port\":%d}", port);
     cdc_protocol_send_event(stream_ctx, response_buf);
 }
-

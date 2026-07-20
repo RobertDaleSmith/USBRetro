@@ -248,6 +248,7 @@ set(SRCS
     "${SHARED_SRC}/usb/usbd/modes/ps3_mode.c"
     "${SHARED_SRC}/usb/usbd/modes/psclassic_mode.c"
     "${SHARED_SRC}/usb/usbd/modes/pcemini_mode.c"
+    "${SHARED_SRC}/usb/usbd/modes/codex_mode.c"
     "${SHARED_SRC}/usb/usbd/modes/ps4_mode.c"
     "${SHARED_SRC}/usb/usbd/modes/xid_mode.c"
     "${SHARED_SRC}/usb/usbd/modes/xbone_mode.c"
