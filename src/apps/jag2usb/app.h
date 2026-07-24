@@ -40,8 +40,8 @@
 // so the return lines stay within the RP2040's non-5V-tolerant input range;
 // tie GND (DB15 pin 9, NOT pin 8) to board GND. DB15 columns are pins 1-4 and
 // rows are pins 6,10,11,12,13,14 (verified against the raphnet jaguar_usb
-// pinout). Columns GP2..GP5, rows GP6..GP10 + J11 on GP26 (GP26 rather than
-// GP11 to stay drop-in with the KB2040, which lacks GP11).
+// pinout). Columns GP2..GP5, the six return lines contiguous on GP6..GP11
+// (contiguity lets the scan gather a row with one shifted GPIO read).
 #define JAG_PIN_J0   2    // column select
 #define JAG_PIN_J1   3
 #define JAG_PIN_J2   4
@@ -51,7 +51,7 @@
 #define JAG_PIN_J8   8
 #define JAG_PIN_J9   9
 #define JAG_PIN_J10  10
-#define JAG_PIN_J11  26
+#define JAG_PIN_J11  11
 
 // ============================================================================
 // ROUTING CONFIGURATION
@@ -69,7 +69,7 @@
 // ============================================================================
 // HARDWARE CONFIGURATION
 // ============================================================================
-#define BOARD "ada_kb2040"                  // KB2040 default
+#define BOARD "pico_w"                      // default board
 #define CPU_OVERCLOCK_KHZ 0                 // No overclock needed
 #define UART_DEBUG 1
 

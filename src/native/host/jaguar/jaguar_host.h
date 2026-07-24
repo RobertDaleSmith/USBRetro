@@ -28,9 +28,8 @@
 #include "core/input_interface.h"
 
 // --- Pin configuration (override in app.h) ---------------------------------
-// Defaults match the RetroFrog usb2jag device wiring (J0..J3=GP2..5, B0=6,
-// B1=7, J8..J11=GP8..11) so one HD15 breakout can run either firmware.
-// Selects are MCU outputs; B0/B1/J8..J11 are MCU inputs (pulled up).
+// Selects are MCU outputs (GP2..5); B0/B1/J8..J11 are MCU inputs (pulled up)
+// on contiguous GP6..GP11 so a row samples in one shifted GPIO read.
 #ifndef JAG_PIN_J0
 #define JAG_PIN_J0   2
 #endif

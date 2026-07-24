@@ -169,7 +169,6 @@ APP_nes2usb_pico_w := pico_w nes2usb nes2usb_pico_w NES USB
 APP_pce2usb_kb2040 := kb2040 pce2usb pce2usb_kb2040 PCEngine USB
 APP_pce2usb_pico := pico pce2usb pce2usb_pico PCEngine USB
 APP_pce2usb_pico_w := pico_w pce2usb pce2usb_pico_w PCEngine USB
-APP_jag2usb_kb2040 := kb2040 jag2usb jag2usb_kb2040 Jaguar USB
 APP_jag2usb_pico := pico jag2usb jag2usb_pico Jaguar USB
 APP_jag2usb_pico_w := pico_w jag2usb jag2usb_pico_w Jaguar USB
 APP_n642nuon_pico := pico n642nuon n642nuon_pico N64 Nuon
@@ -251,7 +250,7 @@ APP_controller_btusb_feather_rp2040_usb_host := feather_usbhost controller_btusb
 
 # All apps (note: controller_macropad not included - build explicitly with 'make controller_macropad')
 # Note: usb2loopy_kb2040, snes23do_rp2040zero excluded until more mature
-APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2n64_kb2040 usb2dc_kb2040 usb2dc_rp2040zero usb2neogeo_kb2040 usb2neogeo_pico usb2neogeo_rp2040zero usb2neogeo_retrofrog n642dc_kb2040 n642dc_pico2_w n642nuon_pico usb23do_rp2040zero usb2uart_kb2040 usb2usb_pico usb2usb_pico_w usb2usb_pico2_w usb2usb_feather_rp2040 usb2usb_feather_rp2040_usb_host usb2usb_feather_rp2040_max3421 usb2usb_feather_rp2040_usb_host_max3421 usb2usb_rp2040zero usb2usb_rp2350usba bt2usb_pico_w bt2usb_pico2_w btusb2usb_pico_w btusb2usb_pico2_w usb2ble_pico_w usb2ble_pico2_w bt2nuon_pico_w bt2nuon_pico2_w bt2n64_pico_w bt2n64_pico2_w snes2usb_kb2040 n642usb_kb2040 gc2usb_kb2040 gc2usb_rp2040zero gc2usb_feather_usbhost gc2eth_rp2040_eth gc2eth_feather_usbhost nes2usb_kb2040 nes2usb_pico_w pce2usb_kb2040 pce2usb_pico pce2usb_pico_w jag2usb_kb2040 controller_fisherprice_v1_kb2040 controller_fisherprice_v2_kb2040 controller_alpakka_pico usb2ami_rp2040zero usb2ami_xiao
+APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2n64_kb2040 usb2dc_kb2040 usb2dc_rp2040zero usb2neogeo_kb2040 usb2neogeo_pico usb2neogeo_rp2040zero usb2neogeo_retrofrog n642dc_kb2040 n642dc_pico2_w n642nuon_pico usb23do_rp2040zero usb2uart_kb2040 usb2usb_pico usb2usb_pico_w usb2usb_pico2_w usb2usb_feather_rp2040 usb2usb_feather_rp2040_usb_host usb2usb_feather_rp2040_max3421 usb2usb_feather_rp2040_usb_host_max3421 usb2usb_rp2040zero usb2usb_rp2350usba bt2usb_pico_w bt2usb_pico2_w btusb2usb_pico_w btusb2usb_pico2_w usb2ble_pico_w usb2ble_pico2_w bt2nuon_pico_w bt2nuon_pico2_w bt2n64_pico_w bt2n64_pico2_w snes2usb_kb2040 n642usb_kb2040 gc2usb_kb2040 gc2usb_rp2040zero gc2usb_feather_usbhost gc2eth_rp2040_eth gc2eth_feather_usbhost nes2usb_kb2040 nes2usb_pico_w pce2usb_kb2040 pce2usb_pico pce2usb_pico_w jag2usb_pico_w controller_fisherprice_v1_kb2040 controller_fisherprice_v2_kb2040 controller_alpakka_pico usb2ami_rp2040zero usb2ami_xiao
 
 # Stable apps for release
 # Note: usb2loopy_kb2040, snes23do_rp2040zero excluded until more mature
@@ -365,7 +364,6 @@ help:
 	@echo "  make pce2usb_kb2040     - PCEngine -> USB HID (KB2040)"
 	@echo "  make pce2usb_pico       - PCEngine -> USB HID (Pico)"
 	@echo "  make pce2usb_pico_w     - PCEngine -> USB HID (Pico W)"
-	@echo "  make jag2usb_kb2040     - Atari Jaguar -> USB HID (KB2040)"
 	@echo "  make jag2usb_pico       - Atari Jaguar -> USB HID (Pico)"
 	@echo "  make jag2usb_pico_w     - Atari Jaguar -> USB HID (Pico W)"
 	@echo "  make lodgenet2usb_pico   - LodgeNet -> USB HID (Pico)"
@@ -1228,10 +1226,6 @@ pce2usb_pico:
 .PHONY: pce2usb_pico_w
 pce2usb_pico_w:
 	$(call build_app,pce2usb_pico_w)
-
-.PHONY: jag2usb_kb2040
-jag2usb_kb2040:
-	$(call build_app,jag2usb_kb2040)
 
 .PHONY: jag2usb_pico
 jag2usb_pico:
