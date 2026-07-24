@@ -793,6 +793,11 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     // Keys: OR together (active-high)
                     x_current_state.keys |= dev->keys;
 
+                    // Aux buttons (e.g. Jaguar keypad): OR together. The blend
+                    // path builds a fresh neutral event, so this field must be
+                    // merged explicitly like buttons/keys or it would be lost.
+                    x_current_state.aux_buttons |= dev->aux_buttons;
+
                     // Present-as-gamepad flag (e.g. MouthPad): if ANY blended
                     // device wants gamepad output, the merged event does too.
                     // Without this, blend mode drops the flag and sinput never

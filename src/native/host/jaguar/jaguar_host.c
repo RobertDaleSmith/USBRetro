@@ -34,13 +34,6 @@
 #define JAG_BIT_J11  5
 #define JAG_ROW_IDLE 0x3F            // all six lines released (pull-ups)
 
-// HID Keyboard/Keypad page (0x07) usages for the 12-key pad.
-#define HID_KEY_KEYPAD_ASTERISK 0x55
-#define HID_KEY_KEYPAD_ENTER    0x58  // stands in for '#' (real Keypad # 0xCC
-                                      // has poor OS support)
-#define HID_KEY_KEYPAD_1        0x59  // ..0x61 = Keypad 9
-#define HID_KEY_KEYPAD_0        0x62
-
 static const uint8_t jag_select_pins[4] = {
     JAG_PIN_J0, JAG_PIN_J1, JAG_PIN_J2, JAG_PIN_J3
 };
@@ -146,34 +139,34 @@ static uint32_t jag_decode_buttons(void)
     return buttons;
 }
 
-// Emit pressed keypad keys as numpad usages into kb_keys[] (6-key rollover).
-// In Pro mode the five positions consumed by X/Y/Z/L/R are skipped.
+// Emit pressed keypad keys as generic aux buttons (SInput maps these to spare
+// paddle/misc slots — see convert_aux_buttons). aux bit index per key below;
+// the resulting SInput button numbers are documented in app.h. In Pro mode the
+// five positions consumed by X/Y/Z/L/R are skipped (they go out as buttons).
 static void jag_decode_keypad(input_event_t* event)
 {
-    // {row, bit, usage} for the 12 keys, digits first so rollover overflow
-    // drops * / # last.
-    static const struct { uint8_t row, bit, usage; } keys[12] = {
-        {1, JAG_BIT_J11, HID_KEY_KEYPAD_1},
-        {2, JAG_BIT_J11, HID_KEY_KEYPAD_1 + 1},   // 2
-        {3, JAG_BIT_J11, HID_KEY_KEYPAD_1 + 2},   // 3
-        {1, JAG_BIT_J10, HID_KEY_KEYPAD_1 + 3},   // 4
-        {2, JAG_BIT_J10, HID_KEY_KEYPAD_1 + 4},   // 5
-        {3, JAG_BIT_J10, HID_KEY_KEYPAD_1 + 5},   // 6
-        {1, JAG_BIT_J9,  HID_KEY_KEYPAD_1 + 6},   // 7
-        {2, JAG_BIT_J9,  HID_KEY_KEYPAD_1 + 7},   // 8
-        {3, JAG_BIT_J9,  HID_KEY_KEYPAD_1 + 8},   // 9
-        {2, JAG_BIT_J8,  HID_KEY_KEYPAD_0},
-        {1, JAG_BIT_J8,  HID_KEY_KEYPAD_ASTERISK},
-        {3, JAG_BIT_J8,  HID_KEY_KEYPAD_ENTER},   // '#'
+    // {row, bit, aux} for the 12 keys. aux index 0..11 = keypad 1..9,0,*,#.
+    static const struct { uint8_t row, bit, aux; } keys[12] = {
+        {1, JAG_BIT_J11, 0},    // 1
+        {2, JAG_BIT_J11, 1},    // 2
+        {3, JAG_BIT_J11, 2},    // 3
+        {1, JAG_BIT_J10, 3},    // 4
+        {2, JAG_BIT_J10, 4},    // 5
+        {3, JAG_BIT_J10, 5},    // 6
+        {1, JAG_BIT_J9,  6},    // 7
+        {2, JAG_BIT_J9,  7},    // 8
+        {3, JAG_BIT_J9,  8},    // 9
+        {2, JAG_BIT_J8,  9},    // 0
+        {1, JAG_BIT_J8,  10},   // *
+        {3, JAG_BIT_J8,  11},   // #
     };
 
-    int n = 0;
-    for (int i = 0; i < 12 && n < 6; i++) {
+    for (int i = 0; i < 12; i++) {
         bool pro_button = (keys[i].bit == JAG_BIT_J9) ||                      // 7/8/9
                           (keys[i].bit == JAG_BIT_J10 && keys[i].row != 2);   // 4/6
         if (s_jag.pro_mode && pro_button) continue;   // emitted as X/Y/Z/L/R instead
         if (jag_key(keys[i].row, keys[i].bit)) {
-            event->kb_keys[n++] = keys[i].usage;
+            event->aux_buttons |= (1u << keys[i].aux);
         }
     }
 }

@@ -130,6 +130,14 @@ typedef struct {
     uint32_t buttons;           // Button bitmap (JP_BUTTON_* defines from globals.h)
     uint32_t keys;              // Keyboard keys (modifier + scancodes, lossy gamepad-mapping encoding)
 
+    // Extra digital buttons beyond the JP_BUTTON_* set, for inputs with more
+    // buttons than the standard bitmap covers (e.g. the Atari Jaguar keypad's
+    // 12 keys). Bit i is a generic "aux button i"; outputs with a wide button
+    // space (SInput's 32) map these to spare slots (paddles/misc), narrower
+    // outputs ignore them. Output-agnostic: the input sets bit indices, the
+    // output owns the slot assignment.
+    uint32_t aux_buttons;
+
     // Raw USB HID keyboard state (preserved for output paths that need
     // full keyboard fidelity — e.g. 3DO PS/2 emulation). The legacy
     // `keys` field above is shaped for gamepad mapping and is too lossy

@@ -137,6 +137,37 @@ static uint32_t convert_buttons(uint32_t buttons)
     return sinput_buttons;
 }
 
+// Map generic aux buttons (input_event.aux_buttons) onto SInput's spare button
+// slots. Used by inputs with more buttons than JP_BUTTON_* covers — e.g. the
+// Atari Jaguar keypad's 12 keys. The chosen slots avoid every slot a Jaguar
+// pad already uses (face/d-pad/shoulders/Start/Back) plus Guide (Steam grabs
+// it) and Power, so all 12 land on distinct, bindable buttons. aux bit index
+// i -> SInput button number below:
+//   0:15  1:16  2:21  3:22  4:20  5:26  6:27  7:28  8:29  9:30  10:31  11:32
+static const uint32_t sinput_aux_slot[12] = {
+    SINPUT_MASK_L_PADDLE1,  // aux0  -> Button 15
+    SINPUT_MASK_R_PADDLE1,  // aux1  -> Button 16
+    SINPUT_MASK_L_PADDLE2,  // aux2  -> Button 21
+    SINPUT_MASK_R_PADDLE2,  // aux3  -> Button 22
+    SINPUT_MASK_CAPTURE,    // aux4  -> Button 20
+    SINPUT_MASK_MISC4,      // aux5  -> Button 26
+    SINPUT_MASK_MISC5,      // aux6  -> Button 27
+    SINPUT_MASK_MISC6,      // aux7  -> Button 28
+    SINPUT_MASK_MISC7,      // aux8  -> Button 29
+    SINPUT_MASK_MISC8,      // aux9  -> Button 30
+    SINPUT_MASK_MISC9,      // aux10 -> Button 31
+    SINPUT_MASK_MISC10,     // aux11 -> Button 32
+};
+
+static uint32_t convert_aux_buttons(uint32_t aux)
+{
+    uint32_t sinput_buttons = 0;
+    for (int i = 0; i < 12; i++) {
+        if (aux & (1u << i)) sinput_buttons |= sinput_aux_slot[i];
+    }
+    return sinput_buttons;
+}
+
 // ============================================================================
 // DEVICE DETECTION
 // ============================================================================
@@ -398,8 +429,9 @@ static bool sinput_mode_send_report(uint8_t player_index,
         feature_request_pending = true;
     }
 
-    // Convert buttons to SInput format (32-bit across 4 bytes)
-    uint32_t sinput_buttons = convert_buttons(buttons);
+    // Convert buttons to SInput format (32-bit across 4 bytes). Aux buttons
+    // (e.g. Jaguar keypad) land on SInput's spare paddle/misc slots.
+    uint32_t sinput_buttons = convert_buttons(buttons) | convert_aux_buttons(event->aux_buttons);
     sinput_report.buttons[0] = (sinput_buttons >>  0) & 0xFF;
     sinput_report.buttons[1] = (sinput_buttons >>  8) & 0xFF;
     sinput_report.buttons[2] = (sinput_buttons >> 16) & 0xFF;
@@ -472,12 +504,6 @@ static bool sinput_mode_send_report(uint8_t player_index,
     } else {
         sinput_report.plug_status = 0;   // unknown -> SDL/Steam shows no battery
     }
-
-    // Gamepads with a keyboard surface (e.g. the Jaguar keypad) carry HID key
-    // state in kb_modifier/kb_keys — emit it on the composite keyboard
-    // interface. No-op for ordinary pads (kb state stays all-zero, and
-    // sinput_send_kbd_consumer only reports on change).
-    sinput_send_kbd_consumer(event);
 
     // Send report on gamepad interface (skip report_id byte since TinyUSB handles it)
     return tud_hid_n_report(ITF_NUM_HID_GAMEPAD, SINPUT_REPORT_ID_INPUT,
