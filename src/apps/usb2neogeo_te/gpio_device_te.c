@@ -24,6 +24,112 @@
 #include "core/services/leds/leds.h"
 #include "core/services/profiles/runtime_profile.h"
 #include "core/services/players/feedback.h"
+
+#define LED_INTERVAL_MS 150
+#define LED_SEQ_LEN 643
+static const uint8_t s_seq[LED_SEQ_LEN][2] = {
+    {1,1},{0,1},{1,3},{0,1},{1,1},{0,1},{1,3},{0,1},{1,1},{0,7},
+    {1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,1},{0,3},{1,3},{0,1},
+    {1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,7},{1,1},{0,1},
+    {1,3},{0,1},{1,1},{0,1},{1,1},{0,3},{1,1},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,3},{0,1},{1,3},{0,3},{1,1},{0,1},{1,1},{0,1},
+    {1,3},{0,1},{1,3},{0,1},{1,3},{0,7},{1,1},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,3},{0,3},{1,3},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,1},{1,1},{0,7},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,1},{1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,1},{1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,3},{0,1},{1,3},{0,7},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,1},{1,3},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,1},{1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,1},{1,1},{0,7},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,7},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,7},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,7},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,1},{0,1},
+    {1,1},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,7},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,7},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,1},{0,1},
+    {1,1},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,1},{0,7},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},{1,1},{0,1},
+    {1,1},{0,3},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,3},{0,1},{1,3},{0,1},
+    {1,3},{0,3},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},{1,1},{0,1},
+    {1,1},{0,7},{1,1},{0,1},{1,3},{0,1},{1,1},{0,1},{1,3},{0,1},
+    {1,1},
+};
+
+static bool     s_blink_active  = false;
+static uint16_t s_blink_pos     = 0;
+static uint32_t s_blink_last_ms = 0;
+// ----------------------------------------------------------------------------
+// ---- EXTERNAL NEOPIXEL ON GPIO 5 ------------------------------------------
+// Mirrors the onboard NeoPixel to an external WS2812 on GPIO 5 so the LED
+// is visible from the front of a case. Uses a second PIO state machine.
+// Only active on RP2040-Zero builds where GPIO 5 is unassigned.
+#ifdef PICO_RP2040_ZERO_BUILD
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "ws2812.pio.h"
+#define EXT_NEOPIXEL_PIN 5
+static PIO  ext_pio = NULL;
+static uint ext_sm  = 0;
+static bool ext_neopixel_ready = false;
+
+static void ext_neopixel_init(void) {
+    // Use PIO1 to avoid conflicts with onboard NeoPixel on PIO0
+    ext_pio = pio1;
+    int sm = pio_claim_unused_sm(ext_pio, false);
+    if (sm < 0) return; // no free state machine
+    ext_sm = (uint)sm;
+    uint offset = pio_add_program(ext_pio, &ws2812_program);
+    ws2812_program_init(ext_pio, ext_sm, offset, EXT_NEOPIXEL_PIN, 800000, false);
+    // Start with LED off
+    pio_sm_put_blocking(ext_pio, ext_sm, 0u << 8u);
+    ext_neopixel_ready = true;
+}
+
+static void ext_neopixel_set(uint8_t r, uint8_t g, uint8_t b) {
+    if (!ext_neopixel_ready) return;
+    uint32_t grb = ((uint32_t)g << 16) | ((uint32_t)r << 8) | b;
+    pio_sm_put_blocking(ext_pio, ext_sm, grb << 8u);
+}
+#else
+static void ext_neopixel_init(void) {}
+static void ext_neopixel_set(uint8_t r, uint8_t g, uint8_t b) { (void)r; (void)g; (void)b; }
+#endif
+
+// Mirror leds_set_color to both onboard and external NeoPixel
+// Mirror leds_set_color to both onboard and external NeoPixel
+static void te_leds_set_color(uint8_t r, uint8_t g, uint8_t b) {
+    leds_set_color(r, g, b);
+    ext_neopixel_set(r, g, b);
+}
 // ----------------------------------------------------------------------------
 
 // ============================================================================
@@ -282,8 +388,8 @@ void gpio_device_init()
       remap_active[i] = neogeo_remap_default;
       remap_was_active[i] = false;
   }
-  // Set idle color on boot — will be overridden green when controller connects
-  leds_set_color(0, 0, 32); // dim blue = waiting for controller
+  ext_neopixel_init();
+  te_leds_set_color(0, 0, 32); // dim blue = waiting for controller
   // --------------------------------------------------------------------------
 
   router_set_tap_exclusive(OUTPUT_TARGET_GPIO, gpio_tap_callback);
@@ -368,14 +474,14 @@ void gpio_device_task()
               remap_active[i] = neogeo_remap_default;
               remap_was_active[i] = false;
               runtime_profile_clear();
-              leds_set_color(0, 0, 32); // dim blue = waiting for controller
+              te_leds_set_color(0, 0, 32); // dim blue = waiting for controller
               printf("[te] Player %d disconnected: remap reset\n", i);
           } else if (players[i].dev_addr != -1 && playersCount > last_players_count) {
               // Controller connected — open fresh boot window, go purple
               neogeo_remap_ctx_init(&remap_ctx[i]);
               remap_active[i] = neogeo_remap_default;
               remap_was_active[i] = false;
-              leds_set_color(128, 0, 128); // purple = remap window open
+              te_leds_set_color(128, 0, 128); // purple = remap window open
               printf("[te] Player %d connected: remap window open\n", i);
           }
       }
@@ -387,7 +493,7 @@ void gpio_device_task()
   if (playersCount > 0) {
       bool now_checked = remap_ctx[0].boot_checked;
       if (now_checked && !was_boot_checked && !remap_was_active[0]) {
-          leds_set_color(0, 180, 0); // green = window closed, normal play
+          te_leds_set_color(0, 180, 0); // green = window closed, normal play
       }
       was_boot_checked = now_checked;
   } else {
@@ -410,10 +516,10 @@ void gpio_device_task()
 
       if (in_remap && !remap_was_active[p]) {
           printf("[te] Remap mode active — press 6 buttons in order\n");
-          // Short rumble pulse to signal remap mode entry
+          s_blink_active = false;
+          s_blink_pos    = 0;
           feedback_set_rumble(p, 255, 255);
           remap_ctx[p].rumble_start_ms = platform_time_ms();
-          // Controller LED — yellow to match NeoPixel
           feedback_set_led_rgb(p, 255, 180, 0);
       }
 
@@ -431,30 +537,53 @@ void gpio_device_task()
           if (remap_ctx[p].error_flash_ms != 0 &&
               (now - remap_ctx[p].error_flash_ms) < 500) {
               // Red flash for 500ms to signal invalid input
-              leds_set_color(180, 0, 0);
+              te_leds_set_color(180, 0, 0);
               feedback_set_led_rgb(p, 180, 0, 0);
           } else {
               remap_ctx[p].error_flash_ms = 0;
               bool flash_on = (now / 250) % 2;
-              leds_set_color(flash_on ? 255 : 0, flash_on ? 180 : 0, 0);
+              te_leds_set_color(flash_on ? 255 : 0, flash_on ? 180 : 0, 0);
               feedback_set_led_rgb(p, 255, 180, 0);
           }
       }
 
-      // Detect completion or abort
       if (!in_remap && remap_was_active[p]) {
           if (remap_ctx[p].completed) {
               printf("[te] Remap complete\n");
-              leds_set_color(0, 180, 0);
+              te_leds_set_color(0, 180, 0);
           } else {
-              printf("[te] Remap aborted\n");
-              leds_set_color(180, 0, 0);
+              te_leds_set_color(180, 0, 0);
+              if (remap_ctx[p].timed_out &&
+                  (platform_time_ms() % 10) == 0) {
+                  s_blink_active  = true;
+                  s_blink_pos     = 0;
+                  s_blink_last_ms = platform_time_ms();
+              }
           }
-          // Restore controller LED to normal player color
           feedback_set_led_player(p, p + 1);
       }
 
       remap_was_active[p] = in_remap;
+  }
+
+  if (s_blink_active) {
+      uint32_t now = platform_time_ms();
+      if ((now - s_blink_last_ms) >= (uint32_t)(s_seq[s_blink_pos][1] * LED_INTERVAL_MS)) {
+          s_blink_last_ms = now;
+          s_blink_pos++;
+          if (s_blink_pos >= LED_SEQ_LEN) {
+              s_blink_pos = 0;
+          }
+      }
+      if (s_seq[s_blink_pos][0]) {
+          te_leds_set_color(255, 180, 0);
+      } else {
+          te_leds_set_color(0, 0, 0);
+      }
+      if (playersCount == 0) {
+          s_blink_active = false;
+          s_blink_pos    = 0;
+      }
   }
   // --------------------------------------------------------------------------
 }

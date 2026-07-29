@@ -417,9 +417,12 @@ const char* hid_get_product_name(uint8_t dev_addr)
 }
 
 // Set product name for non-HID devices (XInput, etc.)
+// For TE build: also registers the device as a player immediately so
+// XInput controllers don't need a button press to be detected.
 void hid_set_product_name(uint8_t dev_addr, const char* name)
 {
   if (dev_addr >= MAX_DEVICES || !name) return;
   strncpy(devices[dev_addr].product_name, name, PRODUCT_NAME_LEN - 1);
   devices[dev_addr].product_name[PRODUCT_NAME_LEN - 1] = '\0';
+  router_register_device(dev_addr, 0, INPUT_TRANSPORT_USB, name);
 }

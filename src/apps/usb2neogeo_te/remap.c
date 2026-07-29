@@ -18,6 +18,7 @@ void neogeo_remap_ctx_init(neogeo_remap_ctx_t *ctx) {
     ctx->completed       = false;
     ctx->connect_ms      = platform_time_ms();
     ctx->active_trigger  = 0;
+    ctx->timed_out       = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +91,7 @@ bool neogeo_remap_update(neogeo_remap_ctx_t *ctx,
         if ((now - ctx->last_activity_ms) > NEOGEO_REMAP_TIMEOUT_MS) {
             ctx->state = REMAP_STATE_IDLE;
             ctx->boot_checked = true;
+            ctx->timed_out = true;
             return false;
         }
         // Wait for all trigger buttons to be released before collecting,
@@ -106,6 +108,7 @@ bool neogeo_remap_update(neogeo_remap_ctx_t *ctx,
         if ((now - ctx->last_activity_ms) > NEOGEO_REMAP_TIMEOUT_MS) {
             ctx->state = REMAP_STATE_IDLE;
             ctx->boot_checked = true;
+            ctx->timed_out = true;
             return false;
         }
 

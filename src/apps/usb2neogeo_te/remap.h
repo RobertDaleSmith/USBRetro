@@ -78,6 +78,7 @@ typedef struct {
     uint32_t             active_trigger;   // which trigger mask fired (to wait for release)
     bool                 boot_checked;     // true once plug-in window has closed
     bool                 completed;        // true if remap finished successfully
+    bool                 timed_out;        // true if aborted by timeout (not deliberate)
 } neogeo_remap_ctx_t;
 
 // Public API

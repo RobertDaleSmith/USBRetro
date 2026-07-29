@@ -1,10 +1,8 @@
-// app.c - USB2NEOGEO TE App Entry Point
+// app.c - USB2NEOGEO Tournament Edition App Entry Point
 //
-// Stripped-down usb2neogeo for tournament use:
-//   - Single default profile, no profile switching
-//   - Consecutive remap only (SELECT held 2s then press 6 buttons)
-//   - Runtime mapping auto-clears on controller disconnect
-//   - No alt remap mode, no auto fire
+// Supports two configurations via compile definitions:
+//   CONFIG_NEOGEO_TE_2P=1 -- 2-player Pico (Native USB = P1, PIO USB = P2)
+//   Default               -- 1-player RP2040-Zero/KB2040/Pico
 
 #include "app.h"
 #include "profiles.h"
@@ -19,13 +17,12 @@
 #include <stdio.h>
 
 static gpio_device_config_t gpio_gpio_config[GPIO_MAX_PLAYERS] = {
+    // Player 1
     [0] = {
         .pin_du = P1_NEOGEO_DU_PIN,
         .pin_dd = P1_NEOGEO_DD_PIN,
         .pin_dl = P1_NEOGEO_DL_PIN,
         .pin_dr = P1_NEOGEO_DR_PIN,
-
-        // Action Buttons
         .pin_b1 = P1_NEOGEO_B4_PIN,
         .pin_b2 = P1_NEOGEO_B5_PIN,
         .pin_b3 = P1_NEOGEO_B1_PIN,
@@ -34,20 +31,42 @@ static gpio_device_config_t gpio_gpio_config[GPIO_MAX_PLAYERS] = {
         .pin_r1 = P1_NEOGEO_B3_PIN,
         .pin_l2 = GPIO_DISABLED,
         .pin_r2 = P1_NEOGEO_B6_PIN,
-
-        // Meta Buttons
         .pin_s1 = P1_NEOGEO_S1_PIN,
         .pin_s2 = P1_NEOGEO_S2_PIN,
         .pin_a1 = GPIO_DISABLED,
         .pin_a2 = GPIO_DISABLED,
-
-        // Extra Buttons
         .pin_l3 = GPIO_DISABLED,
         .pin_r3 = GPIO_DISABLED,
         .pin_l4 = GPIO_DISABLED,
         .pin_r4 = GPIO_DISABLED,
     },
+#ifdef CONFIG_NEOGEO_TE_2P
+    // Player 2 (PIO USB)
+    [1] = {
+        .pin_du = P2_NEOGEO_DU_PIN,
+        .pin_dd = P2_NEOGEO_DD_PIN,
+        .pin_dl = P2_NEOGEO_DL_PIN,
+        .pin_dr = P2_NEOGEO_DR_PIN,
+        .pin_b1 = P2_NEOGEO_B4_PIN,
+        .pin_b2 = P2_NEOGEO_B5_PIN,
+        .pin_b3 = P2_NEOGEO_B1_PIN,
+        .pin_b4 = P2_NEOGEO_B2_PIN,
+        .pin_l1 = GPIO_DISABLED,
+        .pin_r1 = P2_NEOGEO_B3_PIN,
+        .pin_l2 = GPIO_DISABLED,
+        .pin_r2 = P2_NEOGEO_B6_PIN,
+        .pin_s1 = P2_NEOGEO_S1_PIN,
+        .pin_s2 = P2_NEOGEO_S2_PIN,
+        .pin_a1 = GPIO_DISABLED,
+        .pin_a2 = GPIO_DISABLED,
+        .pin_l3 = GPIO_DISABLED,
+        .pin_r3 = GPIO_DISABLED,
+        .pin_l4 = GPIO_DISABLED,
+        .pin_r4 = GPIO_DISABLED,
+    },
+#else
     [1] = PORT_CONFIG_INIT
+#endif
 };
 
 // ============================================================================
@@ -103,7 +122,7 @@ const OutputInterface** app_get_output_interfaces(uint8_t* count)
 
 void app_init(void)
 {
-    printf("[app:usb2neogeo_te] Initializing USB2NEOGEO TE v%s\n", JOYPAD_VERSION);
+    printf("[app:usb2neogeo_te] Initializing %s v%s\n", APP_NAME, JOYPAD_VERSION);
 
     gpio_device_init_pins(gpio_gpio_config, false);
 
@@ -119,7 +138,13 @@ void app_init(void)
     };
     router_init(&router_cfg);
 
+    // Player 1 always on native USB
     router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_GPIO, 0);
+
+#ifdef CONFIG_NEOGEO_TE_2P
+    // Player 2 on PIO USB
+    router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_GPIO, 1);
+#endif
 
     player_config_t player_cfg = {
         .slot_mode = PLAYER_SLOT_MODE,
@@ -132,8 +157,14 @@ void app_init(void)
     runtime_profile_init(&app_runtime_profile_config);
 
     printf("[app:usb2neogeo_te] Initialization complete\n");
-    printf("[app:usb2neogeo_te]   Single profile: default 1L6B layout\n");
+#ifdef CONFIG_NEOGEO_TE_2P
+    printf("[app:usb2neogeo_te]   Player 1: Native USB -> DB15 P1\n");
+    printf("[app:usb2neogeo_te]   Player 2: PIO USB (GP16/17) -> DB15 P2\n");
+    printf("[app:usb2neogeo_te]   Slot mode: FIXED\n");
+#else
+    printf("[app:usb2neogeo_te]   Single player, default 1L6B layout\n");
     printf("[app:usb2neogeo_te]   Remap: consecutive mode only, clears on disconnect\n");
+#endif
 }
 
 // ============================================================================
@@ -144,3 +175,4 @@ void app_task(void)
 {
     // No app-specific task work needed
 }
+
