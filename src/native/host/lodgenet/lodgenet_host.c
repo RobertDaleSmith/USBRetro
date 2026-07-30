@@ -435,13 +435,18 @@ void lodgenet_host_task(void)
     if (valid) {
         proto = PROTO_MCU;
         fail_count = 0;
-        if (++good_count >= 15) {
-            if (!connected) {
+        // good_count debounces the INITIAL connect only. Once connected, submit
+        // on EVERY good read: a single transient read glitch (one bad poll) used
+        // to reset good_count and then withhold input for 15 more polls (~240ms
+        // at 60Hz), which froze the stick/buttons at their last value for ~1/4s
+        // every time noise hit the line. Now a glitch costs at most one poll.
+        if (!connected) {
+            if (++good_count >= 15) {
                 connected = true;
                 printf("[lodgenet] %s connected\n", is_gc ? "GC" : "N64");
             }
-            submit_mcu(bytes, is_gc);
         }
+        if (connected) submit_mcu(bytes, is_gc);
     } else {
         good_count = 0;
         if (++fail_count >= 5) {
