@@ -41,18 +41,18 @@ typedef struct TU_ATTR_PACKED
     uint8_t counter : 5; // +1 each report
   };
 
-  int16_t  gyro[3];  // x, y, z;
+  // Motion block layout must match Linux hid-playstation dualsense_input_report
+  // (same as ds5_bt.c). A 4th button byte + 4 timestamp/padding bytes precede the
+  // gyro/accel — omitting them made gyro/accel read 5 bytes early (garbage motion,
+  // e.g. constant roll at rest) while the touchpad still aligned by coincidence.
+  uint8_t  reserved1;    // 4th button byte
+  uint8_t  reserved2[4]; // sensor timestamp / padding
+
+  int16_t  gyro[3];  // x, y, z
   int16_t  accel[3]; // x, y, z
-  int8_t   unknown_a[5]; // who knows?
-  uint8_t  headset;
-  int8_t   unknown_b[2]; // future use?
 
-  struct {
-    uint8_t tpad_event : 4; // track pad event 0x01 = 2 finger tap; 0x02 last on edge?
-    uint8_t unknown_c  : 4; // future use?
-  };
-
-  uint8_t  tpad_counter;
+  uint32_t sensor_timestamp; // 0.33µs units
+  uint8_t  reserved3;        // temperature / reserved
 
   struct {
     uint8_t tpad_f1_count : 7;
