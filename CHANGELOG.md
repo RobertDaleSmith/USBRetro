@@ -6,6 +6,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.3.0] — 2026-08-03
+
+### Added
+
+#### Companion Face (AMOLED)
+- **Procedural face engine** — a new companion "face" that renders animated eyes on an AMOLED panel (ESP32-S3), driven live over CDC or Bluetooth. Runs alongside the controller stack so a single device is both a pairable gamepad and an expressive face.
+- **Full emotion matrix** — all 11 emotions rendered in each of the face styles (**Astro** LED-lattice, **eyes**, **lil**, **tab**), with **true shape morphing** between emotions via a distance-field blend on a fixed 280 ms smoothstep, plus continuous shadow gradients and per-dot rendering for smooth transitions.
+- **FACE.\* command surface** — `FACE.STYLE` (switch styles at runtime), `FACE.COLOR` (runtime display tint), and `FACE.TRACK` (pre-shipped lip-sync played on the face's own clock). Commands are accepted over the CDC config port **and relayed over BLE NUS** to untethered faces (with self-recovery: cleanup, re-arm, and a wedge watchdog).
+- **Web config — Face page** — drive the companion face (emotion, style, gaze pad) directly from the browser over CDC/BLE.
+- **New board target** — `bt2usb` on the **LilyGo T-Display S3 AMOLED Plus** with animated eyes; `controller_btusb` also runs on the AMOLED face board so the eyes present as a pairable controller.
+
+#### PS4 authentication (USB output)
+- **DS4 local authentication** for PS4/PS5 USB-output modes — upload a DS4 auth key from the browser (folded into the USB Device web-config page). RSA challenge signing runs on **Core 1** (never blocking Core 0), and USB-output apps clock to **200 MHz** so signing lands inside the console's auth window. Rumble/LED output is captured from the interrupt OUT endpoint. Builds on RP2350; auth flash is stubbed on ESP/nRF.
+
+#### New Apps
+- **jag2usb** — native **Atari Jaguar** controller → USB HID. Reads the passive Jaguar switch matrix directly at 3.3 V (no level shifters), with the 12-key keypad emitted as gamepad buttons (via `aux_buttons`) rather than a HID keyboard. Builds for `pico` / `pico_w`.
+
+#### Platform & Tooling
+- **ESP32 power telemetry** — real VBUS presence and battery level read from the charger PMU.
+- **nusprobe** — a BLE NUS command-line tool for talking to OS-paired devices.
+
+### Fixed
+
+#### Bluetooth
+- **Pairing reliability** — coexistence-safe connection params, zombie-link cleanup, and a scan-state LED. Bonded BLE devices now re-pair while Classic BT is up, and the face advertises on USB.
+- **Recovery watchdogs** — dropped the RSSI-liveness watchdog and stopped the recovery watchdog's stealth reboots; idle reconnect now recovers after non-reboot drops (with a `BLE.DROP` bench command for testing). Scoped USB dominance and NUS remote management added.
+- **DS5 companion builds** — can now connect to JoypadOS faces.
+
+#### ESP32
+- **BLE bonds persist** — removed the RAM device-db that was shadowing the TLV-backed one (bonds were lost across reboot).
+- **PMU I2C stack overflow** — cache the PMU I2C read instead of running it in the BTstack task, which overflowed its stack.
+- **Deterministic CDC BOOTSEL** — hand the USB PHY back before download so JTAG/CDC bootsel is reliable.
+
+#### Controllers & IMU
+- **DualSense (USB) motion** — the USB report struct read gyro/accel 5 bytes early (they sit after a 4th button byte + 4 timestamp/padding bytes, per the Linux hid-playstation layout the BT driver already follows), so the SInput IMU streamed constant garbage — "rolling like crazy at rest." Motion now reads the correct offsets; struct size and touchpad alignment unchanged.
+
+#### Native input
+- **lodgenet2n64 input freeze** — a single transient controller-read glitch withheld input for ~15 polls (~240 ms); the connect debounce now gates only initial connection, so every good read submits.
+- **N64 stick range** — analog sticks over-ranged to N64 ±127 where a real stick peaks ~±84, squaring off on tighter test ROMs. Scaled to an authentic range (tunable `N64_STICK_RANGE`). Affects **all** N64-output apps.
+
+#### Build & CI
+- Dropped a premature `codex_mode.c` reference from the ESP build, removed a duplicate `cdc_commands_task` from a merge, and added missing shared sources/stubs so pristine CI builds link.
+- **ESP `COREDUMP.SUM`** — `esp-idf`'s espcoredump component only exposes `esp_core_dump.h` when coredump is enabled, so boards without it (xiao/feather) failed to compile. Gated the command on `__has_include`, so it builds where coredump is configured and is cleanly absent elsewhere.
+
+### Changed
+- **Companion host tooling** moved to its own repository.
+- **README** intro restored (dropped the fork description).
+
+---
+
 ## [2.2.0] — 2026-06-23
 
 ### Added
