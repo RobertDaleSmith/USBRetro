@@ -586,7 +586,17 @@ static void cmd_nus_mode(const char* json)
 }
 #endif // BOARD_LILYGO_TDISPLAY_S3_AMOLED
 
-#ifdef PLATFORM_ESP32
+// COREDUMP.SUM is available only when esp-idf's coredump component is enabled
+// (CONFIG_ESP_COREDUMP_ENABLE) — espcoredump/CMakeLists.txt puts its public header
+// on the include path only then. Boards without coredump (devkit/feather) omit the
+// command; the lilygo face board enables it in its sdkconfig.
+#if defined(PLATFORM_ESP32) && defined(__has_include)
+#  if __has_include("esp_core_dump.h")
+#    define JOYPAD_HAS_ESP_COREDUMP 1
+#  endif
+#endif
+
+#ifdef JOYPAD_HAS_ESP_COREDUMP
 // COREDUMP.SUM — panic PC + backtrace from the flash coredump (esp-idf).
 // addr2line the addresses against the matching .elf on the host.
 #include "esp_core_dump.h"
@@ -3652,7 +3662,7 @@ static const cmd_entry_t commands[] = {
     {"PING", cmd_ping},
     {"REBOOT", cmd_reboot},
     {"BOOTSEL", cmd_bootsel},
-#ifdef PLATFORM_ESP32
+#ifdef JOYPAD_HAS_ESP_COREDUMP
     {"COREDUMP.SUM", cmd_coredump_sum},
 #endif
 #ifdef BOARD_LILYGO_TDISPLAY_S3_AMOLED
