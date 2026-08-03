@@ -186,6 +186,14 @@ static void n64_task(void)
 // Convert unsigned 8-bit analog (0-255, 128=center) to N64 signed, scaled to
 // the authentic ±N64_STICK_RANGE instead of the full ±127.
 static inline int8_t analog_u8_to_n64(uint8_t val) {
+#ifdef CONFIG_LODGENET2N64
+    // LodgeNet is a NATIVE N64 controller driving an N64 console, so its stick is
+    // already in N64 units — decode it verbatim (no scaling, no range clamp) so the
+    // console sees exactly what the controller reports. All range shaping is done
+    // host-side in lodgenet_host.c, which knows N64 vs GC input (GC is pre-scaled
+    // there); this keeps the N64 path a true 1:1 passthrough with zero clipping.
+    return (int8_t)((int32_t)val - 128);
+#else
     // HID: 0=up/left, 128=center, 255=down/right
     // N64: negative=left/down, 0=center, positive=right/up
     int32_t centered = (int32_t)val - 128;              // -128..+127
@@ -195,6 +203,7 @@ static inline int8_t analog_u8_to_n64(uint8_t val) {
     if (scaled < -N64_STICK_RANGE) scaled = -N64_STICK_RANGE;
 
     return (int8_t)scaled;
+#endif
 }
 
 // Map C-buttons from right analog stick position

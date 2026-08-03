@@ -45,6 +45,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 #### Native input
 - **lodgenet2n64 input freeze** — a single transient controller-read glitch withheld input for ~15 polls (~240 ms); the connect debounce now gates only initial connection, so every good read submits.
 - **N64 stick range** — analog sticks over-ranged to N64 ±127 where a real stick peaks ~±84, squaring off on tighter test ROMs. Scaled to an authentic range (tunable `N64_STICK_RANGE`). Affects **all** N64-output apps.
+- **lodgenet2n64 stick passes through 1:1 with zero clipping** — a native N64 (LodgeNet clone) stick reaches the N64 (joybus) output verbatim: the host encodes the raw stick byte-for-byte and the N64 device decodes it with no scaling, no range clamp, and no gate reshaping. The authentic ±84 down-scale/clamp that full-range USB→N64 inputs need is bypassed for the native path, so the console sees exactly what the controller reports — including a clone that ranges past ±84 (previously truncated to a square). GC-through-lodgenet2n64 is pre-scaled host-side to stay in range; usb2n64/bt2n64 are unchanged.
 
 #### Build & CI
 - Dropped a premature `codex_mode.c` reference from the ESP build, removed a duplicate `cdc_commands_task` from a merge, and added missing shared sources/stubs so pristine CI builds link.

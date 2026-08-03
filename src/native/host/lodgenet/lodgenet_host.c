@@ -56,8 +56,13 @@ static uint32_t last_poll_us = 0;
 #define MCU_POLL_INTERVAL_US 16000  // ~60Hz for N64/GC
 #define SR_POLL_INTERVAL_US  7620   // ~131Hz for SNES (matches reference: (8ms*1000-380)/1)
 
-// N64 stick scaling
-#define N64_STICK_MAX 80
+// N64 stick reference deflection. This is deliberately equal to n64_device's
+// N64_STICK_RANGE (84): the host scales native ±MAX → full HID ±127, and the N64
+// device scales HID ±127 → ±84, so with MAX == RANGE the two cancel and a native
+// N64 (LodgeNet clone) stick passes through to the N64 (joybus) output 1:1 — no
+// gain, no reshaping. (Full-range USB→N64 apps still get the device's ±84 clamp.)
+// Keep in sync with N64_STICK_RANGE in native/device/n64/n64_device.c.
+#define N64_STICK_MAX 84
 
 // ============================================================================
 // PIO PROTOCOL MANAGEMENT — matches reference load_mcu/sr_protocol()
@@ -209,6 +214,14 @@ static void submit_mcu(uint8_t *bytes, bool is_gc)
         trigger_l = bytes[6];
         trigger_r = bytes[7];
         device_type = LODGENET_DEVICE_GC;
+#ifdef CONFIG_LODGENET2N64
+        // N64 output decodes the left stick verbatim (identity), so a GC controller's
+        // full-range stick would over-range the console. Pre-scale it to the authentic
+        // N64 range here (matches the device's old ±84 conversion). The right stick
+        // stays full-range — it only feeds C-button thresholds, not the N64 stick.
+        stick_lx = (uint8_t)((((int32_t)bytes[2] - 128) * 84) / 127 + 128);
+        stick_ly = (uint8_t)((((int32_t)(255 - bytes[3]) - 128) * 84) / 127 + 128);
+#endif
     } else { // N64
         if (!(bytes[0] & 0x80)) buttons |= JP_BUTTON_B1;  // A
         if (!(bytes[0] & 0x40)) buttons |= JP_BUTTON_B3;  // B
@@ -217,17 +230,29 @@ static void submit_mcu(uint8_t *bytes, bool is_gc)
         if (!(bytes[1] & 0x02)) buttons |= JP_BUTTON_B4;  // C-Left
         if (!(bytes[1] & 0x01)) buttons |= JP_BUTTON_R3;  // C-Right
 
-        int8_t raw_x = (int8_t)bytes[2];
-        int8_t raw_y = (int8_t)bytes[3];
-        if (raw_x > N64_STICK_MAX) raw_x = N64_STICK_MAX;
+        int32_t raw_x = (int8_t)bytes[2];
+        int32_t raw_y = (int8_t)bytes[3];
+
+#ifdef CONFIG_LODGENET2N64
+        // N64 controller → N64 console: pass the stick through 1:1. The N64 device
+        // decodes this verbatim (analog_u8_to_n64 is identity for CONFIG_LODGENET2N64),
+        // so the console sees exactly what the clone reports — no scaling, no range
+        // clamp, no gate reshaping. The 8-bit axis carries the full native int8 range.
+        stick_lx = (uint8_t)(raw_x + 128);
+        stick_ly = (uint8_t)(128 - raw_y);   // N64 up-positive → HID up=low; device re-inverts
+#else
+        // Full-range HID for USB output (lodgenet2usb): normalize native ±MAX → ±127.
+        // Per-axis guard keeps an out-of-spec reading from wrapping the 8-bit axis.
+        if (raw_x >  N64_STICK_MAX) raw_x =  N64_STICK_MAX;
         if (raw_x < -N64_STICK_MAX) raw_x = -N64_STICK_MAX;
-        if (raw_y > N64_STICK_MAX) raw_y = N64_STICK_MAX;
+        if (raw_y >  N64_STICK_MAX) raw_y =  N64_STICK_MAX;
         if (raw_y < -N64_STICK_MAX) raw_y = -N64_STICK_MAX;
 
-        int32_t scaled_x = ((int32_t)raw_x * 127) / N64_STICK_MAX;
-        int32_t scaled_y = ((int32_t)raw_y * 127) / N64_STICK_MAX;
+        int32_t scaled_x = (raw_x * 127) / N64_STICK_MAX;
+        int32_t scaled_y = (raw_y * 127) / N64_STICK_MAX;
         stick_lx = (uint8_t)(scaled_x + 128);
         stick_ly = 255 - (uint8_t)(scaled_y + 128);
+#endif
 
         stick_rx = 128;
         stick_ry = 128;
