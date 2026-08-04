@@ -504,6 +504,17 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 }
 .button-map-row .input-label { width: 40px; font-weight: 500; font-size: 13px; }
 .button-map-row select { flex: 1; min-width: 100px; padding: 6px; font-size: 13px; }
+.turbo-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.4;
+    user-select: none;
+}
+.turbo-toggle:has(input:checked) { opacity: 1; }
+.turbo-toggle input { cursor: pointer; }
 
 .sensitivity-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .sensitivity-row span:first-child { width: 80px; font-size: 14px; }

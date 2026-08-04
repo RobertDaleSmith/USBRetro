@@ -1565,6 +1565,15 @@ static void cmd_profile_apply(const char* json)
         cp.l2_threshold = (uint8_t)(v > 255 ? 255 : (v < 0 ? 0 : v));
     if (json_get_int(json, "r2_threshold", &v))
         cp.r2_threshold = (uint8_t)(v > 255 ? 255 : (v < 0 ? 0 : v));
+    // Turbo / auto-fire (optional; default off from the memset above).
+    if (json_get_int(json, "autofire_rate", &v))
+        cp.autofire_rate = (uint8_t)((v < 0 || v >= AUTOFIRE_RATE_COUNT) ? 0 : v);
+    if (json_get_int(json, "turbo_mask", &v)) {
+        uint32_t m = (uint32_t)v;
+        cp.turbo_mask[0] = (uint8_t)(m & 0xFF);
+        cp.turbo_mask[1] = (uint8_t)((m >> 8) & 0xFF);
+        cp.turbo_mask[2] = (uint8_t)((m >> 16) & 0xFF);
+    }
 
     flash_apply_ephemeral_profile(&cp);
 

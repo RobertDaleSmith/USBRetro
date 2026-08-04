@@ -43,6 +43,9 @@ export class ProfilesCard {
             `<div class="button-map-row">
                 <span class="input-label">${name}</span>
                 <select id="buttonMap${i}">${mapOptions}</select>
+                <label class="turbo-toggle" title="Auto-fire (turbo) while held">
+                    <input type="checkbox" id="turbo${i}"><span>⚡</span>
+                </label>
             </div>`
         ).join('');
 
@@ -90,6 +93,19 @@ export class ProfilesCard {
                                 <input type="range" id="rightStickSens" min="0" max="200" value="100">
                                 <span id="rightStickSensValue">100%</span>
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Turbo / Auto-fire</label>
+                            <p class="hint" style="margin-bottom: 10px;">Toggle ⚡ on any button above to make it auto-fire while held. All turbo buttons share this rate.</p>
+                            <select id="autofireRate" style="width: 100%;">
+                                <option value="0">Off</option>
+                                <option value="1">30 Hz</option>
+                                <option value="2">20 Hz</option>
+                                <option value="3">15 Hz</option>
+                                <option value="4">12 Hz</option>
+                                <option value="5">10 Hz</option>
+                                <option value="6">7.5 Hz</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>SOCD Cleaning</label>
@@ -246,6 +262,8 @@ export class ProfilesCard {
             this.el.querySelector('#flagSwapSticks').checked = false;
             this.el.querySelector('#flagInvertLY').checked = false;
             this.el.querySelector('#flagInvertRY').checked = false;
+            for (let i = 0; i < REMAPPABLE_COUNT; i++) this.el.querySelector(`#turbo${i}`).checked = false;
+            this.el.querySelector('#autofireRate').value = '0';
         } else {
             try {
                 const profile = await this.protocol.getProfile(index);
@@ -265,6 +283,11 @@ export class ProfilesCard {
                 this.el.querySelector('#flagSwapSticks').checked = (flags & FLAG_SWAP_STICKS) !== 0;
                 this.el.querySelector('#flagInvertLY').checked = (flags & FLAG_INVERT_LY) !== 0;
                 this.el.querySelector('#flagInvertRY').checked = (flags & FLAG_INVERT_RY) !== 0;
+                const turboMask = profile.turbo_mask || 0;
+                for (let i = 0; i < REMAPPABLE_COUNT; i++) {
+                    this.el.querySelector(`#turbo${i}`).checked = (turboMask & (1 << i)) !== 0;
+                }
+                this.el.querySelector('#autofireRate').value = (profile.autofire_rate || 0).toString();
             } catch (e) {
                 this.log(`Failed to load profile: ${e.message}`, 'error');
                 return;
@@ -293,6 +316,11 @@ export class ProfilesCard {
         if (this.el.querySelector('#flagInvertLY').checked) flags |= FLAG_INVERT_LY;
         if (this.el.querySelector('#flagInvertRY').checked) flags |= FLAG_INVERT_RY;
 
+        let turboMask = 0;
+        for (let i = 0; i < REMAPPABLE_COUNT; i++) {
+            if (this.el.querySelector(`#turbo${i}`).checked) turboMask |= (1 << i);
+        }
+
         const data = {
             name,
             button_map: buttonMap,
@@ -300,6 +328,8 @@ export class ProfilesCard {
             right_stick_sens: parseInt(this.el.querySelector('#rightStickSens').value),
             flags,
             socd_mode: parseInt(this.el.querySelector('#socdModeSelect').value),
+            autofire_rate: parseInt(this.el.querySelector('#autofireRate').value),
+            turbo_mask: turboMask,
         };
 
         const index = this.editingIndex === null ? 255 : this.editingIndex;
