@@ -6,26 +6,44 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.3.0] — 2026-08-03
+## [2.3.0] — 2026-08-04
 
 ### Added
 
 #### Companion Face (AMOLED)
 - **Procedural face engine** — a new companion "face" that renders animated eyes on an AMOLED panel (ESP32-S3), driven live over CDC or Bluetooth. Runs alongside the controller stack so a single device is both a pairable gamepad and an expressive face.
 - **Full emotion matrix** — all 11 emotions rendered in each of the face styles (**Astro** LED-lattice, **eyes**, **lil**, **tab**), with **true shape morphing** between emotions via a distance-field blend on a fixed 280 ms smoothstep, plus continuous shadow gradients and per-dot rendering for smooth transitions.
-- **FACE.\* command surface** — `FACE.STYLE` (switch styles at runtime), `FACE.COLOR` (runtime display tint), and `FACE.TRACK` (pre-shipped lip-sync played on the face's own clock). Commands are accepted over the CDC config port **and relayed over BLE NUS** to untethered faces (with self-recovery: cleanup, re-arm, and a wedge watchdog).
+- **FACE.\* command surface** — `FACE.EMO` (emotion), `FACE.STYLE` (switch styles at runtime), `FACE.COLOR` (runtime display tint), `FACE.BRIGHT` (brightness), `FACE.LOOK` (gaze direction), `FACE.OFFSET` (position trim), `FACE.STATE` (query), `FACE.SPEAK`, and `FACE.TRACK` / `FACE.TRACK.GO` (pre-shipped lip-sync played on the face's own clock). Commands are accepted over the CDC config port **and relayed over BLE NUS** to untethered faces (with self-recovery: cleanup, re-arm, and a wedge watchdog).
 - **Web config — Face page** — drive the companion face (emotion, style, gaze pad) directly from the browser over CDC/BLE.
 - **New board target** — `bt2usb` on the **LilyGo T-Display S3 AMOLED Plus** with animated eyes; `controller_btusb` also runs on the AMOLED face board so the eyes present as a pairable controller.
 
 #### PS4 authentication (USB output)
-- **DS4 local authentication** for PS4/PS5 USB-output modes — upload a DS4 auth key from the browser (folded into the USB Device web-config page). RSA challenge signing runs on **Core 1** (never blocking Core 0), and USB-output apps clock to **200 MHz** so signing lands inside the console's auth window. Rumble/LED output is captured from the interrupt OUT endpoint. Builds on RP2350; auth flash is stubbed on ESP/nRF.
+- **DS4 local authentication** for PS4/PS5 USB-output modes — upload a DS4 auth key from the browser (folded into the USB Device web-config page). RSA challenge signing runs on **Core 1** (never blocking Core 0), and USB-output apps clock to **200 MHz** so signing lands inside the console's auth window. Rumble/LED output is captured from the interrupt OUT endpoint. Builds on RP2350; auth flash is stubbed on ESP/nRF. Merged from lucaslealdev's DS4 work.
+- **1000 Hz continuous reporting** in PS4 mode.
+- **Full DS4 v2 HID descriptor** — the report structure was rewritten for precision, fixing compatibility with EA Sports titles (FC26).
+- **Hybrid triggers** — L2/R2 report binary for fighting games and analog for sports titles, with a threshold to stop noise ghosting.
+- **Touchpad-click simulation** via button combos — Select+Start for a click, D-pad modifiers for left/right clicks, and Start+R1 (chosen to avoid triggering Share screenshots).
+- **PS4 auth key upload tool** — `tools/ps4-auth-upload/`, plus a `PS4AUTH` CDC command and PS4 auth flash storage service.
 
 #### New Apps
-- **jag2usb** — native **Atari Jaguar** controller → USB HID. Reads the passive Jaguar switch matrix directly at 3.3 V (no level shifters), with the 12-key keypad emitted as gamepad buttons (via `aux_buttons`) rather than a HID keyboard. Builds for `pico` / `pico_w`.
+- **jag2usb** — native **Atari Jaguar** controller → USB HID. Reads the passive Jaguar switch matrix directly at 3.3 V (no level shifters), with the 12-key keypad emitted as gamepad buttons (via `aux_buttons`) rather than a HID keyboard. Builds for `jag2usb_pico` / `jag2usb_pico_w`.
+
+#### New Controller Support
+- **SInput over BLE** — a BLE HID (HOGP) driver that reads a JoypadOS SInput controller (`controller_btusb` running on nRF / ESP32 / Pico W) and submits it to the router. This is the BLE counterpart to the existing USB `sinput_host` driver, so a JoypadOS controller can now feed a JoypadOS adapter wirelessly.
+
+#### New Board Targets
+- `bt2usb_lilygo_tdisplay_s3_amoled` — the AMOLED companion-face board (16 MB partition layout + board sdkconfig).
+- `controller_btusb_seeed_xiao_nrf52840`.
+- `jag2usb_pico` and `jag2usb_pico_w`.
 
 #### Platform & Tooling
-- **ESP32 power telemetry** — real VBUS presence and battery level read from the charger PMU.
+- **ESP32 power telemetry** — real VBUS presence and battery level read from the charger PMU, behind a shared `core/battery.h` abstraction.
+- **nRF IMU support** — `imu_nrf.c`, motion for nRF52840 controller builds.
 - **nusprobe** — a BLE NUS command-line tool for talking to OS-paired devices.
+- **BLE OTA page** — `tools/ble-ota.html` for over-the-air updates, plus `tools/joypad-ble.py`.
+
+#### Experimental (opt-in, off by default)
+- **DualSense drop-scream** — IMU free-fall detection on a DS5 paired over BT, playing speaker audio through the controller (extended BT output report `0x36`: state + haptic PCM + speaker Opus). Compiled only under `CONFIG_DS5_DROP_SCREAM`; asset-encoding tooling lives in `tools/ds5-scream/`.
 
 ### Fixed
 
@@ -50,6 +68,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 #### Build & CI
 - Dropped a premature `codex_mode.c` reference from the ESP build, removed a duplicate `cdc_commands_task` from a merge, and added missing shared sources/stubs so pristine CI builds link.
 - **ESP `COREDUMP.SUM`** — `esp-idf`'s espcoredump component only exposes `esp_core_dump.h` when coredump is enabled, so boards without it (xiao/feather) failed to compile. Gated the command on `__has_include`, so it builds where coredump is configured and is cleanly absent elsewhere.
+- **Release matrix** — added `gc2usb_pico`, `jag2usb_pico`, and `jag2usb_pico_w`. `jag2usb` had shipped as a documented app with no downloadable UF2, and `gc2usb_pico` had been listed as a board target since 2.1.0 while only the kb2040 and rp2040zero variants were ever built. *(Landed after the v2.3.0 tag — first release artifacts arrive in 2.4.0.)*
+
+#### Known Issues
+- **ESP32-S3 BLE HID drivers are not registered.** `bthid_registry_init()` has a weak stub in the same translation unit as its call site (`bt_transport.c`), so ESP-IDF's `--gc-sections` resolves the call locally and never links `bthid_registry.c`. `sinput_ble.c` and `mouthpad_ble.c` are also absent from the ESP source list. Affects ESP32-S3 `bt2usb` builds from 2026-06-19 onward. Fix proposed in [#179](https://github.com/joypad-ai/joypad-os/pull/179).
 
 ### Changed
 - **Companion host tooling** moved to its own repository.
