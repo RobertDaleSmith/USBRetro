@@ -58,6 +58,9 @@ jobs:
           - nes2usb_pico_w
           - gc2usb_kb2040
           - gc2usb_rp2040zero
+          - gc2usb_pico
+          - jag2usb_pico
+          - jag2usb_pico_w
           - nes2usb_kb2040
           - pce2usb_kb2040
           - pce2usb_pico
