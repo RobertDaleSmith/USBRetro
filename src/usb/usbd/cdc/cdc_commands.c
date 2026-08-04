@@ -1049,12 +1049,17 @@ static void cmd_profile_get(const char* json)
             mpos += snprintf(map_str + mpos, sizeof(map_str) - mpos, "%d", p->button_map[i]);
         }
 
+        uint32_t turbo_mask = (uint32_t)p->turbo_mask[0]
+                            | ((uint32_t)p->turbo_mask[1] << 8)
+                            | ((uint32_t)p->turbo_mask[2] << 16);
         snprintf(response_buf, sizeof(response_buf),
                  "{\"ok\":true,\"index\":%d,\"name\":\"%.11s\",\"builtin\":false,\"editable\":true,"
                  "\"button_map\":[%s],"
-                 "\"left_stick_sens\":%d,\"right_stick_sens\":%d,\"flags\":%d,\"socd_mode\":%d}",
+                 "\"left_stick_sens\":%d,\"right_stick_sens\":%d,\"flags\":%d,\"socd_mode\":%d,"
+                 "\"autofire_rate\":%d,\"turbo_mask\":%lu}",
                  index, p->name, map_str,
-                 p->left_stick_sens, p->right_stick_sens, p->flags, p->socd_mode);
+                 p->left_stick_sens, p->right_stick_sens, p->flags, p->socd_mode,
+                 p->autofire_rate, (unsigned long)turbo_mask);
     }
     send_json(response_buf);
 }
@@ -1259,6 +1264,24 @@ static void cmd_profile_save(const char* json)
         p->socd_mode = 0;  // Default to passthrough
     }
 
+    // Turbo / auto-fire: single rate (0=off, 1..6 = AUTOFIRE_RATE_MS index) + a
+    // per-button mask (bit i = physical button i). See autofire-turbo-plan.md.
+    int rate;
+    if (json_get_int(json, "autofire_rate", &rate)) {
+        p->autofire_rate = (uint8_t)((rate < 0 || rate >= AUTOFIRE_RATE_COUNT) ? 0 : rate);
+    } else if (is_new) {
+        p->autofire_rate = 0;
+    }
+    int tmask;
+    if (json_get_int(json, "turbo_mask", &tmask)) {
+        uint32_t m = (uint32_t)tmask;
+        p->turbo_mask[0] = (uint8_t)(m & 0xFF);
+        p->turbo_mask[1] = (uint8_t)((m >> 8) & 0xFF);
+        p->turbo_mask[2] = (uint8_t)((m >> 16) & 0xFF);
+    } else if (is_new) {
+        p->turbo_mask[0] = p->turbo_mask[1] = p->turbo_mask[2] = 0;
+    }
+
     // Save to flash (runtime settings are already updated)
     flash_save(settings);
 
@@ -1430,6 +1453,10 @@ static void cmd_profile_clone(const char* json)
             new_profile->socd_mode        = src->socd_mode;
             new_profile->l2_threshold     = src->l2_threshold;
             new_profile->r2_threshold     = src->r2_threshold;
+            new_profile->autofire_rate    = src->autofire_rate;
+            new_profile->turbo_mask[0]    = src->turbo_mask[0];
+            new_profile->turbo_mask[1]    = src->turbo_mask[1];
+            new_profile->turbo_mask[2]    = src->turbo_mask[2];
         }
     }
 

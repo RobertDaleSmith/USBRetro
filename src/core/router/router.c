@@ -1012,8 +1012,24 @@ void router_submit_input(const input_event_t* event) {
         if (cp) {
             remapped = *event;
 
+            // Turbo / auto-fire: gate held turbo-flagged physical buttons with a 50%
+            // duty cycle at the profile's single rate, BEFORE the remap so the pulse
+            // follows whatever the button is mapped to. Free-running phase
+            // (now % period) — stateless, all turbo buttons share one phase.
+            // See .dev/docs/autofire-turbo-plan.md.
+            uint32_t in_buttons = event->buttons;
+            uint8_t turbo_ms = autofire_rate_to_ms(cp->autofire_rate);
+            if (turbo_ms) {
+                bool duty_on = (platform_time_ms() % turbo_ms) < (uint32_t)(turbo_ms / 2u);
+                if (!duty_on) {
+                    for (uint8_t i = 0; i < CUSTOM_PROFILE_BUTTON_COUNT; i++)
+                        if (custom_profile_turbo_get(cp, i))
+                            in_buttons &= ~(1u << i);
+                }
+            }
+
             // Button remap (so Fn key remaps are visible to hotkeys below)
-            remapped.buttons = custom_profile_apply_buttons(cp, event->buttons);
+            remapped.buttons = custom_profile_apply_buttons(cp, in_buttons);
 
             // Stick sensitivity
             if (cp->left_stick_sens != 100) {

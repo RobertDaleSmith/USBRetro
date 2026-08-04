@@ -39,6 +39,19 @@
 #define AUTOFIRE_10HZ  100   //  10 Hz → 100ms period
 #define AUTOFIRE_7HZ   133   // 7.5 Hz → 133ms period
 
+// Shared rate ladder for the web-config turbo / runtime tap systems.
+// Index 0 = off; 1..6 map to the presets above. Single source of truth so flash
+// (custom_profile.autofire_rate), the router turbo pass, and CDC all agree.
+// Accessor (not a bare array) so unused-in-a-TU never trips -Werror in a header.
+#define AUTOFIRE_RATE_COUNT 7
+static inline uint8_t autofire_rate_to_ms(uint8_t rate_idx) {
+    static const uint8_t tbl[AUTOFIRE_RATE_COUNT] = {
+        0, AUTOFIRE_30HZ, AUTOFIRE_20HZ, AUTOFIRE_15HZ,
+        AUTOFIRE_12HZ, AUTOFIRE_10HZ, AUTOFIRE_7HZ,
+    };
+    return (rate_idx < AUTOFIRE_RATE_COUNT) ? tbl[rate_idx] : 0;
+}
+
 // ============================================================================
 // ANALOG OUTPUT TARGETS
 // ============================================================================

@@ -44,8 +44,25 @@ typedef struct {
     uint8_t socd_mode;         // SOCD cleaning mode (0=passthrough, 1=neutral, 2=up-priority, 3=last-win)
     uint8_t l2_threshold;      // Analog L2 → digital threshold; 0 = use default (128)
     uint8_t r2_threshold;      // Analog R2 → digital threshold; 0 = use default (128)
-    uint8_t reserved[20];      // Future use
+    // Turbo / auto-fire (see .dev/docs/autofire-turbo-plan.md). One rate per profile,
+    // shared by every turbo button; the mask is keyed on the physical/input button so
+    // the pulse follows whatever that button is remapped to. Byte-typed (not a uint32)
+    // so no alignment padding is introduced — the struct must stay exactly 56 bytes.
+    uint8_t autofire_rate;     // 0 = off; 1..6 = AUTOFIRE_RATE_MS[] index (profile.h)
+    uint8_t turbo_mask[3];     // 24-bit LE bitfield; bit i = button index i (0=B1..17=A2)
+    uint8_t reserved[16];      // Future use
 } custom_profile_t;
+
+// Turbo-mask accessors (bit i = custom_profile button index i, 0=B1 .. 17=A2).
+static inline bool custom_profile_turbo_get(const custom_profile_t* p, uint8_t i) {
+    return (i < CUSTOM_PROFILE_BUTTON_COUNT) &&
+           (p->turbo_mask[i >> 3] & (uint8_t)(1u << (i & 7))) != 0;
+}
+static inline void custom_profile_turbo_set(custom_profile_t* p, uint8_t i, bool on) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return;
+    if (on) p->turbo_mask[i >> 3] |=  (uint8_t)(1u << (i & 7));
+    else    p->turbo_mask[i >> 3] &= (uint8_t)~(1u << (i & 7));
+}
 
 // Profile flags
 #define PROFILE_FLAG_SWAP_STICKS  (1 << 0)
