@@ -1460,6 +1460,11 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         # BTstack uses async_context, not embedded run loop
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        # bt_transport.c gates bthid_registry_init() on this (see #188). Manual-BT
+        # apps don't go through joypad_add_btstack(), so they must define it here or
+        # the registry is never initialised and every BT controller falls to the
+        # generic gamepad driver (--gc-sections discards the whole registry).
+        CONFIG_BT_HOST=1
     )
     # DualSense voice/show modes (opt-in, all disabled by default).
     # CONFIG_DS5_DROP_SCREAM doubles as the base voice-engine flag (0x36 audio
@@ -1537,6 +1542,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_mouthpad PUBLIC
         ${CORE_SOURCES}
@@ -1586,6 +1592,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ENABLE_BTSTACK=1
         SCAN_INTERVAL=0x0500
         SCAN_WINDOW=0x0030
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_bt2nuon PUBLIC
         ${CORE_SOURCES}
@@ -1639,6 +1646,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_bt2loopy PUBLIC
         ${CORE_SOURCES}
@@ -1690,6 +1698,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
         N64_DATA_PIN=2
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_bt2n64 PUBLIC
         ${CORE_SOURCES}
@@ -1745,6 +1754,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_bt2wiiext PUBLIC
         ${CORE_SOURCES}
@@ -1802,6 +1812,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_bt2gc PUBLIC
         ${CORE_SOURCES}
@@ -1861,6 +1872,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_btusb2usb PUBLIC
         ${COMMON_SOURCES}
@@ -1909,6 +1921,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CYW43_LWIP=0
         BTSTACK_USE_CYW43=1
         ENABLE_BTSTACK=1
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_usb2ble PUBLIC
         ${COMMON_SOURCES}
@@ -1991,6 +2004,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         # PLAYER_LED_PIN_2=11
         # PLAYER_LED_PIN_3=12
         # PLAYER_LED_PIN_4=13
+        CONFIG_BT_HOST=1  # register BT-HID drivers (see #188 regression)
     )
     target_sources(joypad_controller_btusb PUBLIC
         ${CORE_SOURCES}
