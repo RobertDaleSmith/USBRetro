@@ -481,7 +481,7 @@ uint32_t custom_profile_apply_buttons(const custom_profile_t* profile, uint32_t 
         }
     }
 
-    // Pass through buttons beyond the profile map (A3, A4, L4, R4, F1, F2)
+    // Pass through buttons beyond the profile map (A3, A4, L4, R4, F1, F2, L5, R5)
     output |= buttons & ~((1u << CUSTOM_PROFILE_BUTTON_COUNT) - 1);
 
     return output;
