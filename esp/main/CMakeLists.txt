@@ -525,6 +525,15 @@ if(NOT APP_NEEDS_USB_HOST)
     target_compile_definitions(${COMPONENT_LIB} PUBLIC DISABLE_USB_HOST=1)
 endif()
 
+# BTHID host registry — derived from the source list rather than set by hand, so
+# it can never drift out of sync with whether bthid_registry.c is actually
+# compiled. bt_transport.c gates its bthid_registry_init() call on this; it used
+# to rely on a weak stub, which --gc-sections quietly resolved to an empty
+# function, leaving ESP32-S3 bt2usb builds with zero BT HID drivers registered.
+if("${SRCS}" MATCHES "bthid_registry\\.c")
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC CONFIG_BT_HOST=1)
+endif()
+
 # Board-specific definitions
 if(NOT DEFINED CONFIG_BOARD)
     set(CONFIG_BOARD "devkit")
