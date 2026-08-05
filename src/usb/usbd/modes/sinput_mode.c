@@ -147,6 +147,13 @@ static uint32_t convert_buttons(uint32_t buttons)
 // it) and Power, so all 12 land on distinct, bindable buttons. aux bit index
 // i -> SInput button number below:
 //   0:15  1:16  2:21  3:22  4:20  5:26  6:27  7:28  8:29  9:30  10:31  11:32
+//
+// NOTE: aux0..aux3 deliberately share SInput's four paddle slots with the
+// JP_BUTTON_L4/R4/L5/R5 paddles mapped in convert_buttons() above. That is safe
+// only because no device drives both: paddle controllers (Steam Controller 2,
+// Xbox Elite) report no aux buttons, and aux-button devices (Jaguar keypad)
+// have no paddles. If a future device has both, these four slots collide and
+// the aux keys need remapping onto MISC slots instead.
 static const uint32_t sinput_aux_slot[12] = {
     SINPUT_MASK_L_PADDLE1,  // aux0  -> Button 15
     SINPUT_MASK_R_PADDLE1,  // aux1  -> Button 16
