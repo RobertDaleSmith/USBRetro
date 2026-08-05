@@ -33,6 +33,76 @@ uint32_t device_switch = 0b10000000100000110000001100000000;
 // Core 1 → Core 0 diagnostic
 volatile uint32_t pf_diag_count = 0;
 
+// ============================================================================
+// SPINNER (Nuon quadrature X axis — Tempest 3000)
+// ============================================================================
+// The Nuon's spinner is a free-running quadrature position, 0-255 with
+// wraparound. Before the router migration this accumulated on the per-player
+// struct inside post_input_event(); that function is gone, so the accumulator
+// now lives here, console-local, exactly as the old TODO asked for.
+//
+// Safe to accumulate on every update_output(): router_get_output() returns NULL
+// when there is nothing new and zeroes delta_x once it has handed it over, so a
+// delta is never counted twice.
+
+// Right-stick rotation → spinner. Matches the pre-router default.
+static bool    spinner_from_stick   = true;
+static int16_t spinner_pos          = 0;      // 0-255, wraps
+static int16_t spinner_last_angle   = 0;      // degrees, for stick rotation
+static bool    spinner_angle_valid  = false;  // seeded on first out-of-deadzone sample
+
+static inline void spinner_add(int16_t delta)
+{
+    spinner_pos += delta;
+    while (spinner_pos > 255) spinner_pos -= 255;
+    while (spinner_pos < 0)   spinner_pos += 256;
+}
+
+// Accumulate one router event into the spinner position.
+static void spinner_accumulate(const input_event_t* event)
+{
+    // Mouse / trackball / touchpad horizontal movement.
+    // Mice are inverted and clamped harder than a touchpad, as before.
+    if (event->delta_x != 0) {
+        bool    is_mouse = (event->type == INPUT_TYPE_MOUSE);
+        int16_t limit    = is_mouse ? 15 : 12;
+        int16_t delta    = is_mouse ? (int16_t)(-event->delta_x) : event->delta_x;
+        if (delta >  limit) delta =  limit;
+        if (delta < -limit) delta = -limit;
+        spinner_add(delta);
+    }
+
+    // Right stick rotation → spinner, so any gamepad can play Tempest 3000.
+    // Angle of the stick vector; feed the frame-to-frame change into the
+    // spinner. Centre zone (64-192 on both axes) is ignored.
+    if (spinner_from_stick) {
+        uint8_t sx = event->analog[ANALOG_RX];
+        uint8_t sy = event->analog[ANALOG_RY];
+
+        if (sx && sy && (sx < 64 || sx > 192 || sy < 64 || sy > 192)) {
+            float   rad   = atan2f((int16_t)sy - 128, (int16_t)sx - 128);
+            int16_t angle = (int16_t)(rad * (180.0f / 3.14159265f)) + 179;
+
+            if (spinner_angle_valid) {
+                int16_t delta = angle - spinner_last_angle;
+                // Shortest way round the circle, so the 359°->0° seam doesn't
+                // register as a full-rotation jump.
+                if (delta >  180) delta -= 360;
+                if (delta < -180) delta += 360;
+                if (delta >  16)  delta =  16;
+                if (delta < -16)  delta = -16;
+                spinner_add(-delta);
+            }
+            spinner_last_angle  = angle;
+            spinner_angle_valid = true;
+        } else {
+            // Back in the deadzone — re-seed on the next flick rather than
+            // measuring against a stale angle.
+            spinner_angle_valid = false;
+        }
+    }
+}
+
 // Send a polyface response: wait for turnaround gap, then push data to send SM.
 // Uses gpio_get() for clock edge counting — reads via SIO (single-cycle, per-core)
 // instead of pio_sm_exec which goes through APB and contends with CYW43 DMA.
@@ -555,9 +625,9 @@ void __not_in_flash_func(update_output)(void)
   output_analog_2x = crc_data_packet(mapped.right_x, 1);
   output_analog_2y = crc_data_packet(mapped.right_y, 1);
 
-  // TODO Phase 5: Re-implement spinner/mouse wheel support
-  // output_quad_x was accumulated in post_input_event() - need console-local accumulator
-  output_quad_x    = crc_data_packet(0, 1);  // Disabled for now
+  // Spinner: accumulate this event's motion, then transmit the position.
+  spinner_accumulate(event);
+  output_quad_x    = crc_data_packet((uint8_t)spinner_pos, 1);
 
   codes_task_for_output(OUTPUT_TARGET_NUON);
 
