@@ -4,8 +4,19 @@
 #include "bt_transport.h"
 #include <stdio.h>
 
-// Weak so peripheral-only builds (no bthid) don't need the symbol
-__attribute__((weak)) void bthid_registry_init(void) {}
+// Whether the BTHID host registry is compiled into this build. Set by the build
+// system from the source list itself (see the CONFIG_BT_HOST blocks in
+// src/CMakeLists.txt, esp/main/CMakeLists.txt and nrf/CMakeLists.txt), so it
+// cannot drift out of sync with whether bthid_registry.c is actually built.
+//
+// This used to be a weak stub defined right here, which was subtly broken: the
+// weak definition and its call site sat in the same translation unit, so a
+// linker running --gc-sections (ESP-IDF does) resolved the call locally and
+// never pulled in bthid_registry.c's strong definition. The firmware linked
+// clean and silently registered zero BT HID drivers.
+#ifdef CONFIG_BT_HOST
+#include "bt/bthid/bthid_registry.h"
+#endif
 
 // ============================================================================
 // ACTIVE TRANSPORT
@@ -23,7 +34,13 @@ void bt_init(const bt_transport_t* transport)
     bt_transport = transport;
 
     // Initialize BTHID registry (registers all drivers)
+#ifdef CONFIG_BT_HOST
     bthid_registry_init();
+#else
+    // Peripheral-only build: no host-side drivers to register. Logged rather
+    // than silent so an accidentally-missing registry is visible on the console.
+    printf("[BT] BTHID registry not compiled in (peripheral-only build)\n");
+#endif
 
     if (bt_transport && bt_transport->init) {
         printf("[BT] Initializing transport: %s\n", bt_transport->name);
