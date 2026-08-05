@@ -175,7 +175,8 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 20)) buttons |= JP_BUTTON_A2;  // QAM (quick-access menu)
     if (sc2_bit(report, 21)) buttons |= JP_BUTTON_R3;  // R3  (right stick click)
     if (sc2_bit(report, 22)) buttons |= JP_BUTTON_S1;  // View / Select
-    if (sc2_bit(report, 23)) buttons |= JP_BUTTON_R4;  // R4 back paddle
+    if (sc2_bit(report, 23)) buttons |= JP_BUTTON_R4;  // R4 upper back paddle
+    if (sc2_bit(report, 24)) buttons |= JP_BUTTON_R5;  // R5 lower back paddle
     if (sc2_bit(report, 25)) buttons |= JP_BUTTON_R1;  // RB
     if (sc2_bit(report, 26)) buttons |= JP_BUTTON_DD;  // D-Down
     if (sc2_bit(report, 27)) buttons |= JP_BUTTON_DR;  // D-Right
@@ -184,7 +185,8 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 30)) buttons |= JP_BUTTON_S2;  // Menu / Start
     if (sc2_bit(report, 31)) buttons |= JP_BUTTON_L3;  // L3 (left stick click)
     if (sc2_bit(report, 32)) buttons |= JP_BUTTON_A1;  // Steam / Home
-    if (sc2_bit(report, 33)) buttons |= JP_BUTTON_L4;  // L4 back paddle
+    if (sc2_bit(report, 33)) buttons |= JP_BUTTON_L4;  // L4 upper back paddle
+    if (sc2_bit(report, 34)) buttons |= JP_BUTTON_L5;  // L5 lower back paddle
     if (sc2_bit(report, 35)) buttons |= JP_BUTTON_L1;  // LB
     if (sc2_bit(report, 39)) buttons |= JP_BUTTON_R2;  // RT full-pull click
     if (sc2_bit(report, 43)) buttons |= JP_BUTTON_L2;  // LT full-pull click
