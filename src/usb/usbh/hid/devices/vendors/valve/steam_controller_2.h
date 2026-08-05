@@ -32,7 +32,7 @@
 #define SC2_VID            0x28DE
 #define SC2_PID_WIRED      0x1302
 #define SC2_PID_PUCK       0x1304
-#define SC2_INPUT_REPORT_ID 0x45
+#define SC2_INPUT_REPORT_ID 0x42   // ID_TRITON_CONTROLLER_STATE (TritonMTUFull_t, 54B)
 
 extern DeviceInterface steam_controller_2_interface;
 

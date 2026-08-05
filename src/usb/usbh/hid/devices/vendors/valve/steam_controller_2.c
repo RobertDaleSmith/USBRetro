@@ -1,26 +1,23 @@
 // steam_controller_2.c - Valve Steam Controller 2 (codename "Triton" / "Roy")
 //
-// One driver covers two USB transports — they emit identical report layouts:
+// One driver covers two USB transports:
 //   VID 0x28DE PID 0x1302  Direct wired SC2
 //   VID 0x28DE PID 0x1304  SC2 paired through Valve's USB "puck" dongle
 //
-// Source for the report layout: jfedor2/hid-remapper firmware/src/quirks.cc
-// @ commit 722ea05 (Valve firmware update changed report ID 0x42 → 0x45).
-// The published HID descriptor on the device is unusable; layout is manual.
+// The SC2 ships in "lizard mode" — Valve's keyboard + mouse emulation — and its
+// vendor interface stays silent until told otherwise (what Steam does on a PC).
+// So on mount we disable lizard mode via SET_SETTINGS (0x87, SETTING_LIZARD_MODE
+// = 0) and RE-SEND it on a heartbeat (task) because the firmware re-enables it on
+// its own. Once disabled the vendor interface streams the native state report
+// ID 0x42 (ID_TRITON_CONTROLLER_STATE, TritonMTUFull_t, 54 bytes) at ~60 Hz,
+// which process() parses. Verified working on wired SC2 hardware (buttons, both
+// sticks, analog triggers).
 //
-// SC2 ships with kbd + mouse + vendor HID interfaces all under the same
-// VID/PID. is_device() matches all three; process() filters out the
-// non-vendor reports by checking report ID. We do NOT currently send the
-// "disable lizard mode" feature report — Steam itself sends it on real
-// systems, but for joypad-os v1 we just ignore the kbd/mouse reports and
-// rely on the vendor interface continuing to emit raw input. If we discover
-// the vendor interface goes silent, init() is the place to add the
-// SC1-style 0x81 + 0x87 feature reports.
-//
-// 12 of the 30 button bits are not yet identified — almost certainly the
-// SC2's grip buttons, back paddles, and trackpad quadrant clicks. SC2_DEBUG
-// builds log unknown bits + the Valve-proprietary touch/pressure axes so a
-// follow-up commit can name them after hardware bring-up.
+// Report layout + lizard-disable protocol: CouchTurtle/sc2-research and SDL3.
+// (An earlier firmware rev used report ID 0x45 with a different layout; this
+// driver targets the shipping 0x42 firmware.) IMU (accel/gyro, bytes 0x22-0x2d)
+// ships OFF by default and reads flat until a separate enable-IMU setting is
+// sent — a follow-up. Grip (L5/R5) and trackpad touch/click bits are unmapped.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -28,17 +25,24 @@
 #include "core/buttons.h"
 #include "core/input_event.h"
 #include "core/router/router.h"
+#include "usb/usbh/hid/hid_registry.h"  // device_interfaces[], CONTROLLER_KEYBOARD/MOUSE
+#include "platform/platform.h"          // platform_time_ms (lizard heartbeat)
 #include "tusb.h"
 #include <stdio.h>
 #include <string.h>
+
+// Lizard-mode disable must be re-sent periodically — the SC2 firmware re-enables
+// keyboard/mouse emulation on its own (SDL3 refreshes ~every 3s). Without this the
+// vendor interface stays silent and no gamepad input arrives.
+#define SC2_LIZARD_REFRESH_MS 1000
 
 #ifndef SC2_DEBUG
 #define SC2_DEBUG 1   // unknown-bit logging on during development
 #endif
 
-// Minimum bytes we need before the parse is meaningful (through gyro Z).
-// 64-byte interrupt-IN frame per the quirk layout; we accept anything ≥ 45.
-#define SC2_MIN_REPORT_LEN 45
+// Minimum bytes we need before the parse is meaningful (through gyro Z at 0x2d).
+// The 0x42 state report is 54 bytes; require enough to read the IMU fields.
+#define SC2_MIN_REPORT_LEN 46
 
 // --- Bit-packed report helpers --------------------------------------------
 // Every 16-bit axis in the quirk layout is byte-aligned, so the i16 helper
@@ -67,8 +71,9 @@ static inline uint8_t sc2_stick_to_u8(int16_t v) {
 // --- Driver state ----------------------------------------------------------
 
 static uint8_t prev_buttons_lo[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint32_t last_lizard_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #if SC2_DEBUG
-static uint32_t prev_unknown_bits[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint8_t  logged_report_id[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #endif
 
 // --- DeviceInterface callbacks --------------------------------------------
@@ -77,15 +82,34 @@ static bool sc2_is_device(uint16_t vid, uint16_t pid) {
     return vid == SC2_VID && (pid == SC2_PID_WIRED || pid == SC2_PID_PUCK);
 }
 
+// Disable "lizard mode" (Valve's default keyboard + mouse emulation) so the SC2
+// streams its native gamepad state report — what Steam does on a real PC. The SC2
+// (Triton) uses SET_SETTINGS (0x87) writing SETTING_LIZARD_MODE (9) = 0, NOT the
+// SC1 CLEAR_DIGITAL_MAPPINGS (0x81). Format: [0x87, payload_len, setting, val_lo,
+// val_hi, ...] as a 64-byte feature report. Must be re-sent periodically (task)
+// because the firmware re-enables lizard mode on its own. Static buffer outlives
+// the async control transfer. (Ref: SDL3 / CouchTurtle/sc2-research.)
+static void sc2_disable_lizard(uint8_t dev_addr, uint8_t instance) {
+    static uint8_t settings[64];
+    memset(settings, 0, sizeof(settings));
+    settings[0] = 0x87;  // ID_SET_SETTINGS_VALUES
+    settings[1] = 0x03;  // payload length: 1 setting x 3 bytes
+    settings[2] = 0x09;  // SETTING_LIZARD_MODE
+    settings[3] = 0x00;  // value LO (0 = disabled)
+    settings[4] = 0x00;  // value HI
+    tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_FEATURE,
+                       settings, sizeof(settings));
+}
+
 static bool sc2_init(uint8_t dev_addr, uint8_t instance) {
     printf("[SC2] mounted dev_addr=%u instance=%u\n", dev_addr, instance);
     prev_buttons_lo[dev_addr][instance] = 0;
+    // 0 forces the first task() tick to send the lizard-disable immediately —
+    // sending during mount can race the interface coming up, so defer to task().
+    last_lizard_ms[dev_addr][instance] = 0;
 #if SC2_DEBUG
-    prev_unknown_bits[dev_addr][instance] = 0;
+    logged_report_id[dev_addr][instance] = 0;
 #endif
-    // No lizard-mode disable in v1. SC2 emits report ID 0x45 alongside the
-    // kbd/mouse reports; process() filters by ID. Add 0x81 + 0x87 feature
-    // reports here if hardware testing shows the vendor stream goes idle.
     return true;
 }
 
@@ -93,86 +117,100 @@ static void sc2_unmount(uint8_t dev_addr, uint8_t instance) {
     printf("[SC2] unmounted dev_addr=%u instance=%u\n", dev_addr, instance);
     prev_buttons_lo[dev_addr][instance] = 0;
 #if SC2_DEBUG
-    prev_unknown_bits[dev_addr][instance] = 0;
+    logged_report_id[dev_addr][instance] = 0;
 #endif
 }
 
 static void sc2_task(uint8_t dev_addr, uint8_t instance,
                      device_output_config_t *config) {
-    (void)dev_addr;
-    (void)instance;
     (void)config;
-    // v1: no output features (haptics/LED). Add via tuh_hid_send_report once
-    // the SC2 output report layout is known.
+    // Lizard-disable heartbeat. Only the vendor interface (protocol NONE) accepts
+    // the settings feature report; the firmware re-enables lizard mode on its own,
+    // so re-send on an interval to keep the native gamepad stream alive.
+    if (tuh_hid_interface_protocol(dev_addr, instance) != HID_ITF_PROTOCOL_NONE) {
+        return;
+    }
+    uint32_t now = platform_time_ms();
+    if (now - last_lizard_ms[dev_addr][instance] >= SC2_LIZARD_REFRESH_MS) {
+        sc2_disable_lizard(dev_addr, instance);
+        last_lizard_ms[dev_addr][instance] = now;
+    }
 }
 
 static void sc2_process(uint8_t dev_addr, uint8_t instance,
                         const uint8_t *report, uint16_t len) {
-    // Filter: SC2 vendor interface emits report ID 0x45. The kbd/mouse
-    // interfaces (claimed by us via VID/PID match) emit different IDs and
-    // are silently dropped here.
-    if (len < SC2_MIN_REPORT_LEN || report[0] != SC2_INPUT_REPORT_ID) {
+#if SC2_DEBUG
+    // Surface the actual report ID once per distinct ID so hardware bring-up can
+    // confirm which native report the firmware streams (0x42 vs 0x45) after the
+    // lizard-disable heartbeat kicks in.
+    if (len >= 1 && report[0] != logged_report_id[dev_addr][instance]) {
+        printf("[SC2] report id=0x%02X len=%u\n", report[0], (unsigned)len);
+        logged_report_id[dev_addr][instance] = report[0];
+    }
+#endif
+
+    // The SC2 vendor interface emits report ID 0x45. Anything else is a lizard
+    // report from the kbd/mouse interfaces (which we claimed by VID/PID). Forward
+    // those to the generic handlers so lizard mode still drives gamepad output —
+    // rather than dropping them and going dead. Native 0x45 reports fall through.
+    if (len < 1 || report[0] != SC2_INPUT_REPORT_ID) {
+        uint8_t itf = tuh_hid_interface_protocol(dev_addr, instance);
+        if (itf == HID_ITF_PROTOCOL_KEYBOARD && device_interfaces[CONTROLLER_KEYBOARD]) {
+            device_interfaces[CONTROLLER_KEYBOARD]->process(dev_addr, instance, report, len);
+        } else if (itf == HID_ITF_PROTOCOL_MOUSE && device_interfaces[CONTROLLER_MOUSE]) {
+            device_interfaces[CONTROLLER_MOUSE]->process(dev_addr, instance, report, len);
+        }
         return;
     }
+    if (len < SC2_MIN_REPORT_LEN) {
+        return;  // native report but truncated
+    }
 
-    // --- Buttons (confirmed bits → JP_BUTTON_*) ---------------------------
+    // --- Buttons (0x42 TritonMTUFull_t; byte 0x02-0x05, bit = byte*8+n) ---
     uint32_t buttons = 0;
-    if (sc2_bit(report,  8)) buttons |= JP_BUTTON_B1;  // South / A / Cross
-    if (sc2_bit(report,  9)) buttons |= JP_BUTTON_B2;  // East  / B / Circle
-    if (sc2_bit(report, 10)) buttons |= JP_BUTTON_B3;  // West  / X / Square
-    if (sc2_bit(report, 11)) buttons |= JP_BUTTON_B4;  // North / Y / Triangle
-    if (sc2_bit(report, 27)) buttons |= JP_BUTTON_L1;  // LB
-    if (sc2_bit(report, 17)) buttons |= JP_BUTTON_R1;  // RB
-    if (sc2_bit(report, 35)) buttons |= JP_BUTTON_L2;  // LT digital
-    if (sc2_bit(report, 31)) buttons |= JP_BUTTON_R2;  // RT digital
-    if (sc2_bit(report, 22)) buttons |= JP_BUTTON_S1;  // Select / Back
-    if (sc2_bit(report, 14)) buttons |= JP_BUTTON_S2;  // Start  / Menu
-    if (sc2_bit(report, 23)) buttons |= JP_BUTTON_L3;  // Left stick click
-    if (sc2_bit(report, 13)) buttons |= JP_BUTTON_R3;  // Right stick click
-    if (sc2_bit(report, 24)) buttons |= JP_BUTTON_A1;  // Steam / Home
+    if (sc2_bit(report, 16)) buttons |= JP_BUTTON_B1;  // A   (0x02 b0)
+    if (sc2_bit(report, 17)) buttons |= JP_BUTTON_B2;  // B   (0x02 b1)
+    if (sc2_bit(report, 18)) buttons |= JP_BUTTON_B3;  // X   (0x02 b2)
+    if (sc2_bit(report, 19)) buttons |= JP_BUTTON_B4;  // Y   (0x02 b3)
+    if (sc2_bit(report, 20)) buttons |= JP_BUTTON_A2;  // QAM (quick-access menu)
+    if (sc2_bit(report, 21)) buttons |= JP_BUTTON_R3;  // R3  (right stick click)
+    if (sc2_bit(report, 22)) buttons |= JP_BUTTON_S1;  // View / Select
+    if (sc2_bit(report, 23)) buttons |= JP_BUTTON_R4;  // R4 back paddle
+    if (sc2_bit(report, 25)) buttons |= JP_BUTTON_R1;  // RB
+    if (sc2_bit(report, 26)) buttons |= JP_BUTTON_DD;  // D-Down
+    if (sc2_bit(report, 27)) buttons |= JP_BUTTON_DR;  // D-Right
+    if (sc2_bit(report, 28)) buttons |= JP_BUTTON_DL;  // D-Left
+    if (sc2_bit(report, 29)) buttons |= JP_BUTTON_DU;  // D-Up
+    if (sc2_bit(report, 30)) buttons |= JP_BUTTON_S2;  // Menu / Start
+    if (sc2_bit(report, 31)) buttons |= JP_BUTTON_L3;  // L3 (left stick click)
+    if (sc2_bit(report, 32)) buttons |= JP_BUTTON_A1;  // Steam / Home
+    if (sc2_bit(report, 33)) buttons |= JP_BUTTON_L4;  // L4 back paddle
+    if (sc2_bit(report, 35)) buttons |= JP_BUTTON_L1;  // LB
+    if (sc2_bit(report, 39)) buttons |= JP_BUTTON_R2;  // RT full-pull click
+    if (sc2_bit(report, 43)) buttons |= JP_BUTTON_L2;  // LT full-pull click
+    // Grips (L5/R5) and trackpad touch/click bits intentionally left unmapped.
 
-    // --- Sticks (Valve sends +Y = up, invert to HID convention 0=up) ------
-    uint8_t lx = sc2_stick_to_u8(sc2_i16(report,  72));
-    uint8_t ly = (uint8_t)(255 - sc2_stick_to_u8(sc2_i16(report,  88)));
-    uint8_t rx = sc2_stick_to_u8(sc2_i16(report, 104));
-    uint8_t ry = (uint8_t)(255 - sc2_stick_to_u8(sc2_i16(report, 120)));
+    // --- Sticks (int16 LE ±32767; Valve +Y = up → invert to HID 0=up) ----
+    uint8_t lx = sc2_stick_to_u8(sc2_i16(report,  80));                    // 0x0a
+    uint8_t ly = (uint8_t)(255 - sc2_stick_to_u8(sc2_i16(report,  96)));   // 0x0c
+    uint8_t rx = sc2_stick_to_u8(sc2_i16(report, 112));                    // 0x0e
+    uint8_t ry = (uint8_t)(255 - sc2_stick_to_u8(sc2_i16(report, 128)));   // 0x10
     if (ly == 0) ly = 1;
     if (ry == 0) ry = 1;
 
-    // --- Triggers (0..32767 unsigned-style, shift to 0..255) --------------
-    uint16_t l2_raw = (uint16_t)sc2_i16(report, 40);
-    uint16_t r2_raw = (uint16_t)sc2_i16(report, 56);
+    // --- Triggers (Hall-effect int16 0..32767 → 0..255) ------------------
+    uint16_t l2_raw = (uint16_t)sc2_i16(report, 48);  // 0x06
+    uint16_t r2_raw = (uint16_t)sc2_i16(report, 64);  // 0x08
     uint8_t l2 = (uint8_t)(l2_raw >> 7);
     uint8_t r2 = (uint8_t)(r2_raw >> 7);
 
-    // --- IMU --------------------------------------------------------------
-    int16_t accel_x = sc2_i16(report, 264);
-    int16_t accel_y = sc2_i16(report, 280);
-    int16_t accel_z = sc2_i16(report, 296);
-    int16_t gyro_x  = sc2_i16(report, 312);
-    int16_t gyro_y  = sc2_i16(report, 328);
-    int16_t gyro_z  = sc2_i16(report, 344);
-
-#if SC2_DEBUG
-    // Log unmapped button bits on change. These are almost certainly the
-    // SC2 grip buttons, back paddles, trackpad-quadrant clicks, and
-    // Valve-proprietary edge-touch hints (bits 18-21, page 0xfff9).
-    static const int unknown_bits[] = {
-        12, 15, 16, 18, 19, 20, 21, 25, 26, 28, 29, 30, 32, 33, 34, 36, 37,
-    };
-    uint32_t unknown_now = 0;
-    for (unsigned i = 0; i < sizeof(unknown_bits) / sizeof(unknown_bits[0]); i++) {
-        if (sc2_bit(report, unknown_bits[i])) unknown_now |= (1u << i);
-    }
-    if (unknown_now != prev_unknown_bits[dev_addr][instance]) {
-        printf("[SC2] unknown bits:");
-        for (unsigned i = 0; i < sizeof(unknown_bits) / sizeof(unknown_bits[0]); i++) {
-            if (unknown_now & (1u << i)) printf(" %d", unknown_bits[i]);
-        }
-        printf("\n");
-        prev_unknown_bits[dev_addr][instance] = unknown_now;
-    }
-#endif
+    // --- IMU (accel 0x22-0x27, gyro 0x28-0x2d; frozen until IMU enabled) --
+    int16_t accel_x = sc2_i16(report, 272);  // 0x22
+    int16_t accel_y = sc2_i16(report, 288);  // 0x24
+    int16_t accel_z = sc2_i16(report, 304);  // 0x26
+    int16_t gyro_x  = sc2_i16(report, 320);  // 0x28
+    int16_t gyro_y  = sc2_i16(report, 336);  // 0x2a
+    int16_t gyro_z  = sc2_i16(report, 352);  // 0x2c
 
     input_event_t event = {
         .dev_addr = dev_addr,
@@ -181,7 +219,7 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
         .transport = INPUT_TRANSPORT_USB,
         .layout = LAYOUT_MODERN_4FACE,
         .buttons = buttons,
-        .button_count = 13,
+        .button_count = 20,
         .analog = {lx, ly, rx, ry, l2, r2, 0},
         .has_motion = true,
         .accel = {accel_x, accel_y, accel_z},
