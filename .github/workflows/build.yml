@@ -65,6 +65,9 @@ jobs:
           - pce2usb_kb2040
           - pce2usb_pico
           - pce2usb_pico_w
+          - psx2usb_pico
+          - psx2usb_kb2040
+          - psx2usb_qtpy
           - jvs2usb_rp2040zero
           - neogeo2usb_kb2040
           - neogeo2usb_rp2040zero
