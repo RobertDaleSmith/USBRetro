@@ -413,6 +413,11 @@ set(COMMON_LIBRARIES pico_stdlib pico_multicore hardware_pio pico_rand tinyusb_h
 # Only ENABLE_BTSTACK is needed here to enable CFG_TUH_BTD in tusb_config.h
 set(BTSTACK_DEFINITIONS
     ENABLE_BTSTACK=1
+    # joypad_add_btstack() always adds BT_HOST_SOURCES, which contains
+    # BTHID_DEVICE_SOURCES (incl. bthid_registry.c), so every BTstack target on
+    # this platform is a BTHID host. bt_transport.c gates its registry call on
+    # this instead of on a weak symbol — see the comment there.
+    CONFIG_BT_HOST=1
 )
 
 # BTstack include directories

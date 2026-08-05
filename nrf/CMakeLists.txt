@@ -689,6 +689,14 @@ endif()
 target_sources(app PRIVATE ${SRCS})
 target_include_directories(app PRIVATE ${INCLUDE_DIRS})
 
+# BTHID host registry — derived from the source list rather than set by hand, so
+# it can never drift out of sync with whether bthid_registry.c is actually
+# compiled. bt_transport.c gates its bthid_registry_init() call on this instead
+# of relying on a weak stub that the linker could resolve to an empty function.
+if("${SRCS}" MATCHES "bthid_registry\\.c")
+    target_compile_definitions(app PRIVATE CONFIG_BT_HOST=1)
+endif()
+
 # ============================================================================
 # GATT header generation (peripheral mode — controller_btusb)
 # ============================================================================
