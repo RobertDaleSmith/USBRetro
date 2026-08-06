@@ -68,6 +68,13 @@ static inline uint8_t sc2_stick_to_u8(int16_t v) {
     return (uint8_t)scaled;
 }
 
+// SInput touchpads are full-range int16 (SDL normalizes v/65536 + 0.5 → 0..1). The
+// SC2 pads are already int16, so pass X through; invert Y (SC2 +Y = up, SInput 0 = top).
+static inline uint16_t sc2_pad_x(int16_t v) { return (uint16_t)v; }
+static inline uint16_t sc2_pad_y(int16_t v) {
+    return (uint16_t)(v == -32768 ? 32767 : -v);
+}
+
 // --- Driver state ----------------------------------------------------------
 
 static uint8_t prev_buttons_lo[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
@@ -243,7 +250,19 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 35)) buttons |= JP_BUTTON_L1;  // LB
     if (sc2_bit(report, 39)) buttons |= JP_BUTTON_R2;  // RT full-pull click
     if (sc2_bit(report, 43)) buttons |= JP_BUTTON_L2;  // LT full-pull click
-    // Grips (L5/R5) and trackpad touch/click bits intentionally left unmapped.
+    // Grip (L5/R5) and trackpad click bits intentionally left unmapped.
+
+    // --- Trackpads (int16 LE ±32767) → DualSense touchpad space (0..1919 × 0..1079,
+    // top-left origin, +Y down) so PS5-type visualizers render at the right scale.
+    // Left pad pos 0x12/0x14, touch = byte 0x05 bit1 (bitpos 41). Right pad pos
+    // 0x18/0x1a, touch = byte 0x04 bit5 (bitpos 37).
+    bool lpad_touch = sc2_bit(report, 41);
+    bool rpad_touch = sc2_bit(report, 37);
+    uint16_t lpad_x = sc2_pad_x(sc2_i16(report, 144));  // 0x12
+    uint16_t lpad_y = sc2_pad_y(sc2_i16(report, 160));  // 0x14
+    uint16_t rpad_x = sc2_pad_x(sc2_i16(report, 192));  // 0x18
+    uint16_t rpad_y = sc2_pad_y(sc2_i16(report, 208));  // 0x1a
+    bool has_touch = (lpad_touch || rpad_touch);
 
     // --- Sticks (int16 LE ±32767; Valve +Y = up → invert to HID 0=up) ----
     uint8_t lx = sc2_stick_to_u8(sc2_i16(report,  80));                    // 0x0a
@@ -283,6 +302,11 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
         .accel_range = 4000,
         .battery_level = batt_level[dev_addr][instance],
         .battery_charging = batt_charging[dev_addr][instance],
+        .has_touch = has_touch,
+        .touch = {
+            { .x = (uint16_t)lpad_x, .y = (uint16_t)lpad_y, .active = lpad_touch },
+            { .x = (uint16_t)rpad_x, .y = (uint16_t)rpad_y, .active = rpad_touch },
+        },
     };
     router_submit_input(&event);
 

@@ -554,6 +554,31 @@ static void register_valve_hid_listener(hci_con_handle_t con_handle);
 static void valve_disconnected(hci_con_handle_t handle);
 static void valve_periodic(void);
 
+// On a bonded reconnect the SC2 (and some others) advertise with NO name, so the
+// scan-time bt_device_lookup falls to the generic profile and the connection would
+// take the generic HOGP/HIDS path — fatal for the SC2, which needs its Valve GATT
+// client (lizard-off) or it stays silent. But conn->name is restored from the stored
+// bond (e.g. "Steam Ctrl (BT) ..."), so re-derive the profile from that name here,
+// before dispatch, whenever the current profile is unset/generic. Returns the (possibly
+// updated) profile so callers can dispatch on its ->ble strategy.
+static const bt_device_profile_t* ble_resolve_profile_from_name(ble_connection_t* conn)
+{
+    if (!conn) return NULL;
+    if (conn->profile && conn->profile != &BT_PROFILE_DEFAULT &&
+        conn->profile->ble != BT_BLE_NONE) {
+        return conn->profile;  // already a specific BLE strategy — keep it
+    }
+    if (conn->name[0]) {
+        const bt_device_profile_t* p = bt_device_lookup_by_name(conn->name);
+        if (p && p != &BT_PROFILE_DEFAULT && p->ble != BT_BLE_NONE) {
+            printf("[BTSTACK_HOST] reconnect: re-derived profile '%s' from name '%s'\n",
+                   p->name, conn->name);
+            conn->profile = p;
+        }
+    }
+    return conn->profile;
+}
+
 // Deferred post-HID setup sequencer. After HID report notifications are
 // enabled (0x1C), the hids_client needs a moment to return to CONNECTED before
 // it will accept a protocol-mode write, and the other GATT clients must run one
@@ -2869,6 +2894,9 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
                            conn->addr[5], conn->addr[4], conn->addr[3], conn->addr[2], conn->addr[1], conn->addr[0],
                            hid_state.last_connected_name);
 
+                    // Recover a name-gated profile if the ADV had no name (bonded reconnect)
+                    ble_resolve_profile_from_name(conn);
+
                     // Route based on BLE strategy
                     if (conn->profile && conn->profile->ble == BT_BLE_DIRECT_ATT) {
                         printf("[BTSTACK_HOST] %s detected - using fast-path HID listener\n",
@@ -2920,6 +2948,9 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
                     }
                     hid_state.has_last_connected = true;
                     btstack_host_save_last_connected();
+
+                    // Recover a name-gated profile if the ADV had no name (bonded reconnect)
+                    ble_resolve_profile_from_name(conn);
 
                     // Route based on BLE strategy
                     if (conn->profile && conn->profile->ble == BT_BLE_DIRECT_ATT) {
@@ -3424,6 +3455,9 @@ typedef enum {
     VALVE_DISC_CHARS,
     VALVE_ENABLE_CCC,
     VALVE_ENABLE_BATT_CCC,
+    VALVE_DISC_HID_SVC,     // discover the standard HID service (0x1812)
+    VALVE_DISC_HID_CHARS,   // discover its HID Report characteristics (0x2A4D)
+    VALVE_ENABLE_HID_CCC,   // subscribe each input-report char (powers on the pads)
     VALVE_READY,
 } valve_state_t;
 
@@ -3440,6 +3474,17 @@ static struct {
     uint16_t rumble_value_handle;               // WWR output report 0x80 target (100F6CB5)
     gatt_client_notification_t notify;
     gatt_client_notification_t battery_notify;
+    // Standard HID service (0x1812): subscribing to its input reports powers on the
+    // trackpads (dead on the Valve vendor stream) and carries their position. Runs
+    // alongside the Valve client (which owns connection/lizard-off/rumble/battery).
+    gatt_client_service_t hid_service;
+    bool has_hid_service;
+    gatt_client_characteristic_t hid_reports[8];
+    gatt_client_notification_t hid_notify[8];
+    uint8_t hid_report_count;
+    uint8_t hid_ccc_index;
+    uint16_t hid_protocol_handle;   // HID Protocol Mode char (0x2A4E) — set REPORT
+    uint32_t hid_disc_start_ms;     // when HID-service bring-up began (timeout guard)
     uint32_t last_keepalive_ms;
     bool imu_enabled;
     uint8_t last_rumble;         // last intensity sent (0 = idle)
@@ -3453,11 +3498,18 @@ static void valve_reset(void)
         if (valve.has_battery_char) {
             gatt_client_stop_listening_for_characteristic_value_updates(&valve.battery_notify);
         }
+        for (int i = 0; i < valve.hid_report_count; i++) {
+            gatt_client_stop_listening_for_characteristic_value_updates(&valve.hid_notify[i]);
+        }
     }
     valve.state = VALVE_IDLE;
     valve.handle = HCI_CON_HANDLE_INVALID;
     valve.report_id = 0;
     valve.has_battery_char = false;
+    valve.has_hid_service = false;
+    valve.hid_report_count = 0;
+    valve.hid_ccc_index = 0;
+    valve.hid_protocol_handle = 0;
     valve.report_value_handle = 0;
     valve.rumble_value_handle = 0;
     valve.imu_enabled = false;
@@ -3527,6 +3579,15 @@ static void valve_feature_write_cb(uint8_t packet_type, uint16_t channel, uint8_
     }
 }
 
+// Standard-HID-service (0x1812) input reports. We subscribe to these purely to
+// power on the trackpads — the controller only enables the pads (and streams their
+// position on the Valve 0x45 report) once a host consumes this HID service. The
+// HID reports themselves carry nothing we need, so this handler just drops them.
+static void valve_hid_notify_handler(uint8_t packet_type, uint16_t channel, uint8_t* packet, uint16_t size)
+{
+    UNUSED(packet_type); UNUSED(channel); UNUSED(packet); UNUSED(size);
+}
+
 // Finish Valve bring-up: listen on the input characteristic, register with the
 // bthid layer so the SC2 driver is selected, and mark READY.
 static void valve_become_ready(void)
@@ -3561,12 +3622,31 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
 
     switch (event) {
         case GATT_EVENT_SERVICE_QUERY_RESULT:
-            gatt_event_service_query_result_get_service(packet, &valve.service);
+            if (valve.state == VALVE_DISC_HID_SVC) {
+                gatt_event_service_query_result_get_service(packet, &valve.hid_service);
+                valve.has_hid_service = true;
+            } else {
+                gatt_event_service_query_result_get_service(packet, &valve.service);
+            }
             break;
 
         case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT: {
             gatt_client_characteristic_t ch;
             gatt_event_characteristic_query_result_get_characteristic(packet, &ch);
+            if (valve.state == VALVE_DISC_HID_CHARS) {
+                // Collect HID Report (0x2A4D) chars with NOTIFY (input reports) —
+                // subscribing to these wakes the pads. Also grab the Protocol Mode
+                // char (0x2A4E) so we can switch the device to REPORT mode (else it
+                // stays in Boot mode and only sends keyboard/mouse, not the full
+                // gamepad+trackpad reports).
+                if (ch.uuid16 == 0x2A4D && (ch.properties & 0x10) &&
+                    valve.hid_report_count < 8) {
+                    valve.hid_reports[valve.hid_report_count++] = ch;
+                } else if (ch.uuid16 == 0x2A4E) {
+                    valve.hid_protocol_handle = ch.value_handle;
+                }
+                break;
+            }
             if (memcmp(ch.uuid128, valve_input_45_uuid128, 16) == 0) {
                 valve.input_char = ch;
                 valve.report_id = 0x45;
@@ -3592,6 +3672,19 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                 if (valve.state == VALVE_ENABLE_BATT_CCC) {
                     printf("[SC2_BLE] battery CCC failed (0x%02X), continuing without battery\n", status);
                     valve.has_battery_char = false;
+                    valve.state = VALVE_DISC_HID_SVC;
+                    valve.hid_disc_start_ms = btstack_run_loop_get_time_ms();
+                    valve.has_hid_service = false;
+                    gatt_client_discover_primary_services_by_uuid16(
+                        valve_gatt_handler, valve.handle, 0x1812);
+                    break;
+                }
+                // HID-service steps are optional (trackpads only) — never drop the
+                // working controller over them.
+                if (valve.state == VALVE_DISC_HID_SVC || valve.state == VALVE_DISC_HID_CHARS ||
+                    valve.state == VALVE_ENABLE_HID_CCC) {
+                    printf("[SC2_BLE] HID service step failed (state=%d 0x%02X), no trackpads\n",
+                           valve.state, status);
                     valve_become_ready();
                     break;
                 }
@@ -3635,7 +3728,59 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                 gatt_client_listen_for_characteristic_value_updates(
                     &valve.battery_notify, valve_battery_notify_handler,
                     valve.handle, &valve.battery_char);
-                valve_become_ready();
+                // Discover the standard HID service (0x1812) and subscribe its input
+                // reports — this powers on the trackpads and carries them.
+                valve.state = VALVE_DISC_HID_SVC;
+                valve.hid_disc_start_ms = btstack_run_loop_get_time_ms();
+                valve.has_hid_service = false;
+                gatt_client_discover_primary_services_by_uuid16(
+                    valve_gatt_handler, valve.handle, 0x1812);
+            } else if (valve.state == VALVE_DISC_HID_SVC) {
+                if (!valve.has_hid_service) {
+                    printf("[SC2_BLE] no standard HID service — no trackpads\n");
+                    valve_become_ready();
+                    break;
+                }
+                valve.state = VALVE_DISC_HID_CHARS;
+                valve.hid_report_count = 0;
+                gatt_client_discover_characteristics_for_service(
+                    valve_gatt_handler, valve.handle, &valve.hid_service);
+            } else if (valve.state == VALVE_DISC_HID_CHARS) {
+                printf("[SC2_BLE] HID service: %d input-report chars\n", valve.hid_report_count);
+                // NOTE: do NOT write Protocol Mode here — a write-without-response
+                // leaves the gatt_client busy and the CCC write below silently fails,
+                // hanging bring-up before READY. It isn't needed anyway: subscribing
+                // the input reports (CCC) is what wakes the pads; their position rides
+                // the Valve 0x45 stream, not these HID reports.
+                if (valve.hid_report_count == 0) { valve_become_ready(); break; }
+                valve.hid_ccc_index = 0;
+                valve.state = VALVE_ENABLE_HID_CCC;
+                // If the write errors SYNCHRONOUSLY (busy/wrong-state) no QUERY_COMPLETE
+                // ever fires — that would hang bring-up. Fall through to READY instead.
+                if (gatt_client_write_client_characteristic_configuration(
+                        valve_gatt_handler, valve.handle, &valve.hid_reports[0],
+                        GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION) != ERROR_CODE_SUCCESS) {
+                    printf("[SC2_BLE] HID CCC write rejected — no trackpads\n");
+                    valve_become_ready();
+                }
+            } else if (valve.state == VALVE_ENABLE_HID_CCC) {
+                gatt_client_listen_for_characteristic_value_updates(
+                    &valve.hid_notify[valve.hid_ccc_index], valve_hid_notify_handler,
+                    valve.handle, &valve.hid_reports[valve.hid_ccc_index]);
+                valve.hid_ccc_index++;
+                if (valve.hid_ccc_index < valve.hid_report_count) {
+                    if (gatt_client_write_client_characteristic_configuration(
+                            valve_gatt_handler, valve.handle,
+                            &valve.hid_reports[valve.hid_ccc_index],
+                            GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION) != ERROR_CODE_SUCCESS) {
+                        printf("[SC2_BLE] HID CCC write rejected mid-chain — pads best-effort\n");
+                        valve_become_ready();
+                    }
+                } else {
+                    printf("[SC2_BLE] HID input reports subscribed (%d) — pads should wake\n",
+                           valve.hid_report_count);
+                    valve_become_ready();
+                }
             }
             break;
         }
@@ -3723,6 +3868,20 @@ static bool valve_handle_rumble(void)
 // feedback system. All on the BTstack thread, one GATT op at a time.
 static void valve_periodic(void)
 {
+    // Robustness: the optional HID-service bring-up (trackpad wake) adds several
+    // GATT ops; if any stalls without an error event, the state machine would hang
+    // before READY and the controller would never register. Guard it — after ~4s
+    // stuck in a HID bring-up state, give up on trackpads and go READY so buttons/
+    // rumble/battery always come up.
+    if (valve.handle != HCI_CON_HANDLE_INVALID &&
+        (valve.state == VALVE_DISC_HID_SVC || valve.state == VALVE_DISC_HID_CHARS ||
+         valve.state == VALVE_ENABLE_HID_CCC) &&
+        (btstack_run_loop_get_time_ms() - valve.hid_disc_start_ms) > 4000) {
+        printf("[SC2_BLE] HID bring-up timed out — going ready without trackpads\n");
+        valve.hid_report_count = 0;
+        valve_become_ready();
+    }
+
     if (valve.state != VALVE_READY) return;
     if (valve.report_value_handle == 0) return;          // no feature char — input still works
     if (gatt_client_is_ready(valve.handle) == 0) return; // another GATT op in flight
@@ -4686,6 +4845,25 @@ static void dis_client_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                 printf("[BTSTACK_HOST] DIS: updating device info for conn_index=%d\n", conn->conn_index);
                 bthid_update_device_info(conn->conn_index, conn->name, vid, pid);
             }
+
+            // Steam Controller 2 reconnect fix: on a bonded reconnect the SC2 advertises
+            // with NO name, so bt_device_lookup ("Steam" substring) misses and it comes
+            // up on the generic HOGP/HIDS path — which leaves it in lizard mode with no
+            // gamepad reports (buttons dead until a fresh pair). DIS PnP ID is the first
+            // point we can positively identify it (VID 0x28DE / PID 0x1303), so switch it
+            // onto the Valve GATT client here: drop the generic HIDS client and start the
+            // Valve discovery (lizard-off + input 0x45 + rumble + battery + trackpad).
+            if (conn && vid == 0x28DE && pid == 0x1303 &&
+                !(conn->profile && conn->profile->ble == BT_BLE_VALVE)) {
+                printf("[SC2_BLE] DIS identified SC2 on generic path — switching to Valve GATT client\n");
+                conn->profile = &BT_PROFILE_STEAM_CONTROLLER2;
+                if (conn->hids_cid) {
+                    hids_client_disconnect(conn->hids_cid);
+                    conn->hids_cid = 0;
+                }
+                register_valve_hid_listener(handle);
+                break;  // don't fall through to NUS matching
+            }
             // Recognize NUS peers by DIS PnP ID and arm the NUS client — names
             // can be reset to dev values that miss the name gate at the 0x1C
             // handler (which leaves the relay stuck "scanning").
@@ -4720,6 +4898,15 @@ static void dis_client_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hci_con_handle_t handle = gattservice_subevent_device_information_done_get_con_handle(packet);
             uint8_t att_status = gattservice_subevent_device_information_done_get_att_status(packet);
             printf("[BTSTACK_HOST] DIS query done: handle=0x%04X status=0x%02X\n", handle, att_status);
+            // Skip the standard Battery Service client for devices on the Valve GATT
+            // path (Steam Controller 2): it has its own battery characteristic, and a
+            // concurrent BAS query would contend with the Valve service discovery we
+            // just kicked off in the PnP-ID handler above.
+            ble_connection_t *dconn = find_connection_by_handle(handle);
+            if (dconn && dconn->profile && dconn->profile->ble == BT_BLE_VALVE) {
+                printf("[BTSTACK_HOST] DIS done: Valve path — skipping standard BAS client\n");
+                break;
+            }
             // Start Battery Service client after DIS completes (avoids GATT procedure contention)
             start_battery_service_client(handle);
             break;

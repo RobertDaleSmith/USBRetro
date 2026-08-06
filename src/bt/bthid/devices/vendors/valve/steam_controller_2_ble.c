@@ -61,9 +61,16 @@
 #define SC2_OFF_LY           12
 #define SC2_OFF_RX           14
 #define SC2_OFF_RY           16
+#define SC2_OFF_LPAD_X       18   // s16 (populated once the pads are woken)
+#define SC2_OFF_LPAD_Y       20   // s16
+#define SC2_OFF_LPAD_PRES    22   // u16
+#define SC2_OFF_RPAD_X       24   // s16
+#define SC2_OFF_RPAD_Y       26   // s16
+#define SC2_OFF_RPAD_PRES    28   // u16
 #define SC2_OFF_ACCEL        34   // X/Y/Z int16
 #define SC2_OFF_GYRO         40   // X/Y/Z int16
 #define SC2_MIN_REPORT_LEN   18   // buttons + sticks present
+#define SC2_TOUCH_REPORT_LEN 30   // trackpad region present
 #define SC2_MOTION_REPORT_LEN 46  // full report incl. IMU
 
 // ============================================================================
@@ -83,6 +90,14 @@ static inline uint8_t stick_to_u8(int16_t v) {
     if (s < 0) s = 0;
     if (s > 255) s = 255;
     return (uint8_t)s;
+}
+
+// SInput touchpads are full-range int16: SDL normalizes them as v/65536 + 0.5 → 0..1.
+// The SC2 pads are already int16 (±32767), so pass X straight through. Y is inverted
+// (SC2 +Y = up; SInput/SDL 0 = top).
+static inline uint16_t pad_x(int16_t v) { return (uint16_t)v; }
+static inline uint16_t pad_y(int16_t v) {
+    return (uint16_t)(v == -32768 ? 32767 : -v);
 }
 
 // ============================================================================
@@ -216,6 +231,22 @@ static void sc2_ble_process_report(bthid_device_t* device, const uint8_t* data, 
         sc2->event.gyro[0]  = rd_s16(data, SC2_OFF_GYRO);
         sc2->event.gyro[1]  = rd_s16(data, SC2_OFF_GYRO + 2);
         sc2->event.gyro[2]  = rd_s16(data, SC2_OFF_GYRO + 4);
+    }
+
+    // Trackpads (bytes 18-29): left pos 18/20 + pressure 22, right pos 24/26 +
+    // pressure 28, all LE. Only non-zero once the pads are woken (btstack_host
+    // subscribes the 0x1812 HID service to power them on). SInput touchpads take
+    // signed int16, so pass through raw. Left Y inverted to match the USB driver.
+    if (len >= SC2_TOUCH_REPORT_LEN) {
+        bool lpad = (raw >> SC2_LPAD_TOUCH) & 1;
+        bool rpad = (raw >> SC2_RPAD_TOUCH) & 1;
+        sc2->event.has_touch = (lpad || rpad);
+        sc2->event.touch[0].x = pad_x(rd_s16(data, SC2_OFF_LPAD_X));
+        sc2->event.touch[0].y = pad_y(rd_s16(data, SC2_OFF_LPAD_Y));
+        sc2->event.touch[0].active = lpad;
+        sc2->event.touch[1].x = pad_x(rd_s16(data, SC2_OFF_RPAD_X));
+        sc2->event.touch[1].y = pad_y(rd_s16(data, SC2_OFF_RPAD_Y));
+        sc2->event.touch[1].active = rpad;
     }
 
     router_submit_input(&sc2->event);
