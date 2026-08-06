@@ -296,10 +296,9 @@ bool tud_xid_send_report(const xbox_og_in_report_t* report)
     // Copy to endpoint buffer
     memcpy(_xid_itf.ep_in_buf, report, sizeof(xbox_og_in_report_t));
 
-    // Wake host if suspended
-    if (tud_suspended()) {
-        tud_remote_wakeup();
-    }
+    // No remote-wakeup call here: TU_VERIFY(tud_xid_ready()) above already
+    // returned while suspended, so anything below it is unreachable in exactly
+    // the state that needs waking. Wakeup lives in usbd_try_remote_wakeup().
 
     return usbd_edpt_xfer(0, _xid_itf.ep_in, _xid_itf.ep_in_buf, sizeof(xbox_og_in_report_t));
 }
