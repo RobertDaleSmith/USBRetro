@@ -3403,6 +3403,8 @@ static const uint8_t valve_input_47_uuid128[16] = {  // notify, report id 0x47
     0x10,0x0F,0x6C,0x7C,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
 static const uint8_t valve_report_uuid128[16] = {    // write (feature reports)
     0x10,0x0F,0x6C,0x34,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
+static const uint8_t valve_haptic_rumble_uuid128[16] = {  // WWR, output report 0x80 (0x80+0x35=0xB5)
+    0x10,0x0F,0x6C,0xB5,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
 
 // Feature-report payloads (report-id byte already stripped, as sent on air).
 // {0x87 = ID_SET_SETTINGS_VALUES, 0x03 = sizeof(ControllerSetting), setting, u16 value}
@@ -3429,9 +3431,12 @@ static struct {
     gatt_client_characteristic_t input_char;   // subscribed notify characteristic
     uint8_t report_id;                          // 0x45 or 0x47 (implied by input_char)
     uint16_t report_value_handle;               // feature-report write target (100F6C34)
+    uint16_t rumble_value_handle;               // WWR output report 0x80 target (100F6CB5)
     gatt_client_notification_t notify;
     uint32_t last_keepalive_ms;
     bool imu_enabled;
+    uint8_t last_rumble;         // last intensity sent (0 = idle)
+    uint32_t last_rumble_ms;     // last rumble write time
 } valve = { .state = VALVE_IDLE, .handle = HCI_CON_HANDLE_INVALID };
 
 static void valve_reset(void)
@@ -3443,7 +3448,10 @@ static void valve_reset(void)
     valve.handle = HCI_CON_HANDLE_INVALID;
     valve.report_id = 0;
     valve.report_value_handle = 0;
+    valve.rumble_value_handle = 0;
     valve.imu_enabled = false;
+    valve.last_rumble = 0;
+    valve.last_rumble_ms = 0;
 }
 
 static void valve_disconnected(hci_con_handle_t handle)
@@ -3511,6 +3519,8 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                 valve.report_id = 0x47;
             } else if (memcmp(ch.uuid128, valve_report_uuid128, 16) == 0) {
                 valve.report_value_handle = ch.value_handle;
+            } else if (memcmp(ch.uuid128, valve_haptic_rumble_uuid128, 16) == 0) {
+                valve.rumble_value_handle = ch.value_handle;
             }
             break;
         }
@@ -3598,10 +3608,55 @@ static void register_valve_hid_listener(hci_con_handle_t con_handle)
         valve_gatt_handler, con_handle, valve_service_uuid128);
 }
 
+// SC2 rumble over BLE — output report 0x80 (ID_OUT_REPORT_HAPTIC_RUMBLE), sent as
+// an ATT Write Without Response (HID output-report semantics; a Write Request draws
+// ATT_ERROR_INVALID_PDU from the SC2). left/right speed carry the magnitude. An
+// active rumble is re-sent every ~40ms to ride the controller's safety timeout.
+// Returns true if it issued a GATT write this tick (so the caller yields the slot).
+#define VALVE_RUMBLE_RESEND_MS 40
+static bool valve_handle_rumble(void)
+{
+    int player_idx = find_player_index(valve.conn_index, 0);
+    feedback_state_t* fb = (player_idx >= 0) ? feedback_get_state(player_idx) : NULL;
+    uint8_t intensity = fb ? (fb->rumble.left > fb->rumble.right ? fb->rumble.left : fb->rumble.right) : 0;
+    uint32_t now = btstack_run_loop_get_time_ms();
+
+    if (!fb) return false;
+    if (valve.rumble_value_handle == 0) return false;   // no haptic characteristic discovered
+    bool changed = (intensity != valve.last_rumble);
+    bool refresh = (intensity > 0 && (now - valve.last_rumble_ms) >= VALVE_RUMBLE_RESEND_MS);
+    if (!changed && !refresh) return false;
+
+    valve.last_rumble = intensity;
+    valve.last_rumble_ms = now;
+
+    // SDL SC2/triton rumble = output report 0x80 (ID_OUT_REPORT_HAPTIC_RUMBLE). Over
+    // the Valve BLE service each report has its own characteristic (0x80 -> 100F6CB5)
+    // and the leading report-id byte is stripped (as with the input chars), so the
+    // written value is just the payload:
+    //   [type=0, intensity_u16=0, left.speed_u16, left.gain=0, right.speed_u16,
+    //    right.gain=0]  (all LE). Magnitude rides entirely on left/right.speed (SDL
+    //   passes the 0..65535 rumble value straight through); gain stays 0 dB; speed 0
+    //   on both = stop. It is an output report -> ATT Write Without Response (the
+    //   haptic char is WWR-capable; feature writes to 0x0017 use Write Request).
+    uint16_t left_speed  = (uint16_t)(fb->rumble.left  * 257);  // 0..255 -> 0..65535
+    uint16_t right_speed = (uint16_t)(fb->rumble.right * 257);
+    static uint8_t rmb[9];
+    rmb[0] = 0x00;                                              // type
+    rmb[1] = 0x00; rmb[2] = 0x00;                              // intensity (unused)
+    rmb[3] = (uint8_t)(left_speed & 0xFF);  rmb[4] = (uint8_t)(left_speed >> 8);
+    rmb[5] = 0x00;                                              // left gain (0 dB)
+    rmb[6] = (uint8_t)(right_speed & 0xFF); rmb[7] = (uint8_t)(right_speed >> 8);
+    rmb[8] = 0x00;                                              // right gain (0 dB)
+    gatt_client_write_value_of_characteristic_without_response(
+        valve.handle, valve.rumble_value_handle, sizeof(rmb), rmb);
+    return true;
+}
+
 // Periodic: keep gamepad mode alive. The controller re-enables "lizard mode"
 // (keyboard/mouse emulation) on a ~3 s watchdog, so we resend the lizard-off
-// feature report at that cadence. IMU is enabled once. All on the BTstack
-// thread, one GATT op at a time.
+// feature report at that cadence. IMU is enabled once, rumble is driven from the
+// feedback system. All on the BTstack thread, one GATT op at a time.
 static void valve_periodic(void)
 {
     if (valve.state != VALVE_READY) return;
@@ -3615,6 +3670,9 @@ static void valve_periodic(void)
             sizeof(valve_setting_imu_on), valve_setting_imu_on);
         return;
     }
+
+    // Rumble takes priority (40ms cadence); yields the GATT slot if it wrote.
+    if (valve_handle_rumble()) return;
 
     uint32_t now = btstack_run_loop_get_time_ms();
     if ((now - valve.last_keepalive_ms) >= VALVE_KEEPALIVE_MS) {

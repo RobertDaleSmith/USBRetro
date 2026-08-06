@@ -72,9 +72,15 @@ static inline uint8_t sc2_stick_to_u8(int16_t v) {
 
 static uint8_t prev_buttons_lo[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 static uint32_t last_lizard_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint8_t  last_rumble[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint32_t last_rumble_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #if SC2_DEBUG
 static uint8_t  logged_report_id[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #endif
+
+// The SC2 auto-stops rumble after a ~50ms hardware safety timeout, so an active
+// rumble must be re-sent on an interval (SDL uses 40ms).
+#define SC2_RUMBLE_RESEND_MS 40
 
 // --- DeviceInterface callbacks --------------------------------------------
 
@@ -121,20 +127,55 @@ static void sc2_unmount(uint8_t dev_addr, uint8_t instance) {
 #endif
 }
 
+// Rumble via the HAPTIC_RUMBLE output report (0x80). The magnitude rides entirely
+// on the per-motor "speed" fields (SDL passes the 0..65535 rumble value straight
+// through); gain stays 0 dB. It is an OUTPUT report — sent on the vendor interface's
+// interrupt-OUT endpoint (a FEATURE SET_REPORT is accepted but silently ignored).
+// Ref: SDL src/joystick/hidapi/SDL_hidapi_steam_triton.c.
+static void sc2_send_rumble(uint8_t dev_addr, uint8_t instance, uint8_t intensity) {
+    uint16_t speed = (uint16_t)(intensity * 257);          // 0..255 -> 0..65535
+    // payload after the report id (tuh_hid_send_report prepends 0x80):
+    // type, intensity_u16, left.speed_u16, left.gain, right.speed_u16, right.gain
+    uint8_t p[9];
+    p[0] = 0x00;                                            // type
+    p[1] = 0x00; p[2] = 0x00;                              // intensity (unused)
+    p[3] = (uint8_t)(speed & 0xFF); p[4] = (uint8_t)(speed >> 8);   // left.speed
+    p[5] = 0x00;                                            // left.gain (0 dB)
+    p[6] = (uint8_t)(speed & 0xFF); p[7] = (uint8_t)(speed >> 8);   // right.speed
+    p[8] = 0x00;                                            // right.gain (0 dB)
+    // The SC2 vendor interface has an interrupt-OUT endpoint, so the output report
+    // goes there. Fall back to a control OUTPUT SET_REPORT if it is ever absent.
+    if (!tuh_hid_send_report(dev_addr, instance, 0x80, p, sizeof(p))) {
+        uint8_t q[10]; q[0] = 0x80; memcpy(&q[1], p, sizeof(p));
+        tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, q, sizeof(q));
+    }
+}
+
 static void sc2_task(uint8_t dev_addr, uint8_t instance,
                      device_output_config_t *config) {
-    (void)config;
-    // Lizard-disable heartbeat. Only the vendor interface (protocol NONE) accepts
-    // the settings feature report; the firmware re-enables lizard mode on its own,
-    // so re-send on an interval to keep the native gamepad stream alive.
+    // Only the vendor interface (protocol NONE) accepts settings/haptic reports.
     if (tuh_hid_interface_protocol(dev_addr, instance) != HID_ITF_PROTOCOL_NONE) {
         return;
     }
     uint32_t now = platform_time_ms();
+
+    // Lizard-disable heartbeat — the firmware re-enables lizard mode on its own,
+    // so re-send on an interval to keep the native gamepad stream alive.
     if (now - last_lizard_ms[dev_addr][instance] >= SC2_LIZARD_REFRESH_MS) {
         sc2_disable_lizard(dev_addr, instance);
         last_lizard_ms[dev_addr][instance] = now;
     }
+
+    // Rumble: send on change, then keep re-sending every ~40ms while active so the
+    // hardware safety timeout doesn't cut it off. When it drops to 0 we simply stop
+    // sending and the controller auto-stops.
+    uint8_t rumble = config ? config->rumble : 0;
+    bool changed = (rumble != last_rumble[dev_addr][instance]);
+    if (rumble > 0 && (changed || now - last_rumble_ms[dev_addr][instance] >= SC2_RUMBLE_RESEND_MS)) {
+        sc2_send_rumble(dev_addr, instance, rumble);
+        last_rumble_ms[dev_addr][instance] = now;
+    }
+    last_rumble[dev_addr][instance] = rumble;
 }
 
 static void sc2_process(uint8_t dev_addr, uint8_t instance,

@@ -73,6 +73,7 @@ void hid_task(void)
       case CONTROLLER_SWITCH: // send Switch Pro init, LED and rumble commands
       case CONTROLLER_SWITCH2: // send Switch 2 Pro init, LED and rumble commands
       case CONTROLLER_SINPUT: // send SInput rumble, player LED, and RGB LED
+      case CONTROLLER_STEAM_2: // send SC2 lizard-disable heartbeat + rumble
       case CONTROLLER_SIDEWINDER_COMMANDER: // send Strategic Commander LEDs
         {
           // Get per-player feedback state
