@@ -74,6 +74,8 @@ static uint8_t prev_buttons_lo[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 static uint32_t last_lizard_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 static uint8_t  last_rumble[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 static uint32_t last_rumble_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint8_t  batt_level[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];    // 0-100, 0=unknown
+static bool     batt_charging[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #if SC2_DEBUG
 static uint8_t  logged_report_id[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #endif
@@ -190,6 +192,16 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     }
 #endif
 
+    // Battery status (0x43, TritonBatteryStatus_t): byte 1 = charge state
+    // (0 reset, 1 discharging, 2 charging, 3 src-validate, 4 charge-done),
+    // byte 2 = level 0-100. Cache it and attach to the next 0x42 input event.
+    if (report[0] == SC2_BATTERY_REPORT_ID && len >= 3) {
+        uint8_t state = report[1];
+        batt_level[dev_addr][instance] = report[2];
+        batt_charging[dev_addr][instance] = (state == 2 || state == 4);  // charging / done
+        return;
+    }
+
     // The SC2 vendor interface emits report ID 0x45. Anything else is a lizard
     // report from the kbd/mouse interfaces (which we claimed by VID/PID). Forward
     // those to the generic handlers so lizard mode still drives gamepad output —
@@ -269,6 +281,8 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
         .gyro  = {gyro_x,  gyro_y,  gyro_z},
         .gyro_range  = 2000,
         .accel_range = 4000,
+        .battery_level = batt_level[dev_addr][instance],
+        .battery_charging = batt_charging[dev_addr][instance],
     };
     router_submit_input(&event);
 

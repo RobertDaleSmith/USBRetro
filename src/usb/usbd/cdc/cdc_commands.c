@@ -2719,13 +2719,20 @@ static void cmd_players_list(const char* json)
                                players[i].transport == INPUT_TRANSPORT_BT_CLASSIC ||
                                players[i].transport == INPUT_TRANSPORT_BT_BLE);
 
+        // Battery (0 = not reported by this controller)
+        uint8_t batt = 0; bool batt_chg = false;
+        router_get_device_battery((uint8_t)players[i].dev_addr, &batt, &batt_chg);
+
         len += snprintf(response_buf + len, sizeof(response_buf) - len,
-                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s}",
+                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s,"
+                        "\"battery\":%u,\"charging\":%s}",
                         i > 0 ? "," : "",
                         i,
                         name ? name : "Unknown",
                         transport,
-                        supports_rumble ? "true" : "false");
+                        supports_rumble ? "true" : "false",
+                        (unsigned)batt,
+                        batt_chg ? "true" : "false");
     }
 
     snprintf(response_buf + len, sizeof(response_buf) - len, "]}");
