@@ -74,6 +74,7 @@ extern void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t l
 extern void bthid_update_device_info(uint8_t conn_index, const char* name,
                                       uint16_t vendor_id, uint16_t product_id);
 extern void bthid_set_battery_level(uint8_t conn_index, uint8_t level);
+extern void bthid_set_battery(uint8_t conn_index, uint8_t level, bool charging);
 extern void bthid_set_hid_descriptor(uint8_t conn_index, const uint8_t* desc, uint16_t desc_len);
 
 // Platform HAL
@@ -3405,6 +3406,8 @@ static const uint8_t valve_report_uuid128[16] = {    // write (feature reports)
     0x10,0x0F,0x6C,0x34,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
 static const uint8_t valve_haptic_rumble_uuid128[16] = {  // WWR, output report 0x80 (0x80+0x35=0xB5)
     0x10,0x0F,0x6C,0xB5,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
+static const uint8_t valve_battery_uuid128[16] = {  // notify, battery report 0x43 (0x43+0x35=0x78)
+    0x10,0x0F,0x6C,0x78,0x17,0x35,0x43,0x13,0xB4,0x02,0x38,0x56,0x71,0x31,0xE5,0xF3};
 
 // Feature-report payloads (report-id byte already stripped, as sent on air).
 // {0x87 = ID_SET_SETTINGS_VALUES, 0x03 = sizeof(ControllerSetting), setting, u16 value}
@@ -3420,6 +3423,7 @@ typedef enum {
     VALVE_DISC_SERVICE,
     VALVE_DISC_CHARS,
     VALVE_ENABLE_CCC,
+    VALVE_ENABLE_BATT_CCC,
     VALVE_READY,
 } valve_state_t;
 
@@ -3429,10 +3433,13 @@ static struct {
     uint8_t conn_index;
     gatt_client_service_t service;
     gatt_client_characteristic_t input_char;   // subscribed notify characteristic
+    gatt_client_characteristic_t battery_char; // battery notify characteristic (100F6C78)
     uint8_t report_id;                          // 0x45 or 0x47 (implied by input_char)
+    bool has_battery_char;                      // battery characteristic discovered
     uint16_t report_value_handle;               // feature-report write target (100F6C34)
     uint16_t rumble_value_handle;               // WWR output report 0x80 target (100F6CB5)
     gatt_client_notification_t notify;
+    gatt_client_notification_t battery_notify;
     uint32_t last_keepalive_ms;
     bool imu_enabled;
     uint8_t last_rumble;         // last intensity sent (0 = idle)
@@ -3443,10 +3450,14 @@ static void valve_reset(void)
 {
     if (valve.state == VALVE_READY) {
         gatt_client_stop_listening_for_characteristic_value_updates(&valve.notify);
+        if (valve.has_battery_char) {
+            gatt_client_stop_listening_for_characteristic_value_updates(&valve.battery_notify);
+        }
     }
     valve.state = VALVE_IDLE;
     valve.handle = HCI_CON_HANDLE_INVALID;
     valve.report_id = 0;
+    valve.has_battery_char = false;
     valve.report_value_handle = 0;
     valve.rumble_value_handle = 0;
     valve.imu_enabled = false;
@@ -3484,6 +3495,26 @@ static void valve_notify_handler(uint8_t packet_type, uint16_t channel, uint8_t*
     ble_report_pending = true;
 }
 
+// Battery notifications on the Valve battery characteristic (100F6C78). Over BLE
+// the report-id byte is stripped, so the value is the TritonBatteryStatus payload:
+// byte 0 = charge state (2=charging, 4=charge-done), byte 1 = level 0-100.
+static void valve_battery_notify_handler(uint8_t packet_type, uint16_t channel, uint8_t* packet, uint16_t size)
+{
+    UNUSED(channel); UNUSED(size);
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != GATT_EVENT_NOTIFICATION) return;
+    uint16_t vh = gatt_event_notification_get_value_handle(packet);
+    if (vh != valve.battery_char.value_handle) return;
+
+    uint16_t len = gatt_event_notification_get_value_length(packet);
+    const uint8_t* val = gatt_event_notification_get_value(packet);
+    if (len < 2) return;
+    uint8_t state = val[0];
+    uint8_t level = val[1];
+    bool charging = (state == 2 || state == 4);
+    bthid_set_battery(valve.conn_index, level, charging);
+}
+
 // Feature-report write completion (with-response). Log only.
 static void valve_feature_write_cb(uint8_t packet_type, uint16_t channel, uint8_t* packet, uint16_t size)
 {
@@ -3493,6 +3524,31 @@ static void valve_feature_write_cb(uint8_t packet_type, uint16_t channel, uint8_
     uint8_t status = gatt_event_query_complete_get_att_status(packet);
     if (status != ATT_ERROR_SUCCESS) {
         printf("[SC2_BLE] feature write failed status=0x%02X\n", status);
+    }
+}
+
+// Finish Valve bring-up: listen on the input characteristic, register with the
+// bthid layer so the SC2 driver is selected, and mark READY.
+static void valve_become_ready(void)
+{
+    gatt_client_listen_for_characteristic_value_updates(
+        &valve.notify, valve_notify_handler, valve.handle, &valve.input_char);
+    valve.state = VALVE_READY;
+    valve.last_keepalive_ms = btstack_run_loop_get_time_ms();
+    printf("[SC2_BLE] ready (report id 0x%02X, battery %s)\n",
+           valve.report_id, valve.has_battery_char ? "yes" : "no");
+
+    // Register the device with the bthid layer so the SC2 driver is selected and
+    // reports route to it. VID/PID are synthetic (not advertised over the air) so
+    // driver match() has something stable.
+    ble_connection_t* conn = find_connection_by_handle(valve.handle);
+    if (conn) {
+        conn->vid = 0x28DE;
+        conn->pid = 0x1303;
+        bthid_update_device_info(valve.conn_index, conn->name, conn->vid, conn->pid);
+        btstack_host_stop_scan();
+        scan_timeout_end = 0;
+        bt_on_hid_ready(valve.conn_index);
     }
 }
 
@@ -3521,6 +3577,9 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                 valve.report_value_handle = ch.value_handle;
             } else if (memcmp(ch.uuid128, valve_haptic_rumble_uuid128, 16) == 0) {
                 valve.rumble_value_handle = ch.value_handle;
+            } else if (memcmp(ch.uuid128, valve_battery_uuid128, 16) == 0) {
+                valve.battery_char = ch;
+                valve.has_battery_char = true;
             }
             break;
         }
@@ -3528,6 +3587,14 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
         case GATT_EVENT_QUERY_COMPLETE: {
             uint8_t status = gatt_event_query_complete_get_att_status(packet);
             if (status != ATT_ERROR_SUCCESS) {
+                // A failed battery CCC is non-fatal — battery is optional; keep the
+                // controller and go ready without battery notifications.
+                if (valve.state == VALVE_ENABLE_BATT_CCC) {
+                    printf("[SC2_BLE] battery CCC failed (0x%02X), continuing without battery\n", status);
+                    valve.has_battery_char = false;
+                    valve_become_ready();
+                    break;
+                }
                 printf("[SC2_BLE] GATT query failed (state=%d status=0x%02X)\n", valve.state, status);
                 valve_reset();
                 break;
@@ -3554,24 +3621,21 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                     valve_gatt_handler, valve.handle, &valve.input_char,
                     GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION);
             } else if (valve.state == VALVE_ENABLE_CCC) {
-                gatt_client_listen_for_characteristic_value_updates(
-                    &valve.notify, valve_notify_handler, valve.handle, &valve.input_char);
-                valve.state = VALVE_READY;
-                valve.last_keepalive_ms = btstack_run_loop_get_time_ms();
-                printf("[SC2_BLE] ready (report id 0x%02X)\n", valve.report_id);
-
-                // Register the device with the bthid layer so the SC2 driver is
-                // selected and reports route to it. VID/PID are synthetic (not
-                // advertised over the air) so driver match() has something stable.
-                ble_connection_t* conn = find_connection_by_handle(valve.handle);
-                if (conn) {
-                    conn->vid = 0x28DE;
-                    conn->pid = 0x1303;
-                    bthid_update_device_info(valve.conn_index, conn->name, conn->vid, conn->pid);
-                    btstack_host_stop_scan();
-                    scan_timeout_end = 0;
-                    bt_on_hid_ready(valve.conn_index);
+                // Input CCC done. Subscribe the battery characteristic too (if the
+                // unit exposes one) before going ready; otherwise ready now.
+                if (valve.has_battery_char) {
+                    valve.state = VALVE_ENABLE_BATT_CCC;
+                    gatt_client_write_client_characteristic_configuration(
+                        valve_gatt_handler, valve.handle, &valve.battery_char,
+                        GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION);
+                } else {
+                    valve_become_ready();
                 }
+            } else if (valve.state == VALVE_ENABLE_BATT_CCC) {
+                gatt_client_listen_for_characteristic_value_updates(
+                    &valve.battery_notify, valve_battery_notify_handler,
+                    valve.handle, &valve.battery_char);
+                valve_become_ready();
             }
             break;
         }
