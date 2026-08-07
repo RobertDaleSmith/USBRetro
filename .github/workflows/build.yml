@@ -79,6 +79,8 @@ jobs:
           - controller_fisherprice_v1_kb2040
           - controller_fisherprice_v2_kb2040
           - controller_alpakka_pico
+          - controller_custom_rp2040zero
+          - controller_custom_pico
           - controller_btusb_pico_w
           - controller_btusb_pico2_w
           - controller_btusb_rp2040_abb
@@ -546,6 +548,7 @@ jobs:
             organized/controller_fisherprice_v1/*.uf2
             organized/controller_fisherprice_v2/*.uf2
             organized/controller_alpakka/*.uf2
+            organized/controller_custom/*.uf2
           if-no-files-found: ignore
 
       - name: Upload controller_btusb

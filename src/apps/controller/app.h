@@ -21,6 +21,8 @@
 //   CONTROLLER_TYPE_FISHERPRICE        - Fisher Price mod (KB2040)
 //   CONTROLLER_TYPE_FISHERPRICE_ANALOG - Fisher Price with analog (KB2040)
 //   CONTROLLER_TYPE_MACROPAD           - Adafruit MacroPad RP2040
+//   CONTROLLER_TYPE_CUSTOM             - Generic hand-wired pad; pins are
+//                                        remappable at runtime (PAD.CONFIG.SET)
 
 // ============================================================================
 // CORE DEPENDENCIES

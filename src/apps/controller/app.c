@@ -99,8 +99,12 @@ static const button_name_t button_names[] = {
     #include "pad/configs/macropad.h"
     #define PAD_CONFIG pad_config_macropad
     #define CONTROLLER_NAME "MacroPad"
+#elif defined(CONTROLLER_TYPE_CUSTOM)
+    #include "pad/configs/custom.h"
+    #define PAD_CONFIG pad_config_custom
+    #define CONTROLLER_NAME "Custom Pad"
 #else
-    #error "No controller type defined! Define one of: CONTROLLER_TYPE_FISHERPRICE_V1, CONTROLLER_TYPE_FISHERPRICE_V2, CONTROLLER_TYPE_ALPAKKA, etc."
+    #error "No controller type defined! Define one of: CONTROLLER_TYPE_FISHERPRICE_V1, CONTROLLER_TYPE_FISHERPRICE_V2, CONTROLLER_TYPE_ALPAKKA, CONTROLLER_TYPE_CUSTOM, etc."
 #endif
 
 // ============================================================================

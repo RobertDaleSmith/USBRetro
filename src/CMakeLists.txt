@@ -2872,6 +2872,38 @@ target_include_directories(joypad_controller_macropad PUBLIC ${CONTROLLER_INCLUD
 target_link_libraries(joypad_controller_macropad PRIVATE ${CONTROLLER_LIBRARIES} pico_i2c_slave)
 joypad_target_common(joypad_controller_macropad)
 
+# --- Custom Pad (Waveshare RP2040-Zero) ---
+# Generic hand-wired controller. The compile-time pin map in
+# pad/configs/custom.h is only a fallback — pins are remappable at runtime
+# over CDC (PAD.CONFIG.SET) and persisted to flash.
+add_executable(joypad_controller_custom_rp2040zero)
+target_compile_definitions(joypad_controller_custom_rp2040zero PRIVATE
+    CONFIG_CONTROLLER=1 CONFIG_USB=1 CONFIG_PAD_INPUT=1 CONTROLLER_TYPE_CUSTOM=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO}
+    WS2812_PIN=16
+    USE_BOOTSEL_BUTTON=1
+)
+target_sources(joypad_controller_custom_rp2040zero PUBLIC ${CORE_SOURCES} ${USB_DEVICE_SOURCES} ${CONTROLLER_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
+)
+target_include_directories(joypad_controller_custom_rp2040zero PUBLIC ${CONTROLLER_INCLUDES})
+target_link_libraries(joypad_controller_custom_rp2040zero PRIVATE ${CONTROLLER_LIBRARIES})
+joypad_target_common(joypad_controller_custom_rp2040zero)
+
+# --- Custom Pad (Raspberry Pi Pico) ---
+# No onboard WS2812 on a stock Pico — falls back to BOARD_LED.
+add_executable(joypad_controller_custom_pico)
+target_compile_definitions(joypad_controller_custom_pico PRIVATE
+    CONFIG_CONTROLLER=1 CONFIG_USB=1 CONFIG_PAD_INPUT=1 CONTROLLER_TYPE_CUSTOM=1 DISABLE_USB_HOST=1 BUTTON_USER_GPIO=${BOARD_BUTTON_GPIO}
+    CONFIG_NO_NEOPIXEL=1
+    USE_BOOTSEL_BUTTON=1
+)
+target_sources(joypad_controller_custom_pico PUBLIC ${CORE_SOURCES} ${USB_DEVICE_SOURCES} ${CONTROLLER_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/apps/controller/app.c
+)
+target_include_directories(joypad_controller_custom_pico PUBLIC ${CONTROLLER_INCLUDES})
+target_link_libraries(joypad_controller_custom_pico PRIVATE ${CONTROLLER_LIBRARIES})
+joypad_target_common(joypad_controller_custom_pico)
+
 # --- ControllerBTUSB (Feather RP2040, USB-only, JoyWing + OLED + Joy) ---
 # No BLE on Feather RP2040 — USB device output only.
 # JoyWing + OLED share I2C1 on STEMMA QT (SDA=2, SCL=3).

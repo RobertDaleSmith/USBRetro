@@ -134,6 +134,8 @@ CONSOLE_controller_fisherprice_v1 := joypad_controller_fisherprice_v1
 CONSOLE_controller_fisherprice_v2 := joypad_controller_fisherprice_v2
 CONSOLE_controller_alpakka := joypad_controller_alpakka
 CONSOLE_controller_macropad := joypad_controller_macropad
+CONSOLE_controller_custom_rp2040zero := joypad_controller_custom_rp2040zero
+CONSOLE_controller_custom_pico := joypad_controller_custom_pico
 CONSOLE_bt2gc := joypad_bt2gc
 CONSOLE_bt2wiiext := joypad_bt2wiiext
 CONSOLE_controller_btusb := joypad_controller_btusb
@@ -238,6 +240,8 @@ APP_controller_fisherprice_v1_kb2040 := kb2040 controller_fisherprice_v1 control
 APP_controller_fisherprice_v2_kb2040 := kb2040 controller_fisherprice_v2 controller_fisherprice_v2_kb2040 GPIO/ADC USB
 APP_controller_alpakka_pico := pico controller_alpakka controller_alpakka_pico GPIO/I2C USB
 APP_controller_macropad := macropad controller_macropad controller_macropad GPIO USB
+APP_controller_custom_rp2040zero := rp2040zero controller_custom_rp2040zero controller_custom_rp2040zero GPIO USB
+APP_controller_custom_pico := pico controller_custom_pico controller_custom_pico GPIO USB
 APP_controller_btusb_fisherprice_v1_kb2040 := kb2040 controller_btusb_fisherprice_v1 controller_btusb_fisherprice_v1_kb2040 GPIO USB
 APP_controller_btusb_fisherprice_v2_kb2040 := kb2040 controller_btusb_fisherprice_v2 controller_btusb_fisherprice_v2_kb2040 GPIO/ADC USB
 APP_controller_btusb_alpakka_pico := pico controller_btusb_alpakka controller_btusb_alpakka_pico GPIO/I2C USB
@@ -304,6 +308,8 @@ APPS += jag2usb_pico_w
 APPS += controller_fisherprice_v1_kb2040
 APPS += controller_fisherprice_v2_kb2040
 APPS += controller_alpakka_pico
+APPS += controller_custom_rp2040zero
+APPS += controller_custom_pico
 APPS += usb2ami_rp2040zero
 APPS += usb2ami_xiao
 APPS := $(strip $(APPS))
@@ -425,6 +431,8 @@ help:
 	@echo "  make controller_fisherprice_v2_kb2040 - Fisher Price V2 (analog+shoulders) -> USB HID (KB2040)"
 	@echo "  make controller_alpakka_pico - GPIO/I2C -> USB HID (Pico)"
 	@echo "  make controller_macropad - 12 keys -> USB HID (MacroPad RP2040)"
+	@echo "  make controller_custom_rp2040zero - Hand-wired GPIO pad -> USB HID (RP2040-Zero, pins set at runtime)"
+	@echo "  make controller_custom_pico - Hand-wired GPIO pad -> USB HID (Pico, pins set at runtime)"
 	@echo "  make controller_btusb_pico_w - GPIO+JoyWing -> BLE+USB HID (Pico W)"
 	@echo "  make controller_btusb_rp2040_abb - GPIO+USB Host -> USB HID (ABB Passthrough)"
 
@@ -1243,6 +1251,14 @@ controller_alpakka_pico:
 controller_macropad:
 	$(call build_app,controller_macropad)
 
+.PHONY: controller_custom_rp2040zero
+controller_custom_rp2040zero:
+	$(call build_app,controller_custom_rp2040zero)
+
+.PHONY: controller_custom_pico
+controller_custom_pico:
+	$(call build_app,controller_custom_pico)
+
 .PHONY: controller_btusb_fisherprice_v1_kb2040
 controller_btusb_fisherprice_v1_kb2040:
 	$(call build_app,controller_btusb_fisherprice_v1_kb2040)
@@ -1704,6 +1720,14 @@ flash-controller_alpakka_pico:
 .PHONY: flash-controller_macropad
 flash-controller_macropad:
 	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_macropad
+
+.PHONY: flash-controller_custom_rp2040zero
+flash-controller_custom_rp2040zero:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_custom_rp2040zero
+
+.PHONY: flash-controller_custom_pico
+flash-controller_custom_pico:
+	@$(MAKE) --no-print-directory _flash_app APP_NAME=controller_custom_pico
 
 .PHONY: flash-controller_btusb_pico_w
 flash-controller_btusb_pico_w:
