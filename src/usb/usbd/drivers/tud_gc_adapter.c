@@ -198,10 +198,9 @@ bool tud_gc_adapter_send_report(const gc_adapter_in_report_t* report)
     // Copy to endpoint buffer
     memcpy(_gc_adapter_itf.ep_in_buf, report, sizeof(gc_adapter_in_report_t));
 
-    // Wake host if suspended
-    if (tud_suspended()) {
-        tud_remote_wakeup();
-    }
+    // No remote-wakeup call here: TU_VERIFY(tud_gc_adapter_ready()) above already
+    // returned while suspended, so anything below it is unreachable in exactly
+    // the state that needs waking. Wakeup lives in usbd_try_remote_wakeup().
 
     return usbd_edpt_xfer(0, _gc_adapter_itf.ep_in, _gc_adapter_itf.ep_in_buf, sizeof(gc_adapter_in_report_t));
 }

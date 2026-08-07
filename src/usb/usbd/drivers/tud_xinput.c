@@ -365,10 +365,9 @@ bool tud_xinput_send_report(const xinput_in_report_t* report)
     // Copy to endpoint buffer
     memcpy(_xinput_itf.ep_in_buf, report, sizeof(xinput_in_report_t));
 
-    // Wake host if suspended
-    if (tud_suspended()) {
-        tud_remote_wakeup();
-    }
+    // No remote-wakeup call here: TU_VERIFY(tud_xinput_ready()) above already
+    // returned while suspended, so anything below it is unreachable in exactly
+    // the state that needs waking. Wakeup lives in usbd_try_remote_wakeup().
 
     return usbd_edpt_xfer(0, _xinput_itf.ep_in, _xinput_itf.ep_in_buf, sizeof(xinput_in_report_t));
 }
