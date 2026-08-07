@@ -20,6 +20,8 @@
 #ifndef IS_RGBW
   #ifdef ADAFRUIT_MACROPAD_RP2040
     #define IS_RGBW false  // MacroPad uses WS2812B (RGB, not RGBW)
+  #elif defined(WAVESHARE_RP2350_USB_A)
+    #define IS_RGBW false  // Waveshare RP2350-USB-A uses WS2812B (RGB, not RGBW)
   #else
     #define IS_RGBW true
   #endif
@@ -76,10 +78,18 @@ static inline void put_pixel(uint32_t pixel_grb) {
 }
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
+#ifdef WAVESHARE_RP2350_USB_A
+    // Waveshare RP2350-USB-A WS2812 uses RGB byte order
+    return
+            ((uint32_t) (r) << 16) |
+            ((uint32_t) (g) << 8) |
+            (uint32_t) (b);
+#else
     return
             ((uint32_t) (r) << 8) |
             ((uint32_t) (g) << 16) |
             (uint32_t) (b);
+#endif
 }
 
 void pattern_snakes(uint len, uint t) {
