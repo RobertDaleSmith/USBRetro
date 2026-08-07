@@ -1,8 +1,12 @@
 // app.h - GCUSB App Manifest
 // USB to GameCube adapter
 //
-// This manifest declares what drivers and services this app needs.
-// The build system uses these flags to conditionally compile only required code.
+// This manifest is a human-readable summary of what this app uses.
+// It is NOT consumed by the build system. The authoritative per-target
+// configuration lives in src/CMakeLists.txt. Only #ifndef-guarded flags are
+// read by code (see REQUIRE_BT_INPUT / REQUIRE_BLE_OUTPUT in controller_btusb);
+// every other flag here is descriptive only and changing it has no effect.
+// See issue #198.
 
 #ifndef APP_GCUSB_H
 #define APP_GCUSB_H
@@ -53,15 +57,18 @@
 // HARDWARE CONFIGURATION
 // ============================================================================
 #define BOARD "ada_kb2040"
-#define CPU_OVERCLOCK_KHZ 130000        // GameCube needs 130MHz for joybus timing
+#define CPU_OVERCLOCK_KHZ 130000        // Descriptive only. The clock is actually set by
+                                        // set_sys_clock_khz(130000, true) at
+                                        // gamecube_device.c:194 -- editing this does nothing.
 #define UART_DEBUG 1
 
 // ============================================================================
 // APP FEATURES
 // ============================================================================
 #define FEATURE_PROFILES 1              // GameCube profile system
-#define FEATURE_KEYBOARD_MODE 1         // GameCube keyboard support
-#define FEATURE_ADAPTIVE_TRIGGERS 1     // DualSense trigger support
+#define FEATURE_KEYBOARD_MODE 1         // Descriptive only -- gates nothing. Keyboard mode is
+                                        // real, toggled by Scroll Lock / F14 in gamecube_device.c.
+#define FEATURE_ADAPTIVE_TRIGGERS 1     // Descriptive only -- gates nothing. The feature is real.
 
 // ============================================================================
 // APP INTERFACE (OS calls these)

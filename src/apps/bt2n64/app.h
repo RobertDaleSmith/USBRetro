@@ -4,8 +4,12 @@
 // Uses Pico W's built-in CYW43 Bluetooth to receive controllers,
 // outputs to N64 via joybus PIO protocol.
 //
-// This manifest declares what drivers and services this app needs.
-// The build system uses these flags to conditionally compile only required code.
+// This manifest is a human-readable summary of what this app uses.
+// It is NOT consumed by the build system. The authoritative per-target
+// configuration lives in src/CMakeLists.txt. Only #ifndef-guarded flags are
+// read by code (see REQUIRE_BT_INPUT / REQUIRE_BLE_OUTPUT in controller_btusb);
+// every other flag here is descriptive only and changing it has no effect.
+// See issue #198.
 
 #ifndef APP_BT2N64_H
 #define APP_BT2N64_H
@@ -32,7 +36,9 @@
 #define N64_OUTPUT_PORTS 1              // N64 single player
 
 // Services
-#define REQUIRE_FLASH_SETTINGS 0        // No profile persistence yet
+#define REQUIRE_FLASH_SETTINGS 0        // Descriptive only. Profiles DO persist:
+                                        // flash_init() at n64_device.c:96, loaded by
+                                        // profile_load_from_flash(), saved via storage_task().
 #define REQUIRE_PROFILE_SYSTEM 1
 #define REQUIRE_PLAYER_MANAGEMENT 1
 
