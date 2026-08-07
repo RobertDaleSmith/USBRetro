@@ -98,20 +98,27 @@ static bool sc2_is_device(uint16_t vid, uint16_t pid) {
 }
 
 // Disable "lizard mode" (Valve's default keyboard + mouse emulation) so the SC2
-// streams its native gamepad state report — what Steam does on a real PC. The SC2
-// (Triton) uses SET_SETTINGS (0x87) writing SETTING_LIZARD_MODE (9) = 0, NOT the
-// SC1 CLEAR_DIGITAL_MAPPINGS (0x81). Format: [0x87, payload_len, setting, val_lo,
-// val_hi, ...] as a 64-byte feature report. Must be re-sent periodically (task)
-// because the firmware re-enables lizard mode on its own. Static buffer outlives
-// the async control transfer. (Ref: SDL3 / CouchTurtle/sc2-research.)
+// streams its native gamepad state report — what Steam does on a real PC — AND
+// enable the IMU (accel+gyro) in the same write. The SC2 (Triton) uses SET_SETTINGS
+// (0x87), which packs multiple [setting, val_lo, val_hi] triples: SETTING_LIZARD_MODE
+// (9) = 0 to leave lizard mode, and SETTING_GYRO (0x30) = 0x18 (SEND_RAW_ACCEL 0x08 |
+// SEND_RAW_GYRO 0x10) to stream motion (off by default → IMU fields read flat until
+// set; mirrors valve_setting_imu_on on the BLE path). Format: [0x87, payload_len,
+// <triples...>] as a 64-byte feature report. Must be re-sent periodically (task)
+// because the firmware re-enables lizard mode on its own; re-sending the IMU bit is
+// harmless. Static buffer outlives the async control transfer. (Ref: SDL3 /
+// CouchTurtle/sc2-research.)
 static void sc2_disable_lizard(uint8_t dev_addr, uint8_t instance) {
     static uint8_t settings[64];
     memset(settings, 0, sizeof(settings));
     settings[0] = 0x87;  // ID_SET_SETTINGS_VALUES
-    settings[1] = 0x03;  // payload length: 1 setting x 3 bytes
+    settings[1] = 0x06;  // payload length: 2 settings x 3 bytes
     settings[2] = 0x09;  // SETTING_LIZARD_MODE
     settings[3] = 0x00;  // value LO (0 = disabled)
     settings[4] = 0x00;  // value HI
+    settings[5] = 0x30;  // SETTING_GYRO
+    settings[6] = 0x18;  // SEND_RAW_ACCEL (0x08) | SEND_RAW_GYRO (0x10)
+    settings[7] = 0x00;  // value HI
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_FEATURE,
                        settings, sizeof(settings));
 }
