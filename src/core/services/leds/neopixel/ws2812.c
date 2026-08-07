@@ -75,11 +75,27 @@ static inline void put_pixel(uint32_t pixel_grb) {
     pio_sm_put_blocking(pio, sm, pixel_grb << 8u);
 }
 
+// Most WS2812/WS2812B parts latch green first (GRB). The addressable LED on
+// the Waveshare RP2350-USB-A latches red first (RGB), so every colour comes
+// out with red and green swapped: the config-mode orange reads green, the
+// "no controller" red reads green, and green reads red. Since the LED is the
+// only diagnostic surface on a solder-free adapter, that inverts the meaning
+// of the status table rather than just looking wrong.
+//
+// Reported by @Atreus171 against a physical board (Discord #btusb2usb,
+// 2026-08-07). Guarded per-board, so no other target changes.
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
+#ifdef WAVESHARE_RP2350_USB_A
+    return
+            ((uint32_t) (r) << 16) |
+            ((uint32_t) (g) << 8) |
+            (uint32_t) (b);
+#else
     return
             ((uint32_t) (r) << 8) |
             ((uint32_t) (g) << 16) |
             (uint32_t) (b);
+#endif
 }
 
 void pattern_snakes(uint len, uint t) {
