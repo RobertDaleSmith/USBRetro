@@ -373,6 +373,16 @@ void router_init(const router_config_t* config) {
     // Copy configuration
     router_config = *config;
 
+    // Restore persisted router settings
+    flash_t flash_data;
+    if (flash_load(&flash_data) && flash_data.router_saved) {
+        if (flash_data.dpad_mode <= 2) {
+            global_dpad_mode = flash_data.dpad_mode;
+        }
+    
+        global_shoulder_swap = (flash_data.shoulder_swap != 0);
+    }
+
     printf(LOG_TAG "Initializing router\n");
     printf(LOG_TAG "  Mode: %s\n",
         config->mode == ROUTING_MODE_SIMPLE ? "SIMPLE" :
@@ -1236,25 +1246,104 @@ void router_submit_input(const input_event_t* event) {
         event = &remapped;
     }
 
-    // Apply global d-pad mode remap (d-pad buttons → analog stick)
-    if (global_dpad_mode > 0) {
-        if (!did_remap) { remapped = *event; did_remap = true; }
-        uint32_t dpad_bits = remapped.buttons & (JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
-        if (dpad_bits) {
-            remapped.buttons &= ~(JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
-            uint8_t ax = 128, ay = 128;
-            if (dpad_bits & JP_BUTTON_DL) ax = 0;
-            else if (dpad_bits & JP_BUTTON_DR) ax = 255;
-            if (dpad_bits & JP_BUTTON_DU) ay = 0;
-            else if (dpad_bits & JP_BUTTON_DD) ay = 255;
-            if (global_dpad_mode == 1) {
-                remapped.analog[0] = ax;
-                remapped.analog[1] = ay;
-            } else {
-                remapped.analog[2] = ax;
-                remapped.analog[3] = ay;
+    // ================================================================
+    // D-pad mode hotkeys
+    // ================================================================
+
+    static bool dpad_hotkey_latch = false;
+
+    bool select_pressed = (event->buttons & JP_BUTTON_S1) != 0;
+    bool dpad_up        = (event->buttons & JP_BUTTON_DU) != 0;
+    bool dpad_left      = (event->buttons & JP_BUTTON_DL) != 0;
+    bool dpad_right     = (event->buttons & JP_BUTTON_DR) != 0;
+
+    if (select_pressed) {
+        if (!dpad_hotkey_latch) {
+
+            if (dpad_up) {
+                router_set_dpad_mode(0);
+                flash_set_dpad_mode(0);
+                dpad_hotkey_latch = true;
+            }
+            else if (dpad_left) {
+                router_set_dpad_mode(1);
+                flash_set_dpad_mode(1);
+                dpad_hotkey_latch = true;
+            }
+            else if (dpad_right) {
+                router_set_dpad_mode(2);
+                flash_set_dpad_mode(2);
+                dpad_hotkey_latch = true;
             }
         }
+    }
+    else {
+        dpad_hotkey_latch = false;
+    }
+
+    // Apply global d-pad mode remap (d-pad buttons ↔ analog sticks)
+    if (global_dpad_mode == 1) { // MODE 1: SWAP Left Stick and D-pad COMPLETELY
+        if (!did_remap) { remapped = *event; did_remap = true; }
+        
+        // 1. Store the current status of the D-pad buttons
+        uint32_t dpad_bits = remapped.buttons & (JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+        
+        // 2. Store the current status of the left analog stick
+        uint8_t old_lx = remapped.analog[0];
+        uint8_t old_ly = remapped.analog[1];
+        
+        // 3. Clear the D-pad buttons from the report to rebuild them based on the stick
+        remapped.buttons &= ~(JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+        
+        // --- STICK → D-PAD ---
+        uint8_t stick_threshold = 60; // Sensitivity threshold (center point is 128)
+        if (old_lx < (128 - stick_threshold))      remapped.buttons |= JP_BUTTON_DL;
+        else if (old_lx > (128 + stick_threshold)) remapped.buttons |= JP_BUTTON_DR;
+        if (old_ly < (128 - stick_threshold))      remapped.buttons |= JP_BUTTON_DU;
+        else if (old_ly > (128 + stick_threshold)) remapped.buttons |= JP_BUTTON_DD;
+        
+        // --- D-PAD → STICK ---
+        uint8_t ax = 128, ay = 128;
+        if (dpad_bits & JP_BUTTON_DL)      ax = 0;
+        else if (dpad_bits & JP_BUTTON_DR) ax = 255;
+        if (dpad_bits & JP_BUTTON_DU)      ay = 0;
+        else if (dpad_bits & JP_BUTTON_DD) ay = 255;
+        
+        remapped.analog[0] = ax;
+        remapped.analog[1] = ay;
+        
+        event = &remapped;
+    } 
+    else if (global_dpad_mode == 2) { // MODE 2: SWAP Right Stick and D-pad COMPLETELY
+        if (!did_remap) { remapped = *event; did_remap = true; }
+        
+        // 1. Store the current status of the D-pad buttons
+        uint32_t dpad_bits = remapped.buttons & (JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+        
+        // 2. Store the current status of the right analog stick (analog[2] and analog[3])
+        uint8_t old_rx = remapped.analog[2];
+        uint8_t old_ry = remapped.analog[3];
+        
+        // 3. Clear the D-pad buttons from the report to rebuild them based on the stick
+        remapped.buttons &= ~(JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+        
+        // --- STICK → D-PAD ---
+        uint8_t stick_threshold = 60; // Sensitivity threshold (center point is 128)
+        if (old_rx < (128 - stick_threshold))      remapped.buttons |= JP_BUTTON_DL;
+        else if (old_rx > (128 + stick_threshold)) remapped.buttons |= JP_BUTTON_DR;
+        if (old_ry < (128 - stick_threshold))      remapped.buttons |= JP_BUTTON_DU;
+        else if (old_ry > (128 + stick_threshold)) remapped.buttons |= JP_BUTTON_DD;
+        
+        // --- D-PAD → STICK ---
+        uint8_t ax = 128, ay = 128;
+        if (dpad_bits & JP_BUTTON_DL)      ax = 0;
+        else if (dpad_bits & JP_BUTTON_DR) ax = 255;
+        if (dpad_bits & JP_BUTTON_DU)      ay = 0;
+        else if (dpad_bits & JP_BUTTON_DD) ay = 255;
+        
+        remapped.analog[2] = ax;
+        remapped.analog[3] = ay;
+        
         event = &remapped;
     }
 
