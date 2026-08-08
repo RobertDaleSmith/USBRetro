@@ -243,6 +243,7 @@ void ngc_init()
   printf("[gc] joybus DATA pin: GPIO %d%s\n", data_pin,
          (data_pin != GC_DATA_PIN) ? " (override)" : "");
   GamecubeConsole_init(&gc, data_pin, pio, sm, offset);
+  gc._reading_mode = GamecubeMode_3;  // every poll overwrites this; 3 is the sane default
   gc_report = default_gc_report;
 
   const profile_t* profile = profile_get_active(OUTPUT_TARGET_GAMECUBE);
@@ -267,6 +268,82 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center)
   }
 }
 
+// ============================================================================
+// ANALOG POLL MODES
+// ============================================================================
+// A console polls with {0x40, analog_mode, motor_state}. Buttons and the main
+// stick occupy bytes 0-3 of the 8-byte reply in every mode; bytes 4-7 change
+// meaning with the requested mode, because the controller's full state is 10
+// bytes and only 8 of them fit in the reply. joybus-pio stores the mode byte in
+// GamecubeConsole._reading_mode and never reads it back (its SendReport still
+// carries the upstream "TODO: Translate report according to reading mode"), so
+// every reply has gone out in mode 3 regardless of what was asked for.
+//
+// Layouts below are from libjoybus (src/target/gc_controller.c, unit-tested)
+// and agree with BlueRetro (main/wired/nsi.c) on modes 0/1/3/4. A packed pair
+// puts the FIRST axis in the HIGH nibble.
+//
+//   mode 0, 5-7 : cx         cy         L:4|R:4    A:4|B:4
+//   mode 1      : cx:4|cy:4  L          R          A:4|B:4
+//   mode 2      : cx:4|cy:4  L:4|R:4    A          B
+//   mode 3      : cx         cy         L          R         <- default
+//   mode 4      : cx         cy         A          B
+//
+// Analog A/B only existed on pre-production controllers; a retail pad reports
+// zero for both, which is also what our origin reply already claims
+// (gc_origin_t.reserved0 / reserved1).
+#define GC_ANALOG_A 0
+#define GC_ANALOG_B 0
+
+static void __not_in_flash_func(gc_pack_analog_mode)(gc_report_t* dest,
+                                                     const gc_report_t* src,
+                                                     int mode)
+{
+  *dest = *src;  // bytes 0-3 (buttons + main stick) are mode-independent
+
+  const uint8_t cx = src->cstick_x;
+  const uint8_t cy = src->cstick_y;
+  const uint8_t l  = src->l_analog;
+  const uint8_t r  = src->r_analog;
+  const uint8_t a  = GC_ANALOG_A;
+  const uint8_t b  = GC_ANALOG_B;
+
+  switch (mode)
+  {
+    case GamecubeMode_1:
+      dest->raw8[4] = (cx & 0xF0) | (cy >> 4);
+      dest->raw8[5] = l;
+      dest->raw8[6] = r;
+      dest->raw8[7] = (a & 0xF0) | (b >> 4);
+      break;
+    case GamecubeMode_2:
+      dest->raw8[4] = (cx & 0xF0) | (cy >> 4);
+      dest->raw8[5] = (l & 0xF0) | (r >> 4);
+      dest->raw8[6] = a;
+      dest->raw8[7] = b;
+      break;
+    case GamecubeMode_3:
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = l;
+      dest->raw8[7] = r;
+      break;
+    case GamecubeMode_4:
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = a;
+      dest->raw8[7] = b;
+      break;
+    case GamecubeMode_0:
+    default:  // modes 5-7 pack the same way as mode 0
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = (l & 0xF0) | (r >> 4);
+      dest->raw8[7] = (a & 0xF0) | (b >> 4);
+      break;
+  }
+}
+
 // core1_task - inner-loop for the second core
 void __not_in_flash_func(core1_task)(void)
 {
@@ -278,8 +355,20 @@ void __not_in_flash_func(core1_task)(void)
     // Wait for GameCube console to poll controller
     gc_rumble = GamecubeConsole_WaitForPoll(&gc) ? 255 : 0;
 
-    // Send GameCube controller button report
-    GamecubeConsole_SendReport(&gc, &gc_report);
+    // Send the report packed for the analog mode the console actually asked
+    // for. Mode 3 is what every production game but Luigi's Mansion uses and
+    // goes out untouched; a keyboard poll (0x54) reuses the same argument byte
+    // for something that is not an analog mode, so it is excluded.
+    if (gc_state.button_mode == BUTTON_MODE_KB || gc._reading_mode == GamecubeMode_3)
+    {
+      GamecubeConsole_SendReport(&gc, &gc_report);
+    }
+    else
+    {
+      gc_report_t packed_report;
+      gc_pack_analog_mode(&packed_report, &gc_report, gc._reading_mode);
+      GamecubeConsole_SendReport(&gc, &packed_report);
+    }
 
     gc_kb_counter++;
     gc_kb_counter &= 15;
