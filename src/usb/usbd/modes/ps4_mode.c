@@ -8,6 +8,7 @@
 #include "../usbd.h"
 #include "descriptors/ps4_descriptors.h"
 #include "core/buttons.h"
+#include <stddef.h>
 #include <string.h>
 
 #ifndef DISABLE_USB_HOST
@@ -16,6 +17,23 @@
 
 #ifdef ENABLE_PS4_LOCAL_AUTH
 #include "ps4_local_auth.h"
+#endif
+
+// The buffer below is the wire report *including* the report ID at index 0,
+// so every field sits one byte later than in sony_ds4_report_t, which is the
+// host-side layout this firmware already parses from real DualShock 4s.
+// Tie the two together so neither can drift without the build noticing --
+// nothing was enforcing that agreement, which is how the accelerometer rest
+// value ended up one byte past the axis it was meant to land in.
+#ifndef DISABLE_USB_HOST
+_Static_assert(offsetof(sony_ds4_report_t, accel) + 4 + 1 == 23,
+               "DS4 accel Z must start at report byte 23");
+_Static_assert(offsetof(sony_ds4_report_t, headset) + 1 == 30,
+               "DS4 status/power byte must be report byte 30");
+_Static_assert(offsetof(sony_ds4_report_t, tpad_counter) + 1 == 34,
+               "DS4 touchpad packet counter must be report byte 34");
+_Static_assert(offsetof(sony_ds4_report_t, tpad_f1_pos) + 1 == 36,
+               "DS4 touchpad finger 1 position must start at report byte 36");
 #endif
 
 // ============================================================================
@@ -45,9 +63,12 @@ static void ps4_mode_init(void)
     ps4_report_buffer[4] = 0x80;  // RY center
     ps4_report_buffer[5] = PS4_HAT_NOTHING;  // D-pad neutral (0x08), no buttons
     // Bytes 6-9: buttons and triggers already 0
-    // Set accelerometer rest state (1G on Z-axis seen in Brook as 0x2060 at offset 24-25)
-    ps4_report_buffer[24] = 0x60;
-    ps4_report_buffer[25] = 0x20;
+    // Set accelerometer rest state (1G on Z-axis seen in Brook as 0x2060).
+    // Accel is three little-endian int16s at bytes 19-24, so Z is 23 (low) / 24
+    // (high). Byte 25 is the first reserved byte -- writing the high half there
+    // left Z reading 0x6000 (~3G) instead of 0x2060 (~1G at 8192 LSB/g).
+    ps4_report_buffer[23] = 0x60;  // accel Z low
+    ps4_report_buffer[24] = 0x20;  // accel Z high
     // Set power level (0x1b = full battery + charging, matches Brook at offset 30)
     ps4_report_buffer[30] = 0x1b;
     // Set touchpad state (33=active, 34=increment, 35-42=fingers)
