@@ -61,6 +61,49 @@ typedef struct {
 
 } usbd_mode_t;
 
+// ============================================================================
+// ANALOG -> DIGITAL TRIGGER DERIVATION
+// ============================================================================
+//
+// Not every input driver reports a digital L2/R2 bit. The XInput host driver
+// deliberately reports triggers as analog only: b8283aa0 removed its
+// `analog_l > 16` threshold so GameCube light shielding (analog press without
+// digital fire) works on usb2gc, moving the decision to the profile layer's
+// `l2_threshold`. Apps that load a built-in profile are fine. usb2usb and
+// bt2usb load none, so the threshold block in `profile_apply()` is skipped
+// entirely (it is guarded on `profile` being non-NULL) and the digital bit is
+// never set for an XInput controller.
+//
+// A mode whose report carries an analog trigger field is unaffected - the
+// press reaches the host as an axis either way. A mode with a DIGITAL-ONLY
+// trigger representation has nowhere else to put it, so it must derive the
+// bit or the trigger is simply dead. That is issue #98 (X360 -> Switch, whose
+// own body prescribes exactly this) and #152 (Xbox One -> PS3).
+//
+// Deriving here rather than in the input driver is what keeps this clear of
+// the regression that killed the previous attempt: d61c50ce synthesised the
+// bit globally and 9d1a68a1 reverted it because gc2usb's resting analog
+// triggers then latched buttons on. Per-output-mode, gc2usb's native
+// GameCube path (`gamecube_device.c`) is untouched.
+//
+// Threshold 5/255 (~2%) is the value ps4_mode has shipped with; the Bluetooth
+// Xbox driver uses `> 10` (xbox_bt.c:238) and OGX-Mini's PS3 device driver
+// fires on any non-zero analog trigger. All three are well below a deliberate
+// press and above the noise floor.
+#define USBD_TRIGGER_DIGITAL_THRESHOLD 5
+
+static inline bool usbd_l2_digital(const profile_output_t* profile_out, uint32_t buttons)
+{
+    return (buttons & JP_BUTTON_L2) ||
+           profile_out->l2_analog >= USBD_TRIGGER_DIGITAL_THRESHOLD;
+}
+
+static inline bool usbd_r2_digital(const profile_output_t* profile_out, uint32_t buttons)
+{
+    return (buttons & JP_BUTTON_R2) ||
+           profile_out->r2_analog >= USBD_TRIGGER_DIGITAL_THRESHOLD;
+}
+
 // Mode registry - populated by usbd_register_modes()
 extern const usbd_mode_t* usbd_modes[USB_OUTPUT_MODE_COUNT];
 

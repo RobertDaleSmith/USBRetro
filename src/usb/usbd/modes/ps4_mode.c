@@ -147,13 +147,16 @@ static bool ps4_mode_send_report(uint8_t player_index,
     }
     
     // Hybrid Trigger Logic (High Compatibility):
-    // Digital bits are flipped at threshold 5 to support SF6 strokes,
-    // while keeping analog values raw for FC26 replay sensitivity.
-    uint8_t l2_val = profile_out->l2_analog;
+    // Digital bits are flipped at USBD_TRIGGER_DIGITAL_THRESHOLD to support
+    // SF6 strokes, while keeping analog values raw for FC26 replay
+    // sensitivity. This mode has had it right all along - the shared helper
+    // exists so the four modes that were missing it cannot drift to some
+    // other threshold. Same value, same behaviour. See usbd_mode.h.
+    uint8_t l2_val = profile_out->l2_analog;   // raw, for bytes 8-9 below
     uint8_t r2_val = profile_out->r2_analog;
 
-    if (l2_val >= 5 || (buttons & JP_BUTTON_L2)) byte6 |= 0x04; // L2 Digital
-    if (r2_val >= 5 || (buttons & JP_BUTTON_R2)) byte6 |= 0x08; // R2 Digital
+    if (usbd_l2_digital(profile_out, buttons)) byte6 |= 0x04; // L2 Digital
+    if (usbd_r2_digital(profile_out, buttons)) byte6 |= 0x08; // R2 Digital
 
     if (buttons & JP_BUTTON_S1) byte6 |= 0x10;  // Share
     if (!(s2_r1_combo)) {
