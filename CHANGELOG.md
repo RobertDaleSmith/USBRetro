@@ -6,6 +6,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.4.0] — unreleased
+
+### Added
+
+#### New Controller Support
+- **Steam Controller 2 — USB and Bluetooth LE.** Closes [#157](https://github.com/joypad-ai/joypad-os/issues/157). The BLE side is a custom-GATT driver (`steam_controller_2_ble.c`) contributed by **@safijari** in [#189](https://github.com/joypad-ai/joypad-os/pull/189), with bonded-reconnect recovery by device name. The USB side needed two fixes to work on shipping hardware: **lizard mode is now disabled** via `SET_SETTINGS` and **re-sent on a 1 s heartbeat** (the controller's firmware re-enables it on its own, so a one-shot never sticks — matches SDL3), and the report parser was retargeted from `0x45` to the shipping **`0x42`** (`ID_TRITON_CONTROLLER_STATE`, 54 B). Buttons, both sticks, Hall-effect analog triggers, View/Menu/Steam and the four back paddles all map. Verified on a wired SC2 (`28DE:1302`). The IMU ships **off by default** (reads flat) — enabling it is a follow-up.
+- **Second paddle pair — `JP_BUTTON_L5` / `JP_BUTTON_R5`** (bits 24/25), for controllers with **four** back paddles (Steam Controller 2, Xbox Elite). Mapped to SInput's paddle-2 slots, so both the USB and BLE SC2 drivers now expose the same button set. Bits 24/25 were previously unused; no flash layout change.
+
+#### Release artifacts
+- **Six new downloadable UF2s** — `psx2usb_pico`, `psx2usb_kb2040`, `psx2usb_qtpy` ([#187](https://github.com/joypad-ai/joypad-os/pull/187)), plus `gc2usb_pico`, `jag2usb_pico` and `jag2usb_pico_w`. **`jag2usb` was announced as a new app in 2.3.0 but shipped no firmware at all** — Atari Jaguar users had release notes and nothing to flash. `gc2usb_pico` had been a listed board target since 2.1.0 while only the kb2040 and rp2040zero variants were ever built. All six are built by the release matrix as of this version.
+
+### Fixed
+
+#### USB
+- **Remote wakeup works on every output mode** — closes [#186](https://github.com/joypad-ai/joypad-os/issues/186) and the root cause of [#75](https://github.com/joypad-ai/joypad-os/issues/75) (open since March). A suspended host could not be woken by a controller in **any** mode. The three drivers that attempted it (XInput, Xbox OG, GC adapter) each guarded the attempt behind `TU_VERIFY(tud_*_ready())`, and `tud_ready()` is `tud_mounted() && !tud_suspended()` — so the gate returned false *exactly when* the wakeup below it needed to fire. The HID modes (SInput / DInput / KB-Mouse) had no wake path at all, while their descriptors advertised `REMOTE_WAKEUP`. The attempt now lives in `usbd_task()` **above** the output-mode dispatch, so all **14** output modes are covered at once. Triggered only by real activity (a held button, or a stick past a ±24 deadzone), rate-limited to 250 ms and re-armed on resume — a controller resting on a desk cannot wake the host.
+
+#### Native output
+- **Nuon spinner axis transmits real motion again** — closes [#190](https://github.com/joypad-ai/joypad-os/issues/190). `output_quad_x` had been stubbed to a constant zero since the router migration (`fe842f02`, 2025-11-24), so the spinner has been **dead in every release since 1.2.0** — Tempest 3000 among others. The accumulator now lives in console-local state and takes mouse/trackball/touchpad deltas plus right-stick rotation. Two bugs in the pre-migration implementation were *not* carried over: no angle wraparound at the 359°→0° seam, and a stale angle after re-centring. Mouse-wheel → spinner is deliberately still absent — `delta_wheel` never reaches the console layer and needs router plumbing first.
+
+#### Bluetooth
+- **ESP32-S3 BLE HID drivers are registered again** — resolves the Known Issue filed against 2.3.0. `bthid_registry_init()` had a weak stub in the same translation unit as its call site, so `--gc-sections` resolved the call locally and never linked the driver registry; `sinput_ble.c` and `mouthpad_ble.c` were also missing from the ESP source list. Fixed by [#179](https://github.com/joypad-ai/joypad-os/pull/179) (@O-IceDawn-O) and [#188](https://github.com/joypad-ai/joypad-os/pull/188), which replaces the weak stub with a link guard.
+- **Every BT controller binds to its specific driver on manual-BT Pico apps.** The link guard above needed `CONFIG_BT_HOST`, which the 10 manual-BT Pico targets never defined — so `--gc-sections` discarded the whole BTHID registry and every Bluetooth controller fell through to the generic gamepad driver. Now defined for `bt2usb`, `bt2n64`, `bt2gc`, `bt2nuon`, `bt2loopy`, `bt2wiiext`, `btusb2usb`, `usb2ble`, `mouthpad` and `controller_btusb`. **No released firmware was affected** — both the link guard and this fix land in 2.4.0.
+
+### Changed
+- **SInput paddle/aux slot overlap is documented.** `convert_buttons()` maps `L4`/`R4`/`L5`/`R5` onto SInput's four paddle slots and `sinput_aux_slot[]` independently maps `aux0..aux3` onto the same four. That is safe only because no current device drives both — paddle controllers report no aux buttons, and aux-button devices (the Jaguar keypad) have no paddles. Nothing in the code said so; it does now, so a future device with both doesn't silently collide.
+
+---
+
 ## [2.3.0] — 2026-08-04
 
 ### Added
