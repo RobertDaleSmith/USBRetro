@@ -1,0 +1,80 @@
+# App build targets deliberately NOT in a CI build matrix.
+#
+# The release publishes `releases/*`, i.e. everything the matrices built, so a
+# target listed here ships no UF2 and users cannot flash it. That is a legitimate
+# choice — an unverified board target in the matrix is a published, unverified
+# release asset. What is not legitimate is making that choice silently, which is
+# how 41 targets ended up unshippable without anyone deciding to.
+#
+# Format:  <make target>  # reason
+# A reason is mandatory; tools/check_build_coverage.py rejects a bare target.
+#
+# Adding a target to a matrix means shipping it. Removing its line here without
+# adding it to a matrix makes the check fail, which is the point.
+#
+# ---------------------------------------------------------------------------
+# SEEDED 2026-08-09 from the pre-existing state, so the check can be switched on
+# without forcing 41 product decisions in one sitting. "no recorded decision"
+# means exactly that: nobody chose to exclude it, it was simply never added.
+# Triaging these — ship, or keep out and say why — is tracked in #212.
+#
+# "announced in CHANGELOG" marks the subset with a broken promise attached: the
+# release notes describe these as shipped features. A changelog is append-only,
+# so those claims are still on the page a user reads today.
+# ---------------------------------------------------------------------------
+
+# --- Documented as immature. The one group with a real, pre-existing reason:
+# Makefile:256 and CHANGELOG.md:576 both say "excluded until more mature".
+usb2loopy_kb2040                          # immature, excluded by long-standing decision
+snes23do_rp2040zero                       # immature, excluded by long-standing decision
+
+# --- Honestly caveated already: CHANGELOG 1.9.0 says "not yet in CI release
+# builds", which is still true. The only entry that told the truth.
+usb2n64_kb2040                            # announced in CHANGELOG, correctly caveated as not in CI
+
+# --- Announced in CHANGELOG as shipped, never built.
+usb2ami_rp2040zero                        # announced in CHANGELOG (2.1.0, community contribution by @thgill, PR #140)
+usb2ami_xiao                              # announced in CHANGELOG (2.1.0, community contribution by @thgill, PR #140)
+usb2ble_pico_w                            # announced in CHANGELOG (2.0.0)
+usb2ble_pico2_w                           # announced in CHANGELOG (2.0.0)
+usb2usb_feather_rp2040_max3421            # announced in CHANGELOG (2.0.0/2.1.0); only the nRF52840 MAX3421E target ships
+usb2usb_feather_rp2040_usb_host_max3421   # announced in CHANGELOG (2.0.0/2.1.0) by name; only the nRF52840 MAX3421E target ships
+n642dc_pico2_w                            # announced in CHANGELOG (2.0.0, "Pico 2 W"); n642dc_kb2040 ships
+gc2eth_rp2040_eth                         # announced in CHANGELOG (2.1.0, experimental)
+gc2eth_feather_usbhost                    # announced in CHANGELOG (2.1.0, experimental)
+bt2loopy_pico_w                           # announced in CHANGELOG (bt2gc/bt2nuon/bt2loopy); the other two ship
+nuon2usb_kb2040                           # announced in CHANGELOG
+nuon2usb_pico_w                           # announced in CHANGELOG
+nuonserial_kb2040                         # announced in CHANGELOG (Nuon homebrew polyface serial adapter)
+wii2n64_pico                              # announced in CHANGELOG (wii2usb/wii2gc/wii2n64); the other two ship
+mouthpad_pico_w                           # announced in CHANGELOG by name ("Builds: ...")
+mouthpad_pico2_w                          # announced in CHANGELOG by name ("Builds: ...")
+usb2usb_ogxm_pico                         # announced in CHANGELOG (OGX-Mini Pico hardware)
+controller_btusb_feather_rp2040_usb_host  # announced in CHANGELOG by name (tri-state pins, USB host, OLED)
+wifi2usb_pico_w                           # announced in CHANGELOG (JOCP WiFi controller input, Joypad iOS app)
+wifi2usb_pico2_w                          # WiFi/JOCP sibling of an announced target
+
+# --- Never added, never announced, no recorded decision.
+gc2dc_kb2040                              # no recorded decision
+gc2usb_feather_usbhost                    # no recorded decision
+usb2neogeo_retrofrog                      # no recorded decision
+n642nuon_aries64                          # no recorded decision
+controller_macropad                       # no recorded decision
+controller_btusb_alpakka_pico             # no recorded decision
+controller_btusb_feather_rp2040           # no recorded decision
+controller_btusb_fisherprice_v1_kb2040    # no recorded decision
+controller_btusb_fisherprice_v2_kb2040    # no recorded decision
+usb2usb_remapper_v7                       # no recorded decision
+usb2usb_remapper_v7_a                     # no recorded decision
+usb2usb_remapper_v7_b                     # no recorded decision
+
+# --- ESP32-S3. The Feather board has four apps wired up in the Makefile and only
+# controller_btusb reaches CI; bt2usb ships for the XIAO board only.
+bt2usb_feather_esp32s3                    # no recorded decision; bt2usb ships for xiao_esp32s3 only
+usb2usb_feather_esp32s3                   # no recorded decision
+btusb2usb_feather_esp32s3                 # no recorded decision
+
+# --- nRF52840.
+mouthpad_aprbrother_nrf52840              # announced in CHANGELOG by name ("Builds: ...")
+bt2usb_aprbrother_nrf52840                # no recorded decision
+controller_btusb_seeed_xiao_nrf52840      # no recorded decision; the Feather variant ships, the XIAO one does not

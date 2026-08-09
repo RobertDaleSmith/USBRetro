@@ -17,6 +17,20 @@ on:
           - major
 
 jobs:
+  # Assert every app build target is in a matrix below or explicitly excluded.
+  # The release publishes `releases/*` — whatever the matrices built — so matrix
+  # membership is release membership, and a target in no matrix ships no UF2.
+  #
+  # Deliberately in no `needs:` chain: it reports, it never gates. A bookkeeping
+  # omission must not block a build or hold up a release. Move it into
+  # `collect.needs` to make it a hard gate.
+  check-build-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check every app target is shipped or explicitly excluded
+        run: python3 tools/check_build_coverage.py
+
   # Build RP2040/RP2350 apps in parallel using matrix (Docker + pico-sdk)
   build-rpi:
     runs-on: ubuntu-latest
