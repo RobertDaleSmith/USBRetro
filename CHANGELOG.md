@@ -32,6 +32,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - **SInput paddle/aux slot overlap is documented.** `convert_buttons()` maps `L4`/`R4`/`L5`/`R5` onto SInput's four paddle slots and `sinput_aux_slot[]` independently maps `aux0..aux3` onto the same four. That is safe only because no current device drives both — paddle controllers report no aux buttons, and aux-button devices (the Jaguar keypad) have no paddles. Nothing in the code said so; it does now, so a future device with both doesn't silently collide.
 
+### Known Issues
+
+#### Apps this changelog announced that still ship no UF2
+The release matrix in `.github/workflows/build.yml` is hand-maintained and has drifted from the Makefile's `APPS` list: **12 buildable targets appear in no matrix**. Because the release job publishes `releases/*` unfiltered, matrix membership *is* release membership — there is no artifact-only tier, so an app missing from the matrix simply does not exist for users. All 12 compile clean; they were never added. Tracked in [#212](https://github.com/joypad-ai/joypad-os/issues/212).
+
+The ones this document created an expectation for:
+
+- **`USB2AMI`** — announced in 2.1.0 as an Amiga / Atari CD32 output driver and credited to **@thgill** ([#140](https://github.com/joypad-ai/joypad-os/pull/140)). Neither `usb2ami_rp2040zero` nor `usb2ami_xiao` has ever been built by CI, so an outside contributor's driver has been listed as a shipped feature for three releases with nothing to flash.
+- **`usb2ble`** — announced in 2.0.0 (USB controllers → BLE gamepad output). `usb2ble_pico_w` / `usb2ble_pico2_w` are unbuilt. It is even one of the ten targets gaining `CONFIG_BT_HOST` in this release's Bluetooth fix above — a fix landing in firmware nobody can download.
+- **`usb2usb` MAX3421E on RP2040** — 2.0.0 announced Feather RP2040 + USB Host FeatherWing support and 2.1.0 names `usb2usb_feather_rp2040_usb_host_max3421` explicitly. Both RP2040 MAX3421E variants are unbuilt; only the **nRF52840** variant ships, which reads as coverage on a substring search and isn't.
+- **`n642dc` on Pico 2 W** — 2.0.0 lists "Pico 2 W — bt2n64 and n642dc targets". `n642dc_kb2040` ships; `n642dc_pico2_w` never has.
+- **`gc2eth`** — announced in 2.1.0. Its "experimental" caveat is about maturity, not availability; both targets are unbuilt.
+
+`usb2n64` is the counter-example: 1.9.0 announced it as "not yet in CI release builds", and that is still accurate.
+
+Conversely, two 1.9.0 caveats are now stale in the other direction — `bt2n64` (Pico W / Pico 2 W), `bt2nuon` and `n642nuon` are all in the release matrix today and have shipped UF2s for several versions. That text is left as published; it was true when written.
+
 ---
 
 ## [2.3.0] — 2026-08-04
