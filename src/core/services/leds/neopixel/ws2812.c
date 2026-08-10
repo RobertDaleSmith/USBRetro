@@ -88,13 +88,22 @@ static inline uint8_t scale_channel(uint8_t c, uint8_t scale) {
 
 static inline void put_pixel(uint32_t pixel_grb) {
     if (global_brightness != 255) {
-        // urgb_u32() packs g<<16 | r<<8 | b, and the raw-value patterns
-        // (rand(), t * 0x10101) land in those same 24 bits, so scaling the
-        // three bytes is right for both.
-        uint32_t g = scale_channel((pixel_grb >> 16) & 0xFF, global_brightness);
-        uint32_t r = scale_channel((pixel_grb >> 8) & 0xFF, global_brightness);
-        uint32_t b = scale_channel(pixel_grb & 0xFF, global_brightness);
-        pixel_grb = (g << 16) | (r << 8) | b;
+        // Scale the three payload bytes by position, not by colour name. The
+        // packing order is not fixed: urgb_u32() emits GRB on most parts and
+        // RGB where the board latches red first, and the raw-value patterns
+        // (rand(), t * 0x10101) carry no colour meaning at all. One scale is
+        // applied to all three bytes, so the result is identical whatever
+        // sits in each -- the order genuinely does not matter here.
+        //
+        // It would matter the moment scaling stops being uniform (per-channel
+        // gamma, or trimming green because WS2812 green reads brighter). Do
+        // that and this has to unpack via urgb_u32()'s own order, or the
+        // red-first boards get the wrong channel trimmed and nothing here
+        // will say so.
+        uint32_t hi  = scale_channel((pixel_grb >> 16) & 0xFF, global_brightness);
+        uint32_t mid = scale_channel((pixel_grb >> 8) & 0xFF, global_brightness);
+        uint32_t lo  = scale_channel(pixel_grb & 0xFF, global_brightness);
+        pixel_grb = (hi << 16) | (mid << 8) | lo;
     }
     pio_sm_put_blocking(pio, sm, pixel_grb << 8u);
 }
