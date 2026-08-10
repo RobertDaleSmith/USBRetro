@@ -25,6 +25,13 @@ The authoritative set is the build targets themselves:
     Both are covered. So esp/nrf are compared on build *identity* — the
     (board, app) pair — which the Makefile recipe and the matrix entry both state.
 
+Taking the Makefile as the universe leaves one door open, so there is a fourth
+check: an app can be added as an `add_executable()` in src/CMakeLists.txt with no
+Makefile entry at all. It then has no target to be missing from a matrix, and the
+three checks above see nothing — while `make` cannot build it and CI never will.
+That is the same end state (an app that ships no UF2) reached from the other side,
+so every `joypad_*` executable must be reachable through some APP_/CONSOLE_ pair.
+
 Excluding a target is fine; excluding it *silently* is the bug. Anything not in a
 matrix must be listed in .github/ci-excluded-apps.txt with a reason.
 
@@ -42,6 +49,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAKEFILE = os.path.join(REPO, "Makefile")
 WORKFLOW = os.path.join(REPO, ".github", "workflows", "build.yml")
 EXCLUDES = os.path.join(REPO, ".github", "ci-excluded-apps.txt")
+CMAKELISTS = os.path.join(REPO, "src", "CMakeLists.txt")
 
 ESP_SUFFIX = "_esp32s3"
 NRF_SUFFIX = "_nrf52840"
@@ -63,6 +71,28 @@ SUB_DEFAULTS = {
 def pico_targets(makefile: str) -> set[str]:
     """Pico-family targets. The matrix runs `make <name>`, so the name is enough."""
     return set(re.findall(r"\$\(call build_app,\s*([A-Za-z0-9_]+)", makefile))
+
+
+def cmake_executables(cmakelists: str) -> set[str]:
+    """Every `add_executable(joypad_*)` in src/CMakeLists.txt — the only file that
+    declares them."""
+    return set(re.findall(r"add_executable\(\s*(joypad_[A-Za-z0-9_]+)", cmakelists))
+
+
+def cmake_reachable(makefile: str) -> set[str]:
+    """CMake executables some `make <app>` can actually build.
+
+    build_app dereferences twice: `APP_<name> := <board> <key> <artifact> ...`, and
+    `<key>` indexes `CONSOLE_<key> := <cmake target>`. So an executable is reachable
+    only if some APP_ entry's second word names a CONSOLE_ that points at it.
+    """
+    console = dict(re.findall(r"^CONSOLE_([A-Za-z0-9_]+)\s*:?=\s*(\S+)", makefile, re.M))
+    reachable = set()
+    for words in re.findall(r"^APP_[A-Za-z0-9_]+\s*:?=\s*(.+)$", makefile, re.M):
+        parts = words.split()
+        if len(parts) >= 2 and parts[1] in console:
+            reachable.add(console[parts[1]])
+    return reachable
 
 
 def sub_targets(makefile: str, family: str) -> dict[str, tuple[str, str]]:
@@ -191,6 +221,26 @@ def main() -> int:
                 )
         summary.append(f"{family}: {len(built)} targets, {len(covered[family])} in matrix, "
                        f"{len(set(built) & set(skips))} excluded")
+
+    # --- CMake executables no `make` target can reach.
+    #
+    # The checks above take the Makefile's targets as the universe, so an app that
+    # exists only as an `add_executable()` is invisible to them — it has no Makefile
+    # target to be missing from a matrix. That is a real door: a new app can arrive
+    # complete, with sources and a CMake target, and still be unbuildable by `make`
+    # and unshippable by CI, which is the outcome this whole file exists to prevent.
+    execs = cmake_executables(read(CMAKELISTS))
+    reachable = cmake_reachable(makefile)
+    for target in sorted(execs - reachable - set(skips)):
+        problems.append(
+            f"cmake: src/CMakeLists.txt declares '{target}', which no Makefile "
+            f"APP_/CONSOLE_ pair builds — `make` cannot build it and CI never will, "
+            f"so it ships no UF2. Add an APP_ entry (and a matrix line), or list it "
+            f"in {rel} with a reason."
+        )
+    covered["cmake"] = execs & reachable
+    summary.append(f"cmake: {len(execs)} executables, {len(covered['cmake'])} reachable "
+                   f"from a make target, {len(execs & set(skips))} excluded")
 
     # A target both shipped and excluded means the exclusion is stale; left alone it
     # rots into a false record of what ships.
