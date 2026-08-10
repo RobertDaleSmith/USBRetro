@@ -7,11 +7,11 @@ The release is `files: releases/*` over whatever the build matrices produced, so
 **matrix membership is release membership** — an app target that is in no matrix
 does not exist for users, no matter what the Makefile or the CHANGELOG says.
 Nothing enumerated the targets and checked that, so the default outcome for a new
-app was silence: as of 2026-08-09, 42 targets had never shipped a UF2, several of
+app was silence: as of 2026-08-09, 41 targets had never shipped a UF2, several of
 them announced in CHANGELOG.md as shipped features.
 
 `APPS` in the Makefile is not a usable denominator — it is a second
-hand-maintained list with its own drift (it omits 28 targets the matrix builds).
+hand-maintained list with its own drift (it omits 21 targets the matrix builds).
 The authoritative set is the build targets themselves:
 
   * pico family  — every `$(call build_app,<target>)` in the Makefile. The matrix
