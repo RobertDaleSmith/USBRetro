@@ -28,7 +28,9 @@
 #include "core/output_interface.h"
 #include "core/services/players/manager.h"
 #include "core/services/leds/leds.h"
+#include "core/services/leds/neopixel/ws2812.h"
 #include "core/services/storage/storage.h"
+#include "core/services/storage/flash.h"
 
 // App layer (linked per-product)
 extern void app_init(void);
@@ -199,6 +201,18 @@ int main(void)
   // Core 1 is already listening for console probes while this runs.
   leds_init();
   storage_init();
+
+  // Apply the saved LED brightness. Has to come after storage_init() — that's
+  // what loads the flash record — and it lands before the first leds_task()
+  // below, so the very first rendered frame is already at the saved level.
+  // 0 means "never set", i.e. leave the driver's full-brightness default.
+  {
+    const flash_t* settings = flash_get_settings();
+    if (settings && settings->led_brightness != 0) {
+      neopixel_set_brightness(settings->led_brightness);
+    }
+  }
+
   players_init();
   app_init();
 

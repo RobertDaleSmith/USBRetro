@@ -89,4 +89,16 @@ void neopixel_set_press_mask(uint16_t mask);
 // When set, overrides pattern table: pulses when pat=0, solid when pat>0
 void neopixel_set_override_color(uint8_t r, uint8_t g, uint8_t b);
 
+// Global brightness scale applied to every pixel the driver emits, including
+// the built-in status patterns (which otherwise bake their own hardcoded
+// levels). 255 = unscaled and is the default, so an untouched build looks
+// exactly as it did before this existed. 0 = off.
+//
+// Implemented by every neopixel backend (rpi ws2812.c, nrf ws2812_nrf.c,
+// esp ws2812_esp32.c) because the shared CDC layer links against it. A
+// backend with no per-channel intensity control — the XIAO nRF52840 drives a
+// plain tri-color GPIO LED — can only honour 0 vs non-zero; see ws2812_nrf.c.
+void neopixel_set_brightness(uint8_t brightness);
+uint8_t neopixel_get_brightness(void);
+
 #endif // WS2812_H

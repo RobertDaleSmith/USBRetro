@@ -346,6 +346,54 @@ static void cmd_reboot(const char* json)
     pending_reboot_time = platform_time_ms();
 }
 
+// LED.BRIGHT: status LED brightness (issue #167). Not board-gated — every
+// neopixel backend implements the setter, and boards with no addressable LED
+// just store the value.
+//   {"cmd":"LED.BRIGHT"}            -> {"ok":true,"v":<live>,"saved":<flash>}
+//   {"cmd":"LED.BRIGHT","v":64}     -> set + persist
+//   {"cmd":"LED.BRIGHT","reset":1}  -> forget the saved value, back to full
+//
+// The saved encoding uses 0 = "never set" (see flash.h), so v:0 turns the LED
+// off right now but persists as 1 — the dimmest value that survives a reboot
+// without being mistaken for unset. Reported back as "saved" so a config UI
+// can show what will actually return after a power cycle.
+static void cmd_led_bright(const char* json)
+{
+    flash_t* settings = flash_get_settings();
+
+    int reset = 0;
+    if (json_get_int(json, "reset", &reset) && reset) {
+        neopixel_set_brightness(255);
+        if (settings) {
+            settings->led_brightness = 0;
+            flash_save(settings);
+        }
+        send_ok();
+        return;
+    }
+
+    int v;
+    if (!json_get_int(json, "v", &v)) {
+        snprintf(response_buf, sizeof(response_buf),
+                 "{\"ok\":true,\"v\":%u,\"saved\":%u}",
+                 neopixel_get_brightness(),
+                 settings ? settings->led_brightness : 0);
+        cdc_protocol_send_response(active_ctx, response_buf);
+        return;
+    }
+
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+
+    neopixel_set_brightness((uint8_t)v);
+
+    if (settings) {
+        settings->led_brightness = (uint8_t)(v == 0 ? 1 : v);
+        flash_save(settings);
+    }
+    send_ok();
+}
+
 #ifdef BOARD_LILYGO_TDISPLAY_S3_AMOLED
 // --- FACE.* — remote control of the AMOLED companion face (eyes_esp32.c).
 // FACE.SPEAK {"v":0-100}  speech envelope -> mouth (lip-sync)
@@ -448,6 +496,7 @@ static void cmd_face_bright(const char* json)
     amoled_brightness((uint8_t)v);
     send_ok();
 }
+
 
 // FACE.TRACK: pre-shipped lip-sync envelope, played on the face's own clock
 // (zero radio traffic during speech). Chunked to fit the NUS relay:
@@ -3700,6 +3749,7 @@ static const cmd_entry_t commands[] = {
     {"MODE.LIST", cmd_mode_list},
     {"IMU.MAP", cmd_imu_map},
     {"TILT.STEER", cmd_tilt_steer},
+    {"LED.BRIGHT", cmd_led_bright},
     // Unified profile commands
     {"PROFILE.LIST", cmd_profile_list},
     {"PROFILE.GET", cmd_profile_get},

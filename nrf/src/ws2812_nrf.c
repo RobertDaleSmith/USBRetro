@@ -11,6 +11,21 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
 
+// Global brightness scale, shared by both board paths (255 = unscaled, the
+// default). Declared before the board split because the Feather's pixel
+// primitive is defined inside the #ifdef below.
+//
+// The Feather scales properly — it drives a real WS2812. The XIAO drives three
+// plain GPIO LEDs with no per-channel intensity control, so there this can only
+// mean off (0) vs on (anything else); see set_rgb().
+static uint8_t global_brightness = 255;
+
+// Within 1/255 of round(c * scale / 255), exactly c at 255 and exactly 0 at 0.
+static inline uint8_t scale_channel(uint8_t c, uint8_t scale)
+{
+    return (uint8_t)(((uint32_t) c * (scale + 1u)) >> 8);
+}
+
 #ifdef BOARD_FEATHER_NRF52840
 
 // ============================================================================
@@ -149,8 +164,13 @@ static bool cur_valid = false;
 
 static void neo_set_color(uint8_t r, uint8_t g, uint8_t b)
 {
+    // Cache the *requested* color, not the scaled one, so a brightness change
+    // doesn't get swallowed by the dedupe — neopixel_set_brightness()
+    // invalidates the cache instead.
     if (cur_valid && cur_r == r && cur_g == g && cur_b == b) return;
-    ws2812_send_pixel(r, g, b);
+    ws2812_send_pixel(scale_channel(r, global_brightness),
+                      scale_channel(g, global_brightness),
+                      scale_channel(b, global_brightness));
     cur_r = r; cur_g = g; cur_b = b;
     cur_valid = true;
 }
@@ -222,6 +242,11 @@ static uint32_t state_change_ms = 0;
 static void set_rgb(bool r, bool g, bool b)
 {
     if (!led_port) return;
+    // These are plain on/off GPIOs — no per-channel intensity. The only part
+    // of a brightness setting this board can honour is "0 means off".
+    if (global_brightness == 0) {
+        r = g = b = false;
+    }
     gpio_pin_set(led_port, LED_RED_PIN, r ? 0 : 1);
     gpio_pin_set(led_port, LED_GREEN_PIN, g ? 0 : 1);
     gpio_pin_set(led_port, LED_BLUE_PIN, b ? 0 : 1);
@@ -346,6 +371,22 @@ void neopixel_indicate_profile(uint8_t profile_index)
 bool neopixel_is_indicating(void)
 {
     return led_state != LED_IDLE;
+}
+
+void neopixel_set_brightness(uint8_t brightness)
+{
+    if (global_brightness == brightness) return;
+    global_brightness = brightness;
+#ifdef BOARD_FEATHER_NRF52840
+    // The pixel cache keys on the requested color, which hasn't changed, so
+    // drop it or the new scale won't reach the LED until the color does.
+    cur_valid = false;
+#endif
+}
+
+uint8_t neopixel_get_brightness(void)
+{
+    return global_brightness;
 }
 
 void neopixel_task(int pat)

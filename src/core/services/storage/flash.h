@@ -103,8 +103,22 @@ typedef struct {
     // reserved[] so the 256-byte layout is unchanged; old flashes read 0=off.
     uint8_t shoulder_swap;
 
-    // Reserved for future global settings (8 bytes)
-    uint8_t reserved[8];
+    // Status LED brightness. 0 = compile-time default (full), 1-255 = scale.
+    // Also carved from reserved[], so the layout and schema are unchanged.
+    //
+    // 0 deliberately means "default" rather than "off", following
+    // l2_threshold / joybus_data_pin / wii_mode above: an existing flash
+    // record reads 0 here, and if 0 meant off then upgrading firmware would
+    // silently kill the status LED on every adapter already in the field.
+    //
+    // Consequence: the persisted range is 1-255, so the dimmest *saved*
+    // setting is 1 (a barely-visible glow), not a true zero. The runtime API
+    // does accept 0 for full off; persistent off stays neopixel_disable()'s
+    // job, which is a separate control.
+    uint8_t led_brightness;
+
+    // Reserved for future global settings (7 bytes)
+    uint8_t reserved[7];
 
     // Custom profiles (4 x 56 = 224 bytes)
     custom_profile_t profiles[CUSTOM_PROFILE_MAX_COUNT];

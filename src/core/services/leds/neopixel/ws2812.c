@@ -71,8 +71,40 @@ static bool has_override_color = false;
 #define BLINK_OFF_TIME_US 200000  // 200ms LED off (this is what we count)
 #define BLINK_ON_TIME_US 100000   // 100ms LED on (brief flash between OFF blinks)
 
+// Global brightness scale (255 = unscaled). Applied here rather than in each
+// pattern because every pattern in this file bakes its own hardcoded level
+// (0x40 in one, 0xff in the next) — the single write to the state machine is
+// the only point that catches all of them, plus the override color and the
+// profile indicator.
+static uint8_t global_brightness = 255;
+
+// Scale one channel. Within 1/255 of round(c * scale / 255), but exactly c at
+// scale 255 and exactly 0 at scale 0, so both endpoints are lossless. Uses a
+// shift rather than a divide on purpose: the RP2040 is a Cortex-M0+ with no
+// divide instruction, so /255 costs three __aeabi_uidiv calls per pixel.
+static inline uint8_t scale_channel(uint8_t c, uint8_t scale) {
+    return (uint8_t)(((uint32_t) c * (scale + 1u)) >> 8);
+}
+
 static inline void put_pixel(uint32_t pixel_grb) {
+    if (global_brightness != 255) {
+        // urgb_u32() packs g<<16 | r<<8 | b, and the raw-value patterns
+        // (rand(), t * 0x10101) land in those same 24 bits, so scaling the
+        // three bytes is right for both.
+        uint32_t g = scale_channel((pixel_grb >> 16) & 0xFF, global_brightness);
+        uint32_t r = scale_channel((pixel_grb >> 8) & 0xFF, global_brightness);
+        uint32_t b = scale_channel(pixel_grb & 0xFF, global_brightness);
+        pixel_grb = (g << 16) | (r << 8) | b;
+    }
     pio_sm_put_blocking(pio, sm, pixel_grb << 8u);
+}
+
+void neopixel_set_brightness(uint8_t brightness) {
+    global_brightness = brightness;
+}
+
+uint8_t neopixel_get_brightness(void) {
+    return global_brightness;
 }
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {

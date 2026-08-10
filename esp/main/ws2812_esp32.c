@@ -80,12 +80,38 @@ static void ws2812_send_pixel(uint8_t r, uint8_t g, uint8_t b)
     rmt_tx_wait_all_done(rmt_chan, 100);
 }
 
+// Global brightness scale (255 = unscaled, the default).
+static uint8_t global_brightness = 255;
+
+// Within 1/255 of round(c * scale / 255), exactly c at 255 and exactly 0 at 0.
+static inline uint8_t scale_channel(uint8_t c, uint8_t scale)
+{
+    return (uint8_t)(((uint32_t) c * (scale + 1u)) >> 8);
+}
+
 static void neo_set_color(uint8_t r, uint8_t g, uint8_t b)
 {
+    // Cache the *requested* color, not the scaled one, so a brightness change
+    // isn't swallowed by the dedupe — neopixel_set_brightness() drops the
+    // cache instead.
     if (cur_valid && cur_r == r && cur_g == g && cur_b == b) return;
-    ws2812_send_pixel(r, g, b);
+    ws2812_send_pixel(scale_channel(r, global_brightness),
+                      scale_channel(g, global_brightness),
+                      scale_channel(b, global_brightness));
     cur_r = r; cur_g = g; cur_b = b;
     cur_valid = true;
+}
+
+void neopixel_set_brightness(uint8_t brightness)
+{
+    if (global_brightness == brightness) return;
+    global_brightness = brightness;
+    cur_valid = false;  // force a re-send at the new scale
+}
+
+uint8_t neopixel_get_brightness(void)
+{
+    return global_brightness;
 }
 
 static void neo_set_off(void)
@@ -328,6 +354,21 @@ void neopixel_set_press_mask(uint16_t mask)
 void neopixel_set_override_color(uint8_t r, uint8_t g, uint8_t b)
 {
     (void)r; (void)g; (void)b;
+}
+
+// Boards in this branch have no addressable LED, but the shared CDC layer
+// links against these, so they still have to exist. Keep the value so a
+// LED.BRIGHT round-trip reads back what was written.
+static uint8_t global_brightness = 255;
+
+void neopixel_set_brightness(uint8_t brightness)
+{
+    global_brightness = brightness;
+}
+
+uint8_t neopixel_get_brightness(void)
+{
+    return global_brightness;
 }
 
 #endif // BOARD_FEATHER_ESP32S3
