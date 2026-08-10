@@ -35,13 +35,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Known Issues
 
 #### Apps this changelog announced that still ship no UF2
-The release matrix in `.github/workflows/build.yml` is hand-maintained and has drifted from the Makefile's `APPS` list: **12 buildable targets appear in no matrix**. Because the release job publishes `releases/*` unfiltered, matrix membership *is* release membership — there is no artifact-only tier, so an app missing from the matrix simply does not exist for users. All 12 compile clean; they were never added. Tracked in [#212](https://github.com/joypad-ai/joypad-os/issues/212).
+The release matrix in `.github/workflows/build.yml` is hand-maintained, and **41 buildable targets appear in no matrix** — 35 RP2040/RP2350, 3 ESP32 and 3 nRF52, out of 110 total. Because the release job publishes `releases/*` unfiltered, matrix membership *is* release membership: there is no artifact-only tier, so an app missing from the matrix simply does not exist for users. Tracked in [#212](https://github.com/joypad-ai/joypad-os/issues/212).
+
+The count in that issue's title and body is **12**, and it is wrong — it is corrected to 41 in the first comment there. That number came from comparing the matrix against the Makefile's `APPS` variable, which is itself a stale hand-maintained list, so 29 targets were invisible to both lists at once. The denominator is the build recipes, not `APPS`. Related: because `all: $(APPS)`, **`make all` does not build 21 of the 62 RP2040 targets that ship**, so a local "build everything" pass is not a check on the release.
 
 The ones this document created an expectation for:
 
 - **`USB2AMI`** — announced in 2.1.0 as an Amiga / Atari CD32 output driver and credited to **@thgill** ([#140](https://github.com/joypad-ai/joypad-os/pull/140)). Neither `usb2ami_rp2040zero` nor `usb2ami_xiao` has ever been built by CI, so an outside contributor's driver has been listed as a shipped feature for three releases with nothing to flash.
+- **`mouthpad`** — listed by name under "Builds:" and backed by a first-class BLE driver, yet **no board ships a UF2**: `mouthpad_pico_w`, `mouthpad_pico2_w` and `mouthpad_aprbrother_nrf52840` are all unbuilt. The accessibility story has no download behind it on any target.
+- **`wifi2usb`** — the JOCP receiver the Joypad iOS app talks to. `wifi2usb_pico_w` / `wifi2usb_pico2_w` have never been built, so the dongle half of that product has never had firmware.
 - **`usb2ble`** — announced in 2.0.0 (USB controllers → BLE gamepad output). `usb2ble_pico_w` / `usb2ble_pico2_w` are unbuilt. It is even one of the ten targets gaining `CONFIG_BT_HOST` in this release's Bluetooth fix above — a fix landing in firmware nobody can download.
 - **`usb2usb` MAX3421E on RP2040** — 2.0.0 announced Feather RP2040 + USB Host FeatherWing support and 2.1.0 names `usb2usb_feather_rp2040_usb_host_max3421` explicitly. Both RP2040 MAX3421E variants are unbuilt; only the **nRF52840** variant ships, which reads as coverage on a substring search and isn't.
+- **`nuon2usb` and `nuonserial`** — announced alongside the Nuon work whose siblings ship. `nuon2usb_kb2040`, `nuon2usb_pico_w` and `nuonserial_kb2040` are unbuilt.
+- **`wii2n64`** — announced in the same breath as `wii2usb` and `wii2gc`, which both ship. `wii2n64_pico` never has.
 - **`n642dc` on Pico 2 W** — 2.0.0 lists "Pico 2 W — bt2n64 and n642dc targets". `n642dc_kb2040` ships; `n642dc_pico2_w` never has.
 - **`gc2eth`** — announced in 2.1.0. Its "experimental" caveat is about maturity, not availability; both targets are unbuilt.
 
