@@ -713,13 +713,31 @@ uint8_t profile_load_from_flash(output_target_t output, uint8_t default_index)
 
 void profile_save_to_flash(output_target_t output)
 {
-    flash_t settings;
     // For now, save primary output's index
     // TODO: Store per-output indices if needed
-    if (output >= 0 && output < MAX_OUTPUT_TARGETS) {
-        settings.active_profile_index = active_index[output];
-        flash_save(&settings);
+    if (output < 0 || output >= MAX_OUTPUT_TARGETS) {
+        return;
     }
+
+    // Persist through the live settings record, never a stack copy.
+    // flash_save() takes all 256 bytes of flash_t, so filling in one field of
+    // a local and handing it over writes uninitialized stack across every
+    // other global setting and all four custom profiles. flash_save() also
+    // stamps magic and schema_version itself, so the resulting record passes
+    // both validation checks on load and nothing downstream can detect it.
+    flash_t* settings = flash_get_settings();
+    if (!settings) {
+        return;  // flash_init() hasn't run — nothing safe to merge into.
+    }
+
+    // Idempotent: the SELECT + D-pad hotkey re-enters this on every switch,
+    // and each flash_save() costs a journal slot.
+    if (settings->active_profile_index == active_index[output]) {
+        return;
+    }
+
+    settings->active_profile_index = active_index[output];
+    flash_save(settings);
 }
 
 // ============================================================================
