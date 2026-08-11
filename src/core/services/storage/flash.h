@@ -81,7 +81,8 @@ typedef struct {
     uint8_t custom_profile_count; // Number of custom profiles (0-4)
 
     // Global settings (continued)
-    uint8_t ble_output_mode;     // BLE output mode (0=Standard composite, 1=Xbox BLE)
+    uint8_t ble_output_mode;     // BLE output mode — ble_output_mode_t
+                                 // (0=Standard composite, 1=Xbox BLE, 2=SInput)
     uint8_t router_saved;        // Non-zero if router settings were explicitly saved
     uint8_t routing_mode;        // Router mode (0=simple, 1=merge, 2=broadcast)
     uint8_t merge_mode;          // Merge mode (0=priority, 1=blend, 2=all)
@@ -113,6 +114,69 @@ typedef struct {
 // Verify size at compile time
 _Static_assert(sizeof(flash_t) == 256, "flash_t must be exactly 256 bytes");
 _Static_assert(sizeof(custom_profile_t) == 56, "custom_profile_t must be exactly 56 bytes");
+
+// ============================================================================
+// Loaded-record sanitisation
+// ============================================================================
+//
+// A stored record is only as trustworthy as its writers. magic and
+// schema_version are stamped by flash_save() itself, so a record written from
+// incoherent data passes both load-time checks — and because settings survive
+// firmware updates (see the file header), it keeps passing them forever. A
+// fixed writer cannot heal a device that already carries one; that repair has
+// to happen on the read side, once, here.
+//
+// Every field below has a valid range that is enforced by its setter and does
+// not depend on the build, so clamping an out-of-range value to 0 ("unset /
+// compile-time default") is a no-op on any record this firmware would itself
+// have produced. Ranges are taken from the enums and the setters, not from the
+// struct comments — ble_output_mode's comment claimed 0-1 while
+// BLE_MODE_COUNT has been 3 since BLE_MODE_SINPUT landed.
+//
+// Deliberately NOT checked:
+//   active_profile_index  profile.c round-trips the *built-in* profile index
+//                         through this byte, which is not bounded by the 0-4
+//                         custom range (see #217).
+//   usb_output_mode,      valid range depends on the build, and a settings
+//   wii_mode              record outlives a reflash to a different app.
+//   reserved[]            progressively carved into named fields.
+//
+// Returns the number of fields corrected; 0 means the record was coherent.
+static inline unsigned flash_sanitize_record(flash_t* s)
+{
+    unsigned fixed = 0;
+
+#define FLASH_CLAMP_(field, max) \
+    do { if (s->field > (max)) { s->field = 0; fixed++; } } while (0)
+
+    FLASH_CLAMP_(wiimote_orient_mode, 2);                     // auto/horiz/vert
+    FLASH_CLAMP_(custom_profile_count, CUSTOM_PROFILE_MAX_COUNT);
+    FLASH_CLAMP_(ble_output_mode, 2);                         // BLE_MODE_COUNT - 1
+    FLASH_CLAMP_(routing_mode, 2);                            // simple/merge/broadcast
+    FLASH_CLAMP_(merge_mode, 2);                              // priority/blend/all
+    FLASH_CLAMP_(dpad_mode, 2);                               // dpad/lstick/rstick
+    FLASH_CLAMP_(bt_input_enabled, 1);
+    FLASH_CLAMP_(shoulder_swap, 1);
+    FLASH_CLAMP_(joybus_data_pin, 28);                        // 0=default, 1-28=GPIO
+    FLASH_CLAMP_(wii_sda_pin, 29);                            // stored as GPIO+1
+    FLASH_CLAMP_(wii_scl_pin, 29);
+
+#undef FLASH_CLAMP_
+
+    // router_saved is a bool with no in-band invalid value, so it cannot be
+    // range-checked on its own — but it gates the router fields that
+    // gc2usb / controller_btusb / bt2wiiext restore at boot, and it is 0 on a
+    // clean record, so an incoherent one is what switches those restores on in
+    // the first place. If anything else in the record failed its range, the
+    // record was not written deliberately: clear the flag so those apps fall
+    // back to compile-time defaults instead of applying a plausible-looking 0.
+    if (fixed && s->router_saved) {
+        s->router_saved = 0;
+        fixed++;
+    }
+
+    return fixed;
+}
 
 // ============================================================================
 // Flash API
