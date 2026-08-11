@@ -179,6 +179,8 @@ static void n64_task(void)
 // calibrated for that. Emitting ±127 over-ranges every axis (~1.6x too far),
 // which reads as a maxed-out square on a stick-test ROM and makes movement
 // feel pegged. Tunable: raise/lower to taste (verify with the mimi test ROM).
+// Keep in sync with N64_STICK_MAX in native/host/lodgenet/lodgenet_host.c and
+// native/host/n64/n64_host.c — the two drivers that read a native N64 stick.
 #ifndef N64_STICK_RANGE
 #define N64_STICK_RANGE 84
 #endif
