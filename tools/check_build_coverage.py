@@ -32,6 +32,18 @@ three checks above see nothing — while `make` cannot build it and CI never wil
 That is the same end state (an app that ships no UF2) reached from the other side,
 so every `joypad_*` executable must be reachable through some APP_/CONSOLE_ pair.
 
+All four of those checks are still rooted in this repo's *top-level* Makefile, so
+they share one blind spot: a platform backend that builds itself. `cd wch && make`
+has no build_app recipe, no APP_/CONSOLE_ pair and no add_executable to be missing
+from anything, so a whole platform can ship nothing while every check above reports
+clean. That is not hypothetical — the CH32V307 port landed in June 2026 and was
+still invisible in August. Hence a fifth check over the backends themselves.
+
+Those backends are *discovered from the tree*, not listed here. A hardcoded
+platform list would be the same hand-maintained-list defect this file exists to
+catch: esp and nrf were spelled out in this module, and CH32 arrived without
+anything noticing precisely because it was not in that spelling.
+
 Excluding a target is fine; excluding it *silently* is the bug. Anything not in a
 matrix must be listed in .github/ci-excluded-apps.txt with a reason.
 
@@ -53,6 +65,17 @@ CMAKELISTS = os.path.join(REPO, "src", "CMakeLists.txt")
 
 ESP_SUFFIX = "_esp32s3"
 NRF_SUFFIX = "_nrf52840"
+
+# Pruned when discovering platform backends: build output, locally-installed
+# toolchains (`make init-wch` drops one in wch/toolchain), release staging, and
+# src/lib, which is eight vendored submodules whose build systems are not ours to
+# ship. Pruning src/lib is on the merits, not a workaround — it holds no Makefile
+# today, and the coverage job checks out without submodules anyway.
+BACKEND_PRUNE = {".git", "build", "_build", "node_modules", "toolchain", "releases"}
+BACKEND_PRUNE_PATHS = {os.path.join("src", "lib")}
+# Inclusive: a Makefile is found at depths 1-3 (wch/, gba/joypad/,
+# tools/sinput-verify/ are 1 and 2) and not at 4 or deeper. Measured, not assumed.
+BACKEND_MAX_DEPTH = 3
 
 
 def read(path: str) -> str:
@@ -93,6 +116,43 @@ def cmake_reachable(makefile: str) -> set[str]:
         if len(parts) >= 2 and parts[1] in console:
             reachable.add(console[parts[1]])
     return reachable
+
+
+def platform_backends(repo: str) -> set[str]:
+    """Directories that build firmware with their own build system.
+
+    Every other check in this file starts from the top-level Makefile. A backend
+    built with `cd <dir> && make` is therefore invisible to all of them: it has no
+    build_app recipe to compare against a matrix, no APP_/CONSOLE_ pair, and no
+    add_executable. Nothing about it is missing from anything, so nothing fires,
+    and it ships no artifact to anyone.
+
+    Discovered by walking the tree rather than listed in this module, because a
+    hardcoded platform list has exactly the failure mode this file exists to catch.
+    esp/ and nrf/ were named in the source above; wch/ landed 2026-06-04 and was
+    still unnoticed two months later, for no reason other than not being named.
+    """
+    found: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(repo):
+        rel = os.path.relpath(dirpath, repo)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        if depth >= BACKEND_MAX_DEPTH:
+            dirnames[:] = []
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith(".")
+            and d not in BACKEND_PRUNE
+            and os.path.join(rel, d).lstrip("./") not in BACKEND_PRUNE_PATHS
+        ]
+        if rel != "." and "Makefile" in filenames:
+            found.add(rel.replace(os.sep, "/"))
+    return found
+
+
+def workflow_jobs(workflow: str) -> set[str]:
+    """Top-level job ids in build.yml (two-space indent under `jobs:`)."""
+    return set(re.findall(r"^  ([a-z][\w-]*):\s*$", workflow, re.M))
 
 
 def sub_targets(makefile: str, family: str) -> dict[str, tuple[str, str]]:
@@ -241,6 +301,22 @@ def main() -> int:
     covered["cmake"] = execs & reachable
     summary.append(f"cmake: {len(execs)} executables, {len(covered['cmake'])} reachable "
                    f"from a make target, {len(execs & set(skips))} excluded")
+
+    # --- platform backends that build themselves, invisible to all of the above.
+    backends = platform_backends(REPO)
+    jobs = workflow_jobs(workflow)
+    covered["backend"] = {d for d in backends if f"build-{d.split('/')[0]}" in jobs}
+    for backend in sorted(backends - covered["backend"] - set(skips)):
+        problems.append(
+            f"backend: '{backend}/' builds with its own build system but build.yml "
+            f"has no 'build-{backend.split('/')[0]}' job, so it produces no release "
+            f"artifact and no CI ever compiles it. None of the checks above can see "
+            f"it — it has no make target to be missing. Add a job, or list it in "
+            f"{rel} with a reason."
+        )
+    summary.append(f"backend: {len(backends)} self-building platform dirs, "
+                   f"{len(covered['backend'])} with a CI job, "
+                   f"{len(backends & set(skips))} excluded")
 
     # A target both shipped and excluded means the exclusion is stale; left alone it
     # rots into a false record of what ships.

@@ -88,3 +88,17 @@ controller_btusb_seeed_xiao_nrf52840      # no recorded decision; the Feather va
 joypad_flash_b_side                       # SWD flashing utility, not an adapter app; never a release artifact
 joypad_gc2dc                              # real app (GameCube -> Dreamcast) with no make target; unshippable, same class as the 41 above. Needs a product call (#212)
 joypad_gc2usb_rp2040zero                  # redundant: APP_gc2usb_rp2040zero builds the generic joypad_gc2usb, which already gets WS2812_PIN=16 from PICO_BOARD=waveshare_rp2040_zero. Dead duplicate, not a coverage gap
+
+# ---------------------------------------------------------------------------
+# Platform backends that build with their own build system (`cd <dir> && make`)
+# instead of a top-level `build_app` recipe. They are invisible to every check
+# above, which all start from the top-level Makefile — there is no make target
+# for them to be missing from a matrix. Added 2026-08-11, when the CH32V307 port
+# turned out to have been unnoticed since June for exactly that reason.
+#
+# esp/ and nrf/ are not listed here because build.yml has build-esp and build-nrf
+# jobs; if either job were deleted, the check would demand a line here instead.
+#
+wch                                       # full CH32V307 usb2usb port (all output modes, host registry, router, CDC), on main since 2026-06-04, builds a standalone wch.elf that ships nowhere. Not merely unwired: needs WCH gcc 8.2.0, pinned because newer GCC miscompiles the USB timing code, which no stock runner has. Shipping it is a product call (#212)
+gba/joypad                                # GBA multiboot payload, NOT a standalone artifact: its output is committed as src/native/host/gc/gba_payload.c and ships embedded inside gc2usb's UF2, so it already reaches users. Building it in CI would need devkitARM. Caveat: nothing checks the committed payload still matches this source
+tools/sinput-verify                       # host-side SInput verification tool, not firmware; never a release artifact
