@@ -40,6 +40,24 @@ _Static_assert(offsetof(sony_ds4_report_t, tpad_f1_pos) + 1 == 36,
 // STATE
 // ============================================================================
 
+// Motion field offsets in the wire report (report ID at index 0), each three
+// little-endian int16s. Kept as named constants because init() and the
+// per-frame writer both address them.
+#define PS4_REPORT_GYRO   13
+#define PS4_REPORT_ACCEL  19
+
+// Accelerometer rest state: 1G on Z. The DS4 accelerometer is 8192 LSB/g, so
+// 1G is nominally 0x2000; 0x2060 is what a real pad settles around and what
+// Brook's XE2 emits.
+#define PS4_ACCEL_REST_Z  0x2060
+
+#ifndef DISABLE_USB_HOST
+_Static_assert(offsetof(sony_ds4_report_t, gyro) + 1 == PS4_REPORT_GYRO,
+               "DS4 gyro must start at report byte 13");
+_Static_assert(offsetof(sony_ds4_report_t, accel) + 1 == PS4_REPORT_ACCEL,
+               "DS4 accel must start at report byte 19");
+#endif
+
 // Using raw byte buffer approach to avoid struct bitfield packing issues
 static uint8_t ps4_report_buffer[64];
 static ps4_out_report_t ps4_output;
@@ -51,6 +69,35 @@ static uint16_t ps4_timestamp = 0;
 // ============================================================================
 // MODE INTERFACE IMPLEMENTATION
 // ============================================================================
+
+static inline void ps4_put_le16(uint8_t index, int16_t value)
+{
+    ps4_report_buffer[index]     = (uint8_t)((uint16_t)value & 0xFF);
+    ps4_report_buffer[index + 1] = (uint8_t)(((uint16_t)value >> 8) & 0xFF);
+}
+
+// Bytes 13-24: gyro X/Y/Z then accel X/Y/Z, straight from the router's event.
+static void ps4_mode_write_motion(const input_event_t* event)
+{
+    if (event->has_motion) {
+        for (int i = 0; i < 3; i++) {
+            ps4_put_le16(PS4_REPORT_GYRO  + (i * 2), event->gyro[i]);
+            ps4_put_le16(PS4_REPORT_ACCEL + (i * 2), event->accel[i]);
+        }
+        return;
+    }
+
+    // No motion source this frame: hold the pad at rest rather than leaving
+    // whatever the last motion-capable controller reported. Sources are
+    // hot-swappable and the router only forwards motion from a device that
+    // has it -- unplug a DS4 mid-tilt, or switch to a pad with no sensors,
+    // and the console would otherwise keep reading that stale tilt forever.
+    for (int i = 0; i < 3; i++) {
+        ps4_put_le16(PS4_REPORT_GYRO  + (i * 2), 0);
+        ps4_put_le16(PS4_REPORT_ACCEL + (i * 2), 0);
+    }
+    ps4_put_le16(PS4_REPORT_ACCEL + 4, PS4_ACCEL_REST_Z);
+}
 
 static void ps4_mode_init(void)
 {
@@ -67,8 +114,9 @@ static void ps4_mode_init(void)
     // Accel is three little-endian int16s at bytes 19-24, so Z is 23 (low) / 24
     // (high). Byte 25 is the first reserved byte -- writing the high half there
     // left Z reading 0x6000 (~3G) instead of 0x2060 (~1G at 8192 LSB/g).
-    ps4_report_buffer[23] = 0x60;  // accel Z low
-    ps4_report_buffer[24] = 0x20;  // accel Z high
+    // send_report() now rewrites bytes 13-24 every frame; this seeds the
+    // buffer for the reports that go out before the first input event.
+    ps4_put_le16(PS4_REPORT_ACCEL + 4, PS4_ACCEL_REST_Z);
     // Set power level (0x1b = full battery + charging, matches Brook at offset 30)
     ps4_report_buffer[30] = 0x1b;
     // Set touchpad state (33=active, 34=increment, 35-42=fingers)
@@ -114,7 +162,6 @@ static bool ps4_mode_send_report(uint8_t player_index,
                                   uint32_t buttons)
 {
     (void)player_index;
-    (void)event;
 
     // Byte 0: Report ID
     ps4_report_buffer[0] = 0x01;
@@ -199,6 +246,19 @@ static bool ps4_mode_send_report(uint8_t player_index,
     ps4_timestamp = platform_time_ms(); 
     ps4_report_buffer[10] = ps4_timestamp & 0xFF;
     ps4_report_buffer[11] = (ps4_timestamp >> 8) & 0xFF;
+
+    // Bytes 13-18: gyro X/Y/Z, bytes 19-24: accel X/Y/Z -- three little-endian
+    // int16s each. Byte 12 is the battery slot and is left alone.
+    // These were previously written only in ps4_mode_init(), so the
+    // console saw a permanently motionless pad regardless of the source.
+    //
+    // No rescale: the internal convention (input_event.h) is +/-32767 =
+    // +/-2000 dps and +/-4g, which *is* the DualShock 4's own full-scale range
+    // -- sony_ds4.c copies the pad's raw sensor words straight into the event,
+    // so a real DS4 in front of this adapter round-trips 1:1. sony_ds3.c
+    // rescales its +/-100 dps / +/-2g sensors up to the same convention before
+    // submitting, so a DS3 source lands correctly here too.
+    ps4_mode_write_motion(event);
 
     // Maintenance of DS4 Metadata (Matches Brook XE2)
     // Byte 30: Battery (0x1b = Full + Charging)
