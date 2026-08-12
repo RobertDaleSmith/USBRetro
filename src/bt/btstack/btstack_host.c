@@ -693,6 +693,15 @@ static void setup_hid_handlers(void)
     printf("[BTSTACK_HOST] Init GATT client...\n");
     gatt_client_init();
 
+    // Actually negotiate the raised ATT MTU: l2cap_set_max_le_mtu() only sets our
+    // maximum — the client must send an MTU Exchange Request to use it, and btstack's
+    // auto-negotiation is OFF by default. Without this the link stays at the 23-byte
+    // default (20-byte notifications), so a controller whose full input report exceeds
+    // 20 bytes (original Steam Controller BLE) connects but stalls the moment its
+    // report grows past one packet. Enabling this makes us request the larger MTU up
+    // front, matching what phones/PCs do.
+    gatt_client_mtu_enable_auto_negotiation(1);
+
     // Minimal ATT server so peers that act as GATT clients toward us don't hang
     // on the 30s ATT timeout (see setup_att_server comment).
     setup_att_server();
@@ -3562,19 +3571,12 @@ static void valve_notify_handler(uint8_t packet_type, uint16_t channel, uint8_t*
     uint16_t len = gatt_event_notification_get_value_length(packet);
     const uint8_t* val = gatt_event_notification_get_value(packet);
 
-    // SC1 (original Steam Controller) BLE — format still being reverse-engineered.
-    // Log the raw notification so the report layout can be captured, then stop (no
-    // parser yet). SC1 BLE packets are shorter/compressed, so bypass the SC2 gate.
-    if (valve.report_id == 0xC1) {
-        printf("[SC1_BLE] rpt len=%u:", (unsigned)len);
-        for (int i = 0; i < len && i < 32; i++) printf(" %02X", val[i]);
-        printf("\n");
-        return;
-    }
-
     // Prepend the implied report id, then defer to the main loop (route via
-    // bt_on_hid_report) to keep the BTstack callback stack shallow.
-    if (len < 18 || len + 1 > (uint16_t)sizeof(pending_ble_report)) return;
+    // bt_on_hid_report) to keep the BTstack callback stack shallow. The SC1 (0xC1)
+    // sends short delta-compressed reports, so it uses a smaller minimum length; the
+    // SC2 requires its full state report.
+    uint16_t min_len = (valve.report_id == 0xC1) ? 4 : 18;
+    if (len < min_len || len + 1 > (uint16_t)sizeof(pending_ble_report)) return;
     pending_ble_report[0] = valve.report_id;
     memcpy(pending_ble_report + 1, val, len);
     pending_ble_report_len = len + 1;
@@ -3634,6 +3636,14 @@ static void valve_become_ready(void)
     valve.last_keepalive_ms = btstack_run_loop_get_time_ms();
     printf("[SC2_BLE] ready (report id 0x%02X, battery %s)\n",
            valve.report_id, valve.has_battery_char ? "yes" : "no");
+    if (valve.report_id == 0xC1) {
+        // Original Steam Controller BLE firmware requests a slow (~1s) connection
+        // interval to save power, which throttles input to ~1 packet/sec and stalls
+        // on a burst of state (a button press). As the central, force a fast gamepad
+        // interval (7.5-15ms). Re-asserted on a timer in valve_periodic because the
+        // controller re-requests the slow interval after connecting.
+        gap_update_connection_parameters(valve.handle, 6, 12, 0, 400);
+    }
 
     // Register the device with the bthid layer so the SC2 driver is selected and
     // reports route to it. VID/PID are synthetic (not advertised over the air) so
@@ -3641,7 +3651,9 @@ static void valve_become_ready(void)
     ble_connection_t* conn = find_connection_by_handle(valve.handle);
     if (conn) {
         conn->vid = 0x28DE;
-        conn->pid = 0x1303;
+        // Distinct synthetic PID for the original Steam Controller (report id 0xC1) so
+        // its dedicated BLE driver matches instead of the SC2's.
+        conn->pid = (valve.report_id == 0xC1) ? 0x1101 : 0x1303;
         bthid_update_device_info(valve.conn_index, conn->name, conn->vid, conn->pid);
         btstack_host_stop_scan();
         scan_timeout_end = 0;
@@ -3683,12 +3695,6 @@ static void valve_gatt_handler(uint8_t packet_type, uint16_t channel, uint8_t* p
                 }
                 break;
             }
-            // DIAG (SC1-BLE bring-up): log every Valve-service characteristic so the
-            // original Steam Controller's input/feature chars — different UUIDs from
-            // the SC2's 0x7A/0x7C/0x34 — can be identified from one capture. The
-            // Valve UUIDs vary only in byte [3]; print it plus properties + handle.
-            printf("[VALVE_CHAR] id=0x%02X props=0x%02X vh=0x%04X\n",
-                   ch.uuid128[3], ch.properties, ch.value_handle);
             if (memcmp(ch.uuid128, valve_input_45_uuid128, 16) == 0) {
                 valve.input_char = ch;
                 valve.report_id = 0x45;
@@ -3959,6 +3965,19 @@ static void ble_identify_stall_task(void)
 
 static void valve_periodic(void)
 {
+    // SC1 BLE: re-assert the fast connection interval. Its firmware re-requests a slow
+    // ~1s interval after connecting (throttling input to a "1s drip" and stalling on a
+    // button burst); as the central we push it back to a gamepad interval on a timer.
+    if (valve.report_id == 0xC1 && valve.state == VALVE_READY &&
+        valve.handle != HCI_CON_HANDLE_INVALID) {
+        static uint32_t last_cparam_ms = 0;
+        uint32_t nowc = btstack_run_loop_get_time_ms();
+        if (last_cparam_ms == 0 || (nowc - last_cparam_ms) >= 3000) {
+            last_cparam_ms = nowc;
+            gap_update_connection_parameters(valve.handle, 6, 12, 0, 400);
+        }
+    }
+
     // Deferred initial discovery: on a bonded reconnect the discover call in
     // register_valve_hid_listener may be rejected because the gatt_client is still
     // settling right after re-encryption. Retry here once it's ready so bring-up
