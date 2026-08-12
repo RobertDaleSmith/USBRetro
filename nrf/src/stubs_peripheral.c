@@ -24,3 +24,8 @@ __attribute__((weak)) void wiimote_set_orient_mode(uint8_t mode) { (void)mode; }
 // btstack_host functions (used by cdc_commands.c)
 __attribute__((weak)) void btstack_host_delete_all_bonds(void) {}
 __attribute__((weak)) bool btstack_host_is_initialized(void) { return false; }
+__attribute__((weak)) int btstack_host_list_classic_bonds(uint8_t addrs_out[][6], int max_count)
+{
+    (void)addrs_out; (void)max_count;
+    return 0;
+}

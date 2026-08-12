@@ -99,8 +99,18 @@ typedef struct {
 bool btstack_classic_get_connection(uint8_t conn_index, btstack_classic_conn_info_t* info);
 uint8_t btstack_classic_get_connection_count(void);
 
-// Get last-connected bonded device (returns false if none stored)
+// Get last-connected bonded device (returns false if none stored).
+// NOTE: this slot only ever holds a BLE device — it is written from Security
+// Manager events, which Classic BT does not generate. Use
+// btstack_host_list_classic_bonds() for the Classic side.
 bool btstack_host_get_last_connected(uint8_t bd_addr_out[6], char name_out[48]);
+
+// Enumerate persisted Classic BT link keys — the bonds a Classic controller
+// (DS4/DS5, Switch Pro, Wiimote) reconnects with. Writes up to max_count
+// addresses and returns how many were written. No name is stored alongside a
+// link key, so callers get the BD_ADDR only: enough to show the bond exists and
+// to pass to btstack_host_forget_device().
+int btstack_host_list_classic_bonds(uint8_t addrs_out[][6], int max_count);
 
 // Classic BT output (for bthid drivers)
 bool btstack_classic_send_set_report_type(uint8_t conn_index, uint8_t report_type,
