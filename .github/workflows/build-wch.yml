@@ -114,6 +114,67 @@ jobs:
           cd wch
           make BOARD="$BOARD"
 
+      # When the link overflows SRAM, ld reports one number and names nothing:
+      # "region `RAM' overflowed", "RAM: 64 KB / 64 KB / 100.00%". That turns a
+      # specific, fixable overflow into a shrug, and on a 64 KB part this is the
+      # failure this job will hit most often. The objects are still on disk when
+      # the link fails, so rank what is actually in them.
+      #
+      # Runs only on failure and cannot fail the job (`|| true`, and it exits 0
+      # when there is nothing to read): this is diagnostics attached to an
+      # existing red, not a second check that can go red on its own. If the
+      # failure was earlier than compilation there are no objects and it says so.
+      #
+      # nm sizes are static allocations only — the 4 KB stack and any heap sit on
+      # top, and .data counts against RAM as well as flash, so treat the totals as
+      # a ranking rather than a budget.
+      - name: Rank static RAM consumers (failure only)
+        if: failure()
+        run: |
+          BIN="wch/toolchain/xPacks/riscv-none-embed-gcc/$WCH_GCC_VER/bin"
+          NM="$BIN/riscv-none-embed-nm"
+          OBJDIR="wch/_build/$BOARD"
+          if [ ! -x "$NM" ] || [ ! -d "$OBJDIR" ]; then
+            echo "no toolchain or no objects yet — failure was before compilation"
+            exit 0
+          fi
+          # -A prefixes each line with the object path; b/B = .bss, c/C = COMMON,
+          # d/D = .data. All three occupy SRAM at runtime.
+          find "$OBJDIR" -name '*.o' -print0 \
+            | xargs -0 -r -n 40 "$NM" -A --print-size --radix=d 2>/dev/null \
+            | awk '$3 ~ /^[bBcCdD]$/ { split($1, f, ":"); sub(/^.*\//, "", f[1]);
+                                       printf "%d\t%s\t%s\t%s\n", $2 + 0, $3, $4, f[1] }' \
+            > /tmp/syms.tsv || true
+          if [ ! -s /tmp/syms.tsv ]; then
+            echo "no sized symbols found"
+            exit 0
+          fi
+          {
+            echo "## CH32V307 static RAM ranking"
+            echo
+            echo "Static allocations from the objects of the failed link. Stack (4 KB)"
+            echo "and heap are on top of these."
+            echo
+            TOTAL=$(awk -F'\t' '{s+=$1} END {print s}' /tmp/syms.tsv)
+            echo "**Total static: $TOTAL bytes** against 65536 bytes of SRAM."
+            echo
+            echo "### Largest symbols"
+            echo
+            echo '| bytes | sec | symbol | object |'
+            echo '|---:|:---:|---|---|'
+            sort -t"$(printf '\t')" -k1,1nr /tmp/syms.tsv | head -40 \
+              | awk -F'\t' '{printf "| %s | %s | `%s` | %s |\n", $1, $2, $3, $4}'
+            echo
+            echo "### Largest objects"
+            echo
+            echo '| bytes | object |'
+            echo '|---:|---|'
+            awk -F'\t' '{s[$4]+=$1} END {for (o in s) printf "%d\t%s\n", s[o], o}' /tmp/syms.tsv \
+              | sort -k1,1nr | head -25 \
+              | awk -F'\t' '{printf "| %s | %s |\n", $1, $2}'
+          } >> "$GITHUB_STEP_SUMMARY" || true
+          echo "ranking written to the job summary"
+
       # `make all` already runs `size`. This step exists for the assertion, not
       # the number: it pins the artifact path the upload step depends on, so a
       # future build-system change that relocates the ELF fails here with a
