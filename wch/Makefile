@@ -149,6 +149,7 @@ SRC_C += \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/dragonrise/dragonrise.c \
+	$(JOYPAD)/usb/usbh/hid/devices/vendors/elo/elo_vagabond.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/google/google_stadia.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/hori/hori_horipad.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/hori/hori_pokken.c \
