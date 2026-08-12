@@ -164,6 +164,7 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_dualstrike.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_commander.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/valve/steam_controller.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/sinput_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
 )

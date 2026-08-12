@@ -191,6 +191,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   case CONTROLLER_SINPUT:
   case CONTROLLER_SIDEWINDER_COMMANDER:
   case CONTROLLER_STEAM_2:
+  case CONTROLLER_STEAM_1:
     device_interfaces[dev_type]->init(dev_addr, instance);
     break;
   case CONTROLLER_DUALSHOCK4:
