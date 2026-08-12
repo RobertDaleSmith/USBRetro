@@ -46,6 +46,7 @@ jobs:
           - bt2usb_pico_w
           - bt2usb_pico2_w
           - bt2usb_waveshare_rp2350b_plus_w
+          - usb2n64_kb2040
           - bt2n64_pico_w
           - bt2n64_pico2_w
           - btusb2usb_pico_w
@@ -407,6 +408,13 @@ jobs:
         with:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2usb
           path: organized/bt2usb/*.uf2
+          if-no-files-found: ignore
+
+      - name: Upload usb2n64
+        uses: actions/upload-artifact@v4
+        with:
+          name: joypad_${{ steps.commit.outputs.hash }}_usb2n64
+          path: organized/usb2n64/*.uf2
           if-no-files-found: ignore
 
       - name: Upload bt2n64
