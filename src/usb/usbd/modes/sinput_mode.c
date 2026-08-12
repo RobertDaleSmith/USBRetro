@@ -511,15 +511,15 @@ static bool sinput_mode_send_report(uint8_t player_index,
     // Touchpad data — SDL3 reads pressure as Uint16 and divides by 32768.0f to
     // normalize to [0,1]. 0xFFFF would saturate to 2.0; cap at 0x7FFF (32767).
     if (event->has_touch) {
-        int16_t t1x = event->touch[0].active ? (int16_t)event->touch[0].x : 0;
-        int16_t t1y = event->touch[0].active ? (int16_t)event->touch[0].y : 0;
+        int16_t t1x = event->touch[0].active ? touch_norm_to_s16(event->touch[0].x) : 0;
+        int16_t t1y = event->touch[0].active ? touch_norm_to_s16(event->touch[0].y) : 0;
         uint16_t t1p = event->touch[0].active ? 0x7FFF : 0;
         memcpy(sinput_report.touchpad1, &t1x, 2);
         memcpy(sinput_report.touchpad1 + 2, &t1y, 2);
         memcpy(sinput_report.touchpad1 + 4, &t1p, 2);
 
-        int16_t t2x = event->touch[1].active ? (int16_t)event->touch[1].x : 0;
-        int16_t t2y = event->touch[1].active ? (int16_t)event->touch[1].y : 0;
+        int16_t t2x = event->touch[1].active ? touch_norm_to_s16(event->touch[1].x) : 0;
+        int16_t t2y = event->touch[1].active ? touch_norm_to_s16(event->touch[1].y) : 0;
         uint16_t t2p = event->touch[1].active ? 0x7FFF : 0;
         memcpy(sinput_report.touchpad2, &t2x, 2);
         memcpy(sinput_report.touchpad2 + 2, &t2y, 2);
@@ -888,14 +888,14 @@ void sinput_report_build_from_event(sinput_report_t* out, const input_event_t* e
     }
 
     if (event->has_touch) {
-        int16_t t1x = event->touch[0].active ? (int16_t)event->touch[0].x : 0;
-        int16_t t1y = event->touch[0].active ? (int16_t)event->touch[0].y : 0;
+        int16_t t1x = event->touch[0].active ? touch_norm_to_s16(event->touch[0].x) : 0;
+        int16_t t1y = event->touch[0].active ? touch_norm_to_s16(event->touch[0].y) : 0;
         uint16_t t1p = event->touch[0].active ? 0x7FFF : 0;
         memcpy(out->touchpad1, &t1x, 2);
         memcpy(out->touchpad1 + 2, &t1y, 2);
         memcpy(out->touchpad1 + 4, &t1p, 2);
-        int16_t t2x = event->touch[1].active ? (int16_t)event->touch[1].x : 0;
-        int16_t t2y = event->touch[1].active ? (int16_t)event->touch[1].y : 0;
+        int16_t t2x = event->touch[1].active ? touch_norm_to_s16(event->touch[1].x) : 0;
+        int16_t t2y = event->touch[1].active ? touch_norm_to_s16(event->touch[1].y) : 0;
         uint16_t t2p = event->touch[1].active ? 0x7FFF : 0;
         memcpy(out->touchpad2, &t2x, 2);
         memcpy(out->touchpad2 + 2, &t2y, 2);

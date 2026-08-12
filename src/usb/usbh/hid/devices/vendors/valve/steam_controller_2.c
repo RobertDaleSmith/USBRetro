@@ -68,12 +68,10 @@ static inline uint8_t sc2_stick_to_u8(int16_t v) {
     return (uint8_t)scaled;
 }
 
-// SInput touchpads are full-range int16 (SDL normalizes v/65536 + 0.5 → 0..1). The
-// SC2 pads are already int16, so pass X through; invert Y (SC2 +Y = up, SInput 0 = top).
-static inline uint16_t sc2_pad_x(int16_t v) { return (uint16_t)v; }
-static inline uint16_t sc2_pad_y(int16_t v) {
-    return (uint16_t)(v == -32768 ? 32767 : -v);
-}
+// SC2 pads are native int16 (±32767). Normalize into the device-agnostic 0..65535
+// touch scale (see input_event.h): X straight, Y inverted (SC2 +Y = up, canonical 0 = top).
+static inline uint16_t sc2_pad_x(int16_t v) { return touch_norm_from_s16(v); }
+static inline uint16_t sc2_pad_y(int16_t v) { return (uint16_t)(32767 - (int32_t)v); }
 
 // --- Driver state ----------------------------------------------------------
 
