@@ -82,8 +82,18 @@ jobs:
       # Only the toolchain is cached. The WCH SDK lands inside the tinyusb
       # submodule working tree, so caching it would fight with submodule init;
       # it is a depth-1 fetch and cheap. The toolchain is a ~200MB download.
-      - name: Cache WCH toolchain
-        uses: actions/cache@v4
+      #
+      # Split restore/save rather than the combined `actions/cache@v4`, because
+      # the combined action's save runs as a post step and post steps are
+      # SKIPPED when the job fails. This job's whole purpose is to fail on
+      # broken shared code, so under the combined action it would re-download
+      # 200MB on every red run and never once populate the cache — which is how
+      # a transient 503 from the xpack release CDN turned into a hard block on
+      # iterating at all. Saving on `always()` means the toolchain is cached the
+      # first time it downloads, red run or not.
+      - name: Restore WCH toolchain
+        id: wch-toolchain-cache
+        uses: actions/cache/restore@v4
         with:
           path: wch/toolchain
           key: wch-gcc-${{ env.WCH_GCC_VER }}-linux-x64
@@ -108,6 +118,33 @@ jobs:
         run: make init-wch
         env:
           PICO_TOOLCHAIN_PATH: /usr
+
+      # Save immediately after install, not at the end of the job, so the
+      # toolchain is cached even when the build below fails — which is the
+      # expected outcome whenever this job is doing its job.
+      #
+      # Guarded on the compiler actually being executable so a failed or partial
+      # download is never written to the cache. The key is fixed, so a poisoned
+      # entry would be worse than no entry: nothing would evict it and every
+      # later run would restore a broken toolchain.
+      - name: Check toolchain present
+        id: wch-toolchain-check
+        if: always()
+        run: |
+          if [ -x "wch/toolchain/xPacks/riscv-none-embed-gcc/$WCH_GCC_VER/bin/riscv-none-embed-gcc" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save WCH toolchain
+        if: always()
+          && steps.wch-toolchain-cache.outputs.cache-hit != 'true'
+          && steps.wch-toolchain-check.outputs.present == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: wch/toolchain
+          key: wch-gcc-${{ env.WCH_GCC_VER }}-linux-x64
 
       - name: Build usb2usb for CH32V307
         run: |
