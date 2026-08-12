@@ -69,6 +69,13 @@ jobs:
     name: build-wch (usb2usb, ch32v307v_r1_1v0)
     runs-on: ubuntu-latest
     steps:
+      # Deliberately NOT `submodules: recursive`. Everything this build needs is
+      # supposed to come from `make init-wch`, so checking out submodules here
+      # would hide a hole in that target instead of catching it — and the first
+      # run of this job caught exactly one (it initialised tinyusb but not
+      # tusb_xinput or libxsm3, so a fresh clone died on `xinput_host.h`). The
+      # bare checkout is what makes this a test of the documented setup path and
+      # not just of the compiler.
       - name: Checkout
         uses: actions/checkout@v4
 

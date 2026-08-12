@@ -440,9 +440,15 @@ init-nrf:
 .PHONY: init-wch
 WCH_GCC_VER := 8.2.0-3.1
 WCH_GCC_BIN := wch/toolchain/xPacks/riscv-none-embed-gcc/$(WCH_GCC_VER)/bin
+# Init all three submodules the wch/ build actually links, not just tinyusb:
+# wch/Makefile pulls xinput_host.c from src/lib/tusb_xinput and the Xbox 360 auth
+# sources from src/lib/libxsm3, and puts both on INC. Initialising only tinyusb
+# left `make init-wch && cd wch && make` failing on a fresh clone with
+# `fatal error: xinput_host.h`. It looked fine to everyone who had built an
+# RP2040 target first, because that inits every submodule.
 init-wch:
 	@echo "$(YELLOW)Setting up WCH CH32V307 toolchain + SDK...$(NC)"
-	@git submodule update --init src/lib/tinyusb
+	@git submodule update --init src/lib/tinyusb src/lib/tusb_xinput src/lib/libxsm3
 	@echo "$(YELLOW)Fetching WCH SDK (openwch/ch32v307)...$(NC)"
 	@sdk="src/lib/tinyusb/hw/mcu/wch/ch32v307"; \
 	if [ -f "$$sdk/EVT/EXAM/SRC/Peripheral/inc/ch32v30x.h" ]; then \
