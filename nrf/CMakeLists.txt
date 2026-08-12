@@ -173,6 +173,7 @@ if(APP_TYPE STREQUAL "usb2usb")
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
+        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
 
         # --- XInput host driver (tusb_xinput library) ---
         "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
@@ -251,6 +252,7 @@ elseif(APP_TYPE STREQUAL "btusb2usb")
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
+        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
 
         # --- XInput host driver (tusb_xinput library) ---
         "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
