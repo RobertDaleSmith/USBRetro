@@ -154,59 +154,96 @@ jobs:
       # When the link overflows SRAM, ld reports one number and names nothing:
       # "region `RAM' overflowed", "RAM: 64 KB / 64 KB / 100.00%". That turns a
       # specific, fixable overflow into a shrug, and on a 64 KB part this is the
-      # failure this job will hit most often. The objects are still on disk when
-      # the link fails, so rank what is actually in them.
+      # failure this job will hit most often. So say what is in the 64 KB.
       #
-      # Runs only on failure and cannot fail the job (`|| true`, and it exits 0
-      # when there is nothing to read): this is diagnostics attached to an
-      # existing red, not a second check that can go red on its own. If the
-      # failure was earlier than compilation there are no objects and it says so.
+      # The source is the linker map, which gcc_common.mk already requests with
+      # -Wl,-Map. ld writes it as it lays sections out, so it exists even though
+      # the link then failed, and it reflects the FINAL layout: post-LTO,
+      # post---gc-sections, with the addresses actually assigned.
       #
-      # nm sizes are static allocations only — the 4 KB stack and any heap sit on
-      # top, and .data counts against RAM as well as flash, so treat the totals as
-      # a ranking rather than a budget.
+      # An earlier version of this step ranked `nm --print-size` output over the
+      # .o files instead, and produced nothing at all. This build is LTO, so the
+      # objects hold GIMPLE bytecode rather than allocated sections and there is
+      # nothing for nm to measure -- allocation does not exist until the link.
+      # The map is the only place these numbers live.
+      #
+      # The map is also uploaded whole. The ranking below is a convenience and
+      # its parsing can rot; the artifact is exact and needs no parser.
+      #
+      # Runs only on failure and cannot fail the job: this is diagnostics
+      # attached to an existing red, not a second check that can go red on its
+      # own. If the failure came before the link there is no map and it says so.
+      #
+      # .data is counted alongside .bss and COMMON because it occupies SRAM at
+      # runtime too. Stack (4 KB) and heap sit on top of all of it, so read the
+      # total as a ranking, not as a budget.
       - name: Rank static RAM consumers (failure only)
         if: failure()
         run: |
-          BIN="wch/toolchain/xPacks/riscv-none-embed-gcc/$WCH_GCC_VER/bin"
-          NM="$BIN/riscv-none-embed-nm"
-          OBJDIR="wch/_build/$BOARD"
-          if [ ! -x "$NM" ] || [ ! -d "$OBJDIR" ]; then
-            echo "no toolchain or no objects yet — failure was before compilation"
+          MAP="wch/_build/$BOARD/wch.elf.map"
+          if [ ! -f "$MAP" ]; then
+            echo "no linker map at $MAP — failure came before the link"
             exit 0
           fi
-          # -A prefixes each line with the object path; b/B = .bss, c/C = COMMON,
-          # d/D = .data. All three occupy SRAM at runtime.
-          find "$OBJDIR" -name '*.o' -print0 \
-            | xargs -0 -r -n 40 "$NM" -A --print-size --radix=d 2>/dev/null \
-            | awk '$3 ~ /^[bBcCdD]$/ { split($1, f, ":"); sub(/^.*\//, "", f[1]);
-                                       printf "%d\t%s\t%s\t%s\n", $2 + 0, $3, $4, f[1] }' \
-            > /tmp/syms.tsv || true
-          if [ ! -s /tmp/syms.tsv ]; then
-            echo "no sized symbols found"
+          # Entries look like "  .bss.foo   0x20000abc   0x400  path/obj.o",
+          # and ld wraps long section names onto their own line with the
+          # address/size/object on the next one. Both forms handled.
+          # Plain POSIX awk with a hand-rolled hex converter: mawk (the ubuntu
+          # default) has no strtonum, and depending on gawk being installed is
+          # an avoidable dependency. Verified against both wrapped and inline
+          # map entry forms.
+          awk '
+            function hex2dec(s,   i, c, v, d) {
+              sub(/^0[xX]/, "", s)
+              v = 0
+              for (i = 1; i <= length(s); i++) {
+                c = tolower(substr(s, i, 1))
+                d = index("0123456789abcdef", c) - 1
+                if (d < 0) return 0
+                v = v * 16 + d
+              }
+              return v
+            }
+            function emit(sz, nm, ob) {
+              sub(/^.*\//, "", ob)
+              if (sz > 0) printf "%d\t%s\t%s\n", sz, nm, ob
+            }
+            /^ (\.(bss|data)|COMMON)/ {
+              if (NF == 1) { pend = $1; next }
+              if (NF >= 4 && $2 ~ /^0x/ && $3 ~ /^0x/) { emit(hex2dec($3), $1, $4); pend = "" }
+              next
+            }
+            /^ +0x/ {
+              if (pend != "" && NF >= 3 && $1 ~ /^0x/ && $2 ~ /^0x/) { emit(hex2dec($2), pend, $3) }
+              pend = ""
+              next
+            }
+          ' "$MAP" > /tmp/ram.tsv 2>/dev/null || true
+          if [ ! -s /tmp/ram.tsv ]; then
+            echo "map found but nothing parsed — see the uploaded wch-linker-map artifact"
             exit 0
           fi
           {
             echo "## CH32V307 static RAM ranking"
             echo
-            echo "Static allocations from the objects of the failed link. Stack (4 KB)"
-            echo "and heap are on top of these."
+            echo "From the linker map of the failed link (final layout, post-LTO)."
+            echo "Stack (4 KB) and heap sit on top of these."
             echo
-            TOTAL=$(awk -F'\t' '{s+=$1} END {print s}' /tmp/syms.tsv)
-            echo "**Total static: $TOTAL bytes** against 65536 bytes of SRAM."
+            TOTAL=$(awk -F'\t' '{s+=$1} END {print s}' /tmp/ram.tsv)
+            echo "**Total .bss + .data + COMMON: $TOTAL bytes** against 65536 bytes of SRAM."
             echo
-            echo "### Largest symbols"
+            echo "### Largest allocations"
             echo
-            echo '| bytes | sec | symbol | object |'
-            echo '|---:|:---:|---|---|'
-            sort -t"$(printf '\t')" -k1,1nr /tmp/syms.tsv | head -40 \
-              | awk -F'\t' '{printf "| %s | %s | `%s` | %s |\n", $1, $2, $3, $4}'
+            echo '| bytes | section | object |'
+            echo '|---:|---|---|'
+            sort -t"$(printf '\t')" -k1,1nr /tmp/ram.tsv | head -40 \
+              | awk -F'\t' '{printf "| %s | `%s` | %s |\n", $1, $2, $3}'
             echo
             echo "### Largest objects"
             echo
             echo '| bytes | object |'
             echo '|---:|---|'
-            awk -F'\t' '{s[$4]+=$1} END {for (o in s) printf "%d\t%s\n", s[o], o}' /tmp/syms.tsv \
+            awk -F'\t' '{s[$3]+=$1} END {for (o in s) printf "%d\t%s\n", s[o], o}' /tmp/ram.tsv \
               | sort -k1,1nr | head -25 \
               | awk -F'\t' '{printf "| %s | %s |\n", $1, $2}'
           } > /tmp/ranking.md
@@ -217,6 +254,17 @@ jobs:
           # durable copy.
           cat /tmp/ranking.md
           cat /tmp/ranking.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      # The exact artifact behind the ranking above, with no parser between it
+      # and the reader.
+      - name: Upload linker map (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wch-linker-map-${{ github.sha }}
+          path: wch/_build/${{ env.BOARD }}/wch.elf.map
+          if-no-files-found: ignore
+          retention-days: 14
 
       # `make all` already runs `size`. This step exists for the assertion, not
       # the number: it pins the artifact path the upload step depends on, so a
