@@ -1,0 +1,129 @@
+name: Build WCH (CH32V307)
+
+# Compile the `wch/` port on every push and pull request.
+#
+# WHY THIS EXISTS
+# ---------------
+# The CH32V307 port landed on `main` on 2026-06-04 (d6c4d2ef) and linked fine.
+# On 2026-07-11 (3063ba01) a merge in an unrelated subsystem added three
+# unguarded `ps4_auth_flash_*` calls to the shared `cdc_commands.c`, which broke
+# the link on every platform that has no pico-sdk flash backend. The identical
+# breakage was stubbed for `esp/` and `nrf/` 8h50m later the same morning
+# (9a9de6a6). `wch/` was skipped and stayed broken for 32 days.
+#
+# The only variable was CI. The two platforms with a build job were fixed in
+# nine hours; the one without was not fixed at all, because nothing compiled it
+# and so nothing went red. No code review would have caught it either — the port
+# was correct when merged, its README truthfully said so, and the breaking commit
+# is in another subsystem entirely. A compile job is the only thing that closes
+# this class of gap.
+#
+# WHY IT IS NOT A JOB IN build.yml
+# --------------------------------
+# build.yml's release step publishes `releases/*`, i.e. whatever its matrices
+# produced, so matrix membership *is* release membership (see #212). This port
+# ships no firmware today and whether it should is a product call, not a CI one —
+# `.github/ci-excluded-apps.txt` records it as deliberately unshipped. What the
+# evidence above asks for is a compile, not a release entry, so this is its own
+# workflow: it reports, and it gates nothing. It is in no `needs:` chain and
+# cannot hold up a build or a release.
+#
+# The `pull_request` trigger is the load-bearing half — breakage of this kind is
+# introduced in a PR that never touches `wch/`, and a post-merge-only check
+# reports it after it has already landed.
+#
+# NOTES FOR LATER
+# ---------------
+# * The toolchain is pinned to WCH gcc 8.2.0; newer GCC miscompiles the WCH USB
+#   timing code. It is an x86-64 xpack tarball, which is why this cannot be run
+#   on an Apple Silicon dev machine without Rosetta, and why CI is the natural
+#   place for it — GitHub's ubuntu runners are x86-64 and run it natively.
+# * The build is deliberately serial. `-j` is very likely fine, but this is the
+#   first time this port has ever been compiled by CI and a confusing red from a
+#   racy build would be worse than a slower green. Add `-j` once it has a
+#   baseline.
+# * No assertions about particular symbols live here on purpose. The link *is*
+#   the check: an unresolved reference from the shared tree fails the build. A
+#   hardcoded symbol list would rot into exactly the kind of stale manifest this
+#   repo already has too many of.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-wch-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  WCH_GCC_VER: 8.2.0-3.1
+  BOARD: ch32v307v_r1_1v0
+
+jobs:
+  build-wch:
+    name: build-wch (usb2usb, ch32v307v_r1_1v0)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Only the toolchain is cached. The WCH SDK lands inside the tinyusb
+      # submodule working tree, so caching it would fight with submodule init;
+      # it is a depth-1 fetch and cheap. The toolchain is a ~200MB download.
+      - name: Cache WCH toolchain
+        uses: actions/cache@v4
+        with:
+          path: wch/toolchain
+          key: wch-gcc-${{ env.WCH_GCC_VER }}-linux-x64
+
+      # PICO_TOOLCHAIN_PATH is set to satisfy a *parse-time* guard, not because
+      # anything here uses it. The top-level Makefile aborts with
+      # `$(error No ARM toolchain found...)` when it can neither locate
+      # /Applications/ArmGNUToolchain nor find arm-none-eabi-gcc on PATH — and a
+      # bare ubuntu runner has neither, because build.yml's RP2040 jobs run
+      # `make` inside the Docker image rather than on the host. That guard fires
+      # while the Makefile is being read, so it kills `make init-wch` before it
+      # does anything WCH-related. `PICO_TOOLCHAIN_PATH` is read nowhere in the
+      # wch build path (verified across wch/, the TinyUSB make system and
+      # src/platform/ch32/), so any non-empty value is inert here; make's
+      # `ifndef` treats an empty value as undefined, hence a real directory.
+      #
+      # The underlying defect is that an ARM-specific guard is unconditional for
+      # goals that need no ARM toolchain (`init-wch`, `init-esp`, `init-nrf`,
+      # `help`). Fixing it belongs in the Makefile, not here — flagged separately
+      # so it is not smuggled into an unrelated PR.
+      - name: Install WCH toolchain + SDK
+        run: make init-wch
+        env:
+          PICO_TOOLCHAIN_PATH: /usr
+
+      - name: Build usb2usb for CH32V307
+        run: |
+          cd wch
+          make BOARD="$BOARD"
+
+      # `make all` already runs `size`. This step exists for the assertion, not
+      # the number: it pins the artifact path the upload step depends on, so a
+      # future build-system change that relocates the ELF fails here with a
+      # readable error instead of surfacing as an empty artifact.
+      - name: Assert ELF exists, report size
+        run: |
+          ELF="wch/_build/$BOARD/wch.elf"
+          test -f "$ELF" || { echo "::error::no ELF at $ELF"; exit 1; }
+          "wch/toolchain/xPacks/riscv-none-embed-gcc/$WCH_GCC_VER/bin/riscv-none-embed-size" "$ELF"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: wch-ch32v307-${{ github.sha }}
+          path: |
+            wch/_build/${{ env.BOARD }}/wch.elf
+            wch/_build/${{ env.BOARD }}/wch.bin
+            wch/_build/${{ env.BOARD }}/wch.hex
+          if-no-files-found: error
+          retention-days: 14
