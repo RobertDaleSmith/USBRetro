@@ -172,8 +172,14 @@ jobs:
             awk -F'\t' '{s[$4]+=$1} END {for (o in s) printf "%d\t%s\n", s[o], o}' /tmp/syms.tsv \
               | sort -k1,1nr | head -25 \
               | awk -F'\t' '{printf "| %s | %s |\n", $1, $2}'
-          } >> "$GITHUB_STEP_SUMMARY" || true
-          echo "ranking written to the job summary"
+          } > /tmp/ranking.md
+          # Both destinations on purpose. The job summary is the readable one,
+          # but it is not exposed by the REST API, so a summary-only report is
+          # unreachable to anything reading this job programmatically (`gh run
+          # view --log`, a bot, a future size-trend check). The log is the
+          # durable copy.
+          cat /tmp/ranking.md
+          cat /tmp/ranking.md >> "$GITHUB_STEP_SUMMARY" || true
 
       # `make all` already runs `size`. This step exists for the assertion, not
       # the number: it pins the artifact path the upload step depends on, so a
