@@ -8,6 +8,7 @@ const STREAM_BUTTONS = [
     { bit: 8, label: 'S1' }, { bit: 9, label: 'S2' },
     { bit: 10, label: 'L3' }, { bit: 11, label: 'R3' },
     { bit: 20, label: 'L4' }, { bit: 21, label: 'R4' },
+    { bit: 24, label: 'L5' }, { bit: 25, label: 'R5' },
     { bit: 12, label: 'DU' }, { bit: 13, label: 'DD' },
     { bit: 14, label: 'DL' }, { bit: 15, label: 'DR' },
     { bit: 16, label: 'A1' }, { bit: 17, label: 'A2' },

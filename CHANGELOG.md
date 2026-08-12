@@ -22,8 +22,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **PS4 output — motion + touchpad passthrough.** PS4/PS5 USB-output mode now emits the router's gyro/accel and **both touch points** (scaled to the DS4 pad, IMU frame-corrected) instead of dropping them, so a controller with motion/trackpads (e.g. the Steam Controllers) drives them through to the console.
 - **Wake a sleeping PC over USB.** Remote wakeup is now reachable on **every** output mode — a held input wakes the host. SInput mode (which exposes a keyboard interface) can wake Windows/macOS; XInput cannot, as it has no keyboard interface for the host to arm wakeup.
 
+#### Configuration & web config
+- **Lower paddles and aux buttons are now fully configurable.** Custom profiles cover the whole button set through **L5/R5** (bits 0–25) — the stored profile map grew from 18 to 26 slots — so the SC2's lower back paddles (plus A3/A4/L4/R4) can be remapped, disabled, or turbo'd like any other button. The web-config profile editor and hotkeys list them, autofire timing covers them, and the input-test page now shows **L5/R5** activity.
+
 ### Changed
 - **Canonical touchpad normalization.** All touchpad sources (DualShock 4, DualSense, both Steam Controllers) are normalized into a device-agnostic 0–65535 space in the router, and output modes scale from there — so trackpads carry through to any output instead of being handled ad hoc per driver.
+- **Flash schema v2.** The custom-profile button map expanded (18 → 26 slots) so L4/R4/F1/F2/L5/R5 become remappable. The struct stays 56 bytes (reusing former reserved space), but reinterpreting those bytes forces a **one-time wipe of saved settings/profiles** on upgrade.
 
 ### Fixed
 - **SC2 Bluetooth reconnect reliability** — defer Valve service discovery until the GATT client is ready (a bonded reconnect fired it too early and hung at `VID:0000`); a bring-up watchdog that disconnects and retries on a stalled state; a forced DIS read to identify a name-less SC2 stuck on the generic HID path; a shorter connect-attempt timeout so a stale/rotated-address bond can't monopolize the radio with scanning off; and scanning resumes after clearing bonds.

@@ -28,8 +28,8 @@
 // AUTOFIRE
 // ============================================================================
 
-// Number of JP_BUTTON_* slots tracked for autofire timing (JP_BUTTON_R4 = 1<<21 is the highest).
-#define AUTOFIRE_BUTTON_COUNT 22
+// Number of JP_BUTTON_* slots tracked for autofire timing (JP_BUTTON_R5 = 1<<25 is the highest).
+#define AUTOFIRE_BUTTON_COUNT 26
 
 // Auto-fire periods (ms) for common frequencies (50% duty cycle)
 #define AUTOFIRE_30HZ   33   //  30 Hz →  33ms period
