@@ -247,6 +247,7 @@ static void send_json(const char* json)
 // Diagnostic getter from sinput_mode.c (fwd-declared to avoid pulling the
 // SInput/tusb headers into this TU).
 extern uint32_t sinput_get_feature_count(void);
+extern void sinput_get_debug_info(char* buf, int len);
 
 static void cmd_info(const char* json)
 {
@@ -282,6 +283,17 @@ static void cmd_info(const char* json)
 #endif
              );
     printf("[CDC] INFO response: %s\n", response_buf);
+    send_json(response_buf);
+}
+
+// SINPUT.DBG — report the values driving the SInput identity SDL reads (CDC-visible
+// diagnostic; printf goes to UART on this board so we can't see it otherwise).
+static void cmd_sinput_dbg(const char* json)
+{
+    (void)json;
+    char dbg[256];
+    sinput_get_debug_info(dbg, sizeof(dbg));
+    snprintf(response_buf, sizeof(response_buf), "{\"sinput_dbg\":\"%s\"}", dbg);
     send_json(response_buf);
 }
 
@@ -2721,13 +2733,20 @@ static void cmd_players_list(const char* json)
                                players[i].transport == INPUT_TRANSPORT_BT_CLASSIC ||
                                players[i].transport == INPUT_TRANSPORT_BT_BLE);
 
+        // Battery (0 = not reported by this controller)
+        uint8_t batt = 0; bool batt_chg = false;
+        router_get_device_battery((uint8_t)players[i].dev_addr, &batt, &batt_chg);
+
         len += snprintf(response_buf + len, sizeof(response_buf) - len,
-                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s}",
+                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s,"
+                        "\"battery\":%u,\"charging\":%s}",
                         i > 0 ? "," : "",
                         i,
                         name ? name : "Unknown",
                         transport,
-                        supports_rumble ? "true" : "false");
+                        supports_rumble ? "true" : "false",
+                        (unsigned)batt,
+                        batt_chg ? "true" : "false");
     }
 
     snprintf(response_buf + len, sizeof(response_buf) - len, "]}");
@@ -3692,6 +3711,7 @@ typedef struct {
 
 static const cmd_entry_t commands[] = {
     {"INFO", cmd_info},
+    {"SINPUT.DBG", cmd_sinput_dbg},
     {"MP.STATS", cmd_mp_stats},
     {"MP.MODE", cmd_mp_mode},
     {"PING", cmd_ping},

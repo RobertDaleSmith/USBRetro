@@ -302,6 +302,24 @@ void router_set_onboard_battery(int percent, bool charging) {
 int router_onboard_battery_percent(void) { return onboard_batt_pct; }
 bool router_onboard_battery_charging(void) { return onboard_batt_charging; }
 
+// Look up a routed input device's last-reported battery by dev_addr. Returns
+// true and fills level (0-100) / charging if any output slot has a battery
+// reading for that device. level 0 = not reported.
+bool router_get_device_battery(uint8_t dev_addr, uint8_t* level, bool* charging) {
+    for (int output = 0; output < MAX_OUTPUTS; output++) {
+        for (int i = 0; i < MAX_BLEND_DEVICES; i++) {
+            if (blend_devices[output][i].active &&
+                blend_devices[output][i].dev_addr == dev_addr &&
+                blend_devices[output][i].state.battery_level > 0) {
+                if (level) *level = blend_devices[output][i].state.battery_level;
+                if (charging) *charging = blend_devices[output][i].state.battery_charging;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Onboard motion: this device's OWN IMU (e.g. controller_btusb on a XIAO Sense),
 // as opposed to motion from a connected input controller (DS4/DS5). The app
 // updates it from the IMU; the router stamps it into output states that have no

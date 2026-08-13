@@ -76,6 +76,13 @@ static uint8_t cached_face_style = SINPUT_FACE_XBOX;
 static uint8_t cached_gamepad_type = SINPUT_TYPE_STANDARD;
 static bool cached_has_motion = false;
 static bool cached_has_touch = false;
+// Touchpad geometry advertised in the SInput capability report (byte 16/17). SDL
+// gates how many touchpads it exposes on touchpad_count — a device with two
+// separate pads (Steam Controller 2: left+right) MUST advertise 2, or SDL reads
+// only touchpad1 and drops the second pad. Default is the DualSense shape
+// (1 pad, 2 fingers); per-device overrides set below in update_cached_device_info().
+static uint8_t cached_touch_count = 1;
+static uint8_t cached_finger_count = 2;
 static controller_layout_t cached_layout = LAYOUT_UNKNOWN;  // last native layout (for feature refresh)
 static int16_t last_dev_addr = -1;  // Track connected device for auto feature report
 
@@ -186,6 +193,12 @@ static uint32_t convert_aux_buttons(uint32_t aux)
 static void update_device_info(uint8_t dev_addr, int8_t instance, input_transport_t transport,
                                controller_layout_t layout)
 {
+    // Default touchpad geometry (DualSense: 1 pad, 2 fingers). Devices with a
+    // different pad layout (e.g. Steam Controller 2 = 2 pads) override below.
+    // Reset every call so a prior 2-pad device doesn't leak into the next one.
+    cached_touch_count = 1;
+    cached_finger_count = 2;
+
     // Native controllers: determine face style from layout
     if (transport == INPUT_TRANSPORT_NATIVE && layout != LAYOUT_UNKNOWN) {
         if (layout == LAYOUT_GAMECUBE) {
@@ -254,9 +267,17 @@ static void update_device_info(uint8_t dev_addr, int8_t instance, input_transpor
                 cached_face_style = SINPUT_FACE_GAMECUBE;
                 cached_gamepad_type = SINPUT_TYPE_GAMECUBE;
                 return;
+            case CONTROLLER_STEAM_2:  // touchpad + gyro → PS5/DualSense SInput type
+                cached_face_style = SINPUT_FACE_SONY;
+                cached_gamepad_type = SINPUT_TYPE_PS5;
+                cached_touch_count = 2;   // two separate pads (left + right)
+                cached_finger_count = 1;  // one finger each
+                return;
             default:
                 cached_face_style = SINPUT_FACE_XBOX;
                 cached_gamepad_type = SINPUT_TYPE_STANDARD;
+                cached_touch_count = 1;
+                cached_finger_count = 2;
                 return;
         }
     }
@@ -293,9 +314,19 @@ static void update_device_info(uint8_t dev_addr, int8_t instance, input_transpor
                     cached_face_style = SINPUT_FACE_XBOX;
                     cached_gamepad_type = SINPUT_TYPE_XBOXONE;
                     return;
+                case 0x28DE:  // Valve — Steam Controller 2. Report as PS5/DualSense
+                    // type: it's the closest canonical SInput type with a touchpad
+                    // (+ gyro), so testers render the touchpad visual.
+                    cached_face_style = SINPUT_FACE_SONY;
+                    cached_gamepad_type = SINPUT_TYPE_PS5;
+                    cached_touch_count = 2;   // two separate pads (left + right)
+                    cached_finger_count = 1;  // one finger each
+                    return;
                 default:
                     cached_face_style = SINPUT_FACE_XBOX;
                     cached_gamepad_type = SINPUT_TYPE_STANDARD;
+                    cached_touch_count = 1;
+                    cached_finger_count = 2;
                     return;
             }
         }
@@ -480,15 +511,15 @@ static bool sinput_mode_send_report(uint8_t player_index,
     // Touchpad data — SDL3 reads pressure as Uint16 and divides by 32768.0f to
     // normalize to [0,1]. 0xFFFF would saturate to 2.0; cap at 0x7FFF (32767).
     if (event->has_touch) {
-        int16_t t1x = event->touch[0].active ? (int16_t)event->touch[0].x : 0;
-        int16_t t1y = event->touch[0].active ? (int16_t)event->touch[0].y : 0;
+        int16_t t1x = event->touch[0].active ? touch_norm_to_s16(event->touch[0].x) : 0;
+        int16_t t1y = event->touch[0].active ? touch_norm_to_s16(event->touch[0].y) : 0;
         uint16_t t1p = event->touch[0].active ? 0x7FFF : 0;
         memcpy(sinput_report.touchpad1, &t1x, 2);
         memcpy(sinput_report.touchpad1 + 2, &t1y, 2);
         memcpy(sinput_report.touchpad1 + 4, &t1p, 2);
 
-        int16_t t2x = event->touch[1].active ? (int16_t)event->touch[1].x : 0;
-        int16_t t2y = event->touch[1].active ? (int16_t)event->touch[1].y : 0;
+        int16_t t2x = event->touch[1].active ? touch_norm_to_s16(event->touch[1].x) : 0;
+        int16_t t2y = event->touch[1].active ? touch_norm_to_s16(event->touch[1].y) : 0;
         uint16_t t2p = event->touch[1].active ? 0x7FFF : 0;
         memcpy(sinput_report.touchpad2, &t2x, 2);
         memcpy(sinput_report.touchpad2 + 2, &t2y, 2);
@@ -644,6 +675,25 @@ static const uint8_t* sinput_mode_get_report_descriptor(void)
 volatile uint32_t g_sinput_feature_count = 0;
 uint32_t sinput_get_feature_count(void) { return g_sinput_feature_count; }
 
+// Diagnostic: report the values that drive the SInput identity SDL reads, so we
+// can see over CDC (not UART printf) why a device resolves to a given type.
+void sinput_get_debug_info(char* buf, int len)
+{
+    int p0_dev = (playersCount > 0) ? players[0].dev_addr : -1;
+    int p0_inst = (playersCount > 0) ? players[0].instance : -1;
+    int p0_tr = (playersCount > 0) ? (int)players[0].transport : -1;
+    int ctrl = -1, steam2 = -1;
+#if (defined(CONFIG_USB_HOST) || defined(CONFIG_USB)) && !defined(DISABLE_USB_HOST)
+    if (p0_dev >= 0) ctrl = hid_get_ctrl_type((uint8_t)p0_dev, (uint8_t)p0_inst);
+    steam2 = CONTROLLER_STEAM_2;  // registry enum only exists in USB-host builds
+#endif
+    snprintf(buf, len,
+        "players=%d p0.dev=%d inst=%d transport=%d ctrl_type=%d STEAM2=%d "
+        "cached: type=%d face=%d touch=%d tpcount=%d",
+        playersCount, p0_dev, p0_inst, p0_tr, ctrl, steam2,
+        cached_gamepad_type, cached_face_style, cached_has_touch, cached_touch_count);
+}
+
 uint16_t sinput_build_feature_response(uint8_t feature_response[63])
 {
     g_sinput_feature_count++;
@@ -744,10 +794,12 @@ uint16_t sinput_build_feature_response(uint8_t feature_response[63])
     // Byte 3: MISC4 (mute/assistant) + MISC5
     f[15] = 0x06;
 
-    // Touchpad
+    // Touchpad — count is device-driven: SC2 has two separate pads (left+right),
+    // DualSense has one pad with two fingers. SDL exposes exactly touchpad_count
+    // pads, so a wrong "1" here would drop the SC2's right pad.
     if (cached_has_touch) {
-        f[16] = 1;  // 1 touchpad
-        f[17] = 2;  // 2 fingers max
+        f[16] = cached_touch_count;
+        f[17] = cached_finger_count;
     } else {
         f[16] = 0;  // no touchpads
         f[17] = 0;
@@ -836,14 +888,14 @@ void sinput_report_build_from_event(sinput_report_t* out, const input_event_t* e
     }
 
     if (event->has_touch) {
-        int16_t t1x = event->touch[0].active ? (int16_t)event->touch[0].x : 0;
-        int16_t t1y = event->touch[0].active ? (int16_t)event->touch[0].y : 0;
+        int16_t t1x = event->touch[0].active ? touch_norm_to_s16(event->touch[0].x) : 0;
+        int16_t t1y = event->touch[0].active ? touch_norm_to_s16(event->touch[0].y) : 0;
         uint16_t t1p = event->touch[0].active ? 0x7FFF : 0;
         memcpy(out->touchpad1, &t1x, 2);
         memcpy(out->touchpad1 + 2, &t1y, 2);
         memcpy(out->touchpad1 + 4, &t1p, 2);
-        int16_t t2x = event->touch[1].active ? (int16_t)event->touch[1].x : 0;
-        int16_t t2y = event->touch[1].active ? (int16_t)event->touch[1].y : 0;
+        int16_t t2x = event->touch[1].active ? touch_norm_to_s16(event->touch[1].x) : 0;
+        int16_t t2y = event->touch[1].active ? touch_norm_to_s16(event->touch[1].y) : 0;
         uint16_t t2p = event->touch[1].active ? 0x7FFF : 0;
         memcpy(out->touchpad2, &t2x, 2);
         memcpy(out->touchpad2 + 2, &t2y, 2);

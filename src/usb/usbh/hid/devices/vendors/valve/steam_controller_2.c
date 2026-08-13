@@ -68,13 +68,26 @@ static inline uint8_t sc2_stick_to_u8(int16_t v) {
     return (uint8_t)scaled;
 }
 
+// SC2 pads are native int16 (±32767). Normalize into the device-agnostic 0..65535
+// touch scale (see input_event.h): X straight, Y inverted (SC2 +Y = up, canonical 0 = top).
+static inline uint16_t sc2_pad_x(int16_t v) { return touch_norm_from_s16(v); }
+static inline uint16_t sc2_pad_y(int16_t v) { return (uint16_t)(32767 - (int32_t)v); }
+
 // --- Driver state ----------------------------------------------------------
 
 static uint8_t prev_buttons_lo[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 static uint32_t last_lizard_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint8_t  last_rumble[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint32_t last_rumble_ms[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
+static uint8_t  batt_level[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];    // 0-100, 0=unknown
+static bool     batt_charging[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #if SC2_DEBUG
 static uint8_t  logged_report_id[CFG_TUH_DEVICE_MAX + 1][CFG_TUH_HID];
 #endif
+
+// The SC2 auto-stops rumble after a ~50ms hardware safety timeout, so an active
+// rumble must be re-sent on an interval (SDL uses 40ms).
+#define SC2_RUMBLE_RESEND_MS 40
 
 // --- DeviceInterface callbacks --------------------------------------------
 
@@ -83,20 +96,27 @@ static bool sc2_is_device(uint16_t vid, uint16_t pid) {
 }
 
 // Disable "lizard mode" (Valve's default keyboard + mouse emulation) so the SC2
-// streams its native gamepad state report — what Steam does on a real PC. The SC2
-// (Triton) uses SET_SETTINGS (0x87) writing SETTING_LIZARD_MODE (9) = 0, NOT the
-// SC1 CLEAR_DIGITAL_MAPPINGS (0x81). Format: [0x87, payload_len, setting, val_lo,
-// val_hi, ...] as a 64-byte feature report. Must be re-sent periodically (task)
-// because the firmware re-enables lizard mode on its own. Static buffer outlives
-// the async control transfer. (Ref: SDL3 / CouchTurtle/sc2-research.)
+// streams its native gamepad state report — what Steam does on a real PC — AND
+// enable the IMU (accel+gyro) in the same write. The SC2 (Triton) uses SET_SETTINGS
+// (0x87), which packs multiple [setting, val_lo, val_hi] triples: SETTING_LIZARD_MODE
+// (9) = 0 to leave lizard mode, and SETTING_GYRO (0x30) = 0x18 (SEND_RAW_ACCEL 0x08 |
+// SEND_RAW_GYRO 0x10) to stream motion (off by default → IMU fields read flat until
+// set; mirrors valve_setting_imu_on on the BLE path). Format: [0x87, payload_len,
+// <triples...>] as a 64-byte feature report. Must be re-sent periodically (task)
+// because the firmware re-enables lizard mode on its own; re-sending the IMU bit is
+// harmless. Static buffer outlives the async control transfer. (Ref: SDL3 /
+// CouchTurtle/sc2-research.)
 static void sc2_disable_lizard(uint8_t dev_addr, uint8_t instance) {
     static uint8_t settings[64];
     memset(settings, 0, sizeof(settings));
     settings[0] = 0x87;  // ID_SET_SETTINGS_VALUES
-    settings[1] = 0x03;  // payload length: 1 setting x 3 bytes
+    settings[1] = 0x06;  // payload length: 2 settings x 3 bytes
     settings[2] = 0x09;  // SETTING_LIZARD_MODE
     settings[3] = 0x00;  // value LO (0 = disabled)
     settings[4] = 0x00;  // value HI
+    settings[5] = 0x30;  // SETTING_GYRO
+    settings[6] = 0x18;  // SEND_RAW_ACCEL (0x08) | SEND_RAW_GYRO (0x10)
+    settings[7] = 0x00;  // value HI
     tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_FEATURE,
                        settings, sizeof(settings));
 }
@@ -121,20 +141,55 @@ static void sc2_unmount(uint8_t dev_addr, uint8_t instance) {
 #endif
 }
 
+// Rumble via the HAPTIC_RUMBLE output report (0x80). The magnitude rides entirely
+// on the per-motor "speed" fields (SDL passes the 0..65535 rumble value straight
+// through); gain stays 0 dB. It is an OUTPUT report — sent on the vendor interface's
+// interrupt-OUT endpoint (a FEATURE SET_REPORT is accepted but silently ignored).
+// Ref: SDL src/joystick/hidapi/SDL_hidapi_steam_triton.c.
+static void sc2_send_rumble(uint8_t dev_addr, uint8_t instance, uint8_t intensity) {
+    uint16_t speed = (uint16_t)(intensity * 257);          // 0..255 -> 0..65535
+    // payload after the report id (tuh_hid_send_report prepends 0x80):
+    // type, intensity_u16, left.speed_u16, left.gain, right.speed_u16, right.gain
+    uint8_t p[9];
+    p[0] = 0x00;                                            // type
+    p[1] = 0x00; p[2] = 0x00;                              // intensity (unused)
+    p[3] = (uint8_t)(speed & 0xFF); p[4] = (uint8_t)(speed >> 8);   // left.speed
+    p[5] = 0x00;                                            // left.gain (0 dB)
+    p[6] = (uint8_t)(speed & 0xFF); p[7] = (uint8_t)(speed >> 8);   // right.speed
+    p[8] = 0x00;                                            // right.gain (0 dB)
+    // The SC2 vendor interface has an interrupt-OUT endpoint, so the output report
+    // goes there. Fall back to a control OUTPUT SET_REPORT if it is ever absent.
+    if (!tuh_hid_send_report(dev_addr, instance, 0x80, p, sizeof(p))) {
+        uint8_t q[10]; q[0] = 0x80; memcpy(&q[1], p, sizeof(p));
+        tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, q, sizeof(q));
+    }
+}
+
 static void sc2_task(uint8_t dev_addr, uint8_t instance,
                      device_output_config_t *config) {
-    (void)config;
-    // Lizard-disable heartbeat. Only the vendor interface (protocol NONE) accepts
-    // the settings feature report; the firmware re-enables lizard mode on its own,
-    // so re-send on an interval to keep the native gamepad stream alive.
+    // Only the vendor interface (protocol NONE) accepts settings/haptic reports.
     if (tuh_hid_interface_protocol(dev_addr, instance) != HID_ITF_PROTOCOL_NONE) {
         return;
     }
     uint32_t now = platform_time_ms();
+
+    // Lizard-disable heartbeat — the firmware re-enables lizard mode on its own,
+    // so re-send on an interval to keep the native gamepad stream alive.
     if (now - last_lizard_ms[dev_addr][instance] >= SC2_LIZARD_REFRESH_MS) {
         sc2_disable_lizard(dev_addr, instance);
         last_lizard_ms[dev_addr][instance] = now;
     }
+
+    // Rumble: send on change, then keep re-sending every ~40ms while active so the
+    // hardware safety timeout doesn't cut it off. When it drops to 0 we simply stop
+    // sending and the controller auto-stops.
+    uint8_t rumble = config ? config->rumble : 0;
+    bool changed = (rumble != last_rumble[dev_addr][instance]);
+    if (rumble > 0 && (changed || now - last_rumble_ms[dev_addr][instance] >= SC2_RUMBLE_RESEND_MS)) {
+        sc2_send_rumble(dev_addr, instance, rumble);
+        last_rumble_ms[dev_addr][instance] = now;
+    }
+    last_rumble[dev_addr][instance] = rumble;
 }
 
 static void sc2_process(uint8_t dev_addr, uint8_t instance,
@@ -148,6 +203,16 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
         logged_report_id[dev_addr][instance] = report[0];
     }
 #endif
+
+    // Battery status (0x43, TritonBatteryStatus_t): byte 1 = charge state
+    // (0 reset, 1 discharging, 2 charging, 3 src-validate, 4 charge-done),
+    // byte 2 = level 0-100. Cache it and attach to the next 0x42 input event.
+    if (report[0] == SC2_BATTERY_REPORT_ID && len >= 3) {
+        uint8_t state = report[1];
+        batt_level[dev_addr][instance] = report[2];
+        batt_charging[dev_addr][instance] = (state == 2 || state == 4);  // charging / done
+        return;
+    }
 
     // The SC2 vendor interface emits report ID 0x45. Anything else is a lizard
     // report from the kbd/mouse interfaces (which we claimed by VID/PID). Forward
@@ -174,7 +239,7 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 19)) buttons |= JP_BUTTON_B4;  // Y   (0x02 b3)
     if (sc2_bit(report, 20)) buttons |= JP_BUTTON_A2;  // QAM (quick-access menu)
     if (sc2_bit(report, 21)) buttons |= JP_BUTTON_R3;  // R3  (right stick click)
-    if (sc2_bit(report, 22)) buttons |= JP_BUTTON_S1;  // View / Select
+    if (sc2_bit(report, 22)) buttons |= JP_BUTTON_S2;  // View (⧉) -> Start (matches BLE/SDL)
     if (sc2_bit(report, 23)) buttons |= JP_BUTTON_R4;  // R4 upper back paddle
     if (sc2_bit(report, 24)) buttons |= JP_BUTTON_R5;  // R5 lower back paddle
     if (sc2_bit(report, 25)) buttons |= JP_BUTTON_R1;  // RB
@@ -182,7 +247,7 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 27)) buttons |= JP_BUTTON_DR;  // D-Right
     if (sc2_bit(report, 28)) buttons |= JP_BUTTON_DL;  // D-Left
     if (sc2_bit(report, 29)) buttons |= JP_BUTTON_DU;  // D-Up
-    if (sc2_bit(report, 30)) buttons |= JP_BUTTON_S2;  // Menu / Start
+    if (sc2_bit(report, 30)) buttons |= JP_BUTTON_S1;  // Menu (☰) -> Back/Select (matches BLE/SDL)
     if (sc2_bit(report, 31)) buttons |= JP_BUTTON_L3;  // L3 (left stick click)
     if (sc2_bit(report, 32)) buttons |= JP_BUTTON_A1;  // Steam / Home
     if (sc2_bit(report, 33)) buttons |= JP_BUTTON_L4;  // L4 upper back paddle
@@ -190,7 +255,19 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
     if (sc2_bit(report, 35)) buttons |= JP_BUTTON_L1;  // LB
     if (sc2_bit(report, 39)) buttons |= JP_BUTTON_R2;  // RT full-pull click
     if (sc2_bit(report, 43)) buttons |= JP_BUTTON_L2;  // LT full-pull click
-    // Grips (L5/R5) and trackpad touch/click bits intentionally left unmapped.
+    // Grip (L5/R5) and trackpad click bits intentionally left unmapped.
+
+    // --- Trackpads (int16 LE ±32767) → DualSense touchpad space (0..1919 × 0..1079,
+    // top-left origin, +Y down) so PS5-type visualizers render at the right scale.
+    // Left pad pos 0x12/0x14, touch = byte 0x05 bit1 (bitpos 41). Right pad pos
+    // 0x18/0x1a, touch = byte 0x04 bit5 (bitpos 37).
+    bool lpad_touch = sc2_bit(report, 41);
+    bool rpad_touch = sc2_bit(report, 37);
+    uint16_t lpad_x = sc2_pad_x(sc2_i16(report, 144));  // 0x12
+    uint16_t lpad_y = sc2_pad_y(sc2_i16(report, 160));  // 0x14
+    uint16_t rpad_x = sc2_pad_x(sc2_i16(report, 192));  // 0x18
+    uint16_t rpad_y = sc2_pad_y(sc2_i16(report, 208));  // 0x1a
+    bool has_touch = (lpad_touch || rpad_touch);
 
     // --- Sticks (int16 LE ±32767; Valve +Y = up → invert to HID 0=up) ----
     uint8_t lx = sc2_stick_to_u8(sc2_i16(report,  80));                    // 0x0a
@@ -228,6 +305,13 @@ static void sc2_process(uint8_t dev_addr, uint8_t instance,
         .gyro  = {gyro_x,  gyro_y,  gyro_z},
         .gyro_range  = 2000,
         .accel_range = 4000,
+        .battery_level = batt_level[dev_addr][instance],
+        .battery_charging = batt_charging[dev_addr][instance],
+        .has_touch = has_touch,
+        .touch = {
+            { .x = (uint16_t)lpad_x, .y = (uint16_t)lpad_y, .active = lpad_touch },
+            { .x = (uint16_t)rpad_x, .y = (uint16_t)rpad_y, .active = rpad_touch },
+        },
     };
     router_submit_input(&event);
 

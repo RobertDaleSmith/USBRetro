@@ -582,6 +582,22 @@ void bthid_set_battery_level(uint8_t conn_index, uint8_t level)
     }
 }
 
+// Like bthid_set_battery_level but also carries charging state and always
+// updates (for controllers that stream a live battery report, e.g. SC2 0x43).
+void bthid_set_battery(uint8_t conn_index, uint8_t level, bool charging)
+{
+    bthid_device_t* device = bthid_get_device(conn_index);
+    if (!device || !device->driver_data) {
+        return;
+    }
+    // All driver data structs have input_event_t as their first field.
+    input_event_t* event = (input_event_t*)device->driver_data;
+    if (level > 0) {
+        event->battery_level = level;
+        event->battery_charging = charging;
+    }
+}
+
 // ============================================================================
 // OUTPUT REPORTS
 // ============================================================================

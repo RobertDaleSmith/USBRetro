@@ -206,7 +206,10 @@ typedef struct {
     uint8_t pressure[12];       // 0x00 = released, 0xFF = fully pressed
     bool has_pressure;          // Pressure data is valid
 
-    // Touchpad (DS4/DualSense: 2-finger capacitive, 0-1919 x 0-942)
+    // Touchpad, up to 2 fingers/pads. Coordinates are DEVICE-AGNOSTIC NORMALIZED:
+    // 0..65535 per axis, 0 = left/top, 65535 = right/bottom (i.e. u16 fixed-point
+    // 0.0..1.0). Every touch INPUT normalizes its native scale into this; every
+    // touch OUTPUT scales it back to its own. Use the touch_norm_* helpers below.
     struct {
         uint16_t x;
         uint16_t y;
@@ -222,6 +225,27 @@ typedef struct {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+// Touchpad coordinate normalization. input_event.touch is stored device-agnostic
+// as 0..65535 per axis (0 = left/top). Inputs map their native scale IN, outputs
+// scale it OUT. int16 helpers suit devices whose native coord is a signed int16
+// centered at 0 (Steam Controller 2, SInput); range helpers suit 0..max devices
+// (DS4 1919x942, DualSense 1919x1079).
+static inline uint16_t touch_norm_from_s16(int16_t v) {
+    return (uint16_t)((int32_t)v + 32768);         // -32768..32767 -> 0..65535
+}
+static inline int16_t touch_norm_to_s16(uint16_t c) {
+    return (int16_t)((int32_t)c - 32768);          // 0..65535 -> -32768..32767
+}
+static inline uint16_t touch_norm_from_range(int32_t v, int32_t max) {
+    if (v < 0) v = 0;
+    if (max <= 0) return 0;
+    if (v > max) v = max;
+    return (uint16_t)((v * 65535) / max);          // 0..max -> 0..65535
+}
+static inline uint16_t touch_norm_to_range(uint16_t c, int32_t max) {
+    return (uint16_t)(((int32_t)c * max) / 65535);  // 0..65535 -> 0..max
+}
 
 // Initialize event with safe defaults
 static inline void init_input_event(input_event_t* event) {
