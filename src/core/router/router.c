@@ -1811,3 +1811,8 @@ void router_set_combo_layout(uint8_t index, uint8_t required_layout) {
 void router_set_shoulder_swap(bool on) {
     global_shoulder_swap = on;
 }
+
+// Live getters — reflect the boot-restored value plus any hotkey/CDC change
+// immediately (unlike the flash record, whose write is debounced ~5s).
+uint8_t router_get_dpad_mode(void) { return global_dpad_mode; }
+bool router_get_shoulder_swap(void) { return global_shoulder_swap; }

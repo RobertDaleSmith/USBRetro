@@ -56,6 +56,11 @@ export class RouterCard {
                         </select>
                     </div>
                     <p class="hint">Swaps the d-pad with a stick (both directions), or swaps the two sticks. Also on-controller: SELECT + D-pad Left/Right. Applies to all input sources.</p>
+                    <div class="row">
+                        <span class="label">Shoulder Swap</span>
+                        <input type="checkbox" id="shoulderSwap">
+                    </div>
+                    <p class="hint">Swaps L1↔L2 and R1↔R2. Also on-controller: START + D-pad Up.</p>
                 </div>
             </div>`;
 
@@ -64,6 +69,7 @@ export class RouterCard {
         });
         this.el.querySelector('#routerSaveBtn').addEventListener('click', () => this.save());
         this.el.querySelector('#dpadMode').addEventListener('change', (e) => this.setDpadMode(e.target.value));
+        this.el.querySelector('#shoulderSwap').addEventListener('change', (e) => this.setShoulderSwap(e.target.checked));
 
         // Dirty tracking — only the routing/merge mode card needs save+reboot
         this.dirty = new DirtyTracker(
@@ -78,6 +84,7 @@ export class RouterCard {
             this.el.querySelector('#routingMode').value = config.routing_mode || 0;
             this.el.querySelector('#mergeMode').value = config.merge_mode || 0;
             this.el.querySelector('#dpadMode').value = config.dpad_mode || 0;
+            this.el.querySelector('#shoulderSwap').checked = !!config.shoulder_swap;
             this.el.querySelector('#mergeModeRow').style.display =
                 (config.routing_mode || 0) === 1 ? '' : 'none';
             this.dirty?.snapshot();
@@ -190,6 +197,15 @@ export class RouterCard {
             this.log(`D-Pad / Stick swap: ${names[parseInt(mode)]}`, 'success');
         } catch (e) {
             this.log(`Failed to set D-Pad mode: ${e.message}`, 'error');
+        }
+    }
+
+    async setShoulderSwap(on) {
+        try {
+            await this.protocol.setShoulderSwap(on);
+            this.log(`Shoulder swap: ${on ? 'on' : 'off'}`, 'success');
+        } catch (e) {
+            this.log(`Failed to set shoulder swap: ${e.message}`, 'error');
         }
     }
 }
