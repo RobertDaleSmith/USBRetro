@@ -133,36 +133,54 @@ static void tap_commit(void) {
 // Commit auto-fire: find tap_button in the existing button map and update its
 // autofire_period_ms. Buttons not in the map are silently ignored — autofire
 // overlays the current mapping without creating new entries.
-static void autofire_commit(void) {
-    if (tap_button == 0 || tap_count == 0) return;
-    uint8_t table_size = sizeof(autofire_period_ms_table) / sizeof(autofire_period_ms_table[0]);
-    uint8_t period_ms = (tap_count > table_size) ? 0 : autofire_period_ms_table[tap_count - 1];
-
-    // No runtime mapping yet — seed from the active normal profile so autofire
-    // overlays on top of the current button remapping instead of replacing it.
-    if (runtime_entry == 0) {
-        const profile_t* base = profile_get_active(router_get_primary_output());
-        if (base && base->button_map && base->button_map_count > 0) {
-            uint8_t n = base->button_map_count;
-            if (n > RUNTIME_PROFILE_ENTRY_MAX) n = RUNTIME_PROFILE_ENTRY_MAX;
-            for (uint8_t i = 0; i < n; i++) runtime_map[i] = base->button_map[i];
-            runtime_entry                   = n;
-            cfg->profile->button_map_count = n;
-            printf("[runtime_profile] AutoFire: seeded %d entries from active profile\n", n);
-        }
+// Seed the runtime map once from the active normal profile, so autofire overlays
+// on top of the current remapping instead of replacing it.
+static void autofire_seed_once(void) {
+    if (runtime_entry != 0) return;
+    const profile_t* base = profile_get_active(router_get_primary_output());
+    if (base && base->button_map && base->button_map_count > 0) {
+        uint8_t n = base->button_map_count;
+        if (n > RUNTIME_PROFILE_ENTRY_MAX) n = RUNTIME_PROFILE_ENTRY_MAX;
+        for (uint8_t i = 0; i < n; i++) runtime_map[i] = base->button_map[i];
+        runtime_entry                  = n;
+        cfg->profile->button_map_count = n;
     }
+}
 
+// Advance one button's autofire rate on each press, live:
+//   solid -> 30 -> 20 -> 15 -> 12 -> 10 -> 7.5 Hz -> solid.
+// Adds a passthrough entry for the button if it isn't already mapped.
+static void autofire_cycle(uint32_t btn) {
+    if (btn == 0) return;
+    const uint8_t table_size = sizeof(autofire_period_ms_table) / sizeof(autofire_period_ms_table[0]);
+    int idx = -1;
     for (uint8_t i = 0; i < runtime_entry; i++) {
-        if (runtime_map[i].input == tap_button) {
-            // runtime_profile_indicator(0);
-            runtime_map[i].autofire_period_ms = period_ms;
-            printf("[runtime_profile] AutoFire update: %s @ %d Hz\n",
-                   jp_button_names(tap_button), period_ms ? 1000 / period_ms : 0);
-            return;
-        }
+        if (runtime_map[i].input == btn) { idx = i; break; }
     }
-    printf("[runtime_profile] AutoFire: %s not in map, ignored\n",
-           jp_button_names(tap_button));
+    if (idx < 0) {
+        if (runtime_entry >= RUNTIME_PROFILE_ENTRY_MAX) return;
+        idx = runtime_entry++;
+        runtime_map[idx] = (button_map_entry_t){
+            .input = btn, .output = btn, .analog = ANALOG_TARGET_NONE,
+            .analog_value = 0, .autofire_period_ms = 0,
+        };
+        cfg->profile->button_map_count = runtime_entry;
+    }
+    uint8_t cur = runtime_map[idx].autofire_period_ms;
+    uint8_t next;
+    if (cur == 0) {
+        next = autofire_period_ms_table[0];
+    } else {
+        int ti = -1;
+        for (uint8_t i = 0; i < table_size; i++) {
+            if (autofire_period_ms_table[i] == cur) { ti = (int)i; break; }
+        }
+        next = (ti < 0 || ti + 1 >= (int)table_size) ? 0 : autofire_period_ms_table[ti + 1];
+    }
+    runtime_map[idx].autofire_period_ms = next;
+    runtime_profile_indicator(0);
+    printf("[runtime_profile] Rapid-fire %s -> %d Hz\n",
+           jp_button_names(btn), next ? 1000 / next : 0);
 }
 
 static void finish_mapping(void) {
@@ -226,6 +244,14 @@ bool runtime_profile_is_active(void) {
     return runtime_state == RUNTIME_MAPPING     ||
            runtime_state == RUNTIME_MAPPING_ALT ||
            runtime_state == RUNTIME_AUTOFIRE;
+}
+
+// True only while a live REMAP is in progress — the caller should freeze output
+// so the buttons being pressed to define the map don't leak through. Rapid-fire
+// set mode is deliberately NOT included: it stays live so you feel each rate.
+bool runtime_profile_is_mapping(void) {
+    return runtime_state == RUNTIME_MAPPING ||
+           runtime_state == RUNTIME_MAPPING_ALT;
 }
 
 void runtime_profile_clear(void) {
@@ -306,83 +332,37 @@ void runtime_profile_check_combo(uint32_t input_buttons, uint8_t l2, uint8_t r2)
     switch (runtime_state) {
 
         case RUNTIME_IDLE: {
-            bool select_held   = (input_buttons & JP_BUTTON_S1) != 0;
-            bool start_held    = (input_buttons & JP_BUTTON_S2) != 0;
-            bool dpad_held     = (input_buttons & (JP_BUTTON_DU | JP_BUTTON_DD |
-                                             JP_BUTTON_DL | JP_BUTTON_DR)) != 0;
-            uint32_t prev_eligible = runtime_prev_buttons & cfg->input_mask;
-            uint32_t curr_eligible = input_buttons & cfg->input_mask;
+            // Enter a config mode from a deliberate hold. Neither combo involves
+            // START, so nothing collides with console reset combos (PCE START+SELECT,
+            // SNES START+SELECT+L+R):
+            //   SELECT + B3 (hold) → rapid-fire set   SELECT + B4 (hold) → live remap
+            bool select_held = (input_buttons & JP_BUTTON_S1) != 0;
+            uint32_t entry = 0;
+            if (select_held && (input_buttons & JP_BUTTON_B3)) entry = JP_BUTTON_B3;
+            else if (select_held && (input_buttons & JP_BUTTON_B4)) entry = JP_BUTTON_B4;
 
-            // --- Trigger A: SELECT alone (no mask buttons, no dpad) for hold_ms,
-            //     then first mask button press → entry mode ---
-            if (select_held && curr_eligible == 0 && !dpad_held) {
-                if (runtime_select_hold == 0) runtime_select_hold = platform_time_ms();
-            } else if (!hold_was_elapsed) {
-                runtime_select_hold = 0;
-            }
-
-            bool hold_elapsed = runtime_select_hold != 0 &&
-                                (platform_time_ms() - runtime_select_hold) >= cfg->hold_ms;
-            if (hold_elapsed && !hold_was_elapsed) { hold_was_elapsed = true; new_prev = 0; }
-            if (!hold_elapsed) hold_was_elapsed = false;
-
-            if (hold_elapsed && select_held) {
-                bool s2_rising = (input_buttons  & JP_BUTTON_S2) &&
-                                !(runtime_prev_buttons & JP_BUTTON_S2);
-                if (s2_rising && curr_eligible == 0) {
-                    runtime_profile_indicator(1);
-                    runtime_profile_clear();
-                    break;
-                }
-            }
-
-            if (hold_elapsed && select_held && prev_eligible == 0 && curr_eligible != 0) {
-                cfg->profile->button_map_count = 0;
-                runtime_entry       = 0;
-                runtime_mapped_mask = 0;
-                runtime_select_hold = 0;
-                runtime_combo_hold = 0;
-                hold_was_elapsed   = false;
-                uint32_t input_btn = curr_eligible & (~curr_eligible + 1);
-                map_entry(input_btn);
-                if (runtime_entry >= cfg->output_button_count) {
-                    finish_mapping();
-                } else {
-                    runtime_profile_indicator(1);
-                    runtime_state = RUNTIME_MAPPING;
-                    printf("[runtime_profile] Entry mode: press button for entry %d/%d\n",
-                           runtime_entry + 1, cfg->output_button_count);
-                }
-                new_prev = input_buttons;
-                break;
-            }
-
-            // --- Trigger B: SELECT + 2 mask buttons for hold_ms → tap mode
-            //     Trigger C: SELECT + 1 mask button  for hold_ms → auto-fire mode ---
-            if (select_held && !start_held && curr_eligible != 0) {
+            if (entry) {
                 if (runtime_combo_hold == 0) runtime_combo_hold = platform_time_ms();
+                if ((platform_time_ms() - runtime_combo_hold) >= cfg->hold_ms) {
+                    runtime_combo_hold = 0;
+                    runtime_profile_indicator(1);
+                    if (entry == JP_BUTTON_B3) {
+                        autofire_seed_once();
+                        runtime_state = RUNTIME_AUTOFIRE;
+                        printf("[runtime_profile] Rapid-fire set: tap a button to cycle its rate "
+                               "(off/30/20/15/12/10/7.5Hz), SELECT to exit\n");
+                    } else {
+                        cfg->profile->button_map_count = 0;
+                        runtime_entry       = 0;
+                        runtime_mapped_mask = 0;
+                        runtime_state = RUNTIME_MAPPING;
+                        printf("[runtime_profile] Remap: press input for entry 1/%d, SELECT to exit\n",
+                               cfg->output_button_count);
+                    }
+                    new_prev = input_buttons;  // don't treat the entry press as an action
+                }
             } else {
                 runtime_combo_hold = 0;
-            }
-
-            if (runtime_combo_hold != 0 &&
-                (platform_time_ms() - runtime_combo_hold) >= cfg->hold_ms) {
-                bool one_button = (curr_eligible & (curr_eligible - 1)) == 0;
-                runtime_select_hold = 0;
-                runtime_combo_hold = 0;
-                hold_was_elapsed   = false;
-                new_prev = input_buttons;
-                runtime_profile_indicator(1);
-                if (one_button) {
-                    runtime_state = RUNTIME_AUTOFIRE;
-                    printf("[runtime_profile] AutoFire mode: tap button Nx for Hz, SELECT to save, START to clear\n");
-                    printf("[runtime_profile]   1x=30Hz 2x=20Hz 3x=15Hz 4x=12Hz 5x=10Hz 6x=7.5Hz\n");
-                } else {
-                    cfg->profile->button_map_count = 0;
-                    runtime_entry = 0;
-                    runtime_state = RUNTIME_MAPPING_ALT;
-                    printf("[runtime_profile] Tap mode: tap buttons, SELECT to save, START to clear\n");
-                }
             }
             break;
         }
@@ -483,63 +463,20 @@ void runtime_profile_check_combo(uint32_t input_buttons, uint8_t l2, uint8_t r2)
             uint32_t curr_eligible = input_buttons & cfg->input_mask;
             uint32_t prev_eligible = runtime_prev_buttons & cfg->input_mask;
 
-            // SELECT alone (rising edge, no mask buttons) → commit + back to IDLE
+            // SELECT (rising edge, no eligible button) → exit. Output stays LIVE the
+            // whole time so you feel each rate as you set it.
             bool s1_rising = (input_buttons & JP_BUTTON_S1) &&
                              !(runtime_prev_buttons & JP_BUTTON_S1);
-            if (s1_rising && !(input_buttons & JP_BUTTON_S2) && curr_eligible == 0) {
+            if (s1_rising && curr_eligible == 0) {
                 runtime_profile_indicator(1);
-                autofire_commit();
-                tap_button    = 0;
-                tap_count     = 0;
-                tap_timeout   = 0;
                 runtime_state = RUNTIME_IDLE;
-                printf("[runtime_profile] AutoFire mapping complete\n");
+                printf("[runtime_profile] Rapid-fire set: done\n");
                 break;
             }
 
-            // START alone (rising edge, no mask buttons) → discard + back to IDLE
-            bool s2_rising = (input_buttons & JP_BUTTON_S2) &&
-                             !(runtime_prev_buttons & JP_BUTTON_S2);
-            if (s2_rising && !(input_buttons & JP_BUTTON_S1) && curr_eligible == 0) {
-                runtime_profile_indicator(1);
-                runtime_autofire_clear();
-                break;
-            }
-
-            // Commit pending sequence on timeout
-            if (tap_button != 0 && tap_timeout != 0 &&
-                (platform_time_ms() - tap_timeout) >= RUNTIME_TAP_TIMEOUT_MS) {
-                runtime_profile_indicator(0);
-                autofire_commit();
-                tap_button  = 0;
-                tap_count   = 0;
-                tap_timeout = 0;
-            }
-
-            // Detect rising edge on eligible buttons
+            // Each button press cycles that one button's rate.
             if (prev_eligible == 0 && curr_eligible != 0) {
-                uint32_t input_btn = curr_eligible & (~curr_eligible + 1);
-                if (tap_button == 0) {
-                    tap_button  = input_btn;
-                    tap_count   = 1;
-                    tap_timeout = platform_time_ms();
-                    printf("[runtime_profile] AutoFire tap 1x: %s\n",
-                           jp_button_names(input_btn));
-                } else if (input_btn == tap_button) {
-                    tap_count++;
-                    tap_timeout = platform_time_ms();
-                    printf("[runtime_profile] AutoFire tap %dx: %s\n",
-                           tap_count, jp_button_names(input_btn));
-                } else {
-                    // Different button: commit previous, start new
-                    runtime_profile_indicator(0);
-                    autofire_commit();
-                    tap_button  = input_btn;
-                    tap_count   = 1;
-                    tap_timeout = platform_time_ms();
-                    printf("[runtime_profile] AutoFire tap 1x: %s\n",
-                           jp_button_names(input_btn));
-                }
+                autofire_cycle(curr_eligible & (~curr_eligible + 1));
             }
             break;
         }

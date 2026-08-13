@@ -240,6 +240,7 @@ set(SRCS
     "${SHARED_SRC}/core/services/players/feedback.c"
     "${SHARED_SRC}/core/services/profiles/profile.c"
     "${SHARED_SRC}/core/services/profiles/profile_indicator.c"
+    "${SHARED_SRC}/core/services/profiles/runtime_profile.c"
 
     # --- USB Device ---
     "${SHARED_SRC}/usb/usbd/usbd.c"

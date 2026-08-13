@@ -2215,7 +2215,7 @@ static void cmd_router_get(const char* json)
     if (flash_load(&flash_data) && flash_data.router_saved) {
         if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
         if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
-        if (flash_data.dpad_mode <= 2) dm = flash_data.dpad_mode;
+        if (flash_data.dpad_mode <= 3) dm = flash_data.dpad_mode;
         bti = flash_data.bt_input_enabled;
     }
     snprintf(response_buf, sizeof(response_buf),
@@ -2230,8 +2230,8 @@ static void cmd_router_get(const char* json)
 static void cmd_router_dpad_set(const char* json)
 {
     int mode;
-    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 2) {
-        send_error("Invalid mode (0-2)");
+    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 3) {
+        send_error("Invalid mode (0=normal,1=dpad<->L,2=dpad<->R,3=L<->R)");
         return;
     }
     router_set_dpad_mode((uint8_t)mode);

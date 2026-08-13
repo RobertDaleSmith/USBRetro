@@ -4,6 +4,7 @@
 // Supports per-output-target profile sets with shared fallback.
 
 #include "profile.h"
+#include "runtime_profile.h"
 #include "platform/platform.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -129,6 +130,11 @@ void profile_set_output_mode_callback(output_mode_callback_t callback)
 
 const profile_t* profile_get_active(output_target_t output)
 {
+    // A live runtime profile (SELECT-hold autofire / remap gesture) overrides
+    // the normal profile for this output while it has any entries.
+    const profile_t* rt = runtime_profile_get_active(output);
+    if (rt) return rt;
+
     const profile_set_t* set = get_profile_set(output);
     if (!set || set->profile_count == 0) {
         return NULL;
