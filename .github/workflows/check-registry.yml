@@ -1,0 +1,55 @@
+# Cross-check the driver registries against every backend's source list.
+#
+# Both registries reference their drivers unconditionally, so a backend that
+# compiles a registry has to compile every driver behind it or it fails to link.
+# The source lists are hand-maintained per backend and have drifted four times;
+# twice the drift landed on a target no CI job builds, so nothing went red.
+#
+# This job needs no toolchain and no submodules -- it is pure text analysis over
+# files already in the checkout -- so it runs in seconds and, unlike a build job,
+# it covers backends and app configs that are in no release matrix. That is the
+# point: the drifts that survived were exactly the ones on unbuilt targets.
+#
+# `pull_request` is the load-bearing trigger. This class of breakage arrives in a
+# PR that touches a registry and one backend's list, and never mentions the
+# backend it breaks.
+name: Check Driver Registry
+
+on:
+  push:
+    paths:
+      - 'src/usb/usbh/hid/hid_registry.c'
+      - 'src/bt/bthid/bthid_registry.c'
+      - 'src/usb/usbh/hid/devices/**'
+      - 'src/bt/bthid/devices/**'
+      - 'src/CMakeLists.txt'
+      - 'esp/main/CMakeLists.txt'
+      - 'nrf/CMakeLists.txt'
+      - 'wch/Makefile'
+      - 'tools/ci/check_driver_registry.py'
+      - '.github/workflows/check-registry.yml'
+  pull_request:
+    paths:
+      - 'src/usb/usbh/hid/hid_registry.c'
+      - 'src/bt/bthid/bthid_registry.c'
+      - 'src/usb/usbh/hid/devices/**'
+      - 'src/bt/bthid/devices/**'
+      - 'src/CMakeLists.txt'
+      - 'esp/main/CMakeLists.txt'
+      - 'nrf/CMakeLists.txt'
+      - 'wch/Makefile'
+      - 'tools/ci/check_driver_registry.py'
+      - '.github/workflows/check-registry.yml'
+  workflow_dispatch:
+
+jobs:
+  check-driver-registry:
+    runs-on: ubuntu-latest
+    steps:
+      # Deliberately not `submodules: recursive` -- the check reads only
+      # first-party sources, and pulling ~1 GB of vendored SDKs would cost more
+      # than the check itself.
+      - uses: actions/checkout@v4
+
+      - name: Cross-check registries against backend source lists
+        run: python3 tools/ci/check_driver_registry.py
