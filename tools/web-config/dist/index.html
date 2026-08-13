@@ -455,17 +455,18 @@ Continue?`)){await this.load();return}try{this.log(`Setting USB mode to ${e}...`
             </div>
 
             <div class="card">
-                <h2>D-Pad Mode</h2>
+                <h2>D-Pad / Stick Swap</h2>
                 <div class="card-content">
                     <div class="row">
                         <span class="label">Mode</span>
                         <select id="dpadMode">
-                            <option value="0">D-Pad</option>
-                            <option value="1">Left Stick</option>
-                            <option value="2">Right Stick</option>
+                            <option value="0">Normal</option>
+                            <option value="1">D-Pad ↔ Left Stick</option>
+                            <option value="2">D-Pad ↔ Right Stick</option>
+                            <option value="3">Left ↔ Right Stick</option>
                         </select>
                     </div>
-                    <p class="hint">Maps d-pad buttons to analog stick. Applies to all input sources.</p>
+                    <p class="hint">Swaps the d-pad with a stick (both directions), or swaps the two sticks. Also on-controller: SELECT + D-pad Left/Right. Applies to all input sources.</p>
                 </div>
             </div>`,this.el.querySelector("#routingMode").addEventListener("change",e=>{this.el.querySelector("#mergeModeRow").style.display=e.target.value==="1"?"":"none"}),this.el.querySelector("#routerSaveBtn").addEventListener("click",()=>this.save()),this.el.querySelector("#dpadMode").addEventListener("change",e=>this.setDpadMode(e.target.value)),this.dirty=new y(this.el.querySelectorAll(".card")[0],this.el.querySelector("#routerSaveBtn"))}async load(){try{const e=await this.protocol.getRouter();this.el.querySelector("#routingMode").value=e.routing_mode||0,this.el.querySelector("#mergeMode").value=e.merge_mode||0,this.el.querySelector("#dpadMode").value=e.dpad_mode||0,this.el.querySelector("#mergeModeRow").style.display=(e.routing_mode||0)===1?"":"none",this.dirty?.snapshot()}catch(e){this.log(`Failed to load router config: ${e.message}`,"error")}try{const e=await this.protocol.getCapabilities();this.renderTopology(e)}catch{const t=this.el.querySelector("#topologyBody");t&&(t.textContent="Capabilities not reported by this firmware.")}}renderTopology(e){const t=this.el.querySelector("#topologyBody");if(!t)return;const s=e.inputs||[],i=e.outputs||[],n=e.routes||[],o=e.routing||{},a=(o.mode_name||"").replace(/^./,u=>u.toUpperCase())||"—",l=o.mode_name==="merge",r=(o.merge_mode_name||"").replace(/^./,u=>u.toUpperCase()),c=s.length===0?'<div class="topology-empty">No inputs registered</div>':s.map(u=>`
                 <div class="topology-node" data-source="${u.source}">
@@ -509,7 +510,7 @@ Continue?`)){await this.load();return}try{this.log(`Setting USB mode to ${e}...`
                 <div class="topology-col-title">Routes</div>
                 ${h}
             </div>
-        `}async save(){if(!confirm("Save router configuration? The device will reboot."))return;const e={routing_mode:parseInt(this.el.querySelector("#routingMode").value),merge_mode:parseInt(this.el.querySelector("#mergeMode").value),dpad_mode:parseInt(this.el.querySelector("#dpadMode").value)};try{this.log("Saving router config...");const t=await this.protocol.setRouter(e);this.log(t.reboot?"Config saved. Device rebooting...":"Config saved.","success")}catch(t){this.log(`Failed to save router config: ${t.message}`,"error")}}async setDpadMode(e){try{await this.protocol.setDpadMode(parseInt(e));const t=["D-Pad","Left Stick","Right Stick"];this.log(`D-Pad mode: ${t[parseInt(e)]}`,"success")}catch(t){this.log(`Failed to set D-Pad mode: ${t.message}`,"error")}}}const U=24,H=4194303,fe=[{id:-1,name:"Disabled"},{id:0,name:"Button Remap"},{id:1,name:"D-Pad → D-Pad"},{id:2,name:"D-Pad → Left Stick"},{id:3,name:"D-Pad → Right Stick"},{id:4,name:"Cycle D-Pad Mode"},{id:5,name:"Next Profile"},{id:6,name:"Previous Profile"}];class be{constructor(e,t,s){this.protocol=t,this.log=s,this.el=e,this.visible=!1,this.currentConfig=null}render(){const e=[0,1,2,3].map(t=>`
+        `}async save(){if(!confirm("Save router configuration? The device will reboot."))return;const e={routing_mode:parseInt(this.el.querySelector("#routingMode").value),merge_mode:parseInt(this.el.querySelector("#mergeMode").value),dpad_mode:parseInt(this.el.querySelector("#dpadMode").value)};try{this.log("Saving router config...");const t=await this.protocol.setRouter(e);this.log(t.reboot?"Config saved. Device rebooting...":"Config saved.","success")}catch(t){this.log(`Failed to save router config: ${t.message}`,"error")}}async setDpadMode(e){try{await this.protocol.setDpadMode(parseInt(e));const t=["Normal","D-Pad ↔ Left Stick","D-Pad ↔ Right Stick","Left ↔ Right Stick"];this.log(`D-Pad / Stick swap: ${t[parseInt(e)]}`,"success")}catch(t){this.log(`Failed to set D-Pad mode: ${t.message}`,"error")}}}const U=24,H=4194303,fe=[{id:-1,name:"Disabled"},{id:0,name:"Button Remap"},{id:1,name:"D-Pad → D-Pad"},{id:2,name:"D-Pad → Left Stick"},{id:3,name:"D-Pad → Right Stick"},{id:4,name:"Cycle D-Pad Mode"},{id:5,name:"Next Profile"},{id:6,name:"Previous Profile"}];class be{constructor(e,t,s){this.protocol=t,this.log=s,this.el=e,this.visible=!1,this.currentConfig=null}render(){const e=[0,1,2,3].map(t=>`
             <div class="combo-row" style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
                 <div class="pad-form-row" style="margin-bottom: 8px;">
                     <span class="label">Combo ${t+1}</span>
