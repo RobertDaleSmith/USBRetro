@@ -232,6 +232,11 @@ static router_config_t router_config;
 static uint8_t global_dpad_mode = 0;
 static bool global_shoulder_swap = false;  // swap L1<->L2, R1<->R2
 
+// True after router_init() installs the built-in SELECT+D-pad hotkeys. The first
+// app router_set_combo() call clears them so the app's own combo table takes over
+// (gc2usb, controller_btusb); apps that register nothing keep the defaults.
+static bool router_default_combos_active = false;
+
 // Global button combo hotkeys
 static struct {
     uint32_t input_mask;
@@ -382,6 +387,21 @@ bool router_onboard_motion_get(int16_t accel[3], int16_t gyro[3]) {
 // INITIALIZATION
 // ============================================================================
 
+// Built-in SELECT (S1) + D-pad hotkeys for the global d-pad output mode, so the
+// toggle works on every app out of the box (previously only gc2usb/controller_btusb
+// registered any combos). Convention matches gc2usb's N64 layout:
+//   SELECT+Down  → mode 0 (d-pad)       SELECT+Left → mode 1 (left stick)
+//   SELECT+Right → mode 2 (right stick)
+// The combo handler persists the choice via flash_set_dpad_mode(); router_init()
+// restores it on boot. Any app that registers its own combos wipes these on its
+// first router_set_combo() call (see router_set_combo).
+static void router_install_default_combos(void) {
+    router_set_combo(0, JP_BUTTON_S1 | JP_BUTTON_DD, (1u << 24));  // action 1 → dpad mode 0
+    router_set_combo(1, JP_BUTTON_S1 | JP_BUTTON_DL, (2u << 24));  // action 2 → dpad mode 1
+    router_set_combo(2, JP_BUTTON_S1 | JP_BUTTON_DR, (3u << 24));  // action 3 → dpad mode 2
+    router_default_combos_active = true;
+}
+
 void router_init(const router_config_t* config) {
     if (!config) {
         printf(LOG_TAG "ERROR: NULL config\n");
@@ -390,6 +410,19 @@ void router_init(const router_config_t* config) {
 
     // Copy configuration
     router_config = *config;
+
+    // Restore persisted router settings (d-pad mode + shoulder swap) so a saved
+    // selection survives a reboot on EVERY app, not just the few that restore
+    // themselves. Gated on router_saved so untouched flash is left at defaults.
+    flash_t flash_data;
+    if (flash_load(&flash_data) && flash_data.router_saved) {
+        if (flash_data.dpad_mode <= 2) router_set_dpad_mode(flash_data.dpad_mode);
+        router_set_shoulder_swap(flash_data.shoulder_swap != 0);
+    }
+
+    // Install the built-in SELECT+D-pad hotkeys. Apps that register their own
+    // combos (gc2usb, controller_btusb) clear these on first router_set_combo().
+    router_install_default_combos();
 
     printf(LOG_TAG "Initializing router\n");
     printf(LOG_TAG "  Mode: %s\n",
@@ -1646,6 +1679,18 @@ void router_set_dpad_mode(uint8_t mode) {
 
 void router_set_combo(uint8_t index, uint32_t input_mask, uint32_t output_mask) {
     if (index >= ROUTER_COMBO_MAX) return;
+    // The first app-registered combo takes ownership of the table: wipe the
+    // built-in defaults installed by router_init() so they can't linger in slots
+    // the app leaves unused.
+    if (router_default_combos_active) {
+        router_default_combos_active = false;
+        for (int i = 0; i < ROUTER_COMBO_MAX; i++) {
+            router_combos[i].input_mask = 0;
+            router_combos[i].output_mask = 0;
+            router_combos[i].required_layout = 0;
+            router_combos[i].fired = false;
+        }
+    }
     router_combos[index].input_mask = input_mask;
     router_combos[index].output_mask = output_mask;
     router_combos[index].required_layout = 0;  // any layout by default
