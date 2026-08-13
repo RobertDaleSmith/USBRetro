@@ -12,15 +12,23 @@ SNES/NES controllers to USB HID gamepad via Adafruit KB2040.
 
 The SNES controller port is a 7-pin connector. Cut an extension cable and wire the console-end plug to the KB2040.
 
+> 🚨 **The connector pin numbering below is UNVERIFIED — do not solder against it yet.**
+> The KB2040 GPIO assignments in the wiring table *are* verified against firmware
+> (`src/apps/snes2usb/app.h:37-41`), but nothing in this repository states which **physical pin of
+> the SNES connector** each signal lands on — `docs/input/snes.md` has no pinout section, and the
+> firmware only knows GPIO numbers. This table was not checked against hardware.
+> Verify continuity with a multimeter against a known-good SNES pinout before connecting +5V.
+> See `a15980f` for why this repo treats unverified connector diagrams as a safety issue.
+
 ```
   ___________
  /  1 2 3 4  \
 |  5 6 7      |
  \____________/
 
- 1 = +5V        5 = DATA (serial data from controller)
- 2 = CLOCK      6 = LATCH (active-high strobe)
- 3 = IOBIT      7 = GND
+ 1 = +5V        5 = DATA (serial data from controller)     [UNVERIFIED]
+ 2 = CLOCK      6 = LATCH (active-high strobe)              [UNVERIFIED]
+ 3 = IOBIT      7 = GND                                     [UNVERIFIED]
  4 = DATA1
 ```
 
@@ -46,7 +54,7 @@ make snes2usb_kb2040
 make flash-snes2usb_kb2040
 ```
 
-Output file: `releases/joypad_<commit>_snes2usb_ada_kb2040.uf2`
+Output file: `releases/joypad_<commit>_snes2usb_kb2040.uf2`
 
 ## Testing
 
