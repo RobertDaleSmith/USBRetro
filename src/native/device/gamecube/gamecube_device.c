@@ -86,6 +86,49 @@ uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 
+// ============================================================================
+// KEYBOARD MODE ACTIVATION CHORD
+// ============================================================================
+// Third activation binding, for keyboards that have neither Scroll Lock nor an
+// F13-F24 row — 65% boards and smaller (discussion #220).
+//
+// It has to be a chord rather than a fourth single key. gc_kb_key_lookup_init()
+// below gives the GameCube keyboard its own keycode for 77 of the 112 HID codes
+// in 0x04-0x73, and a toggle bound to one of those would switch the mode *and*
+// type the character into the game. The 35 codes it leaves free are Scroll Lock,
+// Pause, Num Lock, the numeric keypad, F13-F24 and EUROPE_1/2 — i.e. exactly the
+// clusters a 65% board drops. (EUROPE_2 is free only because the GameCube
+// keyboard is US/JP; it is a real typing key on every ISO board, so it is not a
+// candidate either.) There is no single key that is both present on a small
+// board and free of a GameCube keycode, which is why Scroll Lock and F14 were
+// picked in the first place.
+//
+// To rebind, change these three defines. The modifier side does not matter:
+// process_hid_keyboard() folds right Ctrl/Alt onto the LEFT keycodes before the
+// event reaches us, so Ctrl and Alt on either side of the space bar both work.
+#define GC_KB_TOGGLE_MOD1  HID_KEY_CONTROL_LEFT
+#define GC_KB_TOGGLE_MOD2  HID_KEY_ALT_LEFT
+#define GC_KB_TOGGLE_KEY   HID_KEY_K
+
+// event->keys is a lossy 32-bit packing of the USB HID keyboard report: up to
+// three keycodes, with any held modifiers shifted in at the low end (see
+// process_hid_keyboard in hid_keyboard.c). A trigger therefore has to be matched
+// as set membership over the four bytes, not as equality against the whole word.
+// Comparing the word — as this did until now — means the key only toggles when
+// pressed completely alone: holding any modifier shifts the keycode up a byte
+// and the compare silently fails.
+//
+// No false matches are possible: modifier keycodes (0xE0-0xE7) never appear in
+// the report's keycode[] array, and an unused byte is 0 while every trigger
+// constant is non-zero.
+static inline bool gc_keys_contain(uint32_t keys, uint8_t code)
+{
+  return (uint8_t)( keys        & 0xFF) == code ||
+         (uint8_t)((keys >>  8) & 0xFF) == code ||
+         (uint8_t)((keys >> 16) & 0xFF) == code ||
+         (uint8_t)((keys >> 24) & 0xFF) == code;
+}
+
 // Helper function to scale analog values relative to center (128)
 // Clamps to 1-255 range - some GameCube games reject 0 as invalid
 static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
@@ -373,7 +416,11 @@ void __not_in_flash_func(update_output)(void)
   }
 
   // Handle keyboard mode toggle
-  bool kbModeButtonPress = event->keys == HID_KEY_SCROLL_LOCK || event->keys == HID_KEY_F14;
+  bool kbModeButtonPress = gc_keys_contain(event->keys, HID_KEY_SCROLL_LOCK) ||
+                           gc_keys_contain(event->keys, HID_KEY_F14) ||
+                           (gc_keys_contain(event->keys, GC_KB_TOGGLE_MOD1) &&
+                            gc_keys_contain(event->keys, GC_KB_TOGGLE_MOD2) &&
+                            gc_keys_contain(event->keys, GC_KB_TOGGLE_KEY));
   if (kbModeButtonPress)
   {
     if (!kbModeButtonHeld)
@@ -449,6 +496,17 @@ void __not_in_flash_func(update_output)(void)
     uint8_t k0 = (uint8_t)((event->keys >>  0) & 0xFF);
     uint8_t k1 = (uint8_t)((event->keys >>  8) & 0xFF);
     uint8_t k2 = (uint8_t)((event->keys >> 16) & 0xFF);
+
+    // Don't type the activation chord itself. Scroll Lock and F14 were never an
+    // issue — the lookup table has no GameCube keycode for either — but Ctrl,
+    // Alt and every letter are all mapped (GC_KEY_LEFTCTRL, GC_KEY_LEFTALT,
+    // GC_KEY_K), so without this the chord would be sent to the game for as long
+    // as it is held, starting on the frame that enters keyboard mode. Suppress
+    // while the chord is matched rather than only on its leading edge.
+    if (kbModeButtonPress) {
+      k0 = k1 = k2 = 0;
+    }
+
     new_report.keyboard.keypress[0] = gc_kb_key_lookup(k0);
     new_report.keyboard.keypress[1] = gc_kb_key_lookup(k1);
     new_report.keyboard.keypress[2] = gc_kb_key_lookup(k2);
