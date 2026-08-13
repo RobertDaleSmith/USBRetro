@@ -102,19 +102,7 @@ void app_init(void)
         .mouse_drain_rate = 0,
     };
     router_init(&router_cfg);
-
-    // Restore the user's last-saved D-pad mode + shoulder swap from flash so
-    // the on-controller hotkeys (or the web config's ROUTER.DPAD.SET) stick
-    // across reboot.
-    {
-        flash_t flash_data;
-        if (flash_load(&flash_data) && flash_data.router_saved) {
-            if (flash_data.dpad_mode <= 2) {
-                router_set_dpad_mode(flash_data.dpad_mode);
-            }
-            router_set_shoulder_swap(flash_data.shoulder_swap != 0);
-        }
-    }
+    // (router_init() restores the saved d-pad mode + shoulder swap from flash.)
 
     // Hotkey combos, applied at the router level. The d-pad-mode hotkey uses
     // a different modifier per controller because the two share the gc2usb

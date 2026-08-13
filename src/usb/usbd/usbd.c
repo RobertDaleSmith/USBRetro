@@ -526,12 +526,6 @@ static void usbd_on_input(output_target_t output, uint8_t player_index, const in
         return;
     }
 
-    // Check for profile switch combo (SELECT + D-pad Up/Down after 2s hold)
-    // This enables hotkey profile cycling for both built-in and custom profiles
-    if (player_index == 0) {
-        profile_check_switch_combo(event->buttons);
-    }
-
     // Queue the event for sending when USB is ready
     pending_events[player_index] = *event;
     pending_flags[player_index] = true;

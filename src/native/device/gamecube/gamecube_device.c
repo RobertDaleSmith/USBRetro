@@ -352,11 +352,6 @@ void __not_in_flash_func(update_output)(void)
     last_buttons = event->buttons;
   }
 
-  // Always check profile switching combo with last known state
-  // This ensures combo detection works even when controller doesn't send updates while buttons held
-  if (playersCount > 0) {
-    profile_check_switch_combo(last_buttons);
-  }
 
   if (!event || playersCount == 0) return;  // No new input to process
 
