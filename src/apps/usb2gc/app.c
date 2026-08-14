@@ -123,6 +123,7 @@ void app_init(void)
     // user can configure the joybus pin even when no console is connected.
     // (In play mode main.c auto-discovers it; this overrides for config mode.)
     native_output = &gamecube_output_interface;
+    native_input = &usbh_input_interface;  // true I/O = USB Host → GameCube (both modes)
 
     if (gc_config_mode) {
         printf("[app:usb2gc] Config mode - CDC serial for web configuration\n");

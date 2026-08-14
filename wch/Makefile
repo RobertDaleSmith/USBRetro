@@ -167,6 +167,8 @@ SRC_C += \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_ds5.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_psc.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c \
+	$(JOYPAD)/usb/usbh/hid/devices/vendors/valve/steam_controller.c \
+	$(JOYPAD)/usb/usbh/hid/devices/vendors/elo/elo_vagabond.c \
 
 # --- XInput host driver (tusb_xinput library) ---
 SRC_C += $(JOYPAD)/lib/tusb_xinput/xinput_host.c

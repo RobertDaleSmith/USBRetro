@@ -26,4 +26,11 @@ typedef struct {
 // Maximum inputs per app (USB host + native + BLE + UART)
 #define MAX_INPUT_INTERFACES 4
 
+// The app's canonical/primary input source, set by the app in app_init even when
+// the live input isn't running (e.g. a console adapter in CDC config mode, where
+// the USB port is a device). Mirrors native_output so the web config can report
+// the firmware's true I/O ("USB Host → PCEngine") regardless of transport. NULL
+// when the app doesn't declare one.
+extern const InputInterface* native_input;
+
 #endif // INPUT_INTERFACE_H

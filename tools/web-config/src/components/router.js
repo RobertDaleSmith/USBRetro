@@ -106,14 +106,32 @@ export class RouterCard {
         const body = this.el.querySelector('#topologyBody');
         if (!body) return;
 
-        const inputs = caps.inputs || [];
-        const outputs = caps.outputs || [];
-        const routes = caps.routes || [];
+        let inputs = caps.inputs || [];
+        let outputs = caps.outputs || [];
+        let routes = caps.routes || [];
         const routing = caps.routing || {};
+
+        // In config mode the router is reconfigured to a USB CDC device with no
+        // host inputs. Show the firmware's true topology from the native I/O so
+        // the page reflects what it does on the console (e.g. USB Host → PCEngine).
+        const nat = caps.native || {};
+        if (inputs.length === 0 && (nat.in || nat.out)) {
+            if (nat.in) inputs = [{ name: nat.in, source_name: nat.in_source_name || '', connected: null }];
+            if (nat.out) outputs = [{ name: nat.out, target_name: nat.out_target_name || '', max_players: nat.out_players || 0 }];
+            if (nat.in && nat.out) routes = [{ input_name: nat.in, output_name: nat.out, priority: 0 }];
+        }
 
         const modeLabel = (routing.mode_name || '').replace(/^./, c => c.toUpperCase()) || '—';
         const showMerge = routing.mode_name === 'merge';
         const mergeLabel = (routing.merge_mode_name || '').replace(/^./, c => c.toUpperCase());
+
+        // Summarize by player capacity (from the outputs) rather than a raw
+        // interface count — "1 input · 1 output" reads like one controller and
+        // hides the multitap. Fall back to the interface count if no capacity.
+        const totalPlayers = outputs.reduce((s, o) => s + (o.max_players || 0), 0);
+        const capacityLabel = totalPlayers === 0
+            ? `${inputs.length} input${inputs.length === 1 ? '' : 's'} · ${outputs.length} output${outputs.length === 1 ? '' : 's'}`
+            : totalPlayers === 1 ? 'single player' : `up to ${totalPlayers} players`;
 
         const inputCard = inputs.length === 0
             ? '<div class="topology-empty">No inputs registered</div>'
@@ -152,7 +170,7 @@ export class RouterCard {
             <div class="topology-header">
                 <span class="topology-tag topology-tag-mode">${modeLabel}</span>
                 ${showMerge ? `<span class="topology-tag">strategy: ${mergeLabel}</span>` : ''}
-                <span class="hint">${inputs.length} input${inputs.length === 1 ? '' : 's'} · ${outputs.length} output${outputs.length === 1 ? '' : 's'}</span>
+                <span class="hint">${capacityLabel}</span>
             </div>
             <div class="topology-grid">
                 <div class="topology-col">

@@ -67,8 +67,13 @@ export class DeviceInfoCard {
     async loadTopologySummary() {
         try {
             const caps = await this.protocol.getCapabilities();
-            const inputs = (caps.inputs || []).map(i => i.name).join(' + ') || '—';
-            const outputs = (caps.outputs || []).map(o => o.name).join(' + ') || '—';
+            // Prefer the firmware's canonical I/O (native_input/output) so console
+            // adapters show their true purpose (e.g. "USB Host → PCEngine") even
+            // while config mode has them enumerated as a USB CDC device. Fall back
+            // to the live router I/O for apps that don't declare a native target.
+            const nat = caps.native || {};
+            const inputs = nat.in || (caps.inputs || []).map(i => i.name).join(' + ') || '—';
+            const outputs = nat.out || (caps.outputs || []).map(o => o.name).join(' + ') || '—';
             const mode = (caps.routing?.mode_name || '').replace(/^./, c => c.toUpperCase());
             const merge = caps.routing?.mode_name === 'merge'
                 ? `/${(caps.routing?.merge_mode_name || '').replace(/^./, c => c.toUpperCase())}`

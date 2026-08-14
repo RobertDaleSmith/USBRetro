@@ -770,8 +770,10 @@ static void cmd_mode_list(const char* json)
         if (i == USB_OUTPUT_MODE_GBA_LINK) continue;
 #endif
 
-#ifdef CONFIG_NGC
-        // GameCube config mode: only expose CDC mode
+#if defined(CONFIG_NGC) || defined(CONFIG_PCE)
+        // GameCube / PCEngine config mode: the USB device exists only for the web
+        // config, so expose CDC only — the console-output modes (XInput, PS4, …)
+        // are meaningless for these adapters.
         if (i != USB_OUTPUT_MODE_CDC) continue;
 #endif
 
@@ -2512,9 +2514,23 @@ static void cmd_caps_get(const char* json)
 #else
     int uh_dp = -1;   // native USB (fixed pins) or no host
 #endif
+    // Canonical I/O: the app's true input→output even when config mode has the
+    // device enumerated as a USB CDC device (e.g. usb2pce reports USB Host →
+    // PCEngine, not "— → USB"). Sourced from the app-set native_input/output.
+    extern const InputInterface* native_input;
+    extern const OutputInterface* native_output;
+    const char* nin  = native_input  ? native_input->name  : NULL;
+    const char* nout = native_output ? native_output->name : NULL;
+    const char* nin_src  = native_input  ? app_registry_input_source_name(native_input->source) : "";
+    const char* nout_tgt = native_output ? app_registry_output_target_name(native_output->target) : "";
+    int nout_players = native_output ? router_get_max_players(native_output->target) : 0;
     n = snprintf(out, rem,
-                 "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}}",
-                 uh_present, uh_configurable, uh_dp);
+                 "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}"
+                 ",\"native\":{\"in\":%s%s%s,\"in_source_name\":\"%s\""
+                 ",\"out\":%s%s%s,\"out_target_name\":\"%s\",\"out_players\":%d}}",
+                 uh_present, uh_configurable, uh_dp,
+                 nin  ? "\"" : "null", nin  ? nin  : "", nin  ? "\"" : "", nin_src,
+                 nout ? "\"" : "null", nout ? nout : "", nout ? "\"" : "", nout_tgt, nout_players);
     if (n < 0 || n >= rem) goto overflow;
     send_json(response_buf);
     return;

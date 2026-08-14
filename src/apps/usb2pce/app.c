@@ -128,8 +128,11 @@ static const profile_config_t app_profile_config = {
 
 void app_init(void)
 {
-    // Expose the PCEngine output to the web config in BOTH modes.
+    // Expose the app's true I/O (USB Host → PCEngine) to the web config in BOTH
+    // modes, so the info page reflects the firmware's purpose even while config
+    // mode has it enumerated as a USB CDC device.
     native_output = &pcengine_output_interface;
+    native_input = &usbh_input_interface;
 
     if (pce_config_mode) {
         printf("[app:usb2pce] Config mode - CDC serial for web configuration\n");
@@ -140,6 +143,10 @@ void app_init(void)
             .merge_mode = MERGE_BLEND,
             .max_players_per_output = {
                 [OUTPUT_TARGET_USB_DEVICE] = 1,
+                // Declare the real PCEngine capacity so the web config reports the
+                // true output (5-player multitap) even though config mode routes
+                // to the USB device.
+                [OUTPUT_TARGET_PCENGINE] = PCENGINE_OUTPUT_PORTS,
             },
             .merge_all_inputs = true,
         };
