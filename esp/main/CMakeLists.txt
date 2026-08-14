@@ -361,6 +361,7 @@ if(APP_NEEDS_BTSTACK)
             "${SHARED_SRC}/bt/bthid/devices/vendors/augmental/mouthpad_ble.c"
             "${SHARED_SRC}/bt/bthid/devices/vendors/valve/steam_controller_2_ble.c"
             "${SHARED_SRC}/bt/bthid/devices/vendors/valve/steam_controller_ble.c"
+            "${SHARED_SRC}/bt/bthid/devices/vendors/ipega/ipega_bt.c"
 
             # BTstack host + transport
             "${SHARED_SRC}/bt/btstack/btstack_host.c"

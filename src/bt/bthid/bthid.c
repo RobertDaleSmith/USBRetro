@@ -453,7 +453,7 @@ void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
         return;
     }
 
-    // Debug first report after (re)connection
+// Debug first report after (re)connection
     if (!bt_on_hid_report_debug_done) {
         printf("[BTHID] First report: conn=%d, len=%d, data[0]=0x%02X\n",
                conn_index, len, data[0]);
@@ -516,7 +516,7 @@ void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
 
 void bthid_set_hid_descriptor(uint8_t conn_index, const uint8_t* desc, uint16_t desc_len)
 {
-    // Always cache — descriptor often arrives before device is created (Classic BT)
+// Always cache — descriptor often arrives before device is created (Classic BT)
     if (desc_len <= BTHID_MAX_DESC_LEN) {
         memcpy(cached_hid_desc, desc, desc_len);
         cached_hid_desc_len = desc_len;
