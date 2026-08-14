@@ -226,11 +226,13 @@ void input_sony_ds5(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .gyro = {ds5_report.gyro[0], ds5_report.gyro[1], ds5_report.gyro[2]},
         .battery_level = bat_level,
         .battery_charging = bat_charging,
-        // Touchpad (2-finger capacitive)
+        // Touchpad (2-finger capacitive). Normalize the raw DS5 coords (0..1919
+        // wide, 0..1079 tall) into the canonical 0..65535 touch space so output
+        // modes scale them correctly — matching ds5_bt.c.
         .has_touch = true,
         .touch = {
-          { .x = tx,  .y = ty,  .active = !ds5_report.tpad_f1_down },
-          { .x = tx2, .y = ty2, .active = !ds5_report.tpad_f2_down },
+          { .x = touch_norm_from_range(tx,  1919), .y = touch_norm_from_range(ty,  1079), .active = !ds5_report.tpad_f1_down },
+          { .x = touch_norm_from_range(tx2, 1919), .y = touch_norm_from_range(ty2, 1079), .active = !ds5_report.tpad_f2_down },
         },
       };
       router_submit_input(&event);
