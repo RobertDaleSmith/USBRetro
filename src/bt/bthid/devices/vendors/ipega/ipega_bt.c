@@ -264,7 +264,7 @@ static void ipega_process_report(bthid_device_t* device, const uint8_t* data, ui
     }
 
     id->event.buttons = b;
-    id->event.button_count = 10;
+    id->event.button_count = 11;  // A,B,X,Y,L1,R1,Select,Start,L3,R3,Home
     id->event.analog[ANALOG_LX] = lx;
     id->event.analog[ANALOG_LY] = ly;
     id->event.analog[ANALOG_RX] = rx;
