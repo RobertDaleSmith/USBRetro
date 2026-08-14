@@ -6,6 +6,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.4.0] — 2026-08-12
+
+### Added
+
+#### Valve Steam Controller 2 (codename "Triton")
+- **Full native support over USB and Bluetooth LE.** Disables Valve "lizard mode" (keyboard/mouse emulation) and streams the native gamepad state: all face/shoulder buttons, both analog sticks, Hall-effect analog triggers, the **L5/R5 lower back paddles**, and the **dual trackpads** over both transports (the SC2's pads only wake once a host subscribes to its HID service — handled on the BLE path). Reports **battery level + charging state** and drives **rumble** over USB and BT. Presents to the router as a **DualSense (PS5) SInput layout** so it renders correctly in the config UI and PS-style visualizers.
+- **IMU (accel + gyro) over USB** — motion is enabled via a settings write and streamed at the SDL-canonical ranges (±2000 dps / ±2 g).
+
+#### Valve Steam Controller 1 (original)
+- **USB support** — wireless dongle (`28DE:1142`) and wired (`28DE:1102`). Disables lizard mode and parses the native vendor report: face/shoulders, analog triggers (with a partial-pull digital threshold), left stick, an **8-way D-pad derived from the left trackpad**, stick/pad clicks, grips, and **right trackpad → right analog stick**.
+- **Bluetooth LE support** via the community nRF51822 BLE firmware. Brings up the shared Valve GATT service, forces a **fast connection interval** (the firmware otherwise requests a slow ~1 s interval that throttled input to a drip and stalled on a button burst), and decodes the delta-compressed BLE report. Because BLE carries the stick and left pad as **separate fields**, the left analog stick and the left-pad-D-pad work fully **independently** — an isolation the multiplexed USB report can't provide.
+
+#### Output modes
+- **PS4 output — motion + touchpad passthrough.** PS4/PS5 USB-output mode now emits the router's gyro/accel and **both touch points** (scaled to the DS4 pad, IMU frame-corrected) instead of dropping them, so a controller with motion/trackpads (e.g. the Steam Controllers) drives them through to the console.
+- **Wake a sleeping PC over USB.** Remote wakeup is now reachable on **every** output mode — a held input wakes the host. SInput mode (which exposes a keyboard interface) can wake Windows/macOS; XInput cannot, as it has no keyboard interface for the host to arm wakeup.
+
+#### Configuration & web config
+- **Lower paddles and aux buttons are now fully configurable.** Custom profiles cover the whole button set through **L5/R5** (bits 0–25) — the stored profile map grew from 18 to 26 slots — so the SC2's lower back paddles (plus A3/A4/L4/R4) can be remapped, disabled, or turbo'd like any other button. The web-config profile editor and hotkeys list them, autofire timing covers them, and the input-test page now shows **L5/R5** activity.
+
+### Changed
+- **Canonical touchpad normalization.** All touchpad sources (DualShock 4, DualSense, both Steam Controllers) are normalized into a device-agnostic 0–65535 space in the router, and output modes scale from there — so trackpads carry through to any output instead of being handled ad hoc per driver.
+- **Flash schema v2.** The custom-profile button map expanded (18 → 26 slots) so L4/R4/F1/F2/L5/R5 become remappable. The struct stays 56 bytes (reusing former reserved space), but reinterpreting those bytes forces a **one-time wipe of saved settings/profiles** on upgrade.
+
+### Fixed
+- **SC2 Bluetooth reconnect reliability** — defer Valve service discovery until the GATT client is ready (a bonded reconnect fired it too early and hung at `VID:0000`); a bring-up watchdog that disconnects and retries on a stalled state; a forced DIS read to identify a name-less SC2 stuck on the generic HID path; a shorter connect-attempt timeout so a stale/rotated-address bond can't monopolize the radio with scanning off; and scanning resumes after clearing bonds.
+- **SC2 View/Menu (S1/S2)** mapping in the USB parser corrected to match the BLE/SDL layout.
+- **Nuon spinner axis** — restored the spinner (paddle) axis that was dropped in the router migration, so Nuon output drives the spinner again.
+- **Bluetooth driver link safety** — the BTHID device-driver registry could be discarded by the linker's `--gc-sections` (RP2040, ESP32, nRF), silently dropping BT controller support; the registry is now link-guarded, and `CONFIG_BT_HOST` is defined for manual-BT Pico apps (a #188 regression).
+- **Waveshare RP2350-USB-A LED colors** — the onboard WS2812 is an RGB WS2812B (not RGBW/GRB), so status and player-LED colors rendered wrong; the byte order and `IS_RGBW` are now board-scoped correctly, leaving every other board untouched (#218, thanks @Atreus171).
+- **D-pad mode hotkey + persistence now work on every app.** The SELECT+D-pad d-pad-output-mode toggle (D-pad → left/right stick) and its save/restore-across-reboot were only wired into `gc2usb`/`controller_btusb` — every other app (`usb2usb`, `bt2usb`, …) registered no combos, so the hotkey did nothing and the saved mode never came back. The router now installs the SELECT+D-pad hotkeys by default and restores the saved d-pad mode (and shoulder-swap) on boot for all apps; apps with their own combo tables take over on their first `router_set_combo()` and are unaffected (gap diagnosed via #207, thanks @daveq86).
+
+### Build & CI
+- Release build matrix expanded to include **psx2usb**, **gc2usb_pico**, and **jag2usb**.
+
+---
+
 ## [2.3.0] — 2026-08-04
 
 ### Added

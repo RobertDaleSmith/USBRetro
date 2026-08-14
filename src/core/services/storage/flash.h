@@ -19,14 +19,14 @@
 // ============================================================================
 
 #define CUSTOM_PROFILE_NAME_LEN 12
-#define CUSTOM_PROFILE_BUTTON_COUNT 18
+#define CUSTOM_PROFILE_BUTTON_COUNT 26
 #define CUSTOM_PROFILE_MAX_COUNT 4
 
 // Button mapping values:
 // 0x00 = passthrough (no remap, keep original button)
-// 0x01-0x18 = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 23=F1, 24=F2)
+// 0x01-0x1A = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 24=F2, 25=L5, 26=R5)
 // 0xFF = disabled (button press ignored)
-#define BUTTON_MAP_MAX_TARGET 24  // Max valid remap target (F2)
+#define BUTTON_MAP_MAX_TARGET 26  // Max valid remap target (R5)
 #define BUTTON_MAP_PASSTHROUGH 0x00
 #define BUTTON_MAP_DISABLED    0xFF
 
@@ -34,9 +34,10 @@
 // Stored in flash, user-configurable via web config
 typedef struct {
     char name[CUSTOM_PROFILE_NAME_LEN];  // 12 bytes, null-terminated
-    uint8_t button_map[CUSTOM_PROFILE_BUTTON_COUNT]; // 18 bytes
-    // Button indices: 0=B1, 1=B2, 2=B3, 3=B4, 4=L1, 5=R1, 6=L2, 7=R2,
-    //                 8=S1, 9=S2, 10=L3, 11=R3, 12=DU, 13=DD, 14=DL, 15=DR, 16=A1, 17=A2
+    uint8_t button_map[CUSTOM_PROFILE_BUTTON_COUNT]; // 26 bytes
+    // Button indices (bit position): 0=B1, 1=B2, 2=B3, 3=B4, 4=L1, 5=R1, 6=L2, 7=R2,
+    //                 8=S1, 9=S2, 10=L3, 11=R3, 12=DU, 13=DD, 14=DL, 15=DR, 16=A1, 17=A2,
+    //                 18=A3, 19=A4, 20=L4, 21=R4, 22=F1, 23=F2, 24=L5, 25=R5
     uint8_t left_stick_sens;   // 0-200 (100 = 1.0x, 50 = 0.5x, 200 = 2.0x)
     uint8_t right_stick_sens;  // 0-200
     uint8_t flags;             // Bit 0: swap sticks, Bit 1: invert LY, Bit 2: invert RY,
@@ -44,7 +45,7 @@ typedef struct {
     uint8_t socd_mode;         // SOCD cleaning mode (0=passthrough, 1=neutral, 2=up-priority, 3=last-win)
     uint8_t l2_threshold;      // Analog L2 → digital threshold; 0 = use default (128)
     uint8_t r2_threshold;      // Analog R2 → digital threshold; 0 = use default (128)
-    uint8_t reserved[20];      // Future use
+    uint8_t reserved[12];      // Future use
 } custom_profile_t;
 
 // Profile flags
@@ -65,7 +66,11 @@ typedef struct {
 // Pre-versioning records (v1.9.0 and v2.0.0) have schema_version == 0
 // because the byte was reserved and zero-initialized. Bumping to 1 forces
 // a one-time wipe for those users; subsequent bumps wipe their own range.
-#define FLASH_SCHEMA_VERSION 1
+//
+// v2 (v2.4.0): custom_profile_t.button_map grew 18 → 26 bytes (into former
+// reserved space) so L4/R4/F1/F2/L5/R5 are remappable; the struct stays
+// 56 bytes but those 8 bytes are reinterpreted, so wipe stale records.
+#define FLASH_SCHEMA_VERSION 2
 
 // Settings structure stored in flash (256 bytes = 1 flash page)
 // 16 entries fit in one 4KB sector for journaled writes

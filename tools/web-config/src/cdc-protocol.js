@@ -762,6 +762,10 @@ class CDCProtocol {
         return this.sendCommand('ROUTER.DPAD.SET', { mode });
     }
 
+    async setShoulderSwap(enable) {
+        return this.sendCommand('ROUTER.SHOULDER.SET', { enable });
+    }
+
     // Pad GPIO Config
     async getPadConfig() {
         return this.sendCommand('PAD.CONFIG.GET');

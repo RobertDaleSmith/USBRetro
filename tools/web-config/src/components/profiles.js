@@ -1,9 +1,12 @@
 /** Profile Management Card + Editor Modal */
 
+// Index === JP_BUTTON_* bit position. Must stay in sync with core/buttons.h and
+// the firmware's positional custom_profile_t.button_map (CUSTOM_PROFILE_BUTTON_COUNT).
 const BUTTON_NAMES = [
     'B1', 'B2', 'B3', 'B4', 'L1', 'R1', 'L2', 'R2',
     'S1', 'S2', 'L3', 'R3', 'DU', 'DD', 'DL', 'DR',
-    'A1', 'A2', 'A3', 'A4', 'L4', 'R4', 'F1', 'F2'
+    'A1', 'A2', 'A3', 'A4', 'L4', 'R4', 'F1', 'F2',
+    'L5', 'R5'
 ];
 
 const BUTTON_LABELS = {
@@ -12,11 +15,20 @@ const BUTTON_LABELS = {
     'S1': 'Select / Back', 'S2': 'Start / Menu', 'L3': 'L3 / LS', 'R3': 'R3 / RS',
     'DU': 'D-Pad Up', 'DD': 'D-Pad Down', 'DL': 'D-Pad Left', 'DR': 'D-Pad Right',
     'A1': 'Home / Guide', 'A2': 'Capture / Touchpad',
-    'A3': 'Aux 3', 'A4': 'Aux 4', 'L4': 'Left Paddle', 'R4': 'Right Paddle',
+    'A3': 'Aux 3', 'A4': 'Aux 4', 'L4': 'Left Paddle 1', 'R4': 'Right Paddle 1',
     'F1': 'Function 1', 'F2': 'Function 2',
+    'L5': 'Left Paddle 2', 'R5': 'Right Paddle 2',
 };
 
-const REMAPPABLE_COUNT = 22;  // F1/F2 not remappable in profiles (internal only)
+// F1/F2 are internal function buttons — not offered as remap inputs.
+const NON_REMAPPABLE_INPUTS = new Set(['F1', 'F2']);
+// Bit positions offered as remap inputs, in display order (skips F1/F2).
+const REMAP_INPUT_BITS = BUTTON_NAMES
+    .map((_, bit) => bit)
+    .filter((bit) => !NON_REMAPPABLE_INPUTS.has(BUTTON_NAMES[bit]));
+// Positional map length sent to firmware (must equal CUSTOM_PROFILE_BUTTON_COUNT).
+const BUTTON_MAP_LEN = BUTTON_NAMES.length;
+const REMAPPABLE_COUNT = REMAP_INPUT_BITS.length;  // exported for compat
 const FLAG_SWAP_STICKS = 1;
 const FLAG_INVERT_LY = 2;
 const FLAG_INVERT_RY = 4;
@@ -32,19 +44,19 @@ export class ProfilesCard {
     }
 
     render() {
-        const remappable = BUTTON_NAMES.slice(0, REMAPPABLE_COUNT);
         const mapOptions = `<option value="0">Passthrough</option>` +
             BUTTON_NAMES.map((name, idx) =>
                 `<option value="${idx + 1}">${name} (${BUTTON_LABELS[name] || name})</option>`
             ).join('') +
             `<option value="255">Disabled</option>`;
 
-        const mapRows = remappable.map((name, i) =>
-            `<div class="button-map-row">
+        const mapRows = REMAP_INPUT_BITS.map((bit) => {
+            const name = BUTTON_NAMES[bit];
+            return `<div class="button-map-row">
                 <span class="input-label">${name}</span>
-                <select id="buttonMap${i}">${mapOptions}</select>
-            </div>`
-        ).join('');
+                <select id="buttonMap${bit}">${mapOptions}</select>
+            </div>`;
+        }).join('');
 
         this.el.innerHTML = `
             <div class="card" id="profilesCard">
@@ -235,8 +247,8 @@ export class ProfilesCard {
 
         if (isNew) {
             this.el.querySelector('#profileNameInput').value = '';
-            for (let i = 0; i < REMAPPABLE_COUNT; i++) {
-                this.el.querySelector(`#buttonMap${i}`).value = '0';
+            for (const bit of REMAP_INPUT_BITS) {
+                this.el.querySelector(`#buttonMap${bit}`).value = '0';
             }
             this.el.querySelector('#leftStickSens').value = 100;
             this.el.querySelector('#rightStickSens').value = 100;
@@ -251,8 +263,8 @@ export class ProfilesCard {
                 const profile = await this.protocol.getProfile(index);
                 this.el.querySelector('#profileNameInput').value = profile.name || '';
                 const map = profile.button_map || [];
-                for (let i = 0; i < REMAPPABLE_COUNT; i++) {
-                    this.el.querySelector(`#buttonMap${i}`).value = map[i] !== undefined ? map[i] : 0;
+                for (const bit of REMAP_INPUT_BITS) {
+                    this.el.querySelector(`#buttonMap${bit}`).value = map[bit] !== undefined ? map[bit] : 0;
                 }
                 const ls = this.el.querySelector('#leftStickSens');
                 const rs = this.el.querySelector('#rightStickSens');
@@ -283,9 +295,15 @@ export class ProfilesCard {
         const name = this.el.querySelector('#profileNameInput').value.trim();
         if (!name) { alert('Please enter a profile name'); return; }
 
+        // Positional array indexed by input bit (length CUSTOM_PROFILE_BUTTON_COUNT).
+        // F1/F2 have no row — always passthrough (0) to keep bit alignment.
         const buttonMap = [];
-        for (let i = 0; i < REMAPPABLE_COUNT; i++) {
-            buttonMap.push(parseInt(this.el.querySelector(`#buttonMap${i}`).value));
+        for (let bit = 0; bit < BUTTON_MAP_LEN; bit++) {
+            if (NON_REMAPPABLE_INPUTS.has(BUTTON_NAMES[bit])) {
+                buttonMap.push(0);
+            } else {
+                buttonMap.push(parseInt(this.el.querySelector(`#buttonMap${bit}`).value));
+            }
         }
 
         let flags = 0;

@@ -28,8 +28,8 @@
 // AUTOFIRE
 // ============================================================================
 
-// Number of JP_BUTTON_* slots tracked for autofire timing (JP_BUTTON_R4 = 1<<21 is the highest).
-#define AUTOFIRE_BUTTON_COUNT 22
+// Number of JP_BUTTON_* slots tracked for autofire timing (JP_BUTTON_R5 = 1<<25 is the highest).
+#define AUTOFIRE_BUTTON_COUNT 26
 
 // Auto-fire periods (ms) for common frequencies (50% duty cycle)
 #define AUTOFIRE_30HZ   33   //  30 Hz →  33ms period
@@ -285,8 +285,9 @@ void profile_set_active(output_target_t output, uint8_t index);
 // Same effect for this session, no flash write — for live-control flows
 // (joypad-live) that would otherwise burn flash with thousands of switches.
 void profile_select_active(output_target_t output, uint8_t index);
-void profile_cycle_next(output_target_t output);
-void profile_cycle_prev(output_target_t output);
+// wrap=true cycles (loops past the ends); wrap=false clamps at the first/last.
+void profile_cycle_next(output_target_t output, bool wrap);
+void profile_cycle_prev(output_target_t output, bool wrap);
 
 // ============================================================================
 // PER-PLAYER PROFILE API
@@ -303,14 +304,6 @@ uint8_t profile_get_player_index(output_target_t output, uint8_t player_index);
 void profile_set_player_active(output_target_t output, uint8_t player_index, uint8_t profile_index);
 void profile_cycle_player_next(output_target_t output, uint8_t player_index);
 void profile_cycle_player_prev(output_target_t output, uint8_t player_index);
-
-// Check for per-player profile switch combo
-// player_index: which player's buttons to check
-// buttons: that player's button state
-void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons);
-
-// Check if a specific player's switch combo is active
-bool profile_player_switch_combo_active(uint8_t player_index);
 
 // ============================================================================
 // CALLBACKS
@@ -333,18 +326,6 @@ void profile_set_player_count_callback(uint8_t (*callback)(void));
 // Callback should return true if mode was changed (to trigger feedback)
 typedef bool (*output_mode_callback_t)(int8_t direction);
 void profile_set_output_mode_callback(output_mode_callback_t callback);
-
-// ============================================================================
-// LEGACY COMBO DETECTION (uses player 0)
-// ============================================================================
-
-// Check for profile switch combo (call from output device's update loop)
-// Uses primary output target for switching
-void profile_check_switch_combo(uint32_t buttons);
-
-// Check if profile switch combo is currently active
-// When true, caller should suppress Select + D-pad from output
-bool profile_switch_combo_active(void);
 
 // Load/save profile index from flash
 uint8_t profile_load_from_flash(output_target_t output, uint8_t default_index);

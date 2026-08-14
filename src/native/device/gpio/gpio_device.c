@@ -267,15 +267,6 @@ void gpio_device_task()
   }
 
   if (playersCount > 0) {
-    // Profile-switch combo is suppressed while mapping so SELECT
-    // is exclusively reserved for the mapping trigger/cancel.
-    if (!runtime_profile_is_active()) {
-      uint8_t before = profile_get_active_index(OUTPUT_TARGET_GPIO);
-      profile_check_switch_combo(last_buttons);
-      if (profile_get_active_index(OUTPUT_TARGET_GPIO) != before) {
-        runtime_profile_clear();
-      }
-    }
     runtime_profile_check_combo(last_buttons, last_l2, last_r2);
 
     // Periodic re-apply: profile_apply reads platform_time_ms() so autofire

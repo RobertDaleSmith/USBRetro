@@ -18,6 +18,33 @@
 #include "ps4_local_auth.h"
 #endif
 
+// Vendor detection for the IMU frame remap below.
+#if (defined(CONFIG_USB_HOST) || defined(CONFIG_USB)) && !defined(DISABLE_USB_HOST)
+#include "usb/usbh/hid/hid_registry.h"
+extern int hid_get_ctrl_type(uint8_t dev_addr, uint8_t instance);
+#endif
+#ifdef ENABLE_BTSTACK
+#include "bt/bthid/bthid.h"
+#endif
+
+// True when the source input is a Steam Controller 2 (USB or BLE). The SC2 reports
+// its IMU in the Triton device frame, which needs an SC2-specific remap to the DS4
+// output's expected (SDL) frame; other inputs (DS4/DualSense) are already in-frame.
+static bool ps4_input_is_sc2(uint8_t dev_addr, int8_t instance)
+{
+#if (defined(CONFIG_USB_HOST) || defined(CONFIG_USB)) && !defined(DISABLE_USB_HOST)
+    if (hid_get_ctrl_type(dev_addr, (uint8_t)instance) == CONTROLLER_STEAM_2) return true;
+#else
+    (void)instance;
+#endif
+#ifdef ENABLE_BTSTACK
+    bthid_device_t* d = bthid_get_device(dev_addr);
+    if (d && d->vendor_id == 0x28DE) return true;
+#endif
+    (void)dev_addr;
+    return false;
+}
+
 // ============================================================================
 // STATE
 // ============================================================================
@@ -93,7 +120,6 @@ static bool ps4_mode_send_report(uint8_t player_index,
                                   uint32_t buttons)
 {
     (void)player_index;
-    (void)event;
 
     // Byte 0: Report ID
     ps4_report_buffer[0] = 0x01;
@@ -181,43 +207,98 @@ static bool ps4_mode_send_report(uint8_t player_index,
 
     // Maintenance of DS4 Metadata (Matches Brook XE2)
     // Byte 30: Battery (0x1b = Full + Charging)
-    ps4_report_buffer[30] = 0x1b; 
-    
-    // Touchpad state (Offset 33=active, 34=increment, 35-42=fingers)
-    // Must be properly set for Options button to work in FC26
-    ps4_report_buffer[33] = 0x00; // 0 touches
-    ps4_report_buffer[34]++;      // Increment touchpad counter
-    
-    // Default coordinates: Center (X=960, Y=471) -> C0 73 1D
-    uint16_t tp_x = 960;
-    uint16_t tp_y = 471;
+    ps4_report_buffer[30] = 0x1b;
 
-    if (tp_clicked) {
-        // Shift touch position based on D-pad modifiers
-        if (buttons & JP_BUTTON_DL) {
-            tp_x = 480; // Left Region
-        } else if (buttons & JP_BUTTON_DR) {
-            tp_x = 1440; // Right Region
+    // Motion: gyro (bytes 13-18) + accel (bytes 19-24), int16 LE — the standard DS4
+    // USB layout (Linux hid-playstation / joypad-web's DS4 parser). The event carries
+    // raw int16 + full-scale ranges; DS4 is ±2000 dps gyro / ±4 g accel over full int16,
+    // so scale each axis by its declared range into that standard.
+    //   NOTE (needs a real PS4 / faithful DS4 parser to verify): axis order and signs
+    //   are passed straight, but the SC2/DS device frames differ, so the orientation
+    //   axes may need a per-input remap. This at least streams live motion (was static).
+    if (event->has_motion) {
+        int32_t gr = event->gyro_range  ? event->gyro_range  : 2000;
+        int32_t ar = event->accel_range ? event->accel_range : 4000;
+        int32_t gyro[3]  = { event->gyro[0],  event->gyro[1],  event->gyro[2]  };
+        int32_t accel[3] = { event->accel[0], event->accel[1], event->accel[2] };
+        // SC2 (Triton) IMU frame -> DS4/SDL frame: x=rawX, y=rawZ, z=-rawY (both gyro
+        // and accel, per SDL's steam_triton driver). Without this the SC2 reads pitch
+        // ~-90 when flat — sitting on the gimbal-lock singularity, so roll bounces.
+        // DS4/DualSense inputs are already in-frame, so gate this to the SC2.
+        if (ps4_input_is_sc2(event->dev_addr, event->instance)) {
+            int32_t t;
+            t = gyro[1];  gyro[1]  = gyro[2];  gyro[2]  = -t;
+            t = accel[1]; accel[1] = accel[2]; accel[2] = -t;
         }
-        
-        ps4_report_buffer[33] = 0x01;   // 1 touch active
-        ps4_report_buffer[35] = 0x00;   // Finger 1 pressed (unpressed=0), counter=0
+        for (int i = 0; i < 3; i++) {
+            int32_t g = gyro[i]  * gr / 2000;
+            int32_t a = accel[i] * ar / 4000;
+            if (g > 32767) g = 32767; else if (g < -32768) g = -32768;
+            if (a > 32767) a = 32767; else if (a < -32768) a = -32768;
+            ps4_report_buffer[13 + i * 2] = (uint8_t)(g & 0xFF);
+            ps4_report_buffer[14 + i * 2] = (uint8_t)((g >> 8) & 0xFF);
+            ps4_report_buffer[19 + i * 2] = (uint8_t)(a & 0xFF);
+            ps4_report_buffer[20 + i * 2] = (uint8_t)((a >> 8) & 0xFF);
+        }
     } else {
-        ps4_report_buffer[35] = 0x80;   // Finger 1 unpressed
+        // No motion on this input: emit neutral (zero gyro, +1 g on Z) so a DS4 parser
+        // reads "level and still" rather than the mis-aligned static value it had before.
+        memset(&ps4_report_buffer[13], 0, 10);           // gyro XYZ + accel XY = 0
+        ps4_report_buffer[23] = (uint8_t)(8192 & 0xFF);  // accel Z ~+1 g (8192 LSB/g)
+        ps4_report_buffer[24] = (uint8_t)((8192 >> 8) & 0xFF);
     }
 
-    // Finger 2 always unpressed for this simulation
-    ps4_report_buffer[39] = 0x80;
+    // Touchpad (offset 33=packet count, 34=counter, 35-42=two 4-byte fingers).
+    // Each finger: [id|bit7=released][X lo][ (Y lo<<4)|X hi ][Y hi], 12-bit X 0..1919
+    // / Y 0..942. Must be present for the Options button to work in some titles.
+    ps4_report_buffer[34]++;  // touch packet counter
 
-    // Encode coordinates into buffer
-    ps4_report_buffer[36] = (uint8_t)(tp_x & 0xFF);
-    ps4_report_buffer[37] = (uint8_t)(((tp_y & 0x0F) << 4) | ((tp_x >> 8) & 0x0F));
-    ps4_report_buffer[38] = (uint8_t)((tp_y >> 4) & 0xFF);
-
-    // Sync p2 coordinates with p1 for consistency (even if unpressed)
-    ps4_report_buffer[40] = ps4_report_buffer[36];
-    ps4_report_buffer[41] = ps4_report_buffer[37];
-    ps4_report_buffer[42] = ps4_report_buffer[38];
+    if (event->has_touch) {
+        // Real touchpad: emit both fingers from the normalized event, scaled from the
+        // device-agnostic 0..65535 canonical back to DS4 native (1919x942). Each new
+        // finger-down gets a fresh id so the host tracks touches correctly.
+        static uint8_t tp_id[2] = {0, 0};
+        static bool tp_prev[2] = {false, false};
+        uint8_t active = 0;
+        for (int f = 0; f < 2; f++) {
+            uint8_t* fb = &ps4_report_buffer[35 + f * 4];
+            bool on = event->touch[f].active;
+            if (on) {
+                if (!tp_prev[f]) tp_id[f] = (uint8_t)((tp_id[f] + 1) & 0x7F);
+                uint16_t tx = touch_norm_to_range(event->touch[f].x, 1919);
+                uint16_t ty = touch_norm_to_range(event->touch[f].y, 942);
+                fb[0] = tp_id[f] & 0x7F;  // touching (bit7=0) + id
+                fb[1] = (uint8_t)(tx & 0xFF);
+                fb[2] = (uint8_t)(((ty & 0x0F) << 4) | ((tx >> 8) & 0x0F));
+                fb[3] = (uint8_t)((ty >> 4) & 0xFF);
+                active++;
+            } else {
+                fb[0] = 0x80; fb[1] = 0; fb[2] = 0; fb[3] = 0;  // released
+            }
+            tp_prev[f] = on;
+        }
+        ps4_report_buffer[33] = active ? 0x01 : 0x00;
+    } else {
+        // No real touchpad on this input: simulate a finger from the touchpad-click +
+        // D-pad region so non-touch pads can still trigger touchpad-gated actions.
+        ps4_report_buffer[33] = 0x00;
+        uint16_t tp_x = 960, tp_y = 471;  // center
+        if (tp_clicked) {
+            if (buttons & JP_BUTTON_DL)      tp_x = 480;   // left region
+            else if (buttons & JP_BUTTON_DR) tp_x = 1440;  // right region
+            ps4_report_buffer[33] = 0x01;
+            ps4_report_buffer[35] = 0x00;   // finger 1 pressed
+        } else {
+            ps4_report_buffer[35] = 0x80;   // finger 1 released
+        }
+        ps4_report_buffer[39] = 0x80;       // finger 2 released
+        ps4_report_buffer[36] = (uint8_t)(tp_x & 0xFF);
+        ps4_report_buffer[37] = (uint8_t)(((tp_y & 0x0F) << 4) | ((tp_x >> 8) & 0x0F));
+        ps4_report_buffer[38] = (uint8_t)((tp_y >> 4) & 0xFF);
+        ps4_report_buffer[40] = ps4_report_buffer[36];
+        ps4_report_buffer[41] = ps4_report_buffer[37];
+        ps4_report_buffer[42] = ps4_report_buffer[38];
+    }
 
     // Send with report_id=0x01, letting TinyUSB prepend it
     // Skip byte 0 of buffer (our report_id) and send 63 bytes of data

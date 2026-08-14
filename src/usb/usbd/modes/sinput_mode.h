@@ -38,5 +38,6 @@ void sinput_get_rumble_lr(uint8_t* left, uint8_t* right);
 
 // Diagnostic: feature responses built since boot (see sinput_mode.c).
 uint32_t sinput_get_feature_count(void);
+void sinput_get_debug_info(char* buf, int len);
 
 #endif // SINPUT_MODE_H
