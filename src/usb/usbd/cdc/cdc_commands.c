@@ -2214,17 +2214,21 @@ static void cmd_router_get(const char* json)
 #else
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 0;
 #endif
+    // D-pad mode + shoulder swap come from LIVE router state so the value is
+    // consistent the instant a hotkey or CDC set happens (the flash write is
+    // debounced). router_init() has already restored them from flash on boot.
+    dm = router_get_dpad_mode();
+    uint8_t ss = router_get_shoulder_swap() ? 1 : 0;
     if (flash_load(&flash_data) && flash_data.router_saved) {
         if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
         if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
-        if (flash_data.dpad_mode <= 2) dm = flash_data.dpad_mode;
         bti = flash_data.bt_input_enabled;
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"routing_mode\":%d,\"merge_mode\":%d,\"dpad_mode\":%d,"
-             "\"bt_input\":%s,"
+             "\"shoulder_swap\":%s,\"bt_input\":%s,"
              "\"default_routing_mode\":%d,\"default_merge_mode\":%d}",
-             rm, mm, dm, bti ? "true" : "false",
+             rm, mm, dm, ss ? "true" : "false", bti ? "true" : "false",
              (int)ROUTING_MODE, (int)MERGE_MODE);
     send_json(response_buf);
 }
@@ -2232,12 +2236,24 @@ static void cmd_router_get(const char* json)
 static void cmd_router_dpad_set(const char* json)
 {
     int mode;
-    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 2) {
-        send_error("Invalid mode (0-2)");
+    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 3) {
+        send_error("Invalid mode (0=normal,1=dpad<->L,2=dpad<->R,3=L<->R)");
         return;
     }
     router_set_dpad_mode((uint8_t)mode);
     flash_set_dpad_mode((uint8_t)mode);   // persist (no reboot needed)
+    send_ok();
+}
+
+static void cmd_router_shoulder_set(const char* json)
+{
+    bool on;
+    if (!json_get_bool(json, "enable", &on)) {
+        send_error("missing enable");
+        return;
+    }
+    router_set_shoulder_swap(on);
+    flash_set_shoulder_swap(on ? 1 : 0);   // persist (no reboot needed)
     send_ok();
 }
 
@@ -3781,6 +3797,7 @@ static const cmd_entry_t commands[] = {
     {"ROUTER.GET", cmd_router_get},
     {"ROUTER.SET", cmd_router_set},
     {"ROUTER.DPAD.SET", cmd_router_dpad_set},
+    {"ROUTER.SHOULDER.SET", cmd_router_shoulder_set},
     {"CAPS.GET", cmd_caps_get},
     {"OUTPUT.NATIVE.GET", cmd_output_native_get},
     {"OUTPUT.NATIVE.SET", cmd_output_native_set},
