@@ -143,6 +143,10 @@ void app_init(void)
             .merge_mode = MERGE_BLEND,
             .max_players_per_output = {
                 [OUTPUT_TARGET_USB_DEVICE] = 1,
+                // Declare the real PCEngine capacity so the web config reports the
+                // true output (5-player multitap) even though config mode routes
+                // to the USB device.
+                [OUTPUT_TARGET_PCENGINE] = PCENGINE_OUTPUT_PORTS,
             },
             .merge_all_inputs = true,
         };

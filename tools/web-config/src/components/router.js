@@ -106,10 +106,20 @@ export class RouterCard {
         const body = this.el.querySelector('#topologyBody');
         if (!body) return;
 
-        const inputs = caps.inputs || [];
-        const outputs = caps.outputs || [];
-        const routes = caps.routes || [];
+        let inputs = caps.inputs || [];
+        let outputs = caps.outputs || [];
+        let routes = caps.routes || [];
         const routing = caps.routing || {};
+
+        // In config mode the router is reconfigured to a USB CDC device with no
+        // host inputs. Show the firmware's true topology from the native I/O so
+        // the page reflects what it does on the console (e.g. USB Host → PCEngine).
+        const nat = caps.native || {};
+        if (inputs.length === 0 && (nat.in || nat.out)) {
+            if (nat.in) inputs = [{ name: nat.in, source_name: nat.in_source_name || '', connected: null }];
+            if (nat.out) outputs = [{ name: nat.out, target_name: nat.out_target_name || '', max_players: nat.out_players || 0 }];
+            if (nat.in && nat.out) routes = [{ input_name: nat.in, output_name: nat.out, priority: 0 }];
+        }
 
         const modeLabel = (routing.mode_name || '').replace(/^./, c => c.toUpperCase()) || '—';
         const showMerge = routing.mode_name === 'merge';

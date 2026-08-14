@@ -2519,12 +2519,16 @@ static void cmd_caps_get(const char* json)
     extern const OutputInterface* native_output;
     const char* nin  = native_input  ? native_input->name  : NULL;
     const char* nout = native_output ? native_output->name : NULL;
+    const char* nin_src  = native_input  ? app_registry_input_source_name(native_input->source) : "";
+    const char* nout_tgt = native_output ? app_registry_output_target_name(native_output->target) : "";
+    int nout_players = native_output ? router_get_max_players(native_output->target) : 0;
     n = snprintf(out, rem,
                  "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}"
-                 ",\"native\":{\"in\":%s%s%s,\"out\":%s%s%s}}",
+                 ",\"native\":{\"in\":%s%s%s,\"in_source_name\":\"%s\""
+                 ",\"out\":%s%s%s,\"out_target_name\":\"%s\",\"out_players\":%d}}",
                  uh_present, uh_configurable, uh_dp,
-                 nin  ? "\"" : "null", nin  ? nin  : "", nin  ? "\"" : "",
-                 nout ? "\"" : "null", nout ? nout : "", nout ? "\"" : "");
+                 nin  ? "\"" : "null", nin  ? nin  : "", nin  ? "\"" : "", nin_src,
+                 nout ? "\"" : "null", nout ? nout : "", nout ? "\"" : "", nout_tgt, nout_players);
     if (n < 0 || n >= rem) goto overflow;
     send_json(response_buf);
     return;
