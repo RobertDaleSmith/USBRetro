@@ -1397,10 +1397,17 @@ void router_submit_input(const input_event_t* event) {
             else if (old_x > 128 + TH) remapped.buttons |= JP_BUTTON_DR;
             if (old_y < 128 - TH)      remapped.buttons |= JP_BUTTON_DU;
             else if (old_y > 128 + TH) remapped.buttons |= JP_BUTTON_DD;
-            // d-pad -> stick
+            // d-pad -> stick, with a circular gate: a diagonal lands on the unit
+            // circle (~0.707 per axis, same magnitude as a cardinal) like a real
+            // stick, instead of at the square's corner (255,0).
+            bool x_dir = (dpad_bits & (JP_BUTTON_DL | JP_BUTTON_DR)) != 0;
+            bool y_dir = (dpad_bits & (JP_BUTTON_DU | JP_BUTTON_DD)) != 0;
+            bool diag  = x_dir && y_dir;
+            uint8_t lo = diag ? 38  : 0;    // 128 - ~128*0.707
+            uint8_t hi = diag ? 218 : 255;  // 128 + ~128*0.707
             uint8_t ax = 128, ay = 128;
-            if (dpad_bits & JP_BUTTON_DL) ax = 0; else if (dpad_bits & JP_BUTTON_DR) ax = 255;
-            if (dpad_bits & JP_BUTTON_DU) ay = 0; else if (dpad_bits & JP_BUTTON_DD) ay = 255;
+            if (dpad_bits & JP_BUTTON_DL) ax = lo; else if (dpad_bits & JP_BUTTON_DR) ax = hi;
+            if (dpad_bits & JP_BUTTON_DU) ay = lo; else if (dpad_bits & JP_BUTTON_DD) ay = hi;
             remapped.analog[sx] = ax;
             remapped.analog[sy] = ay;
         }
