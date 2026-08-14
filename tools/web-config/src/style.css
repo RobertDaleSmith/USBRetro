@@ -488,6 +488,8 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 .profile-item-info { flex: 1; }
 .profile-item-name { font-weight: 500; font-size: 14px; }
 .profile-item-details { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.profile-item.profile-disabled .profile-item-name { opacity: 0.5; }
+.profile-item.profile-disabled .profile-item-name::before { content: '🚫 '; font-size: 11px; }
 
 .profile-item-actions { display: flex; gap: 6px; }
 .profile-item-actions button { padding: 6px 12px; font-size: 12px; }
@@ -504,6 +506,19 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 }
 .button-map-row .input-label { width: 40px; font-weight: 500; font-size: 13px; }
 .button-map-row select { flex: 1; min-width: 100px; padding: 6px; font-size: 13px; }
+
+/* Per-row turbo (⚡) toggle: hidden checkbox, dimmed icon when off */
+.button-map-row .turbo-cell {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; flex-shrink: 0; cursor: pointer;
+}
+.button-map-row .turbo-check { position: absolute; opacity: 0; width: 0; height: 0; }
+.button-map-row .turbo-icon {
+    font-size: 15px; line-height: 1; opacity: 0.3; filter: grayscale(1);
+    transition: opacity 0.15s, filter 0.15s;
+}
+.button-map-row .turbo-check:checked + .turbo-icon { opacity: 1; filter: none; }
+.button-map-row .turbo-cell:hover .turbo-icon { opacity: 0.7; }
 
 .sensitivity-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .sensitivity-row span:first-child { width: 80px; font-size: 14px; }
@@ -558,6 +573,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 }
 .toggle input:checked + .toggle-slider { background: var(--accent); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+.toggle input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
 
 /* ================================================================
    MODAL

@@ -157,6 +157,10 @@ void router_set_onboard_battery(int percent, bool charging);
 int  router_onboard_battery_percent(void);
 bool router_onboard_battery_charging(void);
 
+// Last-reported battery for a routed input device (by dev_addr). Returns true
+// and fills level (0-100) / charging when available; level 0 = not reported.
+bool router_get_device_battery(uint8_t dev_addr, uint8_t* level, bool* charging);
+
 // This device's OWN IMU motion (controller-style apps with an onboard IMU, e.g.
 // XIAO Sense LSM6DS3TR-C). Stamped into output states that have no input-device
 // motion, so the SInput report carries accel/gyro. accel/gyro are int16 scaled
@@ -190,6 +194,10 @@ void router_set_dpad_mode(uint8_t mode);
 
 // Set global shoulder swap (L1<->L2, R1<->R2) applied to all inputs.
 void router_set_shoulder_swap(bool on);
+
+// Live d-pad mode / shoulder-swap state (reflects hotkey + CDC changes at once).
+uint8_t router_get_dpad_mode(void);
+bool router_get_shoulder_swap(void);
 
 // Set button combo hotkeys (up to ROUTER_COMBO_MAX)
 // input_mask: buttons that must all be held (0 = disabled)

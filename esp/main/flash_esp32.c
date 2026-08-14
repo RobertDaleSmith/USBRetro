@@ -297,6 +297,20 @@ void flash_set_shoulder_swap(uint8_t on)
     flash_save(&runtime_settings);
 }
 
+uint8_t flash_get_builtin_disabled_mask(void)
+{
+    if (!runtime_settings_loaded) return 0;
+    return runtime_settings.builtin_disabled_mask;
+}
+
+void flash_set_builtin_disabled_mask(uint8_t mask)
+{
+    if (!runtime_settings_loaded) return;
+    if (runtime_settings.builtin_disabled_mask == mask) return;
+    runtime_settings.builtin_disabled_mask = mask;
+    flash_save(&runtime_settings);
+}
+
 // ----------------------------------------------------------------------------
 // RAM-only ephemeral state for joypad-live (PROFILE.SELECT, PROFILE.APPLY,
 // OVERLAY.SET) — mirrors src/core/services/storage/flash.c. No NVS writes,

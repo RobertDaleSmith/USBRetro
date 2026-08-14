@@ -26,6 +26,7 @@
 #include "devices/vendors/microsoft/ms_sidewinder_dualstrike.h"
 #include "devices/vendors/microsoft/ms_sidewinder_commander.h"
 #include "devices/vendors/valve/steam_controller_2.h"
+#include "devices/vendors/valve/steam_controller.h"
 #include "devices/vendors/elo/elo_vagabond.h"
 #include "devices/generic/sinput_host.h"
 // Include other devices here
@@ -53,6 +54,7 @@ void register_devices() {
     device_interfaces[CONTROLLER_SIDEWINDER_COMMANDER] = &ms_sidewinder_commander_interface;
     device_interfaces[CONTROLLER_SINPUT] = &sinput_host_interface;
     device_interfaces[CONTROLLER_STEAM_2] = &steam_controller_2_interface;
+    device_interfaces[CONTROLLER_STEAM_1] = &steam_controller_interface;
     device_interfaces[CONTROLLER_ELO_VAGABOND] = &elo_vagabond_interface;
     device_interfaces[CONTROLLER_DINPUT] = &hid_gamepad_interface;
     device_interfaces[CONTROLLER_KEYBOARD] = &hid_keyboard_interface;

@@ -19,14 +19,14 @@
 // ============================================================================
 
 #define CUSTOM_PROFILE_NAME_LEN 12
-#define CUSTOM_PROFILE_BUTTON_COUNT 18
+#define CUSTOM_PROFILE_BUTTON_COUNT 26
 #define CUSTOM_PROFILE_MAX_COUNT 4
 
 // Button mapping values:
 // 0x00 = passthrough (no remap, keep original button)
-// 0x01-0x18 = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 23=F1, 24=F2)
+// 0x01-0x1A = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 24=F2, 25=L5, 26=R5)
 // 0xFF = disabled (button press ignored)
-#define BUTTON_MAP_MAX_TARGET 24  // Max valid remap target (F2)
+#define BUTTON_MAP_MAX_TARGET 26  // Max valid remap target (R5)
 #define BUTTON_MAP_PASSTHROUGH 0x00
 #define BUTTON_MAP_DISABLED    0xFF
 
@@ -34,9 +34,10 @@
 // Stored in flash, user-configurable via web config
 typedef struct {
     char name[CUSTOM_PROFILE_NAME_LEN];  // 12 bytes, null-terminated
-    uint8_t button_map[CUSTOM_PROFILE_BUTTON_COUNT]; // 18 bytes
-    // Button indices: 0=B1, 1=B2, 2=B3, 3=B4, 4=L1, 5=R1, 6=L2, 7=R2,
-    //                 8=S1, 9=S2, 10=L3, 11=R3, 12=DU, 13=DD, 14=DL, 15=DR, 16=A1, 17=A2
+    uint8_t button_map[CUSTOM_PROFILE_BUTTON_COUNT]; // 26 bytes
+    // Button indices (bit position): 0=B1, 1=B2, 2=B3, 3=B4, 4=L1, 5=R1, 6=L2, 7=R2,
+    //                 8=S1, 9=S2, 10=L3, 11=R3, 12=DU, 13=DD, 14=DL, 15=DR, 16=A1, 17=A2,
+    //                 18=A3, 19=A4, 20=L4, 21=R4, 22=F1, 23=F2, 24=L5, 25=R5
     uint8_t left_stick_sens;   // 0-200 (100 = 1.0x, 50 = 0.5x, 200 = 2.0x)
     uint8_t right_stick_sens;  // 0-200
     uint8_t flags;             // Bit 0: swap sticks, Bit 1: invert LY, Bit 2: invert RY,
@@ -44,8 +45,31 @@ typedef struct {
     uint8_t socd_mode;         // SOCD cleaning mode (0=passthrough, 1=neutral, 2=up-priority, 3=last-win)
     uint8_t l2_threshold;      // Analog L2 → digital threshold; 0 = use default (128)
     uint8_t r2_threshold;      // Analog R2 → digital threshold; 0 = use default (128)
-    uint8_t reserved[20];      // Future use
+    // Per-profile turbo / auto-fire (web-configurable). Backward-compatible:
+    // carved from the former reserved[] which was zero-initialized, so old
+    // records read as rate 0 (off) with an empty mask — no schema bump needed.
+    uint8_t autofire_rate;     // 0 = off, 1..6 = AUTOFIRE_RATE ladder index (profile.h)
+    uint8_t turbo_mask[4];     // 32-bit LE bitfield; bit i = physical button index i
+                               // (0=B1 .. 25=R5, same index space as button_map)
+    // Generic device/output mode, interpreted by the active app's output driver
+    // (e.g. usb2pce: 0=2-button, 1=6-button, 2=3-button Sel, 3=3-button Run). The
+    // app reports its mode names via profile_config_t. Carved from reserved[] →
+    // zero-init means "mode 0" (the app's default) on old flashes; no schema bump.
+    uint8_t output_mode;
+    uint8_t reserved[6];       // 1 + 4 + 1 + 6 = 12, so struct stays exactly 56 bytes
 } custom_profile_t;
+
+// Turbo bit accessors, keyed on physical (input) button index 0..25.
+static inline bool custom_profile_turbo_get(const custom_profile_t* p, uint8_t i) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return false;
+    return (p->turbo_mask[i >> 3] >> (i & 7)) & 1u;
+}
+static inline void custom_profile_turbo_set(custom_profile_t* p, uint8_t i, bool on) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return;
+    uint8_t bit = 1u << (i & 7);
+    if (on) p->turbo_mask[i >> 3] |= bit;
+    else    p->turbo_mask[i >> 3] &= ~bit;
+}
 
 // Profile flags
 #define PROFILE_FLAG_SWAP_STICKS  (1 << 0)
@@ -65,7 +89,11 @@ typedef struct {
 // Pre-versioning records (v1.9.0 and v2.0.0) have schema_version == 0
 // because the byte was reserved and zero-initialized. Bumping to 1 forces
 // a one-time wipe for those users; subsequent bumps wipe their own range.
-#define FLASH_SCHEMA_VERSION 1
+//
+// v2 (v2.4.0): custom_profile_t.button_map grew 18 → 26 bytes (into former
+// reserved space) so L4/R4/F1/F2/L5/R5 are remappable; the struct stays
+// 56 bytes but those 8 bytes are reinterpreted, so wipe stale records.
+#define FLASH_SCHEMA_VERSION 2
 
 // Settings structure stored in flash (256 bytes = 1 flash page)
 // 16 entries fit in one 4KB sector for journaled writes
@@ -103,6 +131,12 @@ typedef struct {
     // reserved[] so the 256-byte layout is unchanged; old flashes read 0=off.
     uint8_t shoulder_swap;
 
+    // Built-in profiles hidden from the hotkey cycle: bit i = built-in index i
+    // disabled. Carved from reserved[] (zero-init → none disabled on old flashes,
+    // no schema bump). Web-config toggle; disabled built-ins are still selectable
+    // directly but skipped by SELECT+Up/Down.
+    uint8_t builtin_disabled_mask;
+
     // Status LED brightness. 0 = compile-time default (full), 1-255 = scale.
     // Also carved from reserved[], so the layout and schema are unchanged.
     //
@@ -115,10 +149,16 @@ typedef struct {
     // setting is 1 (a barely-visible glow), not a true zero. The runtime API
     // does accept 0 for full off; persistent off stays neopixel_disable()'s
     // job, which is a separate control.
+    //
+    // NB: this field sits *after* builtin_disabled_mask deliberately. That one
+    // already shipped on main and adapters have written it, so it keeps its
+    // byte offset; led_brightness takes the next one. Swapping the two would
+    // make an existing record's disabled-profile mask read back as a
+    // near-black LED brightness.
     uint8_t led_brightness;
 
-    // Reserved for future global settings (7 bytes)
-    uint8_t reserved[7];
+    // Reserved for future global settings (6 bytes)
+    uint8_t reserved[6];
 
     // Custom profiles (4 x 56 = 224 bytes)
     custom_profile_t profiles[CUSTOM_PROFILE_MAX_COUNT];
@@ -272,5 +312,9 @@ void flash_set_dpad_mode(uint8_t mode);
 
 // Persist the shoulder-swap toggle (L1<->L2, R1<->R2). Marks router_saved=1.
 void flash_set_shoulder_swap(uint8_t on);
+
+// Built-in profiles hidden from the SELECT+Up/Down cycle (bit i = built-in i).
+uint8_t flash_get_builtin_disabled_mask(void);
+void flash_set_builtin_disabled_mask(uint8_t mask);
 
 #endif // FLASH_H

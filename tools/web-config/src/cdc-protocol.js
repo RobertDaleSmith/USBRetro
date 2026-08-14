@@ -684,6 +684,14 @@ class CDCProtocol {
         return this.sendCommand('PROFILE.DELETE', { index });
     }
 
+    async disableProfile(index, disabled) {
+        return this.sendCommand('PROFILE.DISABLE', { index, disabled });
+    }
+
+    async getProfileModes() {
+        return this.sendCommand('PROFILE.MODES');
+    }
+
     async cloneProfile(index, name) {
         return this.sendCommand('PROFILE.CLONE', { index, name });
     }
@@ -760,6 +768,10 @@ class CDCProtocol {
 
     async setDpadMode(mode) {
         return this.sendCommand('ROUTER.DPAD.SET', { mode });
+    }
+
+    async setShoulderSwap(enable) {
+        return this.sendCommand('ROUTER.SHOULDER.SET', { enable });
     }
 
     // Pad GPIO Config

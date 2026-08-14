@@ -92,17 +92,28 @@ For fighting game controllers (Hitbox, arcade sticks) where opposite directions 
 
 ## Profile Cycling UX
 
-Users switch profiles at runtime:
+`router_init()` installs a set of built-in hotkeys (as default router combos) so
+profile switching and related tweaks work on every app. Apps that register their
+own combos (`router_set_combo()`) take over and replace these defaults.
 
-1. Hold **SELECT + D-pad Up** for 2 seconds -- cycle to the next profile
-2. Hold **SELECT + D-pad Down** for 2 seconds -- cycle to the previous profile
-3. The NeoPixel LED flashes to confirm (number of OFF blinks = profile index + 1)
-4. Controller rumble provides haptic confirmation (if the controller supports it)
-5. While the combo is held, SELECT + D-pad buttons are suppressed from the output
+| Hotkey (on the source controller) | Action |
+|-----------------------------------|--------|
+| **SELECT + D-pad Up** | Previous profile |
+| **SELECT + D-pad Down** | Next profile |
+| **SELECT + D-pad Left / Right** | D-pad ↔ stick swap: a 4-position slider that clamps at the ends, `[D-pad↔L-stick] [normal] [D-pad↔R-stick] [L-stick↔R-stick]` (Left steps toward the first, Right toward the last) |
+| **START + D-pad Up** | Shoulder swap toggle (L1↔L2, R1↔R2) |
 
-Per-player profile switching is supported: each player can independently cycle profiles using the same combo on their own controller.
+Profile switching is **instant** (no timed hold) and **clamps at the ends** -- it
+does not wrap past the first/last profile. The NeoPixel LED flashes to confirm
+(number of OFF blinks = profile index + 1) and the controller rumbles if capable.
 
-Additionally, SELECT + D-pad Left/Right can switch USB output modes (when an output mode callback is registered).
+Per-player profile switching is supported: each player can independently cycle
+profiles using the same combo on their own controller.
+
+The choices persist to flash (profile index, d-pad mode, shoulder swap) and
+restore on boot. Profiles can also be selected from the [web config](web-config.md).
+On-the-fly button remapping and rapid-fire have their own hotkeys -- see
+[Runtime Profile](runtime_profile.md).
 
 ## Profile Persistence
 

@@ -6,10 +6,15 @@ USB controller and mouse adapter for PCEngine/TurboGrafx-16 with multitap suppor
 
 ### 🎮 Controller Support
 
-- **2-button mode** - Standard PCEngine controller (I, II)
-- **3-button mode** - Street Fighter II layout (I, II, Select as III)
+Button mode is chosen via [profiles](../core/profiles.md) (**SELECT + D-pad Up/Down** on the controller, or the web config) and persists across power cycles:
+
+- **2-button mode** - Standard PCEngine controller (I, II); III/IV holes turbo II/I
+- **3-button mode (Sel)** - Street Fighter II layout (I, II, Select as III)
+- **3-button mode (Run)** - I, II, Run as III
 - **6-button mode** - Full button support (I-VI)
-- **Turbo buttons** - Auto-fire on buttons III and IV
+- **Turbo** - built-in on the 2-button profile, plus on-the-fly rapid-fire (**SELECT + B3**)
+
+See [usb2pce](../apps/usb2pce.md) for the full profile/turbo/web-config details.
 
 ### 🖱️ Mouse Support
 
@@ -147,13 +152,13 @@ PCEngine multitap scanning:
 
 - Controllers auto-detected on connection
 - Mouse/controller automatically determined
-- No manual mode switching required
+- Button mode selected via profile (SELECT + D-pad Up/Down), persisted to flash
 
 ### Turbo Functionality
 
-- Buttons III and IV have built-in turbo
-- Turbo rate: ~15Hz (configurable in firmware)
-- Always active when button held
+- 2-button profile turbos the III/IV holes (~15 Hz) — turbo of II/I
+- On-the-fly rapid-fire: hold **SELECT + B3**, tap a button to cycle its rate
+- Turbo rate configurable in firmware / via the rapid-fire gesture
 
 ## Troubleshooting
 

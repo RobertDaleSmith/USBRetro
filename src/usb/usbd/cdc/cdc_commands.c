@@ -245,6 +245,7 @@ static void send_json(const char* json)
 // Diagnostic getter from sinput_mode.c (fwd-declared to avoid pulling the
 // SInput/tusb headers into this TU).
 extern uint32_t sinput_get_feature_count(void);
+extern void sinput_get_debug_info(char* buf, int len);
 
 static void cmd_info(const char* json)
 {
@@ -280,6 +281,17 @@ static void cmd_info(const char* json)
 #endif
              );
     printf("[CDC] INFO response: %s\n", response_buf);
+    send_json(response_buf);
+}
+
+// SINPUT.DBG — report the values driving the SInput identity SDL reads (CDC-visible
+// diagnostic; printf goes to UART on this board so we can't see it otherwise).
+static void cmd_sinput_dbg(const char* json)
+{
+    (void)json;
+    char dbg[256];
+    sinput_get_debug_info(dbg, sizeof(dbg));
+    snprintf(response_buf, sizeof(response_buf), "{\"sinput_dbg\":\"%s\"}", dbg);
     send_json(response_buf);
 }
 
@@ -1006,12 +1018,14 @@ static void cmd_profile_list(const char* json)
 
     // Add built-in profiles (or virtual Default)
     if (builtin_count > 0) {
-        for (int i = 0; i < builtin_count && pos < (int)sizeof(response_buf) - 80; i++) {
+        uint8_t disabled_mask = flash_get_builtin_disabled_mask();
+        for (int i = 0; i < builtin_count && pos < (int)sizeof(response_buf) - 90; i++) {
             const char* name = profile_get_name(get_profile_target(), i);
             if (idx > 0) pos += snprintf(response_buf + pos, sizeof(response_buf) - pos, ",");
             pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
-                            "{\"index\":%d,\"name\":\"%s\",\"builtin\":true,\"editable\":false}",
-                            idx, name ? name : "Default");
+                            "{\"index\":%d,\"name\":\"%s\",\"builtin\":true,\"editable\":false,\"disabled\":%s}",
+                            idx, name ? name : "Default",
+                            ((disabled_mask >> i) & 1u) ? "true" : "false");
             idx++;
         }
     } else {
@@ -1098,12 +1112,16 @@ static void cmd_profile_get(const char* json)
             mpos += snprintf(map_str + mpos, sizeof(map_str) - mpos, "%d", p->button_map[i]);
         }
 
+        uint32_t turbo_mask = (uint32_t)p->turbo_mask[0] | ((uint32_t)p->turbo_mask[1] << 8) |
+                              ((uint32_t)p->turbo_mask[2] << 16) | ((uint32_t)p->turbo_mask[3] << 24);
         snprintf(response_buf, sizeof(response_buf),
                  "{\"ok\":true,\"index\":%d,\"name\":\"%.11s\",\"builtin\":false,\"editable\":true,"
                  "\"button_map\":[%s],"
-                 "\"left_stick_sens\":%d,\"right_stick_sens\":%d,\"flags\":%d,\"socd_mode\":%d}",
+                 "\"left_stick_sens\":%d,\"right_stick_sens\":%d,\"flags\":%d,\"socd_mode\":%d,"
+                 "\"autofire_rate\":%d,\"turbo_mask\":%lu,\"output_mode\":%d}",
                  index, p->name, map_str,
-                 p->left_stick_sens, p->right_stick_sens, p->flags, p->socd_mode);
+                 p->left_stick_sens, p->right_stick_sens, p->flags, p->socd_mode,
+                 p->autofire_rate, (unsigned long)turbo_mask, p->output_mode);
     }
     send_json(response_buf);
 }
@@ -1308,6 +1326,33 @@ static void cmd_profile_save(const char* json)
         p->socd_mode = 0;  // Default to passthrough
     }
 
+    // Turbo / auto-fire (per-profile rate + physical-button bitmask)
+    int rate;
+    if (json_get_int(json, "autofire_rate", &rate)) {
+        p->autofire_rate = (uint8_t)(rate < 0 ? 0 : (rate >= AUTOFIRE_RATE_COUNT ? 0 : rate));
+    } else if (is_new) {
+        p->autofire_rate = 0;  // off
+    }
+    int tmask;
+    if (json_get_int(json, "turbo_mask", &tmask)) {
+        uint32_t m = (uint32_t)tmask;
+        p->turbo_mask[0] = m & 0xFF;         p->turbo_mask[1] = (m >> 8) & 0xFF;
+        p->turbo_mask[2] = (m >> 16) & 0xFF; p->turbo_mask[3] = (m >> 24) & 0xFF;
+    } else if (is_new) {
+        p->turbo_mask[0] = p->turbo_mask[1] = p->turbo_mask[2] = p->turbo_mask[3] = 0;
+    }
+
+    // Generic device/output mode (app-interpreted; clamped to the app's count).
+    int omode;
+    if (json_get_int(json, "output_mode", &omode)) {
+        uint8_t mode_count = 0;
+        profile_get_output_modes(NULL, &mode_count);
+        if (mode_count == 0 || omode < 0 || omode >= mode_count) omode = 0;
+        p->output_mode = (uint8_t)omode;
+    } else if (is_new) {
+        p->output_mode = 0;
+    }
+
     // Save to flash (runtime settings are already updated)
     flash_save(settings);
 
@@ -1452,6 +1497,16 @@ static void cmd_profile_clone(const char* json)
                 if ((uint32_t)out_bit + 1u > BUTTON_MAP_MAX_TARGET) continue;
 
                 new_profile->button_map[in_bit] = (uint8_t)(out_bit + 1);
+
+                // Preserve built-in auto-fire: flag the input button for turbo and
+                // carry its rate over to the profile's single rate. (Multiple
+                // auto-fire entries collapse to the last one's rate — built-ins
+                // use one rate for all, so this is exact in practice.)
+                if (entry->autofire_period_ms) {
+                    custom_profile_turbo_set(new_profile, in_bit, true);
+                    new_profile->autofire_rate =
+                        profile_autofire_index_from_ms(entry->autofire_period_ms);
+                }
             }
 
             // Stick sensitivities: built-in float (1.0 = 100%) → custom int 0-200
@@ -1466,6 +1521,7 @@ static void cmd_profile_clone(const char* json)
             new_profile->socd_mode    = (uint8_t)src->socd_mode;
             new_profile->l2_threshold = src->l2_threshold;
             new_profile->r2_threshold = src->r2_threshold;
+            new_profile->output_mode  = src->output_mode;  // preserve device mode
         }
     } else {
         // Custom → custom: byte-for-byte copy of the supported fields
@@ -1479,6 +1535,9 @@ static void cmd_profile_clone(const char* json)
             new_profile->socd_mode        = src->socd_mode;
             new_profile->l2_threshold     = src->l2_threshold;
             new_profile->r2_threshold     = src->r2_threshold;
+            new_profile->autofire_rate    = src->autofire_rate;
+            memcpy(new_profile->turbo_mask, src->turbo_mask, sizeof(new_profile->turbo_mask));
+            new_profile->output_mode      = src->output_mode;
         }
     }
 
@@ -1488,6 +1547,55 @@ static void cmd_profile_clone(const char* json)
     int new_unified_idx = custom_to_unified_index(new_custom_idx);
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"index\":%d,\"name\":\"%.11s\"}", new_unified_idx, new_profile->name);
+    send_json(response_buf);
+}
+
+// PROFILE.DISABLE - Hide/show a built-in profile in the SELECT+Up/Down cycle.
+// Body: { "index": <unified built-in index>, "disabled": <bool> }
+// Disabled built-ins are still selectable directly (PROFILE.SET / web config) but
+// are skipped by the profile hotkey. Custom profiles cannot be disabled.
+static void cmd_profile_disable(const char* json)
+{
+    int index;
+    if (!json_get_int(json, "index", &index)) {
+        send_error("missing index");
+        return;
+    }
+    if (index < 0 || index >= 8 || !is_builtin_profile(index)) {
+        send_error("only built-in profiles can be disabled");
+        return;
+    }
+    bool disabled = true;
+    json_get_bool(json, "disabled", &disabled);
+
+    uint8_t mask = flash_get_builtin_disabled_mask();
+    if (disabled) mask |= (uint8_t)(1u << index);
+    else          mask &= (uint8_t)~(1u << index);
+    flash_set_builtin_disabled_mask(mask);
+
+    snprintf(response_buf, sizeof(response_buf),
+             "{\"ok\":true,\"index\":%d,\"disabled\":%s}", index, disabled ? "true" : "false");
+    send_json(response_buf);
+}
+
+// PROFILE.MODES - Report the app's generic device/output modes, so the web
+// config can offer a "Device Mode" selector per profile. Empty when the app has
+// no selectable modes. Response: { ok, type, modes:[...] }
+static void cmd_profile_modes(const char* json)
+{
+    (void)json;
+    const char* const* names = NULL;
+    uint8_t count = 0;
+    const char* type = profile_get_output_modes(&names, &count);
+
+    int pos = snprintf(response_buf, sizeof(response_buf),
+                       "{\"ok\":true,\"type\":%s%s%s,\"modes\":[",
+                       type ? "\"" : "null", type ? type : "", type ? "\"" : "");
+    for (uint8_t i = 0; i < count && names && pos < (int)sizeof(response_buf) - 40; i++) {
+        pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
+                        "%s\"%s\"", i ? "," : "", names[i] ? names[i] : "");
+    }
+    snprintf(response_buf + pos, sizeof(response_buf) - pos, "]}");
     send_json(response_buf);
 }
 
@@ -2249,17 +2357,21 @@ static void cmd_router_get(const char* json)
 #else
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 0;
 #endif
+    // D-pad mode + shoulder swap come from LIVE router state so the value is
+    // consistent the instant a hotkey or CDC set happens (the flash write is
+    // debounced). router_init() has already restored them from flash on boot.
+    dm = router_get_dpad_mode();
+    uint8_t ss = router_get_shoulder_swap() ? 1 : 0;
     if (flash_load(&flash_data) && flash_data.router_saved) {
         if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
         if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
-        if (flash_data.dpad_mode <= 2) dm = flash_data.dpad_mode;
         bti = flash_data.bt_input_enabled;
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"routing_mode\":%d,\"merge_mode\":%d,\"dpad_mode\":%d,"
-             "\"bt_input\":%s,"
+             "\"shoulder_swap\":%s,\"bt_input\":%s,"
              "\"default_routing_mode\":%d,\"default_merge_mode\":%d}",
-             rm, mm, dm, bti ? "true" : "false",
+             rm, mm, dm, ss ? "true" : "false", bti ? "true" : "false",
              (int)ROUTING_MODE, (int)MERGE_MODE);
     send_json(response_buf);
 }
@@ -2267,12 +2379,24 @@ static void cmd_router_get(const char* json)
 static void cmd_router_dpad_set(const char* json)
 {
     int mode;
-    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 2) {
-        send_error("Invalid mode (0-2)");
+    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > 3) {
+        send_error("Invalid mode (0=normal,1=dpad<->L,2=dpad<->R,3=L<->R)");
         return;
     }
     router_set_dpad_mode((uint8_t)mode);
     flash_set_dpad_mode((uint8_t)mode);   // persist (no reboot needed)
+    send_ok();
+}
+
+static void cmd_router_shoulder_set(const char* json)
+{
+    bool on;
+    if (!json_get_bool(json, "enable", &on)) {
+        send_error("missing enable");
+        return;
+    }
+    router_set_shoulder_swap(on);
+    flash_set_shoulder_swap(on ? 1 : 0);   // persist (no reboot needed)
     send_ok();
 }
 
@@ -2413,7 +2537,31 @@ static void cmd_caps_get(const char* json)
         first_route = false;
     }
 
-    n = snprintf(out, rem, "]}");
+    // USB host capability. Advertised even in config mode (no live host) so the
+    // web config can show a USB Host page for host-capable adapters:
+    //   present      — this build hosts USB controllers (REQUIRE_USB_HOST app flag)
+    //   configurable — the D+ pin is user-settable (PIO USB on controller apps).
+    //                   Native-USB adapters (usb2pce/usb2gc) are fixed by silicon
+    //                   → present but not configurable → read-only page.
+    //   dp           — the PIO USB D+ pin, or -1 for native USB / no host.
+#if defined(REQUIRE_USB_HOST) && REQUIRE_USB_HOST
+    const char* uh_present = "true";
+#else
+    const char* uh_present = "false";
+#endif
+#ifdef CONFIG_PAD_INPUT
+    const char* uh_configurable = "true";
+#else
+    const char* uh_configurable = "false";
+#endif
+#ifdef PICO_DEFAULT_PIO_USB_DP_PIN
+    int uh_dp = PICO_DEFAULT_PIO_USB_DP_PIN;
+#else
+    int uh_dp = -1;   // native USB (fixed pins) or no host
+#endif
+    n = snprintf(out, rem,
+                 "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}}",
+                 uh_present, uh_configurable, uh_dp);
     if (n < 0 || n >= rem) goto overflow;
     send_json(response_buf);
     return;
@@ -2768,13 +2916,20 @@ static void cmd_players_list(const char* json)
                                players[i].transport == INPUT_TRANSPORT_BT_CLASSIC ||
                                players[i].transport == INPUT_TRANSPORT_BT_BLE);
 
+        // Battery (0 = not reported by this controller)
+        uint8_t batt = 0; bool batt_chg = false;
+        router_get_device_battery((uint8_t)players[i].dev_addr, &batt, &batt_chg);
+
         len += snprintf(response_buf + len, sizeof(response_buf) - len,
-                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s}",
+                        "%s{\"slot\":%d,\"name\":\"%s\",\"transport\":\"%s\",\"rumble\":%s,"
+                        "\"battery\":%u,\"charging\":%s}",
                         i > 0 ? "," : "",
                         i,
                         name ? name : "Unknown",
                         transport,
-                        supports_rumble ? "true" : "false");
+                        supports_rumble ? "true" : "false",
+                        (unsigned)batt,
+                        batt_chg ? "true" : "false");
     }
 
     snprintf(response_buf + len, sizeof(response_buf) - len, "]}");
@@ -3706,6 +3861,7 @@ typedef struct {
 
 static const cmd_entry_t commands[] = {
     {"INFO", cmd_info},
+    {"SINPUT.DBG", cmd_sinput_dbg},
     {"MP.STATS", cmd_mp_stats},
     {"MP.MODE", cmd_mp_mode},
     {"PING", cmd_ping},
@@ -3757,6 +3913,8 @@ static const cmd_entry_t commands[] = {
     {"PROFILE.SAVE", cmd_profile_save},
     {"PROFILE.DELETE", cmd_profile_delete},
     {"PROFILE.CLONE", cmd_profile_clone},
+    {"PROFILE.DISABLE", cmd_profile_disable},
+    {"PROFILE.MODES", cmd_profile_modes},
     {"PROFILE.APPLY", cmd_profile_apply},
     {"PROFILE.CLEAR", cmd_profile_clear},
     {"PROFILE.SELECT", cmd_profile_select},
@@ -3776,6 +3934,7 @@ static const cmd_entry_t commands[] = {
     {"ROUTER.GET", cmd_router_get},
     {"ROUTER.SET", cmd_router_set},
     {"ROUTER.DPAD.SET", cmd_router_dpad_set},
+    {"ROUTER.SHOULDER.SET", cmd_router_shoulder_set},
     {"CAPS.GET", cmd_caps_get},
     {"OUTPUT.NATIVE.GET", cmd_output_native_get},
     {"OUTPUT.NATIVE.SET", cmd_output_native_set},

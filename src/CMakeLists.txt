@@ -164,6 +164,7 @@ set(USB_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_dualstrike.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_commander.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/vendors/valve/steam_controller.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/sinput_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/xinput/xinput.c
 )
@@ -185,6 +186,7 @@ set(BTHID_DEVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_ble.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/google/stadia_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/valve/steam_controller_2_ble.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/valve/steam_controller_ble.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/augmental/mouthpad_ble.c
     # MouthPad NUS<->CDC relay (ambient: self-attaches to CDC when linked + a
     # MouthPad is connected; inert otherwise). Companion to the mouthpad_ble HID
@@ -564,14 +566,16 @@ if (PICO_BOARD STREQUAL "pico")
     target_compile_definitions(joypad_pce PRIVATE RPI_PICO_BUILD=1)
 endif()
 target_sources(joypad_pce PUBLIC ${COMMON_SOURCES}
+    ${USB_DEVICE_SOURCES}    # USB device / CDC for web-config mode (off-console)
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine/pcengine_device.c
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2pce/app.c
 )
 target_include_directories(joypad_pce PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2pce
     ${CMAKE_CURRENT_SOURCE_DIR}/native/device/pcengine
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd   # descriptors/*.h for CDC config-mode device
 )
-target_link_libraries(joypad_pce PRIVATE ${COMMON_LIBRARIES})
+target_link_libraries(joypad_pce PRIVATE ${COMMON_LIBRARIES} tinyusb_device)
 joypad_target_common(joypad_pce)
 joypad_add_btstack(joypad_pce)
 pico_generate_pio_header(joypad_pce ${CMAKE_CURRENT_LIST_DIR}/native/device/pcengine/plex.pio)

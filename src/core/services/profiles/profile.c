@@ -4,6 +4,7 @@
 // Supports per-output-target profile sets with shared fallback.
 
 #include "profile.h"
+#include "runtime_profile.h"
 #include "platform/platform.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -30,30 +31,6 @@ static uint8_t active_index[MAX_OUTPUT_TARGETS] = {0};
 // Per-player profile state
 static player_profile_state_t player_profiles[MAX_PLAYERS] = {0};
 
-// Per-player switch combo state
-typedef struct {
-    uint32_t p_select_hold_start;
-    bool p_select_was_held;
-    bool p_dpad_up_was_pressed;
-    bool p_dpad_down_was_pressed;
-    bool p_dpad_left_was_pressed;
-    bool p_dpad_right_was_pressed;
-    bool p_initial_trigger_done;
-} player_combo_state_t;
-
-static player_combo_state_t player_combo[MAX_PLAYERS] = {0};
-
-// Legacy combo state (player 0)
-#define select_hold_start       player_combo[0].p_select_hold_start
-#define select_was_held         player_combo[0].p_select_was_held
-#define dpad_up_was_pressed     player_combo[0].p_dpad_up_was_pressed
-#define dpad_down_was_pressed   player_combo[0].p_dpad_down_was_pressed
-#define dpad_left_was_pressed   player_combo[0].p_dpad_left_was_pressed
-#define dpad_right_was_pressed  player_combo[0].p_dpad_right_was_pressed
-#define initial_trigger_done    player_combo[0].p_initial_trigger_done
-
-// Timing constants
-static const uint32_t INITIAL_HOLD_TIME_MS = 2000;  // Must hold 2 seconds for first trigger
 
 // SOCD last-input-wins state tracking (per player)
 typedef struct {
@@ -96,6 +73,51 @@ static const profile_set_t* get_profile_set(output_target_t output)
 // ============================================================================
 // PROFILE SYSTEM API
 // ============================================================================
+
+// Shared turbo-rate ladder (see profile.h). index 0 = off; 1..6 → 30/20/15/12/10/7.5 Hz.
+uint8_t profile_autofire_rate_ms(uint8_t index)
+{
+    static const uint8_t ladder[AUTOFIRE_RATE_COUNT] = {
+        0, AUTOFIRE_30HZ, AUTOFIRE_20HZ, AUTOFIRE_15HZ,
+        AUTOFIRE_12HZ, AUTOFIRE_10HZ, AUTOFIRE_7HZ,
+    };
+    return (index < AUTOFIRE_RATE_COUNT) ? ladder[index] : 0;
+}
+
+uint8_t profile_autofire_index_from_ms(uint8_t period_ms)
+{
+    if (period_ms == 0) return 0;  // off
+    uint8_t best = 1, best_diff = 255;
+    for (uint8_t i = 1; i < AUTOFIRE_RATE_COUNT; i++) {
+        uint8_t p = profile_autofire_rate_ms(i);
+        uint8_t d = (p > period_ms) ? (p - period_ms) : (period_ms - p);
+        if (d < best_diff) { best_diff = d; best = i; }
+    }
+    return best;
+}
+
+uint8_t profile_get_active_output_mode(output_target_t output)
+{
+    // A custom profile carries its own output_mode; a built-in exposes it on the
+    // profile_t. flash_get_active_custom_profile() returns non-NULL only when a
+    // custom is active, so this resolves the effective mode either way.
+    const custom_profile_t* cp = flash_get_active_custom_profile();
+    if (cp) return cp->output_mode;
+    const profile_t* p = profile_get_by_index(output, profile_get_active_index(output));
+    return p ? p->output_mode : 0;
+}
+
+const char* profile_get_output_modes(const char* const** names, uint8_t* count)
+{
+    if (!config || !config->output_mode_names || config->output_mode_count == 0) {
+        if (names) *names = NULL;
+        if (count) *count = 0;
+        return NULL;
+    }
+    if (names) *names = config->output_mode_names;
+    if (count) *count = config->output_mode_count;
+    return config->output_type_name;
+}
 
 void profile_init(const profile_config_t* cfg)
 {
@@ -153,6 +175,11 @@ void profile_set_output_mode_callback(output_mode_callback_t callback)
 
 const profile_t* profile_get_active(output_target_t output)
 {
+    // A live runtime profile (SELECT-hold autofire / remap gesture) overrides
+    // the normal profile for this output while it has any entries.
+    const profile_t* rt = runtime_profile_get_active(output);
+    if (rt) return rt;
+
     const profile_set_t* set = get_profile_set(output);
     if (!set || set->profile_count == 0) {
         return NULL;
@@ -324,7 +351,33 @@ static void profile_announce_switch(output_target_t output,
     }
 }
 
-void profile_cycle_next(output_target_t output)
+// True if a unified profile index is selectable by the hotkey cycle. Custom
+// profiles are always enabled; built-ins can be individually disabled via the
+// web config (flash builtin_disabled_mask).
+static bool profile_unified_index_enabled(uint8_t idx, uint8_t builtin_count)
+{
+    if (idx >= builtin_count) return true;               // custom profile
+    return !((flash_get_builtin_disabled_mask() >> idx) & 1u);
+}
+
+// Step from `current` in direction `dir` (+1/-1), skipping disabled built-ins.
+// Returns the next enabled unified index, or `current` when there is none
+// (clamp at the ends, or every candidate disabled).
+static uint8_t profile_cycle_find(uint8_t current, uint8_t total,
+                                  uint8_t builtin_count, int dir, bool wrap)
+{
+    uint8_t idx = current;
+    for (uint8_t step = 0; step < total; step++) {
+        int ni = (int)idx + dir;
+        if (ni < 0)            { if (!wrap) return current; ni = total - 1; }
+        else if (ni >= total)  { if (!wrap) return current; ni = 0; }
+        idx = (uint8_t)ni;
+        if (profile_unified_index_enabled(idx, builtin_count)) return idx;
+    }
+    return current;  // nothing else enabled
+}
+
+void profile_cycle_next(output_target_t output, bool wrap)
 {
     uint8_t builtin_count = profile_get_count(output);
 
@@ -333,7 +386,9 @@ void profile_cycle_next(output_target_t output)
     if (builtin_count == 0) {
         uint8_t total_flash = flash_get_total_profile_count();
         if (total_flash > 1) {
-            flash_cycle_profile_next();
+            uint8_t cur = flash_get_active_profile_index();
+            if (!wrap && cur + 1 >= total_flash) return;  // clamp at last
+            flash_set_active_profile_index((uint8_t)((cur + 1) % total_flash));
             uint8_t new_index = flash_get_active_profile_index();
             leds_indicate_profile(new_index);
             uint8_t player_count = get_player_count ? get_player_count() : 0;
@@ -345,26 +400,30 @@ void profile_cycle_next(output_target_t output)
         return;
     }
 
-    // Apps with built-in profiles: cycle the unified [built-ins, customs]
-    // space so the hotkey matches what the web config (PROFILE.LIST) shows.
+    // Cycle the unified [built-ins, customs] space, skipping any built-in that
+    // has been disabled in the web config.
     uint8_t custom_count = (uint8_t)(flash_get_total_profile_count() - 1);
     uint8_t total = builtin_count + custom_count;
     if (total <= 1) return;
 
     uint8_t current = profile_get_unified_active_index(output, builtin_count);
-    uint8_t next = (uint8_t)((current + 1) % total);
+    uint8_t next = profile_cycle_find(current, total, builtin_count, +1, wrap);
+    if (next == current) return;  // clamp / nothing enabled ahead
     profile_apply_unified_index(output, next, builtin_count);
     profile_announce_switch(output, next, builtin_count);
 }
 
-void profile_cycle_prev(output_target_t output)
+void profile_cycle_prev(output_target_t output, bool wrap)
 {
     uint8_t builtin_count = profile_get_count(output);
 
     if (builtin_count == 0) {
         uint8_t total_flash = flash_get_total_profile_count();
         if (total_flash > 1) {
-            flash_cycle_profile_prev();
+            uint8_t cur = flash_get_active_profile_index();
+            if (!wrap && cur == 0) return;  // clamp at first
+            flash_set_active_profile_index(cur == 0 ? (uint8_t)(total_flash - 1)
+                                                    : (uint8_t)(cur - 1));
             uint8_t new_index = flash_get_active_profile_index();
             leds_indicate_profile(new_index);
             uint8_t player_count = get_player_count ? get_player_count() : 0;
@@ -381,7 +440,8 @@ void profile_cycle_prev(output_target_t output)
     if (total <= 1) return;
 
     uint8_t current = profile_get_unified_active_index(output, builtin_count);
-    uint8_t prev = (current == 0) ? (uint8_t)(total - 1) : (uint8_t)(current - 1);
+    uint8_t prev = profile_cycle_find(current, total, builtin_count, -1, wrap);
+    if (prev == current) return;  // clamp / nothing enabled behind
     profile_apply_unified_index(output, prev, builtin_count);
     profile_announce_switch(output, prev, builtin_count);
 }
@@ -479,222 +539,6 @@ void profile_cycle_player_prev(output_target_t output, uint8_t player_index)
     profile_set_player_active(output, player_index, new_index);
 }
 
-// ============================================================================
-// PER-PLAYER COMBO DETECTION
-// ============================================================================
-
-void profile_check_player_switch_combo(uint8_t player_index, uint32_t buttons)
-{
-    if (player_index >= MAX_PLAYERS) return;
-
-    output_target_t output = router_get_primary_output();
-    if (output == OUTPUT_TARGET_NONE) return;
-
-    player_combo_state_t* combo = &player_combo[player_index];
-
-    // Check button states (buttons are active-high: 1 = pressed)
-    bool select_held = ((buttons & JP_BUTTON_S1) != 0);
-    bool dpad_up_pressed = ((buttons & JP_BUTTON_DU) != 0);
-    bool dpad_down_pressed = ((buttons & JP_BUTTON_DD) != 0);
-
-    // Select released - reset everything for this player
-    if (!select_held) {
-        combo->p_select_hold_start = 0;
-        combo->p_select_was_held = false;
-        combo->p_dpad_up_was_pressed = false;
-        combo->p_dpad_down_was_pressed = false;
-        combo->p_dpad_left_was_pressed = false;
-        combo->p_dpad_right_was_pressed = false;
-        combo->p_initial_trigger_done = false;
-        return;
-    }
-
-    // Select is held
-    uint32_t current_time = platform_time_ms();
-
-    if (!combo->p_select_was_held) {
-        combo->p_select_hold_start = current_time;
-        combo->p_select_was_held = true;
-        // D-pad state will be tracked in the wait period below
-    }
-
-    uint32_t hold_duration = current_time - combo->p_select_hold_start;
-    bool can_trigger = combo->p_initial_trigger_done || (hold_duration >= INITIAL_HOLD_TIME_MS);
-
-    if (!can_trigger) {
-        // Still waiting for initial hold
-        return;
-    }
-
-    // Check if this player's feedback is still active
-    // But still track D-pad state to avoid missing edges
-    feedback_state_t* fb = feedback_get_state(player_index);
-    if (fb && fb->rumble.left > 0) {
-        combo->p_dpad_up_was_pressed = dpad_up_pressed;
-        combo->p_dpad_down_was_pressed = dpad_down_pressed;
-        return;  // Still rumbling from last switch
-    }
-
-    // Initial trigger: when 2-second hold completes, trigger immediately if D-pad is held
-    // Subsequent triggers: require rising edge (release and press again)
-    bool trigger_up = false;
-    bool trigger_down = false;
-
-    if (!combo->p_initial_trigger_done) {
-        // Initial trigger - just check if D-pad is currently pressed
-        trigger_up = dpad_up_pressed;
-        trigger_down = dpad_down_pressed;
-    } else {
-        // Subsequent triggers - require rising edge
-        trigger_up = dpad_up_pressed && !combo->p_dpad_up_was_pressed;
-        trigger_down = dpad_down_pressed && !combo->p_dpad_down_was_pressed;
-    }
-
-    // D-pad Up - cycle profile forward
-    if (trigger_up) {
-        uint8_t count = profile_get_count(output);
-        if (count > 1) {
-            profile_cycle_player_next(output, player_index);
-            combo->p_initial_trigger_done = true;
-        }
-    }
-    combo->p_dpad_up_was_pressed = dpad_up_pressed;
-
-    // D-pad Down - cycle profile backward
-    if (trigger_down && !trigger_up) {  // Don't trigger both directions
-        uint8_t count = profile_get_count(output);
-        if (count > 1) {
-            profile_cycle_player_prev(output, player_index);
-            combo->p_initial_trigger_done = true;
-        }
-    }
-    combo->p_dpad_down_was_pressed = dpad_down_pressed;
-}
-
-bool profile_player_switch_combo_active(uint8_t player_index)
-{
-    if (player_index >= MAX_PLAYERS) return false;
-    return player_combo[player_index].p_select_was_held &&
-           player_combo[player_index].p_initial_trigger_done;
-}
-
-// ============================================================================
-// LEGACY PROFILE SWITCH COMBO DETECTION
-// ============================================================================
-// SELECT + D-pad Up/Down to cycle profiles
-// Requires holding SELECT for 2 seconds before first switch
-
-void profile_check_switch_combo(uint32_t buttons)
-{
-    // Use primary output for switching
-    output_target_t output = router_get_primary_output();
-    if (output == OUTPUT_TARGET_NONE) return;
-
-    uint8_t player_count = get_player_count ? get_player_count() : 1;
-
-    // Check button states (buttons are active-high: 1 = pressed)
-    bool select_held = ((buttons & JP_BUTTON_S1) != 0);
-    bool dpad_up_pressed = ((buttons & JP_BUTTON_DU) != 0);
-    bool dpad_down_pressed = ((buttons & JP_BUTTON_DD) != 0);
-    bool dpad_left_pressed = ((buttons & JP_BUTTON_DL) != 0);
-    bool dpad_right_pressed = ((buttons & JP_BUTTON_DR) != 0);
-
-    // Select released - reset everything
-    if (!select_held) {
-        select_hold_start = 0;
-        select_was_held = false;
-        dpad_up_was_pressed = false;
-        dpad_down_was_pressed = false;
-        dpad_left_was_pressed = false;
-        dpad_right_was_pressed = false;
-        initial_trigger_done = false;
-        return;
-    }
-
-    // Select is held
-    uint32_t current_time = platform_time_ms();
-
-    if (!select_was_held) {
-        // Select just pressed - start timer
-        select_hold_start = current_time;
-        select_was_held = true;
-    }
-
-    uint32_t select_hold_duration = current_time - select_hold_start;
-
-    // Check if initial 2-second hold period has elapsed
-    bool can_trigger = initial_trigger_done || (select_hold_duration >= INITIAL_HOLD_TIME_MS);
-
-    if (!can_trigger) {
-        // Still waiting for initial 2-second hold
-        return;
-    }
-
-    // Don't allow switching while feedback is still active
-    // But still track D-pad state to avoid missing edges
-    if (leds_is_indicating() || profile_indicator_is_active()) {
-        dpad_up_was_pressed = dpad_up_pressed;
-        dpad_down_was_pressed = dpad_down_pressed;
-        dpad_left_was_pressed = dpad_left_pressed;
-        dpad_right_was_pressed = dpad_right_pressed;
-        return;
-    }
-
-    // Initial trigger: when 2-second hold completes, trigger immediately if D-pad is held
-    // Subsequent triggers: require rising edge (release and press again)
-    bool trigger_up = false;
-    bool trigger_down = false;
-
-    if (!initial_trigger_done) {
-        // Initial trigger - just check if D-pad is currently pressed
-        trigger_up = dpad_up_pressed;
-        trigger_down = dpad_down_pressed;
-    } else {
-        // Subsequent triggers - require rising edge
-        trigger_up = dpad_up_pressed && !dpad_up_was_pressed;
-        trigger_down = dpad_down_pressed && !dpad_down_was_pressed;
-    }
-
-    // D-pad Up - cycle profile forward
-    if (trigger_up) {
-        profile_cycle_next(output);
-        initial_trigger_done = true;
-    }
-    dpad_up_was_pressed = dpad_up_pressed;
-
-    // D-pad Down - cycle profile backward
-    if (trigger_down && !trigger_up) {  // Don't trigger both directions
-        profile_cycle_prev(output);
-        initial_trigger_done = true;
-    }
-    dpad_down_was_pressed = dpad_down_pressed;
-
-    // D-pad Left - cycle output mode backward on rising edge
-    if (dpad_left_pressed && !dpad_left_was_pressed) {
-        if (on_output_mode_callback) {
-            if (on_output_mode_callback(-1)) {
-                initial_trigger_done = true;
-            }
-        }
-    }
-    dpad_left_was_pressed = dpad_left_pressed;
-
-    // D-pad Right - cycle output mode forward on rising edge
-    if (dpad_right_pressed && !dpad_right_was_pressed) {
-        if (on_output_mode_callback) {
-            if (on_output_mode_callback(+1)) {
-                initial_trigger_done = true;
-            }
-        }
-    }
-    dpad_right_was_pressed = dpad_right_pressed;
-}
-
-bool profile_switch_combo_active(void)
-{
-    // Combo is active when Select has been held long enough
-    return select_was_held && initial_trigger_done;
-}
 
 // ============================================================================
 // FLASH PERSISTENCE
@@ -899,17 +743,6 @@ void profile_apply(const profile_t* profile,
                    uint8_t rz,
                    profile_output_t* output)
 {
-    // Suppress combo buttons when profile switch is active
-    // This prevents Select + D-pad from being output during switching
-    // Note: active-high (bit set = pressed, bit clear = released)
-    if (profile_switch_combo_active()) {
-        // Clear combo buttons to "released"
-        input_buttons &= ~JP_BUTTON_S1;   // Select
-        input_buttons &= ~JP_BUTTON_DU;   // D-pad Up
-        input_buttons &= ~JP_BUTTON_DD;   // D-pad Down
-        input_buttons &= ~JP_BUTTON_DL;   // D-pad Left
-        input_buttons &= ~JP_BUTTON_DR;   // D-pad Right
-    }
 
     // Zero output fields only — autofire_start_ms at the end is preserved across calls.
     memset(output, 0, offsetof(profile_output_t, autofire_start_ms));
