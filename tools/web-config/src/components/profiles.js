@@ -190,9 +190,12 @@ export class ProfilesCard {
             const item = document.createElement('div');
             item.className = 'profile-item' + (isActive ? ' active' : '');
 
+            if (profile.disabled) item.classList.add('profile-disabled');
+
             const info = document.createElement('div');
             info.className = 'profile-item-info';
-            const detail = profile.builtin ? (profile.index === 0 ? 'Passthrough' : 'Built-in') : 'Custom';
+            let detail = profile.builtin ? (profile.index === 0 ? 'Passthrough' : 'Built-in') : 'Custom';
+            if (profile.disabled) detail += ' · hidden from hotkey';
             info.innerHTML = `<div class="profile-item-name">${profile.name}</div>
                               <div class="profile-item-details">${detail}</div>`;
             item.appendChild(info);
@@ -214,6 +217,16 @@ export class ProfilesCard {
                 cloneBtn.textContent = 'Clone';
                 cloneBtn.addEventListener('click', () => this.clone(profile.index, profile.name));
                 actions.appendChild(cloneBtn);
+
+                // Enable/Disable in the hotkey cycle (built-ins only).
+                const disBtn = document.createElement('button');
+                disBtn.className = 'secondary';
+                disBtn.textContent = profile.disabled ? 'Enable' : 'Disable';
+                disBtn.title = profile.disabled
+                    ? 'Show this profile in the SELECT + D-pad hotkey cycle'
+                    : 'Hide this profile from the SELECT + D-pad hotkey cycle';
+                disBtn.addEventListener('click', () => this.setDisabled(profile.index, !profile.disabled));
+                actions.appendChild(disBtn);
             }
 
             if (profile.editable) {
@@ -256,6 +269,16 @@ export class ProfilesCard {
             await this.load();
         } catch (e) {
             this.log(`Failed to clone profile: ${e.message}`, 'error');
+        }
+    }
+
+    async setDisabled(index, disabled) {
+        try {
+            await this.protocol.disableProfile(index, disabled);
+            this.log(`Profile ${disabled ? 'hidden from' : 'shown in'} the hotkey cycle`, 'success');
+            await this.load();
+        } catch (e) {
+            this.log(`Failed to update profile: ${e.message}`, 'error');
         }
     }
 

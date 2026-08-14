@@ -328,6 +328,32 @@ static void profile_announce_switch(output_target_t output,
     }
 }
 
+// True if a unified profile index is selectable by the hotkey cycle. Custom
+// profiles are always enabled; built-ins can be individually disabled via the
+// web config (flash builtin_disabled_mask).
+static bool profile_unified_index_enabled(uint8_t idx, uint8_t builtin_count)
+{
+    if (idx >= builtin_count) return true;               // custom profile
+    return !((flash_get_builtin_disabled_mask() >> idx) & 1u);
+}
+
+// Step from `current` in direction `dir` (+1/-1), skipping disabled built-ins.
+// Returns the next enabled unified index, or `current` when there is none
+// (clamp at the ends, or every candidate disabled).
+static uint8_t profile_cycle_find(uint8_t current, uint8_t total,
+                                  uint8_t builtin_count, int dir, bool wrap)
+{
+    uint8_t idx = current;
+    for (uint8_t step = 0; step < total; step++) {
+        int ni = (int)idx + dir;
+        if (ni < 0)            { if (!wrap) return current; ni = total - 1; }
+        else if (ni >= total)  { if (!wrap) return current; ni = 0; }
+        idx = (uint8_t)ni;
+        if (profile_unified_index_enabled(idx, builtin_count)) return idx;
+    }
+    return current;  // nothing else enabled
+}
+
 void profile_cycle_next(output_target_t output, bool wrap)
 {
     uint8_t builtin_count = profile_get_count(output);
@@ -351,31 +377,15 @@ void profile_cycle_next(output_target_t output, bool wrap)
         return;
     }
 
+    // Cycle the unified [built-ins, customs] space, skipping any built-in that
+    // has been disabled in the web config.
     uint8_t custom_count = (uint8_t)(flash_get_total_profile_count() - 1);
     uint8_t total = builtin_count + custom_count;
     if (total <= 1) return;
 
     uint8_t current = profile_get_unified_active_index(output, builtin_count);
-
-    // Once the user has custom profiles, the hotkey cycles ONLY those — built-ins
-    // become a hidden fallback still reachable from the web config. With no custom
-    // profiles, fall through to cycling the built-ins as before.
-    if (custom_count > 0) {
-        uint8_t lo = builtin_count;              // first custom (unified index)
-        uint8_t hi = (uint8_t)(total - 1);       // last custom
-        uint8_t next;
-        if (current < lo)      next = lo;        // on a built-in → enter customs
-        else if (current < hi) next = (uint8_t)(current + 1);
-        else if (wrap)         next = lo;        // wrap within the custom ring
-        else                   return;           // clamp at last custom
-        profile_apply_unified_index(output, next, builtin_count);
-        profile_announce_switch(output, next, builtin_count);
-        return;
-    }
-
-    // No customs: cycle the built-ins (unified == built-in space here).
-    if (!wrap && current + 1 >= total) return;  // clamp at last
-    uint8_t next = (uint8_t)((current + 1) % total);
+    uint8_t next = profile_cycle_find(current, total, builtin_count, +1, wrap);
+    if (next == current) return;  // clamp / nothing enabled ahead
     profile_apply_unified_index(output, next, builtin_count);
     profile_announce_switch(output, next, builtin_count);
 }
@@ -407,24 +417,8 @@ void profile_cycle_prev(output_target_t output, bool wrap)
     if (total <= 1) return;
 
     uint8_t current = profile_get_unified_active_index(output, builtin_count);
-
-    // Custom profiles present: cycle only those (built-ins hidden fallback).
-    if (custom_count > 0) {
-        uint8_t lo = builtin_count;              // first custom (unified index)
-        uint8_t hi = (uint8_t)(total - 1);       // last custom
-        uint8_t prev;
-        if (current < lo)      prev = hi;        // on a built-in → enter customs (last)
-        else if (current > lo) prev = (uint8_t)(current - 1);
-        else if (wrap)         prev = hi;        // wrap within the custom ring
-        else                   return;           // clamp at first custom
-        profile_apply_unified_index(output, prev, builtin_count);
-        profile_announce_switch(output, prev, builtin_count);
-        return;
-    }
-
-    // No customs: cycle the built-ins.
-    if (!wrap && current == 0) return;  // clamp at first
-    uint8_t prev = (current == 0) ? (uint8_t)(total - 1) : (uint8_t)(current - 1);
+    uint8_t prev = profile_cycle_find(current, total, builtin_count, -1, wrap);
+    if (prev == current) return;  // clamp / nothing enabled behind
     profile_apply_unified_index(output, prev, builtin_count);
     profile_announce_switch(output, prev, builtin_count);
 }

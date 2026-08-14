@@ -566,6 +566,26 @@ void flash_set_shoulder_swap(uint8_t on)
     flash_save(&runtime_settings);
 }
 
+uint8_t flash_get_builtin_disabled_mask(void)
+{
+    if (!runtime_settings_loaded) return 0;
+    return runtime_settings.builtin_disabled_mask;
+}
+
+void flash_set_builtin_disabled_mask(uint8_t mask)
+{
+    if (!runtime_settings_loaded) {
+        flash_t tmp;
+        if (!flash_load(&tmp)) memset(&tmp, 0, sizeof(tmp));
+        tmp.builtin_disabled_mask = mask;
+        flash_save(&tmp);
+        return;
+    }
+    if (runtime_settings.builtin_disabled_mask == mask) return;
+    runtime_settings.builtin_disabled_mask = mask;
+    flash_save(&runtime_settings);
+}
+
 // Set active custom profile index (saves to flash with debouncing).
 // Persistent — clears any ephemeral override (APPLY + SELECT) so the
 // persisted value is what the device boots to.

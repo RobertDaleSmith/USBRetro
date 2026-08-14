@@ -969,12 +969,14 @@ static void cmd_profile_list(const char* json)
 
     // Add built-in profiles (or virtual Default)
     if (builtin_count > 0) {
-        for (int i = 0; i < builtin_count && pos < (int)sizeof(response_buf) - 80; i++) {
+        uint8_t disabled_mask = flash_get_builtin_disabled_mask();
+        for (int i = 0; i < builtin_count && pos < (int)sizeof(response_buf) - 90; i++) {
             const char* name = profile_get_name(get_profile_target(), i);
             if (idx > 0) pos += snprintf(response_buf + pos, sizeof(response_buf) - pos, ",");
             pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
-                            "{\"index\":%d,\"name\":\"%s\",\"builtin\":true,\"editable\":false}",
-                            idx, name ? name : "Default");
+                            "{\"index\":%d,\"name\":\"%s\",\"builtin\":true,\"editable\":false,\"disabled\":%s}",
+                            idx, name ? name : "Default",
+                            ((disabled_mask >> i) & 1u) ? "true" : "false");
             idx++;
         }
     } else {
@@ -1483,6 +1485,34 @@ static void cmd_profile_clone(const char* json)
     int new_unified_idx = custom_to_unified_index(new_custom_idx);
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"index\":%d,\"name\":\"%.11s\"}", new_unified_idx, new_profile->name);
+    send_json(response_buf);
+}
+
+// PROFILE.DISABLE - Hide/show a built-in profile in the SELECT+Up/Down cycle.
+// Body: { "index": <unified built-in index>, "disabled": <bool> }
+// Disabled built-ins are still selectable directly (PROFILE.SET / web config) but
+// are skipped by the profile hotkey. Custom profiles cannot be disabled.
+static void cmd_profile_disable(const char* json)
+{
+    int index;
+    if (!json_get_int(json, "index", &index)) {
+        send_error("missing index");
+        return;
+    }
+    if (index < 0 || index >= 8 || !is_builtin_profile(index)) {
+        send_error("only built-in profiles can be disabled");
+        return;
+    }
+    bool disabled = true;
+    json_get_bool(json, "disabled", &disabled);
+
+    uint8_t mask = flash_get_builtin_disabled_mask();
+    if (disabled) mask |= (uint8_t)(1u << index);
+    else          mask &= (uint8_t)~(1u << index);
+    flash_set_builtin_disabled_mask(mask);
+
+    snprintf(response_buf, sizeof(response_buf),
+             "{\"ok\":true,\"index\":%d,\"disabled\":%s}", index, disabled ? "true" : "false");
     send_json(response_buf);
 }
 
@@ -3799,6 +3829,7 @@ static const cmd_entry_t commands[] = {
     {"PROFILE.SAVE", cmd_profile_save},
     {"PROFILE.DELETE", cmd_profile_delete},
     {"PROFILE.CLONE", cmd_profile_clone},
+    {"PROFILE.DISABLE", cmd_profile_disable},
     {"PROFILE.APPLY", cmd_profile_apply},
     {"PROFILE.CLEAR", cmd_profile_clear},
     {"PROFILE.SELECT", cmd_profile_select},

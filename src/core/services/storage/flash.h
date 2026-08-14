@@ -126,8 +126,14 @@ typedef struct {
     // reserved[] so the 256-byte layout is unchanged; old flashes read 0=off.
     uint8_t shoulder_swap;
 
-    // Reserved for future global settings (8 bytes)
-    uint8_t reserved[8];
+    // Built-in profiles hidden from the hotkey cycle: bit i = built-in index i
+    // disabled. Carved from reserved[] (zero-init → none disabled on old flashes,
+    // no schema bump). Web-config toggle; disabled built-ins are still selectable
+    // directly but skipped by SELECT+Up/Down.
+    uint8_t builtin_disabled_mask;
+
+    // Reserved for future global settings (7 bytes)
+    uint8_t reserved[7];
 
     // Custom profiles (4 x 56 = 224 bytes)
     custom_profile_t profiles[CUSTOM_PROFILE_MAX_COUNT];
@@ -281,5 +287,9 @@ void flash_set_dpad_mode(uint8_t mode);
 
 // Persist the shoulder-swap toggle (L1<->L2, R1<->R2). Marks router_saved=1.
 void flash_set_shoulder_swap(uint8_t on);
+
+// Built-in profiles hidden from the SELECT+Up/Down cycle (bit i = built-in i).
+uint8_t flash_get_builtin_disabled_mask(void);
+void flash_set_builtin_disabled_mask(uint8_t mask);
 
 #endif // FLASH_H
