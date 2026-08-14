@@ -96,6 +96,29 @@ uint8_t profile_autofire_index_from_ms(uint8_t period_ms)
     return best;
 }
 
+uint8_t profile_get_active_output_mode(output_target_t output)
+{
+    // A custom profile carries its own output_mode; a built-in exposes it on the
+    // profile_t. flash_get_active_custom_profile() returns non-NULL only when a
+    // custom is active, so this resolves the effective mode either way.
+    const custom_profile_t* cp = flash_get_active_custom_profile();
+    if (cp) return cp->output_mode;
+    const profile_t* p = profile_get_by_index(output, profile_get_active_index(output));
+    return p ? p->output_mode : 0;
+}
+
+const char* profile_get_output_modes(const char* const** names, uint8_t* count)
+{
+    if (!config || !config->output_mode_names || config->output_mode_count == 0) {
+        if (names) *names = NULL;
+        if (count) *count = 0;
+        return NULL;
+    }
+    if (names) *names = config->output_mode_names;
+    if (count) *count = config->output_mode_count;
+    return config->output_type_name;
+}
+
 void profile_init(const profile_config_t* cfg)
 {
     config = cfg;

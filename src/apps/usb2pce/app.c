@@ -111,10 +111,19 @@ const OutputInterface** app_get_output_interfaces(uint8_t* count)
 // APP INITIALIZATION
 // ============================================================================
 
-// Shared so both play mode and CDC config mode expose the PCE profiles.
+// PCEngine device/output modes (index = custom_profile_t.output_mode, and the
+// built-in profiles' output_mode). Kept in sync with pcengine_device.h BUTTON_MODE_*.
+static const char* const usb2pce_output_modes[] = {
+    "2-Button", "6-Button", "3-Button (Sel)", "3-Button (Run)",
+};
+
+// Shared so both play mode and CDC config mode expose the PCE profiles + modes.
 static const profile_config_t app_profile_config = {
     .output_profiles = { [OUTPUT_TARGET_PCENGINE] = &usb2pce_profile_set },
     .shared_profiles = &usb2pce_profile_set,
+    .output_type_name = "PCEngine",
+    .output_mode_names = usb2pce_output_modes,
+    .output_mode_count = sizeof(usb2pce_output_modes) / sizeof(usb2pce_output_modes[0]),
 };
 
 void app_init(void)

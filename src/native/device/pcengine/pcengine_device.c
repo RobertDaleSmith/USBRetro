@@ -324,12 +324,11 @@ void __not_in_flash_func(read_inputs)(void)
     uint8_t  plx = pce_prof_out[i].left_x;
     uint8_t  ply = pce_prof_out[i].left_y;
 
-    // Byte format (2- vs 6-button) comes from the BUILT-IN active profile's
-    // output_mode, read directly so the runtime rapid-fire profile can't reset
-    // it back to 2-button.
-    const profile_t* base = profile_get_by_index(OUTPUT_TARGET_PCENGINE,
-                              profile_get_active_index(OUTPUT_TARGET_PCENGINE));
-    pce_state.button_mode[i] = base ? base->output_mode : BUTTON_MODE_2;
+    // Byte format (2- vs 6-button) comes from the active profile's output_mode —
+    // a custom profile's own mode when one is active, otherwise the active
+    // built-in's. Read via the effective-mode helper so custom profiles (e.g. a
+    // cloned "6-Button") play in their selected mode.
+    pce_state.button_mode[i] = profile_get_active_output_mode(OUTPUT_TARGET_PCENGINE);
 
     // Build normal byte (d-pad + I/II/Select/Run) from the profile output.
     uint8_t normal = 0xFF;

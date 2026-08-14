@@ -273,6 +273,14 @@ typedef struct {
     // Shared profile set (used when output-specific not defined)
     const profile_set_t* shared_profiles;
 
+    // Optional generic device/output modes selectable per profile (custom
+    // profiles carry a custom_profile_t.output_mode byte the output driver reads).
+    // output_type_name names the target (e.g. "PCEngine"); output_mode_names[i]
+    // is the label for output_mode == i. NULL / 0 → app has no selectable modes.
+    const char* output_type_name;
+    const char* const* output_mode_names;
+    uint8_t output_mode_count;
+
 } profile_config_t;
 
 // ============================================================================
@@ -281,6 +289,16 @@ typedef struct {
 
 // Initialize profile system with configuration
 void profile_init(const profile_config_t* config);
+
+// Effective device/output mode of the ACTIVE profile (custom's output_mode when
+// a custom profile is active, else the active built-in's). Output drivers call
+// this instead of reading a built-in profile_t directly, so custom profiles get
+// their selected mode. Returns 0 (app default) when nothing is configured.
+uint8_t profile_get_active_output_mode(output_target_t output);
+
+// App-declared output-mode metadata (from profile_config_t), for the web config.
+// Returns the app's output type name (or NULL) and fills names[]/count.
+const char* profile_get_output_modes(const char* const** names, uint8_t* count);
 
 // Get active profile for an output target (legacy - uses player 0's profile)
 // Falls back to shared profiles if output-specific not defined

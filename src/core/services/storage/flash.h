@@ -51,7 +51,12 @@ typedef struct {
     uint8_t autofire_rate;     // 0 = off, 1..6 = AUTOFIRE_RATE ladder index (profile.h)
     uint8_t turbo_mask[4];     // 32-bit LE bitfield; bit i = physical button index i
                                // (0=B1 .. 25=R5, same index space as button_map)
-    uint8_t reserved[7];       // 1 + 4 + 7 = 12, so struct stays exactly 56 bytes
+    // Generic device/output mode, interpreted by the active app's output driver
+    // (e.g. usb2pce: 0=2-button, 1=6-button, 2=3-button Sel, 3=3-button Run). The
+    // app reports its mode names via profile_config_t. Carved from reserved[] →
+    // zero-init means "mode 0" (the app's default) on old flashes; no schema bump.
+    uint8_t output_mode;
+    uint8_t reserved[6];       // 1 + 4 + 1 + 6 = 12, so struct stays exactly 56 bytes
 } custom_profile_t;
 
 // Turbo bit accessors, keyed on physical (input) button index 0..25.

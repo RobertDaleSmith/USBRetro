@@ -89,6 +89,11 @@ export class ProfilesCard {
                             <label>Profile Name</label>
                             <input type="text" id="profileNameInput" maxlength="11" placeholder="Profile name">
                         </div>
+                        <div class="form-group" id="outputModeGroup" style="display:none;">
+                            <label id="outputModeLabel">Device Mode</label>
+                            <p class="hint" style="margin-bottom: 10px;" id="outputModeHint"></p>
+                            <select id="outputModeSelect" style="width: 100%;"></select>
+                        </div>
                         <div class="form-group">
                             <label>Button Mapping</label>
                             <p class="hint" style="margin-bottom: 10px;">For each input button, select what output button it should produce.</p>
@@ -179,6 +184,33 @@ export class ProfilesCard {
         } catch (e) {
             this.log(`Failed to load profiles: ${e.message}`, 'error');
         }
+
+        // App-declared device/output modes (optional — older firmware won't have it).
+        try {
+            const m = await this.protocol.getProfileModes();
+            this.outputModes = (m && m.ok && Array.isArray(m.modes)) ? m : null;
+        } catch (e) {
+            this.outputModes = null;
+        }
+        this.populateOutputModes();
+    }
+
+    // Fill the Device Mode dropdown from the app's mode list; hide it if none.
+    populateOutputModes() {
+        const group = this.el.querySelector('#outputModeGroup');
+        const sel = this.el.querySelector('#outputModeSelect');
+        if (!group || !sel) return;
+        const modes = this.outputModes && this.outputModes.modes;
+        if (!modes || modes.length === 0) {
+            group.style.display = 'none';
+            return;
+        }
+        const type = this.outputModes.type || 'Device';
+        this.el.querySelector('#outputModeLabel').textContent = `${type} Mode`;
+        this.el.querySelector('#outputModeHint').textContent =
+            `Output format sent to the ${type}. Applies whenever this profile is active.`;
+        sel.innerHTML = modes.map((name, i) => `<option value="${i}">${name}</option>`).join('');
+        group.style.display = '';
     }
 
     renderList() {
@@ -302,6 +334,7 @@ export class ProfilesCard {
             this.el.querySelector('#rightStickSensValue').textContent = '100%';
             this.el.querySelector('#socdModeSelect').value = '0';
             this.el.querySelector('#autofireRate').value = '0';
+            this.el.querySelector('#outputModeSelect').value = '0';
             this.el.querySelector('#flagSwapSticks').checked = false;
             this.el.querySelector('#flagInvertLY').checked = false;
             this.el.querySelector('#flagInvertRY').checked = false;
@@ -323,6 +356,7 @@ export class ProfilesCard {
                 this.el.querySelector('#rightStickSensValue').textContent = rs.value + '%';
                 this.el.querySelector('#socdModeSelect').value = (profile.socd_mode || 0).toString();
                 this.el.querySelector('#autofireRate').value = (profile.autofire_rate || 0).toString();
+                this.el.querySelector('#outputModeSelect').value = (profile.output_mode || 0).toString();
                 const flags = profile.flags || 0;
                 this.el.querySelector('#flagSwapSticks').checked = (flags & FLAG_SWAP_STICKS) !== 0;
                 this.el.querySelector('#flagInvertLY').checked = (flags & FLAG_INVERT_LY) !== 0;
@@ -389,6 +423,11 @@ export class ProfilesCard {
             autofire_rate: autofireRate,
             turbo_mask: turboMask,
         };
+
+        // Include device mode only when the app exposes modes.
+        if (this.outputModes && this.outputModes.modes && this.outputModes.modes.length) {
+            data.output_mode = parseInt(this.el.querySelector('#outputModeSelect').value) || 0;
+        }
 
         const index = this.editingIndex === null ? 255 : this.editingIndex;
 

@@ -1069,10 +1069,10 @@ static void cmd_profile_get(const char* json)
                  "{\"ok\":true,\"index\":%d,\"name\":\"%.11s\",\"builtin\":false,\"editable\":true,"
                  "\"button_map\":[%s],"
                  "\"left_stick_sens\":%d,\"right_stick_sens\":%d,\"flags\":%d,\"socd_mode\":%d,"
-                 "\"autofire_rate\":%d,\"turbo_mask\":%lu}",
+                 "\"autofire_rate\":%d,\"turbo_mask\":%lu,\"output_mode\":%d}",
                  index, p->name, map_str,
                  p->left_stick_sens, p->right_stick_sens, p->flags, p->socd_mode,
-                 p->autofire_rate, (unsigned long)turbo_mask);
+                 p->autofire_rate, (unsigned long)turbo_mask, p->output_mode);
     }
     send_json(response_buf);
 }
@@ -1293,6 +1293,17 @@ static void cmd_profile_save(const char* json)
         p->turbo_mask[0] = p->turbo_mask[1] = p->turbo_mask[2] = p->turbo_mask[3] = 0;
     }
 
+    // Generic device/output mode (app-interpreted; clamped to the app's count).
+    int omode;
+    if (json_get_int(json, "output_mode", &omode)) {
+        uint8_t mode_count = 0;
+        profile_get_output_modes(NULL, &mode_count);
+        if (mode_count == 0 || omode < 0 || omode >= mode_count) omode = 0;
+        p->output_mode = (uint8_t)omode;
+    } else if (is_new) {
+        p->output_mode = 0;
+    }
+
     // Save to flash (runtime settings are already updated)
     flash_save(settings);
 
@@ -1461,6 +1472,7 @@ static void cmd_profile_clone(const char* json)
             new_profile->socd_mode    = (uint8_t)src->socd_mode;
             new_profile->l2_threshold = src->l2_threshold;
             new_profile->r2_threshold = src->r2_threshold;
+            new_profile->output_mode  = src->output_mode;  // preserve device mode
         }
     } else {
         // Custom → custom: byte-for-byte copy of the supported fields
@@ -1476,6 +1488,7 @@ static void cmd_profile_clone(const char* json)
             new_profile->r2_threshold     = src->r2_threshold;
             new_profile->autofire_rate    = src->autofire_rate;
             memcpy(new_profile->turbo_mask, src->turbo_mask, sizeof(new_profile->turbo_mask));
+            new_profile->output_mode      = src->output_mode;
         }
     }
 
@@ -1513,6 +1526,27 @@ static void cmd_profile_disable(const char* json)
 
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"index\":%d,\"disabled\":%s}", index, disabled ? "true" : "false");
+    send_json(response_buf);
+}
+
+// PROFILE.MODES - Report the app's generic device/output modes, so the web
+// config can offer a "Device Mode" selector per profile. Empty when the app has
+// no selectable modes. Response: { ok, type, modes:[...] }
+static void cmd_profile_modes(const char* json)
+{
+    (void)json;
+    const char* const* names = NULL;
+    uint8_t count = 0;
+    const char* type = profile_get_output_modes(&names, &count);
+
+    int pos = snprintf(response_buf, sizeof(response_buf),
+                       "{\"ok\":true,\"type\":%s%s%s,\"modes\":[",
+                       type ? "\"" : "null", type ? type : "", type ? "\"" : "");
+    for (uint8_t i = 0; i < count && names && pos < (int)sizeof(response_buf) - 40; i++) {
+        pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
+                        "%s\"%s\"", i ? "," : "", names[i] ? names[i] : "");
+    }
+    snprintf(response_buf + pos, sizeof(response_buf) - pos, "]}");
     send_json(response_buf);
 }
 
@@ -3830,6 +3864,7 @@ static const cmd_entry_t commands[] = {
     {"PROFILE.DELETE", cmd_profile_delete},
     {"PROFILE.CLONE", cmd_profile_clone},
     {"PROFILE.DISABLE", cmd_profile_disable},
+    {"PROFILE.MODES", cmd_profile_modes},
     {"PROFILE.APPLY", cmd_profile_apply},
     {"PROFILE.CLEAR", cmd_profile_clear},
     {"PROFILE.SELECT", cmd_profile_select},
