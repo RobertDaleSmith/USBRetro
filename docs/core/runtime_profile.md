@@ -6,84 +6,53 @@ Source: `src/core/services/profiles/runtime_profile.c` and `runtime_profile.h`
 
 ## How It Works
 
-The service watches all button events via `runtime_profile_check_combo()`, called from the app's input processing loop. It maintains an internal state machine with four states:
+The service watches all button events via `runtime_profile_check_combo()`, called from the app's input processing loop (the router wires a global instance for every app). It maintains an internal state machine:
 
 | State | Description |
 |-------|-------------|
-| `RUNTIME_IDLE` | Normal operation; listening for trigger combos |
-| `RUNTIME_MAPPING` | Consecutive mapping mode (one input button per output) |
-| `RUNTIME_MAPPING_ALT` | Press-count mapping mode (press N times → output N) |
-| `RUNTIME_AUTOFIRE` | Auto-fire assignment mode (press N times → frequency) |
+| `RUNTIME_IDLE` | Normal operation; listening for entry combos |
+| `RUNTIME_MAPPING` | Live remap mode (one input button per output, in order) |
+| `RUNTIME_AUTOFIRE` | Rapid-fire mode (each press cycles a button's rate) |
 
-While the NeoPixel or controller LED is indicating (blinking), button input is ignored to avoid accidental triggers.
+Both modes are entered from idle by a deliberate **hold** (`hold_ms`, ~2 s). Neither
+entry combo uses START, so nothing collides with console reset combos (PCE
+START+SELECT, SNES START+SELECT+L+R). While the NeoPixel or controller LED is
+indicating (blinking), button input is ignored to avoid accidental triggers.
 
-## Consecutive Mapping (RUNTIME_MAPPING)
+| Entry combo | Mode |
+|-------------|------|
+| **SELECT + B3** (hold) | Rapid-fire set |
+| **SELECT + B4** (hold) | Live remap |
 
-Maps each input button to a fixed output, one at a time.
+## Rapid-Fire (RUNTIME_AUTOFIRE)
 
-**To enter:**
-1. Hold **SELECT** alone (no mask buttons, no D-pad) for `hold_ms`
-2. Press the first mask button to assign to output slot 1
+Cycles a repeating auto-fire rate on any button, live.
 
-**While in mapping mode:**
-- Press a mask button → assigns it to the next output
-- Already-mapped buttons are silently rejected (duplicate input protection)
-- Press **START** → cancel and clear the mapping
+**To enter:** hold **SELECT + B3** for `hold_ms`. The LED blinks once; release the buttons.
 
-**To finish:** press mask buttons until all output are filled. Unmapped mask buttons are automatically disabled (they produce no output).
+**While in rapid-fire set:**
+- **Tap a button** → advances *that* button's rate one step each press, cycling:
 
-**Feedback:** 1 NeoPixel blink per intermediate entry confirmed; 2 blinks when mapping is complete.
+  `off → 30 → 20 → 15 → 12 → 10 → 7.5 Hz → off …`
 
-## Press-Count Mapping (RUNTIME_MAPPING_ALT)
+- Each button tracks its own rate independently; the change takes effect immediately so you can feel it.
+- Press **SELECT** → exit.
 
-Maps input buttons to output by pressing: press a button N times to assign it to output N.
+Rapid-fire overlays the current mapping without replacing it. If no runtime mapping exists yet, it seeds once from the active profile so rates apply on top of the existing remapping.
 
-**To enter:** Hold **SELECT** + any 2 mask buttons simultaneously for `hold_ms`. After `hold_ms` the LED blinks twice and buttons stop registering — the device is in mapping mode. Release all buttons.
+## Live Remap (RUNTIME_MAPPING)
 
-**While in mapping mode:**
-- Press a mask button N times → assigns it to output N (1-indexed)
-- 800ms silence after the last press commits the sequence (LED blinks once as confirmation)
-- Pressing a different button commits the previous sequence and starts a new one
-- Not pressing a button leaves it unmapped (it will not produce output)
-- Press **SELECT** alone → save and exit (LED blinks twice)
-- Press **START** alone → cancel and clear
+Maps each input button to a fixed output, one at a time, in order.
 
-> **Note:** Every time this mode is entered, the previous layout is fully erased and must be set a new.
+**To enter:** hold **SELECT + B4** for `hold_ms`. The LED blinks once; release the buttons. The previous runtime map is cleared.
 
-**Multiple inputs to the same slot:** pressing different buttons the same number of times maps both to the same output. This allows, for example, assigning two input buttons to the same game action — one with auto-fire and one without:
+**While in remap mode:**
+- Press an input button → assigns it to the next output slot (slot 1, 2, … in `output_buttons` order).
+- Already-mapped buttons are silently rejected (duplicate input protection).
+- Press **SELECT** → save and exit. Unfilled output slots and any input button that was never assigned are left disabled (produce no output).
+- Press **START** → cancel and clear the mapping.
 
-> _Button 1 pressed once (→ output 1, no turbo) = charged shot_
-> _Button 3 pressed once (→ output 1, with auto-fire) = rapid shot_
-
-**Feedback:** 1 NeoPixel blink each time a press sequence is committed; 2 blinks on save.
-
-## Auto-Fire (RUNTIME_AUTOFIRE)
-
-Assigns a repeating auto-fire frequency to an existing mapped button.
-
-**To enter:** Hold **SELECT** + exactly 1 mask button for `hold_ms`. After `hold_ms` the LED blinks twice and buttons stop registering — the device is in auto-fire mode. Release all buttons.
-
-**While in auto-fire mode:**
-- Press the target button N times → assigns auto-fire at the corresponding frequency:
-
-| Press | Frequency |
-|------|-----------|
-| 1 | 30 Hz |
-| 2 | 20 Hz |
-| 3 | 15 Hz |
-| 4 | 12 Hz |
-| 5 | 10 Hz |
-| 6 | 7.5 Hz |
-| 7+ | Disabled (clears any existing auto-fire) |
-
-- 800ms silence after the last press commits the frequency (LED blinks once as confirmation)
-- Not pressing a button leaves its auto-fire setting unchanged
-- Press **SELECT** alone → save and exit (LED blinks twice)
-- Press **START** alone → discard all changes and exit
-
-Auto-fire overlays the current mapping without replacing it. If no runtime mapping exists yet, it seeds from the active profile so frequencies are applied on top of the existing remapping.
-
-**Feedback:** 1 NeoPixel blink each time a press sequence is committed; 2 blinks on save.
+**Feedback:** 1 NeoPixel blink per entry confirmed; 2 blinks on save/exit.
 
 ## Duplicate Input Protection
 
@@ -99,7 +68,7 @@ The mask is set in `map_entry()` and cleared in `runtime_profile_init()`, `runti
 
 ## Clearing the Runtime Mapping
 
-From `RUNTIME_IDLE`: hold **SELECT** for `hold_ms`, then press **START** (no mask buttons). The mapping is erased and the device returns to the active profile.
+Press **START** while in **Live Remap** mode to cancel and erase the mapping, returning to the active profile. Entering remap mode (SELECT + B4) also clears the previous runtime map before starting a new one.
 
 Programmatically: `runtime_profile_clear()` resets all state. `runtime_autofire_clear()` removes only auto-fire assignments without touching the button remapping.
 
