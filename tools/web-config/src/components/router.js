@@ -125,6 +125,14 @@ export class RouterCard {
         const showMerge = routing.mode_name === 'merge';
         const mergeLabel = (routing.merge_mode_name || '').replace(/^./, c => c.toUpperCase());
 
+        // Summarize by player capacity (from the outputs) rather than a raw
+        // interface count — "1 input · 1 output" reads like one controller and
+        // hides the multitap. Fall back to the interface count if no capacity.
+        const totalPlayers = outputs.reduce((s, o) => s + (o.max_players || 0), 0);
+        const capacityLabel = totalPlayers === 0
+            ? `${inputs.length} input${inputs.length === 1 ? '' : 's'} · ${outputs.length} output${outputs.length === 1 ? '' : 's'}`
+            : totalPlayers === 1 ? 'single player' : `up to ${totalPlayers} players`;
+
         const inputCard = inputs.length === 0
             ? '<div class="topology-empty">No inputs registered</div>'
             : inputs.map(i => `
@@ -162,7 +170,7 @@ export class RouterCard {
             <div class="topology-header">
                 <span class="topology-tag topology-tag-mode">${modeLabel}</span>
                 ${showMerge ? `<span class="topology-tag">strategy: ${mergeLabel}</span>` : ''}
-                <span class="hint">${inputs.length} input${inputs.length === 1 ? '' : 's'} · ${outputs.length} output${outputs.length === 1 ? '' : 's'}</span>
+                <span class="hint">${capacityLabel}</span>
             </div>
             <div class="topology-grid">
                 <div class="topology-col">
