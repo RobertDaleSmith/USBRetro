@@ -35,7 +35,7 @@ export class UsbHostCard {
                     <div class="buttons" style="margin-top: 12px;">
                         <button id="usbHostSaveBtn">Save &amp; Reboot</button>
                     </div>
-                    <p class="hint" style="margin-top: 8px;">Device will reboot to apply changes.</p>
+                    <p class="hint" id="usbHostHint" style="margin-top: 8px;">Device will reboot to apply changes.</p>
                 </div>
             </div>`;
 
@@ -52,38 +52,72 @@ export class UsbHostCard {
 
     updateDm() {
         const dp = parseInt(this.el.querySelector('#usbHostDp').value);
-        this.el.querySelector('#usbHostDm').value = dp + 1;
+        this.el.querySelector('#usbHostDm').value = Number.isFinite(dp) ? dp + 1 : '';
     }
 
     async load() {
         const card = this.el.querySelector('#usbHostCard');
+
+        // Controller apps expose an editable PIO USB host via the pad config.
         try {
             const config = await this.protocol.getPadConfig();
-            if (!config.ok || config.name === 'none') {
-                card.style.display = 'none';
-                this.visible = false;
+            if (config.ok && config.name !== 'none') {
+                card.style.display = '';
+                this.visible = true;
+                // Tri-state semantic for usb_host_dp:
+                //   > 0  → enabled, override pin
+                //   == 0 → enabled, use compile-time default (sysDp)
+                //   < 0  → explicitly disabled by user
+                const dp = config.usb_host_dp !== undefined ? config.usb_host_dp : 0;
+                const sysDp = config.sys_usb_host_dp !== undefined ? config.sys_usb_host_dp : -1;
+                const enabled = dp >= 0 && (dp > 0 || sysDp >= 0);
+                const shownPin = dp > 0 ? dp : (sysDp >= 0 ? sysDp : 0);
+                this.el.querySelector('#usbHostEnabled').checked = enabled;
+                this.el.querySelector('#usbHostDp').value = shownPin;
+                this.togglePins();
+                this.updateDm();
+                this.setReadOnly(false);
+                this.currentConfig = config;
+                this.dirty?.snapshot();
                 return;
             }
-            card.style.display = '';
-            this.visible = true;
-            // Tri-state semantic for usb_host_dp:
-            //   > 0  → enabled, override pin
-            //   == 0 → enabled, use compile-time default (sysDp)
-            //   < 0  → explicitly disabled by user
-            const dp = config.usb_host_dp !== undefined ? config.usb_host_dp : 0;
-            const sysDp = config.sys_usb_host_dp !== undefined ? config.sys_usb_host_dp : -1;
-            const enabled = dp >= 0 && (dp > 0 || sysDp >= 0);
-            const shownPin = dp > 0 ? dp : (sysDp >= 0 ? sysDp : 0);
-            this.el.querySelector('#usbHostEnabled').checked = enabled;
-            this.el.querySelector('#usbHostDp').value = shownPin;
-            this.togglePins();
-            this.updateDm();
-            this.currentConfig = config;
-            this.dirty?.snapshot();
-        } catch (e) {
-            card.style.display = 'none';
-            this.visible = false;
-        }
+        } catch (e) { /* not a controller app — fall through to CAPS */ }
+
+        // Native-USB host adapters (usb2pce/usb2gc) have no configurable pad, but
+        // still host controllers on fixed silicon pins. Advertise the page in a
+        // read-only state so it's visible that USB host exists but isn't editable.
+        try {
+            const caps = await this.protocol.getCapabilities();
+            const uh = caps && caps.usb_host;
+            if (uh && uh.present) {
+                card.style.display = '';
+                this.visible = true;
+                this.currentConfig = null;   // no pad config → Save disabled
+                this.el.querySelector('#usbHostEnabled').checked = true;  // host always on
+                const dp = (uh.dp !== undefined && uh.dp >= 0) ? uh.dp : '';
+                this.el.querySelector('#usbHostDp').value = dp;
+                this.togglePins();
+                this.updateDm();
+                this.setReadOnly(!uh.configurable);
+                return;
+            }
+        } catch (e) { /* no CAPS support — hide */ }
+
+        card.style.display = 'none';
+        this.visible = false;
+    }
+
+    // Read-only mode: native USB host is fixed by hardware — show the toggle and
+    // pins but disable editing and hide Save.
+    setReadOnly(ro) {
+        this.el.querySelector('#usbHostEnabled').disabled = ro;
+        this.el.querySelector('#usbHostDp').disabled = ro;
+        const save = this.el.querySelector('#usbHostSaveBtn');
+        if (save) save.style.display = ro ? 'none' : '';
+        const hint = this.el.querySelector('#usbHostHint');
+        if (hint) hint.textContent = ro
+            ? 'Native USB host — always on, pins fixed by hardware.'
+            : 'Device will reboot to apply changes.';
     }
 
     async save() {

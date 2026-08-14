@@ -2392,7 +2392,31 @@ static void cmd_caps_get(const char* json)
         first_route = false;
     }
 
-    n = snprintf(out, rem, "]}");
+    // USB host capability. Advertised even in config mode (no live host) so the
+    // web config can show a USB Host page for host-capable adapters:
+    //   present      — this build hosts USB controllers (REQUIRE_USB_HOST app flag)
+    //   configurable — the D+ pin is user-settable (PIO USB on controller apps).
+    //                   Native-USB adapters (usb2pce/usb2gc) are fixed by silicon
+    //                   → present but not configurable → read-only page.
+    //   dp           — the PIO USB D+ pin, or -1 for native USB / no host.
+#if defined(REQUIRE_USB_HOST) && REQUIRE_USB_HOST
+    const char* uh_present = "true";
+#else
+    const char* uh_present = "false";
+#endif
+#ifdef CONFIG_PAD_INPUT
+    const char* uh_configurable = "true";
+#else
+    const char* uh_configurable = "false";
+#endif
+#ifdef PICO_DEFAULT_PIO_USB_DP_PIN
+    int uh_dp = PICO_DEFAULT_PIO_USB_DP_PIN;
+#else
+    int uh_dp = -1;   // native USB (fixed pins) or no host
+#endif
+    n = snprintf(out, rem,
+                 "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}}",
+                 uh_present, uh_configurable, uh_dp);
     if (n < 0 || n >= rem) goto overflow;
     send_json(response_buf);
     return;
