@@ -53,10 +53,10 @@
   #else
     #define CFG_TUH_RPI_PIO_USB       1  // Enable PIO USB host driver
   #endif
-#elif defined(CONFIG_NGC)
-  // GameCube: runtime host OR device on RHPORT0
-  // Play mode (GC 3.3V detected): USB host for controllers
-  // Config mode (no 3.3V): USB device with CDC for web configuration
+#elif defined(CONFIG_NGC) || defined(CONFIG_PCE)
+  // GameCube / PCEngine: runtime host OR device on RHPORT0 (native USB)
+  // Play mode (console detected): USB host for controllers
+  // Config mode (no console): USB device with CDC for web configuration
   #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_HOST | OPT_MODE_DEVICE)
 #else
   // Host-only mode for existing console implementations
@@ -163,7 +163,7 @@
 // USB DEVICE CONFIGURATION (CONFIG_USB or DISABLE_USB_HOST builds)
 //--------------------------------------------------------------------
 
-#if defined(CONFIG_USB) || defined(DISABLE_USB_HOST) || defined(CONFIG_NGC) || defined(CONFIG_BT2WIIEXT)
+#if defined(CONFIG_USB) || defined(DISABLE_USB_HOST) || defined(CONFIG_NGC) || defined(CONFIG_BT2WIIEXT) || defined(CONFIG_PCE)
   // Device configuration
   #define CFG_TUD_ENDPOINT0_SIZE    64
 
