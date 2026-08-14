@@ -76,7 +76,7 @@ static const OutputInterface* cdc_output_interfaces[] = {
 
 const OutputInterface** app_get_output_interfaces(uint8_t* count)
 {
-    // Detect mode by checking GC_DATA joybus signal pin.
+    // Detect mode by watching the GC_DATA joybus signal pin.
     // Joybus convention: console-side pull-up to 3.3V keeps the line HIGH
     // when the console is powered. With our internal pull-down (~50kΩ) the
     // ~1kΩ console pull-up easily wins → reads HIGH. With no console (or
@@ -85,22 +85,12 @@ const OutputInterface** app_get_output_interfaces(uint8_t* count)
     // Same pattern can be reused on usb2n64 (joybus) and any other adapter
     // whose console output line idles HIGH when powered.
     //
-    // Honor runtime pin override from web config so detection lines up with
-    // the same pin joybus init will use later.
-    flash_init();  // idempotent — needed early to read pin override
-    flash_t* settings = flash_get_settings();
-    uint detect_pin = GC_DATA_PIN;
-    if (settings && settings->joybus_data_pin > 0 && settings->joybus_data_pin <= 28) {
-        detect_pin = settings->joybus_data_pin;
-    }
-
-    gpio_init(detect_pin);
-    gpio_set_dir(detect_pin, GPIO_IN);
-    gpio_pull_down(detect_pin);
-    sleep_ms(200);  // Allow line to settle / console power to stabilize
-
-    if (!gpio_get(detect_pin)) {
-        // No console signal → config mode (USB device with CDC)
+    // gamecube_console_detect() handles the pin override, the settle delay and
+    // the sampling window; see gamecube_device.c for why one sample wasn't
+    // enough.
+    if (!gamecube_console_detect()) {
+        // No console signal → config mode (USB device with CDC). app_task()
+        // keeps re-checking, so a console seen later doesn't need a replug.
         gc_config_mode = true;
         *count = 1;
         return cdc_output_interfaces;
@@ -192,7 +182,11 @@ void app_init(void)
 
 void app_task(void)
 {
-    if (gc_config_mode) return;  // Config mode: nothing to do here
+    if (gc_config_mode) {
+        // Watch for a console that came up after we booted.
+        gamecube_config_mode_task();
+        return;
+    }
 
     // Forward rumble from GameCube console to USB controllers
     if (gamecube_output_interface.get_rumble) {

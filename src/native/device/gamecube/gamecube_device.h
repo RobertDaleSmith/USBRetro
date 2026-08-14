@@ -61,10 +61,21 @@
 
 // Global variables
 extern PIO pio;
-extern bool gc_config_mode;  // True when no GC 3.3V detected (CDC config mode)
+extern bool gc_config_mode;  // True when no console was seen on the joybus data
+                             // line (CDC config mode). Not the GC 3.3V pin --
+                             // detection moved to the data line in a12cc10b and
+                             // GC_3V3_PIN has been dead since.
 
 // Function declarations
 void ngc_init(void);
+
+// Console presence detection (joybus data line). Call gamecube_console_detect()
+// from app_get_output_interfaces() to choose play vs CDC config mode, then call
+// gamecube_config_mode_task() from app_task() while gc_config_mode is true so a
+// console that appears after boot is picked up without a replug.
+uint gamecube_detect_pin(void);
+bool gamecube_console_detect(void);
+void gamecube_config_mode_task(void);
 
 void __not_in_flash_func(core1_task)(void);
 void __not_in_flash_func(update_output)(void);
