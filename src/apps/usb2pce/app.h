@@ -25,6 +25,7 @@
 // Output drivers
 #define REQUIRE_NATIVE_PCENGINE_OUTPUT 1
 #define PCENGINE_OUTPUT_PORTS 5        // PCEngine multitap supports 5 players
+#define REQUIRE_USB_DEVICE 1           // CDC config mode when not connected to PCEngine
 
 // Services
 #define REQUIRE_PLAYER_MANAGEMENT 1

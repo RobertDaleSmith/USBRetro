@@ -39,6 +39,16 @@
 #define AUTOFIRE_10HZ  100   //  10 Hz → 100ms period
 #define AUTOFIRE_7HZ   133   // 7.5 Hz → 133ms period
 
+// Shared turbo-rate ladder for web-config custom-profile turbo (single source of
+// truth for router turbo pass + CDC). Index 0 = off; 1..6 map to the AUTOFIRE_*HZ
+// periods above (30/20/15/12/10/7.5 Hz). Returns 0 (off) for out-of-range.
+#define AUTOFIRE_RATE_COUNT 7
+uint8_t profile_autofire_rate_ms(uint8_t index);
+// Reverse lookup: nearest ladder index for a period in ms (0 → 0/off). Used to
+// translate a built-in profile's per-entry MAP_AUTOFIRE period into the custom
+// profile's single rate index when cloning.
+uint8_t profile_autofire_index_from_ms(uint8_t period_ms);
+
 // ============================================================================
 // ANALOG OUTPUT TARGETS
 // ============================================================================
@@ -175,6 +185,11 @@ typedef struct {
     // SOCD handling for D-pad (fighting games, Hitbox controllers)
     socd_mode_t socd_mode;
 
+    // Generic output-device mode, interpreted by the output driver (e.g. the
+    // PCEngine driver reads it as 2/6/3-button mode). 0 = default; ignored by
+    // outputs that don't use it.
+    uint8_t output_mode;
+
 } profile_t;
 
 // ============================================================================
@@ -258,6 +273,14 @@ typedef struct {
     // Shared profile set (used when output-specific not defined)
     const profile_set_t* shared_profiles;
 
+    // Optional generic device/output modes selectable per profile (custom
+    // profiles carry a custom_profile_t.output_mode byte the output driver reads).
+    // output_type_name names the target (e.g. "PCEngine"); output_mode_names[i]
+    // is the label for output_mode == i. NULL / 0 → app has no selectable modes.
+    const char* output_type_name;
+    const char* const* output_mode_names;
+    uint8_t output_mode_count;
+
 } profile_config_t;
 
 // ============================================================================
@@ -266,6 +289,16 @@ typedef struct {
 
 // Initialize profile system with configuration
 void profile_init(const profile_config_t* config);
+
+// Effective device/output mode of the ACTIVE profile (custom's output_mode when
+// a custom profile is active, else the active built-in's). Output drivers call
+// this instead of reading a built-in profile_t directly, so custom profiles get
+// their selected mode. Returns 0 (app default) when nothing is configured.
+uint8_t profile_get_active_output_mode(output_target_t output);
+
+// App-declared output-mode metadata (from profile_config_t), for the web config.
+// Returns the app's output type name (or NULL) and fills names[]/count.
+const char* profile_get_output_modes(const char* const** names, uint8_t* count);
 
 // Get active profile for an output target (legacy - uses player 0's profile)
 // Falls back to shared profiles if output-specific not defined

@@ -32,26 +32,38 @@ Web Config works on adapters that output over **USB**. These expose a virtual se
 | **Nuon2USB** | Nuon controller → USB output |
 | **Controller** | Custom controller with USB output |
 
+### ✅ Supported Off-Console — Console Output Adapters with Config Mode
+
+These adapters output to the console over GPIO, but detect at boot whether a
+console is attached. Plugged into a **PC with no console**, they come up as a USB
+CDC device for Web Config (edit/switch profiles, view status); plugged into the
+console, they run normally. On a cold boot the adapter self-corrects into play
+mode once the console starts scanning.
+
+| Adapter | Console-present detection |
+|---------|---------------------------|
+| **USB2GC** | GameCube 3.3V rail on the data pin |
+| **USB2PCE** | Clock activity on the PC Engine SEL/CLR lines |
+
 ### ❌ Not Yet Supported — Native Console Output Adapters
 
-These adapters output directly to the console over GPIO pins — there is no USB device connection to your computer, so Web Config cannot communicate with them.
+These adapters output directly to the console over GPIO pins and have no config
+mode yet, so Web Config cannot communicate with them.
 
 | Adapter | Why No Web Config |
 |---------|-------------------|
-| **USB2GC** | Output is GameCube Joybus protocol over GPIO |
 | **USB2N64** | Output is N64 Joybus protocol over GPIO |
 | **USB2DC** | Output is Dreamcast Maple bus over GPIO |
 | **USB2NES** | Output is NES shift register over GPIO |
 | **USB2SNES** | Output is SNES shift register over GPIO |
 | **USB23DO** | Output is 3DO PBus protocol over GPIO |
-| **USB2PCE** | Output is PC Engine protocol over GPIO |
 | **USB2Neo Geo** | Output is Neo Geo direct wiring over GPIO |
 | **USB2Nuon** | Output is Nuon Polyface serial over GPIO |
 | **BT2N64** | Output is N64 Joybus protocol over GPIO |
 | **BT2GC** | Output is GameCube Joybus protocol over GPIO |
 
 !!! info "Coming Soon"
-    Web Config support for native console output adapters is planned for a future firmware update.
+    Config mode is being extended to more native console output adapters.
 
 ---
 
@@ -152,9 +164,11 @@ Set the Wii Remote orientation mode (horizontal vs. vertical) for correct button
 3. **Bad cable** — Use a USB data cable, not a charge-only cable.
 4. **Driver conflict** (Windows) — Some controller drivers claim the serial port. Try unplugging other USB devices.
 
-### I'm using USB2GC / BT2N64 / USB2DC and it doesn't connect
+### I'm using a console output adapter and it doesn't connect
 
-Native console output adapters don't support Web Config yet. These adapters communicate with the console over GPIO pins, not USB — so there's no serial port for the browser to connect to. See the [compatibility table](#which-adapters-support-web-config) above.
+**USB2GC and USB2PCE** support Web Config off-console: unplug from the console and plug into your PC with no console attached — the adapter boots into config mode and exposes a serial port. If it was cold-booted on the console it self-corrects into play mode, so connect it to the PC *without* a console to reach config mode.
+
+**Other native console output adapters** (USB2N64, USB2DC, BT2N64, BT2GC, etc.) don't have a config mode yet — they communicate with the console over GPIO pins, not USB, so there's no serial port for the browser. See the [compatibility table](#which-adapters-support-web-config) above.
 
 ### I changed the output mode and now I can't reconnect
 

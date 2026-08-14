@@ -45,8 +45,31 @@ typedef struct {
     uint8_t socd_mode;         // SOCD cleaning mode (0=passthrough, 1=neutral, 2=up-priority, 3=last-win)
     uint8_t l2_threshold;      // Analog L2 → digital threshold; 0 = use default (128)
     uint8_t r2_threshold;      // Analog R2 → digital threshold; 0 = use default (128)
-    uint8_t reserved[12];      // Future use
+    // Per-profile turbo / auto-fire (web-configurable). Backward-compatible:
+    // carved from the former reserved[] which was zero-initialized, so old
+    // records read as rate 0 (off) with an empty mask — no schema bump needed.
+    uint8_t autofire_rate;     // 0 = off, 1..6 = AUTOFIRE_RATE ladder index (profile.h)
+    uint8_t turbo_mask[4];     // 32-bit LE bitfield; bit i = physical button index i
+                               // (0=B1 .. 25=R5, same index space as button_map)
+    // Generic device/output mode, interpreted by the active app's output driver
+    // (e.g. usb2pce: 0=2-button, 1=6-button, 2=3-button Sel, 3=3-button Run). The
+    // app reports its mode names via profile_config_t. Carved from reserved[] →
+    // zero-init means "mode 0" (the app's default) on old flashes; no schema bump.
+    uint8_t output_mode;
+    uint8_t reserved[6];       // 1 + 4 + 1 + 6 = 12, so struct stays exactly 56 bytes
 } custom_profile_t;
+
+// Turbo bit accessors, keyed on physical (input) button index 0..25.
+static inline bool custom_profile_turbo_get(const custom_profile_t* p, uint8_t i) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return false;
+    return (p->turbo_mask[i >> 3] >> (i & 7)) & 1u;
+}
+static inline void custom_profile_turbo_set(custom_profile_t* p, uint8_t i, bool on) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return;
+    uint8_t bit = 1u << (i & 7);
+    if (on) p->turbo_mask[i >> 3] |= bit;
+    else    p->turbo_mask[i >> 3] &= ~bit;
+}
 
 // Profile flags
 #define PROFILE_FLAG_SWAP_STICKS  (1 << 0)
@@ -108,8 +131,14 @@ typedef struct {
     // reserved[] so the 256-byte layout is unchanged; old flashes read 0=off.
     uint8_t shoulder_swap;
 
-    // Reserved for future global settings (8 bytes)
-    uint8_t reserved[8];
+    // Built-in profiles hidden from the hotkey cycle: bit i = built-in index i
+    // disabled. Carved from reserved[] (zero-init → none disabled on old flashes,
+    // no schema bump). Web-config toggle; disabled built-ins are still selectable
+    // directly but skipped by SELECT+Up/Down.
+    uint8_t builtin_disabled_mask;
+
+    // Reserved for future global settings (7 bytes)
+    uint8_t reserved[7];
 
     // Custom profiles (4 x 56 = 224 bytes)
     custom_profile_t profiles[CUSTOM_PROFILE_MAX_COUNT];
@@ -263,5 +292,9 @@ void flash_set_dpad_mode(uint8_t mode);
 
 // Persist the shoulder-swap toggle (L1<->L2, R1<->R2). Marks router_saved=1.
 void flash_set_shoulder_swap(uint8_t on);
+
+// Built-in profiles hidden from the SELECT+Up/Down cycle (bit i = built-in i).
+uint8_t flash_get_builtin_disabled_mask(void);
+void flash_set_builtin_disabled_mask(uint8_t mask);
 
 #endif // FLASH_H
