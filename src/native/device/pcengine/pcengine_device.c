@@ -32,8 +32,8 @@ static void pce_early_gpio_init(void)
 #include "hardware/uart.h"
 #endif
 
-#define TURBO_SPEED_COUNT 3
-static const uint32_t turbo_periods[TURBO_SPEED_COUNT] = { 50, 33, 25 }; // ms: 10Hz, 15Hz, 20Hz
+// Turbo/autofire is now defined per built-in profile (usb2pce/profiles.h) via
+// MAP_AUTOFIRE and applied by profile_apply(); the driver no longer hardcodes it.
 
 PIO pio;
 uint sm1, sm2, sm3;
@@ -88,14 +88,16 @@ static struct {
     volatile int16_t mouse_global_y[MAX_PLAYERS];  // Accumulated Y deltas (like PCEMouse global_y)
     volatile int16_t mouse_output_x[MAX_PLAYERS];  // Output X being sent (like PCEMouse output_x)
     volatile int16_t mouse_output_y[MAX_PLAYERS];  // Output Y being sent (like PCEMouse output_y)
-    uint32_t turbo_b3_start[MAX_PLAYERS];
-    bool     turbo_b3_held[MAX_PLAYERS];
-    uint32_t turbo_b4_start[MAX_PLAYERS];
-    bool     turbo_b4_held[MAX_PLAYERS];
-    uint8_t  turbo_speed_index[MAX_PLAYERS];
-    bool     l1_prev[MAX_PLAYERS];
-    bool     r1_prev[MAX_PLAYERS];
-    uint8_t  normal_base[MAX_PLAYERS];  // Pre-turbo normal byte for continuous re-evaluation
+    // Cached raw input per player, so the active profile (button remaps + autofire,
+    // incl. the global rapid-fire gesture) is re-applied every scan even when no
+    // new input event arrives — needed for autofire to keep toggling on a held
+    // button. See read_inputs().
+    bool     has_input[MAX_PLAYERS];
+    bool     is_kbd[MAX_PLAYERS];
+    uint32_t in_buttons[MAX_PLAYERS];
+    uint8_t  in_lx[MAX_PLAYERS], in_ly[MAX_PLAYERS];
+    uint8_t  in_rx[MAX_PLAYERS], in_ry[MAX_PLAYERS];
+    uint8_t  in_l2[MAX_PLAYERS], in_r2[MAX_PLAYERS], in_rz[MAX_PLAYERS];
 } pce_state = {
     .button_mode = {BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2, BUTTON_MODE_2},
     .normal_byte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -106,6 +108,10 @@ static struct {
     .mouse_output_x = {0},
     .mouse_output_y = {0}
 };
+
+// Persistent per-player profile output (Core-0 only). Kept alive across scans
+// because profile_apply() stores autofire timing in autofire_start_ms[].
+static profile_output_t pce_prof_out[MAX_PLAYERS];
 
 // No timers needed - state cycles event-driven on CLK edges
 
@@ -256,6 +262,7 @@ void __not_in_flash_func(read_inputs)(void)
     if (i >= playersCount) {
       pce_state.normal_byte[i] = 0xFF;
       pce_state.ext_byte[i] = 0xF0;
+      pce_state.has_input[i] = false;
       pce_state.is_mouse[i] = false;
       pce_state.mouse_global_x[i] = 0;
       pce_state.mouse_global_y[i] = 0;
@@ -264,57 +271,83 @@ void __not_in_flash_func(read_inputs)(void)
       continue;
     }
     
-    // No new event - keep existing state (important for mouse!)
-    if (!event) {
-      // Re-evaluate turbo timing even without new input events
-      if (pce_state.turbo_b3_held[i] || pce_state.turbo_b4_held[i]) {
-        uint32_t now = to_ms_since_boot(get_absolute_time());
-        uint32_t period = turbo_periods[pce_state.turbo_speed_index[i]];
-        uint8_t normal = pce_state.normal_base[i];
-        if (pce_state.turbo_b3_held[i] && ((now - pce_state.turbo_b3_start[i]) / period) % 2 == 0)
-          normal &= ~(1 << 5);
-        if (pce_state.turbo_b4_held[i] && ((now - pce_state.turbo_b4_start[i]) / period) % 2 == 0)
-          normal &= ~(1 << 4);
-        pce_state.normal_byte[i] = normal;
+    // Cache the raw input so the active profile can be re-applied every scan
+    // below (autofire must keep toggling even when no new event arrives). Mouse
+    // deltas are event-driven, so mouse handling stays inside the event branch.
+    if (event) {
+      pce_state.in_buttons[i] = event->buttons;
+      pce_state.in_lx[i] = event->analog[0];
+      pce_state.in_ly[i] = event->analog[1];
+      pce_state.in_rx[i] = event->analog[2];
+      pce_state.in_ry[i] = event->analog[3];
+      pce_state.in_l2[i] = event->analog[4];
+      pce_state.in_r2[i] = event->analog[5];
+      pce_state.in_rz[i] = event->analog[6];
+      pce_state.is_kbd[i] = (event->type == INPUT_TYPE_KEYBOARD);
+      pce_state.has_input[i] = true;
+
+      // Mouse handling - accumulate deltas exactly like PCEMouse post_globals
+      bool was_mouse = pce_state.is_mouse[i];
+      pce_state.is_mouse[i] = (event->type == INPUT_TYPE_MOUSE);
+      if (was_mouse && !pce_state.is_mouse[i]) {
+        pce_state.mouse_global_x[i] = 0;
+        pce_state.mouse_global_y[i] = 0;
+        pce_state.mouse_output_x[i] = 0;
+        pce_state.mouse_output_y[i] = 0;
       }
-      continue;
+      if (pce_state.is_mouse[i]) {
+        uint8_t delta_x = (uint8_t)(-(int8_t)event->delta_x);
+        uint8_t delta_y = (uint8_t)(-(int8_t)event->delta_y);
+        if (delta_x >= 128) pce_state.mouse_global_x[i] -= (256 - delta_x);
+        else                pce_state.mouse_global_x[i] += delta_x;
+        if (delta_y >= 128) pce_state.mouse_global_y[i] -= (256 - delta_y);
+        else                pce_state.mouse_global_y[i] += delta_y;
+        if (!output_exclude) {
+          pce_state.mouse_output_x[i] = pce_state.mouse_global_x[i];
+          pce_state.mouse_output_y[i] = pce_state.mouse_global_y[i];
+        }
+      }
     }
 
-    // Build normal byte (d-pad + buttons)
+    if (!pce_state.has_input[i]) continue;  // no input received yet
+
+    // Apply the active profile every scan: button remaps + per-button autofire,
+    // including the global rapid-fire gesture (profile_get_active() returns the
+    // runtime profile when one is set). Safe on Core 0 where profile_apply lives.
+    const profile_t* prof = profile_get_active(OUTPUT_TARGET_PCENGINE);
+    profile_apply(prof, pce_state.in_buttons[i],
+                  pce_state.in_lx[i], pce_state.in_ly[i],
+                  pce_state.in_rx[i], pce_state.in_ry[i],
+                  pce_state.in_l2[i], pce_state.in_r2[i], pce_state.in_rz[i],
+                  &pce_prof_out[i]);
+    uint32_t pb  = pce_prof_out[i].buttons;
+    uint8_t  plx = pce_prof_out[i].left_x;
+    uint8_t  ply = pce_prof_out[i].left_y;
+
+    // Byte format (2- vs 6-button) comes from the BUILT-IN active profile's
+    // output_mode, read directly so the runtime rapid-fire profile can't reset
+    // it back to 2-button.
+    const profile_t* base = profile_get_by_index(OUTPUT_TARGET_PCENGINE,
+                              profile_get_active_index(OUTPUT_TARGET_PCENGINE));
+    pce_state.button_mode[i] = base ? base->output_mode : BUTTON_MODE_2;
+
+    // Build normal byte (d-pad + I/II/Select/Run) from the profile output.
     uint8_t normal = 0xFF;
-    
-    // D-pad from digital buttons
-    if (event->buttons & JP_BUTTON_DU) normal &= ~(1 << 0);
-    if (event->buttons & JP_BUTTON_DR) normal &= ~(1 << 1);
-    if (event->buttons & JP_BUTTON_DD) normal &= ~(1 << 2);
-    if (event->buttons & JP_BUTTON_DL) normal &= ~(1 << 3);
-    
-    // D-pad from left analog stick (threshold at 64/192 from center 128)
-    // HID convention: 0=up, 128=center, 255=down
-    if (event->analog[0] < 64)  normal &= ~(1 << 3);  // Left
-    if (event->analog[0] > 192) normal &= ~(1 << 1);  // Right
-    if (event->analog[1] < 64)  normal &= ~(1 << 0);  // Up (low Y = stick up)
-    if (event->analog[1] > 192) normal &= ~(1 << 2);  // Down (high Y = stick down)
-    if (event->buttons & JP_BUTTON_B2) normal &= ~(1 << 4);  // I
-    if (event->buttons & JP_BUTTON_B1) normal &= ~(1 << 5);  // II
-    if (event->buttons & JP_BUTTON_S1) normal &= ~(1 << 6);  // Select
-    if (event->buttons & JP_BUTTON_S2) normal &= ~(1 << 7);  // Run
+    if (pb & JP_BUTTON_DU) normal &= ~(1 << 0);
+    if (pb & JP_BUTTON_DR) normal &= ~(1 << 1);
+    if (pb & JP_BUTTON_DD) normal &= ~(1 << 2);
+    if (pb & JP_BUTTON_DL) normal &= ~(1 << 3);
+    if (plx < 64)  normal &= ~(1 << 3);   // stick left
+    if (plx > 192) normal &= ~(1 << 1);   // stick right
+    if (ply < 64)  normal &= ~(1 << 0);   // stick up (low Y)
+    if (ply > 192) normal &= ~(1 << 2);   // stick down
+    if (pb & JP_BUTTON_B2) normal &= ~(1 << 4);  // I
+    if (pb & JP_BUTTON_B1) normal &= ~(1 << 5);  // II
+    if (pb & JP_BUTTON_S1) normal &= ~(1 << 6);  // Select
+    if (pb & JP_BUTTON_S2) normal &= ~(1 << 7);  // Run
+    if (pce_state.is_kbd[i] && (pb & JP_BUTTON_A1)) normal &= ~((1 << 6) | (1 << 7));
 
-    // Keyboard: A1 → Select+Run
-    if (event->type == INPUT_TYPE_KEYBOARD && (event->buttons & JP_BUTTON_A1)) {
-      normal &= ~((1 << 6) | (1 << 7));
-    }
-
-    // Button mode (2/6/3-button) comes from the active profile's output_mode.
-    // Switch it with the universal profile hotkey (SELECT + D-pad Up/Down) or the
-    // web config; the choice persists. (Replaces the old RUN+D-pad toggle, which
-    // collided with the global START+D-pad hotkeys.)
-    const profile_t* pce_prof = profile_get_active(OUTPUT_TARGET_PCENGINE);
-    if (pce_prof) {
-      pce_state.button_mode[i] = pce_prof->output_mode;
-    }
-
-    // Turbo EverDrive Pro hot-key fix
+    // EverDrive Pro hot-key fix
     if (hotkey) {
       normal &= hotkey;
     } else if (i == 0) {
@@ -324,93 +357,12 @@ void __not_in_flash_func(read_inputs)(void)
       else if (btns == 0x84) hotkey = ~0x84;
     }
 
-    // 3-button modes
-    bool is3btnSel = pce_state.button_mode[i] == BUTTON_MODE_3_SEL;
-    bool is3btnRun = pce_state.button_mode[i] == BUTTON_MODE_3_RUN;
-    bool is6btn = pce_state.button_mode[i] == BUTTON_MODE_6;
-
-    if (is3btnSel && (event->buttons & JP_BUTTON_B3)) {
-      normal &= ~(1 << 6);
-    } else if (is3btnRun && (event->buttons & JP_BUTTON_B3)) {
-      normal &= ~(1 << 7);
-    } else if (!is6btn) {
-      // Save pre-turbo byte for re-evaluation when no new events arrive
-      pce_state.normal_base[i] = normal;
-
-      // Turbo buttons (per-player, ms-based timing)
-      uint32_t now = to_ms_since_boot(get_absolute_time());
-      uint32_t period = turbo_periods[pce_state.turbo_speed_index[i]];
-
-      // Edge-triggered speed cycling via L1/R1
-      bool l1_now = (event->buttons & JP_BUTTON_L1) != 0;
-      bool r1_now = (event->buttons & JP_BUTTON_R1) != 0;
-      if (l1_now && !pce_state.l1_prev[i] && pce_state.turbo_speed_index[i] > 0)
-        pce_state.turbo_speed_index[i]--;
-      if (r1_now && !pce_state.r1_prev[i] && pce_state.turbo_speed_index[i] < TURBO_SPEED_COUNT - 1)
-        pce_state.turbo_speed_index[i]++;
-      pce_state.l1_prev[i] = l1_now;
-      pce_state.r1_prev[i] = r1_now;
-
-      // Turbo B3 → II
-      if (event->buttons & JP_BUTTON_B3) {
-        if (!pce_state.turbo_b3_held[i]) { pce_state.turbo_b3_start[i] = now; pce_state.turbo_b3_held[i] = true; }
-        if (((now - pce_state.turbo_b3_start[i]) / period) % 2 == 0)
-          normal &= ~(1 << 5);
-      } else {
-        pce_state.turbo_b3_held[i] = false;
-      }
-
-      // Turbo B4 → I
-      if (event->buttons & JP_BUTTON_B4) {
-        if (!pce_state.turbo_b4_held[i]) { pce_state.turbo_b4_start[i] = now; pce_state.turbo_b4_held[i] = true; }
-        if (((now - pce_state.turbo_b4_start[i]) / period) % 2 == 0)
-          normal &= ~(1 << 4);
-      } else {
-        pce_state.turbo_b4_held[i] = false;
-      }
-    }
-
-    // Build extended byte (6-button mode)
+    // Build extended byte (6-button III/IV/V/VI) from the profile output.
     uint8_t ext = 0xF0;  // Lower nibble = 0 is the 6-button signature
-    if (event->buttons & JP_BUTTON_B3) ext &= ~(1 << 4);  // III
-    if (event->buttons & JP_BUTTON_B4) ext &= ~(1 << 5);  // IV
-    if (event->buttons & JP_BUTTON_L1) ext &= ~(1 << 6);  // V
-    if (event->buttons & JP_BUTTON_R1) ext &= ~(1 << 7);  // VI
-
-    // Mouse handling - accumulate deltas exactly like PCEMouse post_globals
-    bool was_mouse = pce_state.is_mouse[i];
-    pce_state.is_mouse[i] = (event->type == INPUT_TYPE_MOUSE);
-    
-    // Clear mouse state when device type changes (prevents drift on disconnect)
-    if (was_mouse && !pce_state.is_mouse[i]) {
-      pce_state.mouse_global_x[i] = 0;
-      pce_state.mouse_global_y[i] = 0;
-      pce_state.mouse_output_x[i] = 0;
-      pce_state.mouse_output_y[i] = 0;
-    }
-    
-    if (pce_state.is_mouse[i]) {
-      // Negate deltas to match PCE direction convention
-      uint8_t delta_x = (uint8_t)(-(int8_t)event->delta_x);
-      uint8_t delta_y = (uint8_t)(-(int8_t)event->delta_y);
-      
-      // Accumulate into signed 16-bit (same logic as PCEMouse post_globals)
-      if (delta_x >= 128)
-        pce_state.mouse_global_x[i] -= (256 - delta_x);
-      else
-        pce_state.mouse_global_x[i] += delta_x;
-      
-      if (delta_y >= 128)
-        pce_state.mouse_global_y[i] -= (256 - delta_y);
-      else
-        pce_state.mouse_global_y[i] += delta_y;
-      
-      // Only copy global to output when not in a scan (like PCEMouse)
-      if (!output_exclude) {
-        pce_state.mouse_output_x[i] = pce_state.mouse_global_x[i];
-        pce_state.mouse_output_y[i] = pce_state.mouse_global_y[i];
-      }
-    }
+    if (pb & JP_BUTTON_B3) ext &= ~(1 << 4);  // III
+    if (pb & JP_BUTTON_B4) ext &= ~(1 << 5);  // IV
+    if (pb & JP_BUTTON_L1) ext &= ~(1 << 6);  // V
+    if (pb & JP_BUTTON_R1) ext &= ~(1 << 7);  // VI
 
     pce_state.normal_byte[i] = normal;
     pce_state.ext_byte[i] = ext;
