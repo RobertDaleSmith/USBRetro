@@ -208,7 +208,7 @@ export class ProfilesCard {
                 actions.appendChild(selectBtn);
             }
 
-            if (profile.builtin && profile.index !== 0) {
+            if (profile.builtin) {
                 const cloneBtn = document.createElement('button');
                 cloneBtn.className = 'secondary';
                 cloneBtn.textContent = 'Clone';
