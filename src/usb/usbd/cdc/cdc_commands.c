@@ -768,8 +768,10 @@ static void cmd_mode_list(const char* json)
         if (i == USB_OUTPUT_MODE_GBA_LINK) continue;
 #endif
 
-#ifdef CONFIG_NGC
-        // GameCube config mode: only expose CDC mode
+#if defined(CONFIG_NGC) || defined(CONFIG_PCE)
+        // GameCube / PCEngine config mode: the USB device exists only for the web
+        // config, so expose CDC only — the console-output modes (XInput, PS4, …)
+        // are meaningless for these adapters.
         if (i != USB_OUTPUT_MODE_CDC) continue;
 #endif
 
