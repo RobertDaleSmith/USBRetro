@@ -6,7 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.4.0] — 2026-08-12
+## [2.4.0] — 2026-08-14
 
 ### Added
 
@@ -25,13 +25,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 #### Configuration & web config
 - **Lower paddles and aux buttons are now fully configurable.** Custom profiles cover the whole button set through **L5/R5** (bits 0–25) — the stored profile map grew from 18 to 26 slots — so the SC2's lower back paddles (plus A3/A4/L4/R4) can be remapped, disabled, or turbo'd like any other button. The web-config profile editor and hotkeys list them, autofire timing covers them, and the input-test page now shows **L5/R5** activity.
 
+#### Off-console web config (console-output adapters)
+- **usb2pce and usb2gc now expose the web config off-console.** Plugged into a PC with no console attached, they boot as a USB **CDC** device for the web config (edit/switch profiles, view status) instead of a controller host. The mode is chosen at boot from the console's control lines — GameCube's 3.3 V rail, or the PC Engine's **SEL/CLR clock activity** — and a console powered on *with the adapter already attached* self-corrects into play mode the instant it starts scanning (the cold-boot race is handled by a runtime watch that reboots into play mode). In config mode the USB output-mode list is limited to **CDC** only.
+- **USB Host page for native-USB adapters.** The web config shows a read-only **USB Host** page for adapters that host controllers on the RP2040's native USB (usb2pce/usb2gc) — presence is advertised via `CAPS.usb_host`, with the pin fixed by hardware (unlike PIO-USB controller apps, whose pin stays editable).
+- **True I/O on the Info and Router pages.** A console adapter in config mode now reports its real topology — e.g. **USB Host → PCEngine · up to 5 players**, with a `USB Host → PCEngine` route — instead of the USB-CDC transport, via a new `native_input`/`native_output` `CAPS.native` object.
+
+#### Web-config profiles
+- **Per-button turbo (auto-fire), web-configurable.** Custom profiles gain a ⚡ turbo toggle per button plus one shared rate (30/20/15/12/10/7.5 Hz). The router applies it before the remap (so the pulse follows the mapping), cloning a built-in preserves its compiled auto-fire, and joypad-live drives it over the same `PROFILE.*` CDC commands.
+- **Per-profile device/output mode.** Custom profiles carry a generic, app-declared output mode; usb2pce exposes **2-Button / 6-Button / 3-Button (Sel) / 3-Button (Run)** as a "PCEngine Mode" dropdown (`PROFILE.MODES` reports each app's modes), so a cloned "6-Button" plays in 6-button mode instead of falling back to 2-button.
+- **Disable built-in profiles.** An Enable/Disable toggle per built-in profile — disabled ones are skipped by the SELECT+D-pad profile cycle but stay directly selectable. Cloning the **Default** profile is now allowed too.
+
+#### usb2pce
+- **Button mode and turbo now live in profiles.** The 2-/3-/6-button PC Engine mode and its per-mode turbo are built-in profiles selected by hotkey or web config (retiring the RUN+D-pad mode toggle), and the global on-the-fly rapid-fire works on PCEngine output as well.
+
 ### Changed
+- **Universal profile hotkeys on every app.** `router_init()` now installs the profile/tuning hotkeys by default, so they work regardless of app: **SELECT + D-pad Up/Down** switches profiles instantly and clamps at the ends; **SELECT + D-pad Left/Right** is a 4-position D-pad↔stick swap slider (`[D-pad↔L-stick] [normal] [D-pad↔R-stick] [L-stick↔R-stick]`); **START + D-pad Up** toggles shoulder swap. On-the-fly config gestures are **SELECT + B3** (rapid-fire set — tap a button to cycle its rate) and **SELECT + B4** (live remap); neither uses START, so they don't collide with console reset combos. Apps with their own combo tables still take over on their first `router_set_combo()`.
 - **Canonical touchpad normalization.** All touchpad sources (DualShock 4, DualSense, both Steam Controllers) are normalized into a device-agnostic 0–65535 space in the router, and output modes scale from there — so trackpads carry through to any output instead of being handled ad hoc per driver.
 - **Flash schema v2.** The custom-profile button map expanded (18 → 26 slots) so L4/R4/F1/F2/L5/R5 become remappable. The struct stays 56 bytes (reusing former reserved space), but reinterpreting those bytes forces a **one-time wipe of saved settings/profiles** on upgrade.
 
 ### Fixed
 - **SC2 Bluetooth reconnect reliability** — defer Valve service discovery until the GATT client is ready (a bonded reconnect fired it too early and hung at `VID:0000`); a bring-up watchdog that disconnects and retries on a stalled state; a forced DIS read to identify a name-less SC2 stuck on the generic HID path; a shorter connect-attempt timeout so a stale/rotated-address bond can't monopolize the radio with scanning off; and scanning resumes after clearing bonds.
 - **SC2 View/Menu (S1/S2)** mapping in the USB parser corrected to match the BLE/SDL layout.
+- **DualSense USB touchpad** is now normalized to the canonical 0–65535 space (matching the BT path) instead of passing raw pixel coordinates, so PS4/PS5-output touchpad passthrough is correctly scaled.
+- **D-pad → analog-stick diagonals** now follow the circular stick radius instead of hitting the square corners, so a diagonal reads as a real stick deflection.
 - **Nuon spinner axis** — restored the spinner (paddle) axis that was dropped in the router migration, so Nuon output drives the spinner again.
 - **Bluetooth driver link safety** — the BTHID device-driver registry could be discarded by the linker's `--gc-sections` (RP2040, ESP32, nRF), silently dropping BT controller support; the registry is now link-guarded, and `CONFIG_BT_HOST` is defined for manual-BT Pico apps (a #188 regression).
 - **Waveshare RP2350-USB-A LED colors** — the onboard WS2812 is an RGB WS2812B (not RGBW/GRB), so status and player-LED colors rendered wrong; the byte order and `IS_RGBW` are now board-scoped correctly, leaving every other board untouched (#218, thanks @Atreus171).
