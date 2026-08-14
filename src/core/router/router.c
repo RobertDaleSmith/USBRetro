@@ -1303,14 +1303,14 @@ void router_submit_input(const input_event_t* event) {
                 break;
             case 5:  // Next Profile (wrap)
                 if (!router_combos[c].fired) {
-                    profile_cycle_next(0, true);
+                    profile_cycle_next(router_get_primary_output(), true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
                 break;
             case 6:  // Previous Profile (wrap)
                 if (!router_combos[c].fired) {
-                    profile_cycle_prev(0, true);
+                    profile_cycle_prev(router_get_primary_output(), true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
@@ -1346,14 +1346,14 @@ void router_submit_input(const input_event_t* event) {
                 break;
             case 10:  // Previous Profile (clamp at first)
                 if (!router_combos[c].fired) {
-                    profile_cycle_prev(0, false);
+                    profile_cycle_prev(router_get_primary_output(), false);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
                 break;
             case 11:  // Next Profile (clamp at last)
                 if (!router_combos[c].fired) {
-                    profile_cycle_next(0, false);
+                    profile_cycle_next(router_get_primary_output(), false);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;

@@ -1,6 +1,7 @@
 // pcengine.c
 
 #include "pcengine_device.h"
+#include "core/services/profiles/profile.h"
 #include "pico/time.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/iobank0.h"
@@ -304,16 +305,14 @@ void __not_in_flash_func(read_inputs)(void)
       normal &= ~((1 << 6) | (1 << 7));
     }
 
-    // Hotkey detection
-    bool s2_pressed = (event->buttons & JP_BUTTON_S2) != 0;
-    if (s2_pressed && (event->buttons & JP_BUTTON_DU))
-      pce_state.button_mode[i] = BUTTON_MODE_6;
-    else if (s2_pressed && (event->buttons & JP_BUTTON_DD))
-      pce_state.button_mode[i] = BUTTON_MODE_2;
-    else if (s2_pressed && (event->buttons & JP_BUTTON_DL))
-      pce_state.button_mode[i] = BUTTON_MODE_3_SEL;
-    else if (s2_pressed && (event->buttons & JP_BUTTON_DR))
-      pce_state.button_mode[i] = BUTTON_MODE_3_RUN;
+    // Button mode (2/6/3-button) comes from the active profile's output_mode.
+    // Switch it with the universal profile hotkey (SELECT + D-pad Up/Down) or the
+    // web config; the choice persists. (Replaces the old RUN+D-pad toggle, which
+    // collided with the global START+D-pad hotkeys.)
+    const profile_t* pce_prof = profile_get_active(OUTPUT_TARGET_PCENGINE);
+    if (pce_prof) {
+      pce_state.button_mode[i] = pce_prof->output_mode;
+    }
 
     // Turbo EverDrive Pro hot-key fix
     if (hotkey) {

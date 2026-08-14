@@ -10,6 +10,8 @@
 #include "core/input_interface.h"
 #include "core/output_interface.h"
 #include "native/device/pcengine/pcengine_device.h"
+#include "core/services/profiles/profile.h"
+#include "profiles.h"
 #include "usb/usbh/usbh.h"
 #include <stdio.h>
 
@@ -66,6 +68,14 @@ void app_init(void)
 
     // Add default route: USB → PCEngine
     router_add_route(INPUT_SOURCE_USB_HOST, OUTPUT_TARGET_PCENGINE, 0);
+
+    // Built-in profiles select the PCEngine button mode (2/6/3-button). Switch
+    // with the universal profile hotkey (SELECT + D-pad Up/Down) or the web
+    // config; the choice persists and restores on boot.
+    static const profile_config_t profile_cfg = {
+        .output_profiles = { [OUTPUT_TARGET_PCENGINE] = &usb2pce_profile_set },
+    };
+    profile_init(&profile_cfg);
 
     // Configure player management
     player_config_t player_cfg = {

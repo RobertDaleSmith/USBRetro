@@ -175,6 +175,11 @@ typedef struct {
     // SOCD handling for D-pad (fighting games, Hitbox controllers)
     socd_mode_t socd_mode;
 
+    // Generic output-device mode, interpreted by the output driver (e.g. the
+    // PCEngine driver reads it as 2/6/3-button mode). 0 = default; ignored by
+    // outputs that don't use it.
+    uint8_t output_mode;
+
 } profile_t;
 
 // ============================================================================
