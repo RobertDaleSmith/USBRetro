@@ -44,6 +44,10 @@
 // periods above (30/20/15/12/10/7.5 Hz). Returns 0 (off) for out-of-range.
 #define AUTOFIRE_RATE_COUNT 7
 uint8_t profile_autofire_rate_ms(uint8_t index);
+// Reverse lookup: nearest ladder index for a period in ms (0 → 0/off). Used to
+// translate a built-in profile's per-entry MAP_AUTOFIRE period into the custom
+// profile's single rate index when cloning.
+uint8_t profile_autofire_index_from_ms(uint8_t period_ms);
 
 // ============================================================================
 // ANALOG OUTPUT TARGETS

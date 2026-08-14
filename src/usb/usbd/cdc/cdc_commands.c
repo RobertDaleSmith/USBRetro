@@ -1435,6 +1435,16 @@ static void cmd_profile_clone(const char* json)
                 if ((uint32_t)out_bit + 1u > BUTTON_MAP_MAX_TARGET) continue;
 
                 new_profile->button_map[in_bit] = (uint8_t)(out_bit + 1);
+
+                // Preserve built-in auto-fire: flag the input button for turbo and
+                // carry its rate over to the profile's single rate. (Multiple
+                // auto-fire entries collapse to the last one's rate — built-ins
+                // use one rate for all, so this is exact in practice.)
+                if (entry->autofire_period_ms) {
+                    custom_profile_turbo_set(new_profile, in_bit, true);
+                    new_profile->autofire_rate =
+                        profile_autofire_index_from_ms(entry->autofire_period_ms);
+                }
             }
 
             // Stick sensitivities: built-in float (1.0 = 100%) → custom int 0-200

@@ -84,6 +84,18 @@ uint8_t profile_autofire_rate_ms(uint8_t index)
     return (index < AUTOFIRE_RATE_COUNT) ? ladder[index] : 0;
 }
 
+uint8_t profile_autofire_index_from_ms(uint8_t period_ms)
+{
+    if (period_ms == 0) return 0;  // off
+    uint8_t best = 1, best_diff = 255;
+    for (uint8_t i = 1; i < AUTOFIRE_RATE_COUNT; i++) {
+        uint8_t p = profile_autofire_rate_ms(i);
+        uint8_t d = (p > period_ms) ? (p - period_ms) : (period_ms - p);
+        if (d < best_diff) { best_diff = d; best = i; }
+    }
+    return best;
+}
+
 void profile_init(const profile_config_t* cfg)
 {
     config = cfg;
