@@ -123,6 +123,7 @@ elseif(CONFIG_APP STREQUAL "usb2usb")
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
+        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
 
         # --- XInput host driver (tusb_xinput library) ---
         "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
@@ -193,6 +194,7 @@ elseif(CONFIG_APP STREQUAL "btusb2usb")
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
         "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
+        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
 
         # --- XInput host driver (tusb_xinput library) ---
         "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
@@ -238,6 +240,7 @@ set(SRCS
     "${SHARED_SRC}/core/services/players/feedback.c"
     "${SHARED_SRC}/core/services/profiles/profile.c"
     "${SHARED_SRC}/core/services/profiles/profile_indicator.c"
+    "${SHARED_SRC}/core/services/profiles/runtime_profile.c"
 
     # --- USB Device ---
     "${SHARED_SRC}/usb/usbd/usbd.c"
@@ -357,6 +360,7 @@ if(APP_NEEDS_BTSTACK)
             "${SHARED_SRC}/bt/bthid/devices/generic/sinput_ble.c"
             "${SHARED_SRC}/bt/bthid/devices/vendors/augmental/mouthpad_ble.c"
             "${SHARED_SRC}/bt/bthid/devices/vendors/valve/steam_controller_2_ble.c"
+            "${SHARED_SRC}/bt/bthid/devices/vendors/valve/steam_controller_ble.c"
 
             # BTstack host + transport
             "${SHARED_SRC}/bt/btstack/btstack_host.c"

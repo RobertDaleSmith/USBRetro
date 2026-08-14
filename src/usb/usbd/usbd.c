@@ -526,12 +526,6 @@ static void usbd_on_input(output_target_t output, uint8_t player_index, const in
         return;
     }
 
-    // Check for profile switch combo (SELECT + D-pad Up/Down after 2s hold)
-    // This enables hotkey profile cycling for both built-in and custom profiles
-    if (player_index == 0) {
-        profile_check_switch_combo(event->buttons);
-    }
-
     // Queue the event for sending when USB is ready
     pending_events[player_index] = *event;
     pending_flags[player_index] = true;
@@ -767,6 +761,55 @@ void usbd_init(void)
     printf("[usbd] Initialization complete\n");
 }
 
+// ============================================================================
+// REMOTE WAKEUP
+// ============================================================================
+
+// Wake a suspended host on real user input.
+//
+// This has to live above the per-mode dispatch in usbd_task(), because every
+// gate below it bottoms out in tud_ready() — which TinyUSB defines as
+// tud_mounted() && !tud_suspended(), i.e. false exactly when the host is
+// asleep. Both the mode->is_ready() checks here and the TU_VERIFY(tud_*_ready())
+// at the top of each driver's send_report() therefore return early while
+// suspended, so a tud_remote_wakeup() placed anywhere inside those paths is
+// unreachable. Three drivers used to carry exactly that dead branch.
+//
+// Firing on router activity rather than on every task tick matters twice over:
+// router_ms_since_activity() is only stamped by a held button or a stick pushed
+// past a +/-24 noise margin, so a controller resting on a desk cannot wake the
+// host, and dcd_remote_wakeup() drives resume signalling on the bus, so it must
+// not be issued on idle polls. Retried on an interval because a single resume
+// can be missed by the host.
+#define USBD_WAKE_ACTIVITY_WINDOW_MS 500  // how recent input must be to count
+#define USBD_WAKE_RETRY_MS           250  // min gap between resume attempts
+
+static uint32_t usbd_wake_last_attempt_ms = 0;
+static bool     usbd_wake_armed = true;   // first attempt of a suspend is immediate
+
+static void usbd_try_remote_wakeup(void)
+{
+    if (!tud_suspended()) {
+        usbd_wake_armed = true;  // re-arm for the next suspend
+        return;
+    }
+
+    // Only genuine user input wakes the host.
+    if (router_ms_since_activity() > USBD_WAKE_ACTIVITY_WINDOW_MS) return;
+
+    uint32_t now = platform_time_ms();
+    if (!usbd_wake_armed && (now - usbd_wake_last_attempt_ms) < USBD_WAKE_RETRY_MS) {
+        return;
+    }
+
+    usbd_wake_last_attempt_ms = now;
+    usbd_wake_armed = false;
+
+    // No-op unless the host enabled DEVICE_REMOTE_WAKEUP during suspend, which
+    // is the correct behaviour for hosts that opted out.
+    tud_remote_wakeup();
+}
+
 void usbd_task(void)
 {
     // TinyUSB device task - runs from core0 main loop
@@ -777,6 +820,10 @@ void usbd_task(void)
 #else
     tud_task();
 #endif
+
+    // Must precede the dispatch below — nothing past this point runs while the
+    // host is suspended. See usbd_try_remote_wakeup().
+    usbd_try_remote_wakeup();
 
     switch (output_mode) {
         case USB_OUTPUT_MODE_XBOX_ORIGINAL: {

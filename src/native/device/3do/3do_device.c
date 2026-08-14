@@ -815,11 +815,6 @@ void _3do_task() {
     update_3do_report(i);
   }
 
-  // Check for profile/mode switching combo
-  // Uses last_p0_buttons captured inside update_3do_report() before profile remapping
-  if (playersCount > 0) {
-    profile_check_switch_combo(last_p0_buttons);
-  }
 }
 
 //-----------------------------------------------------------------------------

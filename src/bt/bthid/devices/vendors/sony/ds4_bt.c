@@ -404,12 +404,12 @@ static void ds4_process_report(bthid_device_t* device, const uint8_t* data, uint
         }
         ds4->event.delta_x = touchpad_delta_x;
 
-        // Touch coordinates
-        ds4->event.touch[0].x = tx;
-        ds4->event.touch[0].y = ty;
+        // Touch coordinates — normalize DS4 native (1919x942) into 0..65535 canonical.
+        ds4->event.touch[0].x = touch_norm_from_range(tx, 1919);
+        ds4->event.touch[0].y = touch_norm_from_range(ty, 942);
         ds4->event.touch[0].active = !rpt->tpad_f1_down;
-        ds4->event.touch[1].x = tx2;
-        ds4->event.touch[1].y = ty2;
+        ds4->event.touch[1].x = touch_norm_from_range(tx2, 1919);
+        ds4->event.touch[1].y = touch_norm_from_range(ty2, 942);
         ds4->event.touch[1].active = !rpt->tpad_f2_down;
         ds4->event.has_touch = true;
     }
