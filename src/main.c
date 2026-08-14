@@ -49,6 +49,7 @@ const OutputInterface* active_output = NULL;
 // native console output set this so the web config can configure pins/modes
 // even when running in CDC config mode (no console plugged in).
 const OutputInterface* native_output = NULL;
+const InputInterface* native_input = NULL;
 
 #ifdef ENABLE_PS4_LOCAL_AUTH
 // mbedTLS RSA-2048 signing on Core 1 needs ~6–8 KB of stack.

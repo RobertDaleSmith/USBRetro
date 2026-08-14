@@ -128,8 +128,11 @@ static const profile_config_t app_profile_config = {
 
 void app_init(void)
 {
-    // Expose the PCEngine output to the web config in BOTH modes.
+    // Expose the app's true I/O (USB Host → PCEngine) to the web config in BOTH
+    // modes, so the info page reflects the firmware's purpose even while config
+    // mode has it enumerated as a USB CDC device.
     native_output = &pcengine_output_interface;
+    native_input = &usbh_input_interface;
 
     if (pce_config_mode) {
         printf("[app:usb2pce] Config mode - CDC serial for web configuration\n");
