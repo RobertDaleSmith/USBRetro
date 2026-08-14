@@ -558,6 +558,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 }
 .toggle input:checked + .toggle-slider { background: var(--accent); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+.toggle input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
 
 /* ================================================================
    MODAL
