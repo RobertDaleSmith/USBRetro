@@ -83,15 +83,6 @@ void bthid_register_driver(const bthid_driver_t* driver)
 
 static bool bthid_task_debug_done = false;
 static bool bt_on_hid_report_debug_done = false;
-// Debug dump of raw HID reports/descriptors (reverse-engineering layouts like
-// the iPega PG-9021). Disabled in release builds - enable to capture layouts.
-// #define BTHID_DEBUG_DUMP 1
-#ifdef BTHID_DEBUG_DUMP
-static uint8_t bthid_conn_report_dumps[BTHID_MAX_DEVICES]; // full reports dumped per conn
-static uint8_t raw_last[BTHID_MAX_DEVICES][64];
-static uint16_t raw_last_len[BTHID_MAX_DEVICES];
-static uint32_t raw_changed_count[BTHID_MAX_DEVICES];
-#endif
 
 void bthid_task(void)
 {
@@ -436,10 +427,6 @@ void bt_on_disconnect(uint8_t conn_index)
         cached_hid_desc_len = 0;
         cached_hid_desc_conn = 0xFF;
     }
-#ifdef BTHID_DEBUG_DUMP
-    bthid_conn_report_dumps[conn_index] = 0;
-    raw_last_len[conn_index] = 0;   // next connection re-dumps first report
-#endif
     remove_device(conn_index);
 
     // Reset one-shot debug flags so reconnections produce debug output
@@ -466,25 +453,7 @@ void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
         return;
     }
 
-#ifdef BTHID_DEBUG_DUMP
-    // Dump changed HID input reports unparsed (dedupe consecutive identical so
-    // presses/releases are visible). Reverse-engineers the PG-9021 layout in
-    // XInput/PS3/PS4/Switch/Steam modes: play each control and capture lines.
-    bool raw_same = (bthid_conn_report_dumps[conn_index] > 0) &&
-                    (len == raw_last_len[conn_index] && len <= 64 &&
-                     memcmp(raw_last[conn_index], data, len) == 0);
-    if (!raw_same && raw_changed_count[conn_index] < 200 && len <= 64) {
-        if (len > 0) memcpy(raw_last[conn_index], data, len);
-        raw_last_len[conn_index] = len;
-        raw_changed_count[conn_index]++;
-        bthid_conn_report_dumps[conn_index] = 1;
-        printf("[BTHID] Raw conn=%d len=%d:", conn_index, len);
-        for (uint16_t i = 0; i < len && i < 40; i++) printf(" %02x", data[i]);
-        printf("\n");
-    }
-#endif
-
-    // Debug first report after (re)connection
+// Debug first report after (re)connection
     if (!bt_on_hid_report_debug_done) {
         printf("[BTHID] First report: conn=%d, len=%d, data[0]=0x%02X\n",
                conn_index, len, data[0]);
@@ -547,25 +516,7 @@ void bt_on_hid_report(uint8_t conn_index, const uint8_t* data, uint16_t len)
 
 void bthid_set_hid_descriptor(uint8_t conn_index, const uint8_t* desc, uint16_t desc_len)
 {
-#ifdef BTHID_DEBUG_DUMP
-    // Dump the HID report descriptor hex whenever a NEW descriptor arrives for
-    // this connection. This reveals the exact per-mode byte layout of the
-    // PG-9021 (Android HID vs XInput vs PS3 vs PS4 vs Switch vs Steam Input).
-    static uint8_t desc_conn_last = 0xFF;
-    static uint16_t desc_len_last = 0;
-    if (desc_conn_last != conn_index || desc_len_last != desc_len) {
-        desc_conn_last = conn_index;
-        desc_len_last = desc_len;
-        printf("[BTHID] HID desc conn=%d len=%u:", conn_index, (unsigned)desc_len);
-        for (uint16_t i = 0; i < desc_len && i < 256; i++) {
-            if ((i % 16) == 0) printf("\n  ");
-            printf("%02x ", desc[i]);
-        }
-        printf("\n");
-    }
-#endif
-
-    // Always cache — descriptor often arrives before device is created (Classic BT)
+// Always cache — descriptor often arrives before device is created (Classic BT)
     if (desc_len <= BTHID_MAX_DESC_LEN) {
         memcpy(cached_hid_desc, desc, desc_len);
         cached_hid_desc_len = desc_len;
