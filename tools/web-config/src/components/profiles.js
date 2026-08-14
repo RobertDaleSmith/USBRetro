@@ -55,6 +55,10 @@ export class ProfilesCard {
             return `<div class="button-map-row">
                 <span class="input-label">${name}</span>
                 <select id="buttonMap${bit}">${mapOptions}</select>
+                <label class="turbo-cell" title="Turbo — auto-fire while held (uses the profile's Turbo Rate)">
+                    <input type="checkbox" class="turbo-check" id="turbo${bit}">
+                    <span class="turbo-icon">⚡</span>
+                </label>
             </div>`;
         }).join('');
 
@@ -114,6 +118,19 @@ export class ProfilesCard {
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Turbo Rate</label>
+                            <p class="hint" style="margin-bottom: 10px;">Auto-fire speed for buttons marked ⚡. One rate for the whole profile.</p>
+                            <select id="autofireRate" style="width: 100%;">
+                                <option value="0">Off</option>
+                                <option value="1">30 Hz</option>
+                                <option value="2">20 Hz</option>
+                                <option value="3">15 Hz</option>
+                                <option value="4">12 Hz</option>
+                                <option value="5">10 Hz</option>
+                                <option value="6">7.5 Hz</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Options</label>
                             <div class="checkbox-row"><input type="checkbox" id="flagSwapSticks"><label for="flagSwapSticks">Swap Left/Right Sticks</label></div>
                             <div class="checkbox-row"><input type="checkbox" id="flagInvertLY"><label for="flagInvertLY">Invert Left Y Axis</label></div>
@@ -135,6 +152,11 @@ export class ProfilesCard {
         this.el.querySelector('#cancelEditorBtn').addEventListener('click', () => this.closeEditor());
         this.el.querySelector('#saveProfileBtn').addEventListener('click', () => this.save());
         this.el.querySelector('#deleteProfileBtn').addEventListener('click', () => this.delete());
+
+        // Enable/disable the Turbo Rate select as ⚡ toggles change.
+        this.el.querySelector('#buttonMapContainer').addEventListener('change', (e) => {
+            if (e.target.classList.contains('turbo-check')) this.updateTurboState();
+        });
 
         this.el.querySelector('#leftStickSens').addEventListener('input', (e) => {
             this.el.querySelector('#leftStickSensValue').textContent = e.target.value + '%';
@@ -249,12 +271,14 @@ export class ProfilesCard {
             this.el.querySelector('#profileNameInput').value = '';
             for (const bit of REMAP_INPUT_BITS) {
                 this.el.querySelector(`#buttonMap${bit}`).value = '0';
+                this.el.querySelector(`#turbo${bit}`).checked = false;
             }
             this.el.querySelector('#leftStickSens').value = 100;
             this.el.querySelector('#rightStickSens').value = 100;
             this.el.querySelector('#leftStickSensValue').textContent = '100%';
             this.el.querySelector('#rightStickSensValue').textContent = '100%';
             this.el.querySelector('#socdModeSelect').value = '0';
+            this.el.querySelector('#autofireRate').value = '0';
             this.el.querySelector('#flagSwapSticks').checked = false;
             this.el.querySelector('#flagInvertLY').checked = false;
             this.el.querySelector('#flagInvertRY').checked = false;
@@ -263,8 +287,10 @@ export class ProfilesCard {
                 const profile = await this.protocol.getProfile(index);
                 this.el.querySelector('#profileNameInput').value = profile.name || '';
                 const map = profile.button_map || [];
+                const turbo = profile.turbo_mask || 0;
                 for (const bit of REMAP_INPUT_BITS) {
                     this.el.querySelector(`#buttonMap${bit}`).value = map[bit] !== undefined ? map[bit] : 0;
+                    this.el.querySelector(`#turbo${bit}`).checked = ((turbo >> bit) & 1) !== 0;
                 }
                 const ls = this.el.querySelector('#leftStickSens');
                 const rs = this.el.querySelector('#rightStickSens');
@@ -273,6 +299,7 @@ export class ProfilesCard {
                 this.el.querySelector('#leftStickSensValue').textContent = ls.value + '%';
                 this.el.querySelector('#rightStickSensValue').textContent = rs.value + '%';
                 this.el.querySelector('#socdModeSelect').value = (profile.socd_mode || 0).toString();
+                this.el.querySelector('#autofireRate').value = (profile.autofire_rate || 0).toString();
                 const flags = profile.flags || 0;
                 this.el.querySelector('#flagSwapSticks').checked = (flags & FLAG_SWAP_STICKS) !== 0;
                 this.el.querySelector('#flagInvertLY').checked = (flags & FLAG_INVERT_LY) !== 0;
@@ -283,7 +310,18 @@ export class ProfilesCard {
             }
         }
 
+        this.updateTurboState();
         modal.classList.remove('hidden');
+    }
+
+    // Grey out the Turbo Rate select when no ⚡ is set; when turbo is first
+    // enabled with the rate still Off, pick a sensible default so it does something.
+    updateTurboState() {
+        const anyTurbo = REMAP_INPUT_BITS.some(
+            (bit) => this.el.querySelector(`#turbo${bit}`).checked);
+        const rate = this.el.querySelector('#autofireRate');
+        rate.disabled = !anyTurbo;
+        if (anyTurbo && rate.value === '0') rate.value = '3';  // 15 Hz default
     }
 
     closeEditor() {
@@ -311,6 +349,13 @@ export class ProfilesCard {
         if (this.el.querySelector('#flagInvertLY').checked) flags |= FLAG_INVERT_LY;
         if (this.el.querySelector('#flagInvertRY').checked) flags |= FLAG_INVERT_RY;
 
+        // Turbo: bitmask over physical input bits, plus the shared rate index.
+        let turboMask = 0;
+        for (const bit of REMAP_INPUT_BITS) {
+            if (this.el.querySelector(`#turbo${bit}`).checked) turboMask |= (1 << bit);
+        }
+        const autofireRate = turboMask ? parseInt(this.el.querySelector('#autofireRate').value) || 0 : 0;
+
         const data = {
             name,
             button_map: buttonMap,
@@ -318,6 +363,8 @@ export class ProfilesCard {
             right_stick_sens: parseInt(this.el.querySelector('#rightStickSens').value),
             flags,
             socd_mode: parseInt(this.el.querySelector('#socdModeSelect').value),
+            autofire_rate: autofireRate,
+            turbo_mask: turboMask,
         };
 
         const index = this.editingIndex === null ? 255 : this.editingIndex;

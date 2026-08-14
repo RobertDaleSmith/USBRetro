@@ -39,6 +39,12 @@
 #define AUTOFIRE_10HZ  100   //  10 Hz → 100ms period
 #define AUTOFIRE_7HZ   133   // 7.5 Hz → 133ms period
 
+// Shared turbo-rate ladder for web-config custom-profile turbo (single source of
+// truth for router turbo pass + CDC). Index 0 = off; 1..6 map to the AUTOFIRE_*HZ
+// periods above (30/20/15/12/10/7.5 Hz). Returns 0 (off) for out-of-range.
+#define AUTOFIRE_RATE_COUNT 7
+uint8_t profile_autofire_rate_ms(uint8_t index);
+
 // ============================================================================
 // ANALOG OUTPUT TARGETS
 // ============================================================================

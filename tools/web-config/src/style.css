@@ -505,6 +505,19 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 .button-map-row .input-label { width: 40px; font-weight: 500; font-size: 13px; }
 .button-map-row select { flex: 1; min-width: 100px; padding: 6px; font-size: 13px; }
 
+/* Per-row turbo (⚡) toggle: hidden checkbox, dimmed icon when off */
+.button-map-row .turbo-cell {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; flex-shrink: 0; cursor: pointer;
+}
+.button-map-row .turbo-check { position: absolute; opacity: 0; width: 0; height: 0; }
+.button-map-row .turbo-icon {
+    font-size: 15px; line-height: 1; opacity: 0.3; filter: grayscale(1);
+    transition: opacity 0.15s, filter 0.15s;
+}
+.button-map-row .turbo-check:checked + .turbo-icon { opacity: 1; filter: none; }
+.button-map-row .turbo-cell:hover .turbo-icon { opacity: 0.7; }
+
 .sensitivity-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .sensitivity-row span:first-child { width: 80px; font-size: 14px; }
 .sensitivity-row span:last-child { width: 50px; text-align: right; font-size: 14px; }

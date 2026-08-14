@@ -45,8 +45,26 @@ typedef struct {
     uint8_t socd_mode;         // SOCD cleaning mode (0=passthrough, 1=neutral, 2=up-priority, 3=last-win)
     uint8_t l2_threshold;      // Analog L2 → digital threshold; 0 = use default (128)
     uint8_t r2_threshold;      // Analog R2 → digital threshold; 0 = use default (128)
-    uint8_t reserved[12];      // Future use
+    // Per-profile turbo / auto-fire (web-configurable). Backward-compatible:
+    // carved from the former reserved[] which was zero-initialized, so old
+    // records read as rate 0 (off) with an empty mask — no schema bump needed.
+    uint8_t autofire_rate;     // 0 = off, 1..6 = AUTOFIRE_RATE ladder index (profile.h)
+    uint8_t turbo_mask[4];     // 32-bit LE bitfield; bit i = physical button index i
+                               // (0=B1 .. 25=R5, same index space as button_map)
+    uint8_t reserved[7];       // 1 + 4 + 7 = 12, so struct stays exactly 56 bytes
 } custom_profile_t;
+
+// Turbo bit accessors, keyed on physical (input) button index 0..25.
+static inline bool custom_profile_turbo_get(const custom_profile_t* p, uint8_t i) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return false;
+    return (p->turbo_mask[i >> 3] >> (i & 7)) & 1u;
+}
+static inline void custom_profile_turbo_set(custom_profile_t* p, uint8_t i, bool on) {
+    if (i >= CUSTOM_PROFILE_BUTTON_COUNT) return;
+    uint8_t bit = 1u << (i & 7);
+    if (on) p->turbo_mask[i >> 3] |= bit;
+    else    p->turbo_mask[i >> 3] &= ~bit;
+}
 
 // Profile flags
 #define PROFILE_FLAG_SWAP_STICKS  (1 << 0)

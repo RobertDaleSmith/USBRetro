@@ -74,6 +74,16 @@ static const profile_set_t* get_profile_set(output_target_t output)
 // PROFILE SYSTEM API
 // ============================================================================
 
+// Shared turbo-rate ladder (see profile.h). index 0 = off; 1..6 → 30/20/15/12/10/7.5 Hz.
+uint8_t profile_autofire_rate_ms(uint8_t index)
+{
+    static const uint8_t ladder[AUTOFIRE_RATE_COUNT] = {
+        0, AUTOFIRE_30HZ, AUTOFIRE_20HZ, AUTOFIRE_15HZ,
+        AUTOFIRE_12HZ, AUTOFIRE_10HZ, AUTOFIRE_7HZ,
+    };
+    return (index < AUTOFIRE_RATE_COUNT) ? ladder[index] : 0;
+}
+
 void profile_init(const profile_config_t* cfg)
 {
     config = cfg;
