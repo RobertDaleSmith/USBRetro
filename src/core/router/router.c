@@ -8,6 +8,7 @@
 #include "core/buttons.h"
 #include "core/services/storage/flash.h"
 #include "core/services/profiles/profile.h"
+#include "core/services/profiles/runtime_profile.h"
 #include "platform/platform.h"
 #include "core/services/players/manager.h"
 #include <string.h>
@@ -232,6 +233,39 @@ static router_config_t router_config;
 static uint8_t global_dpad_mode = 0;
 static bool global_shoulder_swap = false;  // swap L1<->L2, R1<->R2
 
+// True after router_init() installs the built-in SELECT+D-pad hotkeys. The first
+// app router_set_combo() call clears them so the app's own combo table takes over
+// (gc2usb, controller_btusb); apps that register nothing keep the defaults.
+static bool router_default_combos_active = false;
+
+// ---- Global on-the-fly runtime profile (SELECT-hold → autofire / live remap) ----
+// Wired for every app in router_init(). Apps that call runtime_profile_init()
+// themselves (e.g. usb2neogeo) override this because their init runs afterward.
+static const uint32_t rt_output_buttons[] = {
+    JP_BUTTON_B1, JP_BUTTON_B2, JP_BUTTON_B3, JP_BUTTON_B4,
+    JP_BUTTON_L1, JP_BUTTON_R1, JP_BUTTON_L2, JP_BUTTON_R2,
+};
+static profile_t rt_scratch_profile = {
+    .name = "runtime", .description = "Runtime profile",
+    .button_map = NULL, .button_map_count = 0,
+    .l2_behavior = TRIGGER_PASSTHROUGH, .r2_behavior = TRIGGER_PASSTHROUGH,
+    .l2_threshold = 128, .r2_threshold = 128,
+    .left_stick_sensitivity = 1.0f, .right_stick_sensitivity = 1.0f,
+    .socd_mode = SOCD_UP_PRIORITY,
+};
+static const runtime_profile_output_config_t rt_output_config = {
+    .output_buttons      = rt_output_buttons,
+    .output_button_count = sizeof(rt_output_buttons) / sizeof(rt_output_buttons[0]),
+    .input_mask          = (JP_BUTTON_B1 | JP_BUTTON_B2 | JP_BUTTON_B3 | JP_BUTTON_B4 |
+                            JP_BUTTON_L1 | JP_BUTTON_R1 | JP_BUTTON_L2 | JP_BUTTON_R2 |
+                            JP_BUTTON_L3 | JP_BUTTON_R3 | JP_BUTTON_A1 |
+                            JP_BUTTON_L4 | JP_BUTTON_R4 | JP_BUTTON_L5 | JP_BUTTON_R5),
+    .hold_ms             = 2000,
+    .output_button_names = NULL,
+    .profile             = &rt_scratch_profile,
+};
+static runtime_profile_config_t rt_config;  // output_configs[] filled in router_init()
+
 // Global button combo hotkeys
 static struct {
     uint32_t input_mask;
@@ -382,6 +416,24 @@ bool router_onboard_motion_get(int16_t accel[3], int16_t gyro[3]) {
 // INITIALIZATION
 // ============================================================================
 
+// Built-in hotkeys so profile-switch / d-pad-mode / shoulder-swap work on every
+// app out of the box (previously only gc2usb/controller_btusb registered combos).
+// All fire once per press (instant, no hold):
+//   SELECT + Up/Down     → profile prev/next   (clamps at the ends, no wrap)
+//   SELECT + Left/Right  → d-pad mode slider [left stick <- d-pad -> right stick]
+//   START  + Up          → shoulder swap toggle (L1<->L2, R1<->R2)
+// Choices persist via flash (profile index / dpad mode / shoulder swap) and are
+// restored on boot. Any app that registers its own combos wipes these on its
+// first router_set_combo() call (see router_set_combo).
+static void router_install_default_combos(void) {
+    router_set_combo(0, JP_BUTTON_S1 | JP_BUTTON_DU, (10u << 24)); // profile prev (clamp)
+    router_set_combo(1, JP_BUTTON_S1 | JP_BUTTON_DD, (11u << 24)); // profile next (clamp)
+    router_set_combo(2, JP_BUTTON_S1 | JP_BUTTON_DL, (8u  << 24)); // d-pad slider ← left stick
+    router_set_combo(3, JP_BUTTON_S1 | JP_BUTTON_DR, (9u  << 24)); // d-pad slider → right stick
+    router_set_combo(4, JP_BUTTON_S2 | JP_BUTTON_DU, (7u  << 24)); // shoulder swap toggle
+    router_default_combos_active = true;
+}
+
 void router_init(const router_config_t* config) {
     if (!config) {
         printf(LOG_TAG "ERROR: NULL config\n");
@@ -390,6 +442,27 @@ void router_init(const router_config_t* config) {
 
     // Copy configuration
     router_config = *config;
+
+    // Restore persisted router settings (d-pad mode + shoulder swap) so a saved
+    // selection survives a reboot on EVERY app, not just the few that restore
+    // themselves. Gated on router_saved so untouched flash is left at defaults.
+    flash_t flash_data;
+    if (flash_load(&flash_data) && flash_data.router_saved) {
+        if (flash_data.dpad_mode <= 3) router_set_dpad_mode(flash_data.dpad_mode);
+        router_set_shoulder_swap(flash_data.shoulder_swap != 0);
+    }
+
+    // Install the built-in SELECT+D-pad hotkeys. Apps that register their own
+    // combos (gc2usb, controller_btusb) clear these on first router_set_combo().
+    router_install_default_combos();
+
+    // Register the global on-the-fly runtime profile for every output target so
+    // the SELECT-hold autofire/remap gesture works on every app. Apps that call
+    // runtime_profile_init() themselves override this (their init runs later).
+    for (int t = 0; t < MAX_OUTPUT_TARGETS; t++) {
+        rt_config.output_configs[t] = &rt_output_config;
+    }
+    runtime_profile_init(&rt_config);
 
     printf(LOG_TAG "Initializing router\n");
     printf(LOG_TAG "  Mode: %s\n",
@@ -953,6 +1026,16 @@ void router_submit_input(const input_event_t* event) {
     if (!event) return;
     if (route_count == 0) return;
 
+    // Global on-the-fly runtime profile gesture (SELECT-hold → autofire / live
+    // remap). Detected on the raw input; the mapping it builds is applied by
+    // profile_get_active() in the output drivers. Output is frozen while a
+    // mapping is being entered so the buttons you press don't leak through.
+    runtime_profile_check_combo(event->buttons,
+                                event->analog[ANALOG_L2], event->analog[ANALOG_R2]);
+    // Freeze output only while a live remap is being entered; rapid-fire set mode
+    // stays live so you feel each rate as you cycle it.
+    if (runtime_profile_is_mapping()) return;
+
     // Track activity for idle-sleep: any button, or a stick off-center.
     if (event->buttons != 0) {
         s_last_activity_ms = platform_time_ms();
@@ -1218,16 +1301,16 @@ void router_submit_input(const input_event_t* event) {
                 }
                 remapped.buttons &= ~in;
                 break;
-            case 5:  // Next Profile
+            case 5:  // Next Profile (wrap)
                 if (!router_combos[c].fired) {
-                    profile_cycle_next(0);
+                    profile_cycle_next(0, true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
                 break;
-            case 6:  // Previous Profile
+            case 6:  // Previous Profile (wrap)
                 if (!router_combos[c].fired) {
-                    profile_cycle_prev(0);
+                    profile_cycle_prev(0, true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
@@ -1236,6 +1319,41 @@ void router_submit_input(const input_event_t* event) {
                 if (!router_combos[c].fired) {
                     global_shoulder_swap = !global_shoulder_swap;
                     flash_set_shoulder_swap(global_shoulder_swap);  // persist
+                    router_combos[c].fired = true;
+                }
+                remapped.buttons &= ~in;
+                break;
+            // D-pad/stick swap as a 4-position slider that clamps at the ends,
+            // left -> right:
+            //   [d-pad<->Lstick] [normal] [d-pad<->Rstick] [Lstick<->Rstick]
+            //   modes:      1        0           2               3
+            case 8:   // slider step LEFT
+            case 9:   // slider step RIGHT
+                if (!router_combos[c].fired) {
+                    static const uint8_t pos_to_mode[4] = {1, 0, 2, 3};
+                    int pos = (global_dpad_mode == 1) ? 0 :
+                              (global_dpad_mode == 0) ? 1 :
+                              (global_dpad_mode == 2) ? 2 : 3;
+                    pos += (action == 9) ? 1 : -1;
+                    if (pos < 0) pos = 0;
+                    if (pos > 3) pos = 3;
+                    uint8_t nm = pos_to_mode[pos];
+                    router_set_dpad_mode(nm);
+                    flash_set_dpad_mode(nm);   // persist across reboot
+                    router_combos[c].fired = true;
+                }
+                remapped.buttons &= ~in;
+                break;
+            case 10:  // Previous Profile (clamp at first)
+                if (!router_combos[c].fired) {
+                    profile_cycle_prev(0, false);
+                    router_combos[c].fired = true;
+                }
+                remapped.buttons &= ~in;
+                break;
+            case 11:  // Next Profile (clamp at last)
+                if (!router_combos[c].fired) {
+                    profile_cycle_next(0, false);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
@@ -1254,24 +1372,37 @@ void router_submit_input(const input_event_t* event) {
         event = &remapped;
     }
 
-    // Apply global d-pad mode remap (d-pad buttons → analog stick)
+    // Apply global d-pad/stick swap. Each mode trades both directions:
+    //   1 = d-pad <-> left stick, 2 = d-pad <-> right stick, 3 = left <-> right stick.
     if (global_dpad_mode > 0) {
         if (!did_remap) { remapped = *event; did_remap = true; }
-        uint32_t dpad_bits = remapped.buttons & (JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
-        if (dpad_bits) {
+        if (global_dpad_mode == 3) {
+            // Swap the two analog sticks (d-pad untouched).
+            uint8_t tx = remapped.analog[0], ty = remapped.analog[1];
+            remapped.analog[0] = remapped.analog[2];
+            remapped.analog[1] = remapped.analog[3];
+            remapped.analog[2] = tx;
+            remapped.analog[3] = ty;
+        } else {
+            // D-pad <-> one stick, both directions. sx/sy = that stick's axes.
+            const int sx = (global_dpad_mode == 1) ? 0 : 2;
+            const int sy = sx + 1;
+            const uint8_t TH = 60;  // stick->d-pad activation threshold (center 128)
+            uint32_t dpad_bits = remapped.buttons &
+                (JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+            uint8_t old_x = remapped.analog[sx], old_y = remapped.analog[sy];
+            // stick -> d-pad
             remapped.buttons &= ~(JP_BUTTON_DU | JP_BUTTON_DD | JP_BUTTON_DL | JP_BUTTON_DR);
+            if (old_x < 128 - TH)      remapped.buttons |= JP_BUTTON_DL;
+            else if (old_x > 128 + TH) remapped.buttons |= JP_BUTTON_DR;
+            if (old_y < 128 - TH)      remapped.buttons |= JP_BUTTON_DU;
+            else if (old_y > 128 + TH) remapped.buttons |= JP_BUTTON_DD;
+            // d-pad -> stick
             uint8_t ax = 128, ay = 128;
-            if (dpad_bits & JP_BUTTON_DL) ax = 0;
-            else if (dpad_bits & JP_BUTTON_DR) ax = 255;
-            if (dpad_bits & JP_BUTTON_DU) ay = 0;
-            else if (dpad_bits & JP_BUTTON_DD) ay = 255;
-            if (global_dpad_mode == 1) {
-                remapped.analog[0] = ax;
-                remapped.analog[1] = ay;
-            } else {
-                remapped.analog[2] = ax;
-                remapped.analog[3] = ay;
-            }
+            if (dpad_bits & JP_BUTTON_DL) ax = 0; else if (dpad_bits & JP_BUTTON_DR) ax = 255;
+            if (dpad_bits & JP_BUTTON_DU) ay = 0; else if (dpad_bits & JP_BUTTON_DD) ay = 255;
+            remapped.analog[sx] = ax;
+            remapped.analog[sy] = ay;
         }
         event = &remapped;
     }
@@ -1288,6 +1419,12 @@ void router_submit_input(const input_event_t* event) {
         if (b & JP_BUTTON_L2) swapped |= JP_BUTTON_L1;
         if (b & JP_BUTTON_R2) swapped |= JP_BUTTON_R1;
         remapped.buttons = swapped;
+        // The analog trigger axes must follow the swap: a trigger moved to L1/R1
+        // becomes a digital bumper, so drive the L2/R2 analog axes from the
+        // swapped digital state (0/255) instead of leaving the old trigger
+        // travel firing on them.
+        remapped.analog[ANALOG_L2] = (swapped & JP_BUTTON_L2) ? 255 : 0;
+        remapped.analog[ANALOG_R2] = (swapped & JP_BUTTON_R2) ? 255 : 0;
         event = &remapped;
     }
 
@@ -1637,15 +1774,29 @@ void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
 
 
 void router_set_dpad_mode(uint8_t mode) {
-    if (mode <= 2) {
+    if (mode <= 3) {
         global_dpad_mode = mode;
-        static const char* names[] = {"D-PAD", "LEFT STICK", "RIGHT STICK"};
+        static const char* names[] = {
+            "NORMAL", "D-PAD<->LSTICK", "D-PAD<->RSTICK", "LSTICK<->RSTICK"
+        };
         printf(LOG_TAG "D-pad mode: %s\n", names[mode]);
     }
 }
 
 void router_set_combo(uint8_t index, uint32_t input_mask, uint32_t output_mask) {
     if (index >= ROUTER_COMBO_MAX) return;
+    // The first app-registered combo takes ownership of the table: wipe the
+    // built-in defaults installed by router_init() so they can't linger in slots
+    // the app leaves unused.
+    if (router_default_combos_active) {
+        router_default_combos_active = false;
+        for (int i = 0; i < ROUTER_COMBO_MAX; i++) {
+            router_combos[i].input_mask = 0;
+            router_combos[i].output_mask = 0;
+            router_combos[i].required_layout = 0;
+            router_combos[i].fired = false;
+        }
+    }
     router_combos[index].input_mask = input_mask;
     router_combos[index].output_mask = output_mask;
     router_combos[index].required_layout = 0;  // any layout by default
@@ -1660,3 +1811,8 @@ void router_set_combo_layout(uint8_t index, uint8_t required_layout) {
 void router_set_shoulder_swap(bool on) {
     global_shoulder_swap = on;
 }
+
+// Live getters — reflect the boot-restored value plus any hotkey/CDC change
+// immediately (unlike the flash record, whose write is debounced ~5s).
+uint8_t router_get_dpad_mode(void) { return global_dpad_mode; }
+bool router_get_shoulder_swap(void) { return global_shoulder_swap; }
