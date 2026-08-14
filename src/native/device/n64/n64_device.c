@@ -277,7 +277,6 @@ void __not_in_flash_func(update_output)(void)
     }
     if (playersCount > 0) {
         n64_player_assigned = true;
-        profile_check_switch_combo(last_buttons);
     }
 
     if (!event || playersCount == 0) return;

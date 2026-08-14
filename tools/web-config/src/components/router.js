@@ -44,17 +44,23 @@ export class RouterCard {
             </div>
 
             <div class="card">
-                <h2>D-Pad Mode</h2>
+                <h2>D-Pad / Stick Swap</h2>
                 <div class="card-content">
                     <div class="row">
                         <span class="label">Mode</span>
                         <select id="dpadMode">
-                            <option value="0">D-Pad</option>
-                            <option value="1">Left Stick</option>
-                            <option value="2">Right Stick</option>
+                            <option value="0">Normal</option>
+                            <option value="1">D-Pad ↔ Left Stick</option>
+                            <option value="2">D-Pad ↔ Right Stick</option>
+                            <option value="3">Left ↔ Right Stick</option>
                         </select>
                     </div>
-                    <p class="hint">Maps d-pad buttons to analog stick. Applies to all input sources.</p>
+                    <p class="hint">Swaps the d-pad with a stick (both directions), or swaps the two sticks. Also on-controller: SELECT + D-pad Left/Right. Applies to all input sources.</p>
+                    <div class="row">
+                        <span class="label">Shoulder Swap</span>
+                        <input type="checkbox" id="shoulderSwap">
+                    </div>
+                    <p class="hint">Swaps L1↔L2 and R1↔R2. Also on-controller: START + D-pad Up.</p>
                 </div>
             </div>`;
 
@@ -63,6 +69,7 @@ export class RouterCard {
         });
         this.el.querySelector('#routerSaveBtn').addEventListener('click', () => this.save());
         this.el.querySelector('#dpadMode').addEventListener('change', (e) => this.setDpadMode(e.target.value));
+        this.el.querySelector('#shoulderSwap').addEventListener('change', (e) => this.setShoulderSwap(e.target.checked));
 
         // Dirty tracking — only the routing/merge mode card needs save+reboot
         this.dirty = new DirtyTracker(
@@ -77,6 +84,7 @@ export class RouterCard {
             this.el.querySelector('#routingMode').value = config.routing_mode || 0;
             this.el.querySelector('#mergeMode').value = config.merge_mode || 0;
             this.el.querySelector('#dpadMode').value = config.dpad_mode || 0;
+            this.el.querySelector('#shoulderSwap').checked = !!config.shoulder_swap;
             this.el.querySelector('#mergeModeRow').style.display =
                 (config.routing_mode || 0) === 1 ? '' : 'none';
             this.dirty?.snapshot();
@@ -185,10 +193,19 @@ export class RouterCard {
     async setDpadMode(mode) {
         try {
             await this.protocol.setDpadMode(parseInt(mode));
-            const names = ['D-Pad', 'Left Stick', 'Right Stick'];
-            this.log(`D-Pad mode: ${names[parseInt(mode)]}`, 'success');
+            const names = ['Normal', 'D-Pad ↔ Left Stick', 'D-Pad ↔ Right Stick', 'Left ↔ Right Stick'];
+            this.log(`D-Pad / Stick swap: ${names[parseInt(mode)]}`, 'success');
         } catch (e) {
             this.log(`Failed to set D-Pad mode: ${e.message}`, 'error');
+        }
+    }
+
+    async setShoulderSwap(on) {
+        try {
+            await this.protocol.setShoulderSwap(on);
+            this.log(`Shoulder swap: ${on ? 'on' : 'off'}`, 'success');
+        } catch (e) {
+            this.log(`Failed to set shoulder swap: ${e.message}`, 'error');
         }
     }
 }

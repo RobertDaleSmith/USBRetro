@@ -34,6 +34,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **SC2 View/Menu (S1/S2)** mapping in the USB parser corrected to match the BLE/SDL layout.
 - **Nuon spinner axis** — restored the spinner (paddle) axis that was dropped in the router migration, so Nuon output drives the spinner again.
 - **Bluetooth driver link safety** — the BTHID device-driver registry could be discarded by the linker's `--gc-sections` (RP2040, ESP32, nRF), silently dropping BT controller support; the registry is now link-guarded, and `CONFIG_BT_HOST` is defined for manual-BT Pico apps (a #188 regression).
+- **Waveshare RP2350-USB-A LED colors** — the onboard WS2812 is an RGB WS2812B (not RGBW/GRB), so status and player-LED colors rendered wrong; the byte order and `IS_RGBW` are now board-scoped correctly, leaving every other board untouched (#218, thanks @Atreus171).
+- **D-pad mode hotkey + persistence now work on every app.** The SELECT+D-pad d-pad-output-mode toggle (D-pad → left/right stick) and its save/restore-across-reboot were only wired into `gc2usb`/`controller_btusb` — every other app (`usb2usb`, `bt2usb`, …) registered no combos, so the hotkey did nothing and the saved mode never came back. The router now installs the SELECT+D-pad hotkeys by default and restores the saved d-pad mode (and shoulder-swap) on boot for all apps; apps with their own combo tables take over on their first `router_set_combo()` and are unaffected (gap diagnosed via #207, thanks @daveq86).
 
 ### Build & CI
 - Release build matrix expanded to include **psx2usb**, **gc2usb_pico**, and **jag2usb**.

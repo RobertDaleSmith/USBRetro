@@ -497,10 +497,10 @@ void wii_host_task(void) {
                 output_target_t primary = router_get_primary_output();
                 if (primary == OUTPUT_TARGET_NONE) primary = OUTPUT_TARGET_USB_DEVICE;
                 if (held == trigger_up) {
-                    profile_cycle_next(primary);
+                    profile_cycle_next(primary, true);
                     printf("[wii_host] profile: next (output=%d)\n", (int)primary);
                 } else {
-                    profile_cycle_prev(primary);
+                    profile_cycle_prev(primary, true);
                     printf("[wii_host] profile: prev (output=%d)\n", (int)primary);
                 }
                 leds_indicate_profile(profile_get_active_index(primary));

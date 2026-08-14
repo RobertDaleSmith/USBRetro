@@ -195,6 +195,10 @@ void router_set_dpad_mode(uint8_t mode);
 // Set global shoulder swap (L1<->L2, R1<->R2) applied to all inputs.
 void router_set_shoulder_swap(bool on);
 
+// Live d-pad mode / shoulder-swap state (reflects hotkey + CDC changes at once).
+uint8_t router_get_dpad_mode(void);
+bool router_get_shoulder_swap(void);
+
 // Set button combo hotkeys (up to ROUTER_COMBO_MAX)
 // input_mask: buttons that must all be held (0 = disabled)
 // output_mask: upper byte = action, lower 22 bits = output buttons

@@ -613,7 +613,7 @@ void app_init(void)
         if (flash_load(&flash_data) && flash_data.router_saved) {
             if (flash_data.routing_mode <= 2) router_cfg.mode = flash_data.routing_mode;
             if (flash_data.merge_mode <= 2) router_cfg.merge_mode = flash_data.merge_mode;
-            if (flash_data.dpad_mode <= 2) router_set_dpad_mode(flash_data.dpad_mode);
+            // (d-pad mode is restored centrally by router_init().)
 #if REQUIRE_BT_INPUT
             bt_input_enabled = flash_data.bt_input_enabled != 0;
 #endif
