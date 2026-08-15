@@ -217,6 +217,9 @@ jobs:
           - app: controller_btusb_feather_nrf52840
             board: adafruit_feather_nrf52840
             app_type: controller_btusb
+          - app: controller_btusb_seeed_xiao_nrf52840
+            board: xiao_ble
+            app_type: controller_btusb
 
     steps:
       - name: Checkout code with submodules
