@@ -534,7 +534,10 @@ uint8_t flash_get_active_profile_index(void)
 // Idempotent — skips the write if value + saved-flag already match.
 void flash_set_dpad_mode(uint8_t mode)
 {
-    if (mode > 2) return;
+    // Valid range is 0-3. Mode 3 (LSTICK<->RSTICK) was added alongside the
+    // 4-position d-pad slider hotkey; this guard still said 2 and silently
+    // dropped it, so the slider's rightmost position never survived a reboot.
+    if (mode > 3) return;
     if (!runtime_settings_loaded) {
         flash_t tmp;
         if (!flash_load(&tmp)) memset(&tmp, 0, sizeof(tmp));

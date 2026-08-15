@@ -114,7 +114,7 @@ typedef struct {
     uint8_t router_saved;        // Non-zero if router settings were explicitly saved
     uint8_t routing_mode;        // Router mode (0=simple, 1=merge, 2=broadcast)
     uint8_t merge_mode;          // Merge mode (0=priority, 1=blend, 2=all)
-    uint8_t dpad_mode;           // D-pad mode (0=dpad, 1=left stick, 2=right stick)
+    uint8_t dpad_mode;           // D-pad mode (0=normal, 1=dpad<->Lstick, 2=dpad<->Rstick, 3=Lstick<->Rstick)
     uint8_t bt_input_enabled;    // BT Central scanning (0=off, 1=on)
 
     // Native output pin overrides
