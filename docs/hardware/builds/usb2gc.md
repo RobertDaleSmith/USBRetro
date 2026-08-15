@@ -30,14 +30,29 @@ The GameCube controller port uses a proprietary connector. Cut a GC extension ca
 | GC Pin | Signal | RP2040 GPIO | Notes |
 |--------|--------|-------------|-------|
 | 1 | 5V | RAW (KB2040) / VBUS (Pico) / 5V (RP2040-Zero) | Powers the board from the console |
-| 6 | 3.3V | GPIO 6 | Console-presence sense — distinguishes "plugged into a GameCube" from "powered over USB only" |
-| 2 | Data | GPIO 7 | Bidirectional joybus data line |
+| 2 | Data | GPIO 7 | Bidirectional joybus data line — **and the console-detect line** |
 | 3, 4 | GND | GND | Tie both GC ground wires to the board's GND |
 | 5 | (unused) | — | Leave disconnected |
+| 6 | 3.3V | *(leave disconnected)* | Not used by current firmware — see below |
+
+**Only three signals matter: Pin 2 (data), Pin 1 (5V), and the two grounds.** Get those right and the adapter works.
 
 Cable wire colors vary by manufacturer — verify with a multimeter against the [GameCube Pinout reference](../../output/gamecube.md) before soldering.
 
-When no console is detected (USB-only power), the adapter boots into USB device + CDC config mode so you can plug it into a computer for setup. With the console connected and powering the 3.3V sense line, the adapter runs in play mode as a GameCube controller.
+#### How console detection actually works
+
+The firmware detects the console on the **data line, GPIO 7** — not on a separate sense wire. At boot it configures GPIO 7 as an input with the RP2040's internal pull-down (~50 kΩ) and waits 200 ms. A powered console holds joybus high through its own ~1 kΩ pull-up, which easily wins against the pull-down:
+
+- **GPIO 7 reads HIGH** → console present → **play mode** (controller input → GameCube)
+- **GPIO 7 reads LOW** → no console → **config mode** (USB device with CDC for [config.joypad.ai](https://config.joypad.ai))
+
+Detection then hands the pin over to the joybus PIO program, which reconfigures it with a pull-up.
+
+!!! warning "Detection is one-shot — power the console first"
+    The probe runs **once**, 200 ms after the board powers up, with no re-check and no recovery. If the adapter powers up before the console does, it latches into config mode and stays there until it is power-cycled. Power the console on with the adapter already plugged in, and if the adapter comes up in config mode by mistake, **unplug and replug it** — that is the fix, not a bad solder joint.
+
+!!! note "About GC Pin 6 (3.3V)"
+    Earlier firmware sensed the console on a dedicated 3.3V wire at GPIO 6, and earlier versions of this guide told you to wire it. Detection moved to the data line in April 2026 (`a12cc10b`), and **nothing in the firmware reads GPIO 6 any more** — `GC_3V3_PIN` is still defined in `gamecube_device.h` but has no remaining callers. Leaving that wire connected on an existing build is harmless; on a new build, skip it. The reference photos below predate this change and still show the wire.
 
 !!! warning "Don't power the adapter from both ends at once"
     The GameCube cable's 5V wire connects to the board's 5V/RAW/VBUS rail, which is the same rail as USB-C/microUSB VBUS through the board's protection diode. Plugging the adapter into a console **and** a computer's USB port at the same time ties two 5V supplies together — you can backfeed one into the other and stress the regulators on either side. Use the console's power for play mode, or USB power for config mode, never both.
@@ -49,19 +64,44 @@ The board's native USB port is the host. Plug your USB controller into it throug
 !!! note "KB2040: bridge the USB power jumper"
     On the KB2040, bridge the solder pads on the underside next to the USB-C port to enable full USB host power. Without the bridge, attached controllers may not get enough current to enumerate or run rumble. Pi Pico and RP2040-Zero have this routed by default and need no jumper.
 
-For Bluetooth controllers, none of these boards have an onboard radio — plug a [compatible USB BT dongle](../../input/bluetooth.md#bluetooth-dongles) into the host port (use a USB hub if you also need a wired controller alongside).
+For Bluetooth controllers, none of these boards have an onboard radio — plug a [compatible USB BT dongle](../../input/bluetooth.md#bluetooth-dongles) into the host port (use a USB hub if you also need a wired controller alongside). If you only want Bluetooth controllers, the Pico W build below is simpler.
+
+### Bluetooth-only: bt2gc on a Pico W
+
+The Pico W and Pico 2 W have a built-in radio, so `bt2gc` takes Bluetooth controllers straight to the GameCube with **no USB host and no dongle**:
+
+| Board | Build Target |
+|-------|--------------|
+| Raspberry Pi Pico W | `bt2gc_pico_w` |
+| Raspberry Pi Pico 2 W | `bt2gc_pico2_w` |
+
+**The GameCube wiring is identical** — 5V to VBUS, data to **GPIO 7**, both grounds to GND, Pin 6 left disconnected. Console detection is the same one-shot data-line probe described above, so the same power-on ordering applies.
+
+Differences from the USB build:
+
+- **No USB-A adapter or OTG cable.** The board's USB port is not a host in this build; it is only used for power, flashing, and config mode.
+- **No NeoPixel status LED** — `bt2gc` is built with `CONFIG_NO_NEOPIXEL`, so ignore the LED step under [Testing](#testing).
+- **Pairing is on the BOOTSEL button**: **click** opens a 60-second pairing window, **hold** disconnects everything and clears all bonds. Leave the button reachable when you case the build.
+- With no console attached, the adapter comes up as a USB device instead, so you can still reach [config.joypad.ai](https://config.joypad.ai); a **double-click** cycles the USB output mode there.
+
+One controller drives the single GameCube port. Wiimotes, DualShock/DualSense, Switch Pro and the other Bluetooth pads in the [BT controller list](../../input/bluetooth.md) all route through the same drivers as `bt2usb`.
+
+```bash
+make bt2gc_pico_w
+make flash-bt2gc_pico_w
+```
 
 ## Reference Builds
 
 ### KB2040
 
-A finished KB2040 + GC cable build — five wires from the cable land on RAW (5V), GPIO 6 (3.3V sense), GPIO 7 (data), and a pair of GND pads:
+A finished KB2040 + GC cable build. Five wires from the cable land on RAW (5V), GPIO 6, GPIO 7 (data), and a pair of GND pads — this build predates the detection change, so the GPIO 6 wire is present but unused. A new build only needs four:
 
 ![Reference KB2040 build with GameCube extension cable soldered to RAW, GPIO 6, GPIO 7, and GND pads](../../images/usb2gc-kb2040-wired.png)
 
 ### RP2040-Zero
 
-Same wiring on a Waveshare RP2040-Zero — only the physical pad locations and the NeoPixel/I2C settings change, the GC pins are identical:
+Same wiring on a Waveshare RP2040-Zero — only the physical pad locations and the NeoPixel/I2C settings change, the GC pins are identical (and the GPIO 6 wire shown here is likewise no longer needed):
 
 ![Reference RP2040-Zero wiring for usb2gc — GPIO 6/7 on the joybus side, RAW for 5V, GND tied together](../../images/wiring_usb2gc_rp2040zero.png)
 
