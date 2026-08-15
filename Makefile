@@ -250,11 +250,80 @@ APP_controller_btusb_feather_rp2040_usb_host := feather_usbhost controller_btusb
 
 # All apps (note: controller_macropad not included - build explicitly with 'make controller_macropad')
 # Note: usb2loopy_kb2040, snes23do_rp2040zero excluded until more mature
-APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb2n64_kb2040 usb2dc_kb2040 usb2dc_rp2040zero usb2neogeo_kb2040 usb2neogeo_pico usb2neogeo_rp2040zero usb2neogeo_retrofrog n642dc_kb2040 n642dc_pico2_w n642nuon_pico usb23do_rp2040zero usb2uart_kb2040 usb2usb_pico usb2usb_pico_w usb2usb_pico2_w usb2usb_feather_rp2040 usb2usb_feather_rp2040_usb_host usb2usb_feather_rp2040_max3421 usb2usb_feather_rp2040_usb_host_max3421 usb2usb_rp2040zero usb2usb_rp2350usba bt2usb_pico_w bt2usb_pico2_w btusb2usb_pico_w btusb2usb_pico2_w usb2ble_pico_w usb2ble_pico2_w bt2nuon_pico_w bt2nuon_pico2_w bt2n64_pico_w bt2n64_pico2_w snes2usb_kb2040 n642usb_kb2040 gc2usb_kb2040 gc2usb_rp2040zero gc2usb_feather_usbhost gc2eth_rp2040_eth gc2eth_feather_usbhost nes2usb_kb2040 nes2usb_pico_w pce2usb_kb2040 pce2usb_pico pce2usb_pico_w jag2usb_pico_w controller_fisherprice_v1_kb2040 controller_fisherprice_v2_kb2040 controller_alpakka_pico usb2ami_rp2040zero usb2ami_xiao
+# One target per line: a shared single-line list conflicts on every
+# concurrent app addition. Add new targets above the $(strip) anchor.
+APPS :=
+APPS += usb2pce_kb2040
+APPS += usb2gc_kb2040
+APPS += usb2gc_rp2040zero
+APPS += usb2nuon_kb2040
+APPS += usb2n64_kb2040
+APPS += usb2dc_kb2040
+APPS += usb2dc_rp2040zero
+APPS += usb2neogeo_kb2040
+APPS += usb2neogeo_pico
+APPS += usb2neogeo_rp2040zero
+APPS += usb2neogeo_retrofrog
+APPS += n642dc_kb2040
+APPS += n642dc_pico2_w
+APPS += n642nuon_pico
+APPS += usb23do_rp2040zero
+APPS += usb2uart_kb2040
+APPS += usb2usb_pico
+APPS += usb2usb_pico_w
+APPS += usb2usb_pico2_w
+APPS += usb2usb_feather_rp2040
+APPS += usb2usb_feather_rp2040_usb_host
+APPS += usb2usb_feather_rp2040_max3421
+APPS += usb2usb_feather_rp2040_usb_host_max3421
+APPS += usb2usb_rp2040zero
+APPS += usb2usb_rp2350usba
+APPS += bt2usb_pico_w
+APPS += bt2usb_pico2_w
+APPS += btusb2usb_pico_w
+APPS += btusb2usb_pico2_w
+APPS += usb2ble_pico_w
+APPS += usb2ble_pico2_w
+APPS += bt2nuon_pico_w
+APPS += bt2nuon_pico2_w
+APPS += bt2n64_pico_w
+APPS += bt2n64_pico2_w
+APPS += snes2usb_kb2040
+APPS += n642usb_kb2040
+APPS += gc2usb_kb2040
+APPS += gc2usb_rp2040zero
+APPS += gc2usb_feather_usbhost
+APPS += gc2eth_rp2040_eth
+APPS += gc2eth_feather_usbhost
+APPS += nes2usb_kb2040
+APPS += nes2usb_pico_w
+APPS += pce2usb_kb2040
+APPS += pce2usb_pico
+APPS += pce2usb_pico_w
+APPS += jag2usb_pico_w
+APPS += controller_fisherprice_v1_kb2040
+APPS += controller_fisherprice_v2_kb2040
+APPS += controller_alpakka_pico
+APPS += usb2ami_rp2040zero
+APPS += usb2ami_xiao
+APPS := $(strip $(APPS))
 
 # Stable apps for release
 # Note: usb2loopy_kb2040, snes23do_rp2040zero excluded until more mature
-RELEASE_APPS := usb2pce_kb2040 usb2gc_kb2040 usb2gc_rp2040zero usb2nuon_kb2040 usb23do_rp2040zero usb2usb_feather_rp2040 usb2usb_feather_rp2040_usb_host usb2usb_rp2040zero bt2usb_pico_w snes2usb_kb2040
+# One target per line: a shared single-line list conflicts on every
+# concurrent app addition. Add new targets above the $(strip) anchor.
+RELEASE_APPS :=
+RELEASE_APPS += usb2pce_kb2040
+RELEASE_APPS += usb2gc_kb2040
+RELEASE_APPS += usb2gc_rp2040zero
+RELEASE_APPS += usb2nuon_kb2040
+RELEASE_APPS += usb23do_rp2040zero
+RELEASE_APPS += usb2usb_feather_rp2040
+RELEASE_APPS += usb2usb_feather_rp2040_usb_host
+RELEASE_APPS += usb2usb_rp2040zero
+RELEASE_APPS += bt2usb_pico_w
+RELEASE_APPS += snes2usb_kb2040
+RELEASE_APPS := $(strip $(RELEASE_APPS))
 
 # Release directory
 RELEASE_DIR := releases
