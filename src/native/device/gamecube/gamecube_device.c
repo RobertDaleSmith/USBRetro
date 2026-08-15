@@ -521,6 +521,94 @@ static bool gc_set_native_config(const char* json, char* response_buf, uint16_t 
 }
 
 // ============================================================================
+// CONSOLE PRESENCE DETECTION
+// ============================================================================
+// The joybus data line idles HIGH only while a powered console holds it up
+// through its ~1k pull-up; our internal ~50k pull-down wins when nothing is
+// attached. That is the whole test: HIGH -> play mode, LOW -> CDC config mode.
+//
+// It used to be one gpio_get() taken 200 ms after boot, and a single sample can
+// miss two ways. The adapter draws its power from the same connector as the
+// console, so both come up together and the console's line is not guaranteed to
+// be high at t=200 ms; and a sample can land inside a joybus transfer, which
+// drives the line low for the length of the burst. Either miss stuck the
+// adapter in config mode for good -- nothing re-checked it and nothing
+// recovered, so the only way out was a replug in the right order (#164, #165).
+//
+// So: keep sampling for a while instead of once, and re-check while in config
+// mode so a console that shows up late is picked up without a replug.
+
+#define GC_DETECT_SETTLE_MS     200  // let the line settle before the first sample
+#define GC_DETECT_WINDOW_MS     800  // keep sampling this long before giving up
+#define GC_DETECT_POLL_MS         5
+
+#define GC_RECHECK_INTERVAL_MS  250  // how often to re-sample while in config mode
+#define GC_RECHECK_CONFIRM       10  // consecutive highs (2.5 s) before rebooting
+
+static uint gc_detect_pin = GC_DATA_PIN;
+
+uint gamecube_detect_pin(void)
+{
+    flash_init();  // idempotent -- needed this early to read the pin override
+    flash_t* settings = flash_get_settings();
+    if (settings && settings->joybus_data_pin > 0 && settings->joybus_data_pin <= 28) {
+        return settings->joybus_data_pin;
+    }
+    return GC_DATA_PIN;
+}
+
+bool gamecube_console_detect(void)
+{
+    // Honour the runtime pin override so detection uses the same pin joybus
+    // init will claim later.
+    gc_detect_pin = gamecube_detect_pin();
+
+    gpio_init(gc_detect_pin);
+    gpio_set_dir(gc_detect_pin, GPIO_IN);
+    gpio_pull_down(gc_detect_pin);
+
+    sleep_ms(GC_DETECT_SETTLE_MS);
+    if (gpio_get(gc_detect_pin)) return true;  // unchanged 200 ms boot into play mode
+
+    for (uint32_t waited = 0; waited < GC_DETECT_WINDOW_MS; waited += GC_DETECT_POLL_MS) {
+        sleep_ms(GC_DETECT_POLL_MS);
+        if (gpio_get(gc_detect_pin)) {
+            printf("[gc] console detected after %lu ms\n",
+                   (unsigned long)(GC_DETECT_SETTLE_MS + waited + GC_DETECT_POLL_MS));
+            return true;
+        }
+    }
+    return false;
+}
+
+void gamecube_config_mode_task(void)
+{
+    static uint32_t last_sample_ms = 0;
+    static uint8_t high_streak = 0;
+
+    uint32_t now = platform_time_ms();
+    if ((uint32_t)(now - last_sample_ms) < GC_RECHECK_INTERVAL_MS) return;
+    last_sample_ms = now;
+
+    // Nothing but a console can pull this line high: joybus never claimed the
+    // pin in config mode, so it is still an input with our pull-down engaged.
+    if (!gpio_get(gc_detect_pin)) {
+        high_streak = 0;
+        return;
+    }
+    if (++high_streak < GC_RECHECK_CONFIRM) return;
+    high_streak = 0;
+
+    // Don't yank the board out from under someone who is configuring it: a CDC
+    // host has to assert DTR for this to be true, so a plain power source or a
+    // console-only hookup -- the case we are here to recover -- does not count.
+    if (tud_cdc_connected()) return;
+
+    printf("[gc] console appeared after boot - rebooting into play mode\n");
+    platform_reboot();
+}
+
+// ============================================================================
 // OUTPUT INTERFACE
 // ============================================================================
 

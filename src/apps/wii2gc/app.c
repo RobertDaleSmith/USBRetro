@@ -64,20 +64,11 @@ const OutputInterface** app_get_output_interfaces(uint8_t* count)
     // Detect console via GC_DATA joybus signal pin (same as usb2gc).
     // Console pull-up (~1kΩ to 3.3V) keeps line HIGH when powered;
     // our pull-down (~50kΩ) dominates when no console → LOW → config mode.
-    // Honour runtime pin override from web config.
-    flash_init();  // idempotent — needed early to read pin override
-    flash_t* settings = flash_get_settings();
-    uint detect_pin = GC_DATA_PIN;
-    if (settings && settings->joybus_data_pin > 0 && settings->joybus_data_pin <= 28) {
-        detect_pin = settings->joybus_data_pin;
-    }
-
-    gpio_init(detect_pin);
-    gpio_set_dir(detect_pin, GPIO_IN);
-    gpio_pull_down(detect_pin);
-    sleep_ms(200);
-
-    if (!gpio_get(detect_pin)) {
+    // gamecube_console_detect() handles the pin override, the settle delay and
+    // the sampling window; see gamecube_device.c for why one sample wasn't
+    // enough.
+    if (!gamecube_console_detect()) {
+        // app_task() keeps re-checking, so a console seen later needs no replug.
         gc_config_mode = true;
         *count = 1;
         return cdc_outputs;
@@ -156,5 +147,8 @@ void app_init(void)
 
 void app_task(void)
 {
-    (void)0;
+    if (gc_config_mode) {
+        // Watch for a console that came up after we booted.
+        gamecube_config_mode_task();
+    }
 }
