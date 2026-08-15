@@ -73,13 +73,21 @@ static uint32_t map_n64_to_jp(const n64_report_t* report)
 }
 
 // Convert N64 signed stick to unsigned (0-255, 128 = center)
-// N64 sticks typically only reach ±80 to ±85, not ±128
-// Scale up to use full range
-#define N64_STICK_MAX 80  // Typical max deflection
+// N64 sticks do not reach ±128 — an OEM stick peaks in the mid-80s — so the
+// native reading is scaled up to the full HID range here.
+//
+// The reference deflection is 84, matching the two other places in this tree
+// that carry an N64 stick constant:
+//   - native/device/n64/n64_device.c   N64_STICK_RANGE 84  (HID ±127 → N64)
+//   - native/host/lodgenet/lodgenet_host.c  N64_STICK_MAX 84  (native N64 → HID)
+// BlueRetro independently uses the same value (0x54) for its N64 axis metadata.
+// Keep all three in sync; a mismatch shows up as a gain difference between two
+// of our own adapters reading the same controller.
+#define N64_STICK_MAX 84  // Authentic max cardinal deflection
 
 static uint8_t convert_stick_axis(int8_t value)
 {
-    // Scale from N64 range [-80, +80] to [-128, +127]
+    // Scale from N64 range [-84, +84] to [-128, +127]
     int32_t scaled = ((int32_t)value * 127) / N64_STICK_MAX;
 
     // Clamp to valid range

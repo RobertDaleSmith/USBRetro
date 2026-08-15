@@ -61,7 +61,8 @@ static uint32_t last_poll_us = 0;
 // device scales HID ±127 → ±84, so with MAX == RANGE the two cancel and a native
 // N64 (LodgeNet clone) stick passes through to the N64 (joybus) output 1:1 — no
 // gain, no reshaping. (Full-range USB→N64 apps still get the device's ±84 clamp.)
-// Keep in sync with N64_STICK_RANGE in native/device/n64/n64_device.c.
+// Keep in sync with N64_STICK_RANGE in native/device/n64/n64_device.c and with
+// N64_STICK_MAX in native/host/n64/n64_host.c (the other native-N64 reader).
 #define N64_STICK_MAX 84
 
 // ============================================================================
