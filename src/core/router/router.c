@@ -1346,24 +1346,39 @@ void router_submit_input(const input_event_t* event) {
         }
 
         bool held = (event->buttons & in) == in;
-        if (!held) {
-            router_combos[c].fired = false;
-            router_combos[c].held_since = 0;
-            continue;
+
+        // Decide whether to run the combo action this pass.
+        //
+        // Default combos require a deliberate ~0.7s hold, so a quick in-game
+        // SELECT/START + D-pad passes straight through instead of switching a
+        // profile. The catch: the USB HID input path is change-gated (a driver
+        // only submits an event when the report *changes* — hid_gamepad.c), so a
+        // static hold produces no events after the press and a timer can't
+        // advance on the input path alone. So fire on WHICHEVER edge arrives:
+        // while still held once the hold has elapsed (streaming controllers), or
+        // on the release edge if it was held long enough (change-gated ones). A
+        // quick tap (< hold) reaches neither and passes through. App-registered
+        // combos stay instant.
+        bool process;
+        if (!router_default_combos_active) {
+            process = held;
+        } else {
+            uint32_t now = platform_time_ms();
+            if (held && router_combos[c].held_since == 0) {
+                router_combos[c].held_since = now ? now : 1;  // 0 = not held
+            }
+            bool elapsed = router_combos[c].held_since != 0 &&
+                           (now - router_combos[c].held_since) >= ROUTER_DEFAULT_COMBO_HOLD_MS;
+            process = held ? elapsed                                // streaming: fire while held
+                           : (elapsed && !router_combos[c].fired);  // release: fire on the up-edge
         }
 
-        // Built-in default combos require a brief deliberate hold before they
-        // fire or consume the buttons. Until the hold elapses we do NOT touch
-        // the outgoing report, so a quick in-game SELECT/START + D-pad passes
-        // straight through. App-registered combos keep instant behavior.
-        if (router_default_combos_active) {
-            uint32_t now = platform_time_ms();
-            if (router_combos[c].held_since == 0) {
-                router_combos[c].held_since = now ? now : 1;  // 0 means "not held"
+        if (!process) {
+            if (!held) {  // released (or quick tap): clear state, pass through
+                router_combos[c].fired = false;
+                router_combos[c].held_since = 0;
             }
-            if ((now - router_combos[c].held_since) < ROUTER_DEFAULT_COMBO_HOLD_MS) {
-                continue;  // hold not met yet — pass the buttons through
-            }
+            continue;
         }
 
         if (!did_remap) {
@@ -1454,6 +1469,14 @@ void router_submit_input(const input_event_t* event) {
                 }
                 remapped.buttons &= ~in;
                 break;
+        }
+
+        // If this was the release-edge fire (change-gated controller went quiet
+        // during the hold), the action just ran via the !fired latch above —
+        // clear the hold so the next press starts fresh.
+        if (!held) {
+            router_combos[c].fired = false;
+            router_combos[c].held_since = 0;
         }
     }
     if (did_remap) event = &remapped;
