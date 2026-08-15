@@ -273,7 +273,16 @@ static struct {
     uint8_t required_layout;   // controller_layout_t, 0 = any layout
     bool fired;
     uint32_t held_since;       // ms timestamp the combo became fully held (0 = not held)
+    uint32_t held_dev;         // device that owns the in-progress hold (0 = none)
 } router_combos[ROUTER_COMBO_MAX];
+
+// Identity of the device an event came from, for combo hold ownership. Raw
+// dev_addr/instance rather than the shared player slot: a Joy-Con Grip's two
+// interfaces are one player but only one of them is pressing the combo, so the
+// other half's traffic must not count as the holder. Never 0 — 0 means "none".
+static inline uint32_t combo_dev_key(const input_event_t* event) {
+    return 0x10000u | ((uint32_t)event->dev_addr << 8) | (uint8_t)event->instance;
+}
 
 // Built-in default combos (SELECT/START + D-pad) require a brief deliberate hold
 // before they fire AND before they consume the buttons, so a quick in-game
@@ -1342,6 +1351,8 @@ void router_submit_input(const input_event_t* event) {
         if (router_combos[c].required_layout &&
             event->layout != router_combos[c].required_layout) {
             router_combos[c].fired = false;
+            router_combos[c].held_since = 0;   // both halves of the state, or a
+            router_combos[c].held_dev = 0;     // stale timer outlives the filter
             continue;
         }
 
@@ -1359,13 +1370,24 @@ void router_submit_input(const input_event_t* event) {
         // on the release edge if it was held long enough (change-gated ones). A
         // quick tap (< hold) reaches neither and passes through. App-registered
         // combos stay instant.
+        //
+        // The hold is owned by ONE device. router_combos[] is global while the
+        // router runs up to MAX_PLAYERS_PER_OUTPUT players, so without an owner
+        // every event from a second controller arrives with held == false and
+        // resets the timer — on a 2+ pad adapter player 1 could never accumulate
+        // 0.7s and the default hotkeys would be unreachable.
         bool process;
         if (!router_default_combos_active) {
             process = held;
         } else {
+            uint32_t key = combo_dev_key(event);
+            if (router_combos[c].held_since != 0 && router_combos[c].held_dev != key) {
+                continue;  // someone else's hold in progress — don't touch it
+            }
             uint32_t now = platform_time_ms();
             if (held && router_combos[c].held_since == 0) {
                 router_combos[c].held_since = now ? now : 1;  // 0 = not held
+                router_combos[c].held_dev = key;
             }
             bool elapsed = router_combos[c].held_since != 0 &&
                            (now - router_combos[c].held_since) >= ROUTER_DEFAULT_COMBO_HOLD_MS;
@@ -1377,6 +1399,7 @@ void router_submit_input(const input_event_t* event) {
             if (!held) {  // released (or quick tap): clear state, pass through
                 router_combos[c].fired = false;
                 router_combos[c].held_since = 0;
+                router_combos[c].held_dev = 0;
             }
             continue;
         }
@@ -1477,6 +1500,7 @@ void router_submit_input(const input_event_t* event) {
         if (!held) {
             router_combos[c].fired = false;
             router_combos[c].held_since = 0;
+            router_combos[c].held_dev = 0;
         }
     }
     if (did_remap) event = &remapped;
@@ -1787,6 +1811,19 @@ void router_reset_outputs(void) {
 void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
     printf(LOG_TAG "Device disconnected: dev_addr=%d, instance=%d\n", dev_addr, instance);
 
+    // Drop any combo hold this device owned. Unplugging mid-hold produces no
+    // further events from it, so nothing else would ever clear the timer and
+    // the next press would measure against a stale timestamp — firing on frame
+    // one, which is exactly what the hold guard exists to prevent.
+    uint32_t gone = 0x10000u | ((uint32_t)dev_addr << 8) | (uint8_t)instance;
+    for (int c = 0; c < ROUTER_COMBO_MAX; c++) {
+        if (router_combos[c].held_dev == gone) {
+            router_combos[c].held_since = 0;
+            router_combos[c].held_dev = 0;
+            router_combos[c].fired = false;
+        }
+    }
+
     // Find the player index for this device
     int player_index = find_player_index(dev_addr, instance);
 
@@ -1921,12 +1958,16 @@ void router_set_combo(uint8_t index, uint32_t input_mask, uint32_t output_mask) 
             router_combos[i].output_mask = 0;
             router_combos[i].required_layout = 0;
             router_combos[i].fired = false;
+            router_combos[i].held_since = 0;
+            router_combos[i].held_dev = 0;
         }
     }
     router_combos[index].input_mask = input_mask;
     router_combos[index].output_mask = output_mask;
     router_combos[index].required_layout = 0;  // any layout by default
     router_combos[index].fired = false;
+    router_combos[index].held_since = 0;
+    router_combos[index].held_dev = 0;
 }
 
 void router_set_combo_layout(uint8_t index, uint8_t required_layout) {
