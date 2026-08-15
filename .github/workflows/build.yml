@@ -19,6 +19,7 @@ on:
 jobs:
   # Build RP2040/RP2350 apps in parallel using matrix (Docker + pico-sdk)
   build-rpi:
+    needs: check-version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,6 +92,7 @@ jobs:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.check-version.outputs.sha }}
           token: ${{ secrets.JOYBOT_PAT || secrets.GITHUB_TOKEN }}
           submodules: recursive
           fetch-depth: 0
@@ -110,7 +112,7 @@ jobs:
 
       - name: Get commit hash
         id: commit
-        run: echo "hash=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "hash=$(echo ${{ needs.check-version.outputs.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build ${{ matrix.app }}
         run: |
@@ -133,6 +135,7 @@ jobs:
   # Build ESP32 targets (separate job — needs ESP-IDF toolchain)
   build-esp:
     name: build-esp (${{ matrix.app }})
+    needs: check-version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -155,13 +158,14 @@ jobs:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.check-version.outputs.sha }}
           token: ${{ secrets.JOYBOT_PAT || secrets.GITHUB_TOKEN }}
           submodules: recursive
           fetch-depth: 0
 
       - name: Get commit hash
         id: commit
-        run: echo "hash=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "hash=$(echo ${{ needs.check-version.outputs.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build ${{ matrix.app }}
         run: |
@@ -197,6 +201,7 @@ jobs:
   # Build nRF52840 targets (separate job — needs nRF Connect SDK)
   build-nrf:
     name: build-nrf (${{ matrix.app }})
+    needs: check-version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -225,6 +230,7 @@ jobs:
       - name: Checkout code with submodules
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.check-version.outputs.sha }}
           token: ${{ secrets.JOYBOT_PAT || secrets.GITHUB_TOKEN }}
           submodules: recursive
           fetch-depth: 0
@@ -269,7 +275,7 @@ jobs:
 
       - name: Get commit hash
         id: commit
-        run: echo "hash=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "hash=$(echo ${{ needs.check-version.outputs.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build ${{ matrix.app }}
         working-directory: nrf
@@ -298,7 +304,7 @@ jobs:
 
   # Collect all artifacts and create combined release package
   collect:
-    needs: [build-rpi, build-esp, build-nrf]
+    needs: [check-version, build-rpi, build-esp, build-nrf]
     runs-on: ubuntu-latest
     steps:
       - name: Download all firmware artifacts
@@ -310,7 +316,7 @@ jobs:
 
       - name: Get commit hash
         id: commit
-        run: echo "hash=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "hash=$(echo ${{ needs.check-version.outputs.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Organize artifacts
         run: |
@@ -579,25 +585,35 @@ jobs:
           ls -lh releases/*.uf2 >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
-  # Check version and optionally bump it (only on manual trigger)
+  # Resolve the version to build, bumping it first on a manual release trigger.
+  #
+  # This job MUST run before the build jobs. When CI bumps VERSION it creates a
+  # new commit, and the build jobs have to check that commit out — otherwise they
+  # compile the pre-bump tree and every UF2 self-reports the OLD version through
+  # JOYPAD_VERSION (CDC `INFO`, the boot banner, and the USB bcdDevice derived in
+  # src/CMakeLists.txt). That is exactly what shipped: the v2.3.0 assets report
+  # 2.2.0 and the v2.4.0 assets report 2.3.0.
   check-version:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       should_release: ${{ steps.check.outputs.should_release }}
+      sha: ${{ steps.resolve.outputs.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.JOYBOT_PAT }}
+          # JOYBOT_PAT is what pushes the bump commit, but it is empty for a
+          # fork pull request. Fall back so checkout still works there; the
+          # bump steps are event-guarded and never run on that path anyway.
+          token: ${{ secrets.JOYBOT_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Bump version (if requested)
-        if: github.event.inputs.bump_version != 'none'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
         id: bump
         run: |
           CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
@@ -626,7 +642,8 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit and push version bump
-        if: github.event.inputs.bump_version != 'none'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump_version != 'none'
+        id: commit_bump
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Bump version to ${{ steps.bump.outputs.new_version }}"
@@ -644,12 +661,41 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "📦 Current VERSION: ${VERSION}"
 
+      # The commit the build jobs must check out. When the bump ran, that is the
+      # bump commit (which github.sha predates); otherwise the triggering commit.
+      - name: Resolve build ref
+        id: resolve
+        run: |
+          SHA="${{ steps.commit_bump.outputs.commit_hash }}"
+          if [ -z "$SHA" ]; then
+            SHA="${{ github.sha }}"
+            echo "🔗 No version bump — building ${SHA}"
+          else
+            echo "🔗 Version bumped — building the bump commit ${SHA}"
+          fi
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
+
+          # Guard the whole point of this job: the tree the builds will compile
+          # must carry the version we are about to release.
+          REF_VERSION=$(git show "${SHA}:VERSION" | tr -d '[:space:]')
+          if [ "$REF_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::Build ref ${SHA} has VERSION ${REF_VERSION}, expected ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+          echo "✅ ${SHA} carries VERSION ${REF_VERSION}"
+
       - name: Check if should create release
         id: check
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+          # A release is only ever cut from a manual dispatch. check-version now
+          # runs on push too (the build jobs need its ref), so without this guard
+          # an ordinary push to main with an untagged VERSION would publish one.
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "⏭️  Not a manual dispatch — no release"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          elif git rev-parse "v${VERSION}" >/dev/null 2>&1; then
             echo "⏭️  Version v${VERSION} already has a release"
             echo "should_release=false" >> $GITHUB_OUTPUT
           else
@@ -661,7 +707,7 @@ jobs:
   # Create GitHub Release (only on manual trigger when version is new)
   create-release:
     needs: [collect, check-version]
-    if: needs.check-version.outputs.should_release == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
