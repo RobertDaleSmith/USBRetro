@@ -48,8 +48,8 @@ The firmware detects the console on the **data line, GPIO 7** — not on a separ
 
 Detection then hands the pin over to the joybus PIO program, which reconfigures it with a pull-up.
 
-!!! warning "Detection is one-shot — power the console first"
-    The probe runs **once**, 200 ms after the board powers up, with no re-check and no recovery. If the adapter powers up before the console does, it latches into config mode and stays there until it is power-cycled. Power the console on with the adapter already plugged in, and if the adapter comes up in config mode by mistake, **unplug and replug it** — that is the fix, not a bad solder joint.
+!!! note "Detection recovers on its own"
+    At boot the probe settles for 200 ms, then samples for up to **800 ms** — it switches to play mode the moment the data line goes high, so a console that is still powering up or a sample that lands inside a joybus burst no longer traps the adapter in config mode. And if it *does* come up in config mode (console powered on later), it keeps re-checking every 250 ms and **reboots itself into play mode** once the console has driven the line high steadily for ~2.5 s — unless a PC is actively connected over USB (config.joypad.ai), in which case it stays put so it can't reboot out from under your session. So plugging into a console works even if the adapter powered up first; you should no longer need to unplug and replug.
 
 !!! note "About GC Pin 6 (3.3V)"
     Earlier firmware sensed the console on a dedicated 3.3V wire at GPIO 6, and earlier versions of this guide told you to wire it. Detection moved to the data line in April 2026 (`a12cc10b`), and **nothing in the firmware reads GPIO 6 any more** — `GC_3V3_PIN` is still defined in `gamecube_device.h` but has no remaining callers. Leaving that wire connected on an existing build is harmless; on a new build, skip it. The reference photos below predate this change and still show the wire.
@@ -75,7 +75,7 @@ The Pico W and Pico 2 W have a built-in radio, so `bt2gc` takes Bluetooth contro
 | Raspberry Pi Pico W | `bt2gc_pico_w` |
 | Raspberry Pi Pico 2 W | `bt2gc_pico2_w` |
 
-**The GameCube wiring is identical** — 5V to VBUS, data to **GPIO 7**, both grounds to GND, Pin 6 left disconnected. Console detection is the same one-shot data-line probe described above, so the same power-on ordering applies.
+**The GameCube wiring is identical** — 5V to VBUS, data to **GPIO 7**, both grounds to GND, Pin 6 left disconnected. Console detection is the same self-recovering data-line probe described above.
 
 Differences from the USB build:
 
