@@ -1,6 +1,11 @@
 # Bluetooth to USB Adapter (Pico W)
 
-Bluetooth controllers to USB HID gamepad via Raspberry Pi Pico W. No soldering required.
+Bluetooth controllers to a USB gamepad via Raspberry Pi Pico W. No soldering required.
+
+On a freshly flashed board this build enumerates as a **PS4 (DualShock 4) controller**, not a
+generic HID gamepad — `bt2usb` is compiled with `USBD_DEFAULT_MODE=USB_OUTPUT_MODE_PS4`. The mode
+is switchable at runtime and **persists in flash**, so a board whose mode was changed previously
+comes back up in the saved mode, not in PS4. See [USB output modes](#usb-output-modes) below.
 
 ## Parts Needed
 
@@ -19,7 +24,7 @@ make bt2usb_pico_w
 make flash-bt2usb_pico_w
 ```
 
-Output file: `releases/joypad_<commit>_bt2usb_rpi_pico_w.uf2`
+Output file: `releases/joypad_<commit>_bt2usb_pico_w.uf2`
 
 Alternatively, drag and drop the `.uf2` file onto the `RPI-RP2` drive that appears when the Pico W is in bootloader mode.
 
@@ -31,9 +36,27 @@ Alternatively, drag and drop the `.uf2` file onto the `RPI-RP2` drive that appea
    - **Xbox (BLE)**: Hold the pairing button on top until the Xbox button flashes
    - **8BitDo**: Hold Start/Pair until the LED flashes
    - **Switch Pro**: Hold the sync button on top
-3. The Pico W scans continuously and will connect automatically
-4. The board LED blinks slowly while scanning, then turns solid when connected
-5. The controller appears as a USB HID gamepad on the host PC
+3. With nothing connected, the Pico W scans automatically and will connect on its own
+4. The board LED shows which state it is in — see the table below
+5. The controller appears on the host PC (as a PS4 pad by default)
+
+### Board LED
+
+| LED | Meaning |
+|-----|---------|
+| Fast blink (~0.2 s) | Actively scanning in a pairing window (BOOTSEL click, 60 s) |
+| Slow blink (~0.8 s) | Nothing connected — idle, scanning, or connecting |
+| Solid on | At least one controller connected |
+
+Note that the slow blink is the *no-device* state, not a "scanning" state; the adapter blinks fast
+only during an explicit pairing window.
+
+### Adding a second controller
+
+**Auto-scan only runs while zero controllers are connected.** Both automatic resume paths in
+`btstack_host.c` are gated on `btstack_classic_get_connection_count() == 0`, so once one pad is
+connected the adapter stops looking for more. To pair an additional controller, **click BOOTSEL**
+to open a 60-second scan window (the LED will blink fast), then put the new pad into pairing mode.
 
 ## Testing
 
@@ -42,11 +65,50 @@ Alternatively, drag and drop the `.uf2` file onto the `RPI-RP2` drive that appea
 3. Verify all inputs register correctly on the PC
 4. Rumble feedback from the PC is forwarded back to the BT controller
 
+## BOOTSEL button controls
+
+The BOOTSEL button is the adapter's entire control surface once it is running. The firmware
+prints these at startup over USB serial.
+
+| Action | Effect |
+|--------|--------|
+| Click | Open a 60-second Bluetooth scan window (pair an additional controller) |
+| Double-click | Cycle the USB output mode |
+| Triple-click | Reset the output mode to SInput |
+| Hold | Disconnect all controllers **and erase all bonds** |
+
+## USB output modes
+
+Double-clicking BOOTSEL cycles through:
+
+```
+SInput -> XInput -> PS3 -> PS4 -> Switch -> Keyboard/Mouse -> SInput
+```
+
+A freshly flashed board starts in **PS4**, so the first double-click moves it to Switch.
+Triple-click jumps straight back to SInput. Less common modes (DInput, PS Classic, Xbox Original,
+Xbox One, XAC) are not in the cycle — set those over the CDC config interface. **Each mode change
+re-enumerates the board on the USB bus**, so the host will briefly see the device disconnect and
+come back.
+
+The selected mode is written to flash and reloaded by `usbd_init()` on every boot, so it survives
+power cycles. If a board comes up in an unexpected mode, triple-click to force it back to SInput.
+
+## Button profiles
+
+Hold **SELECT for 2 seconds, then press D-pad Up/Down** to cycle *button profiles*.
+
+> ⚠️ This switches button **profiles**, not USB output modes — the two are separate controls and
+> have been confused in earlier revisions of this doc. `usbd_on_input()` routes the combo to
+> `profile_check_switch_combo()`. D-pad **Left/Right** during the combo is wired to an output-mode
+> callback that **only the 3DO device driver ever registers** (`3do_device.c:690`), so on `bt2usb`
+> — and on every other USB-device app — that pointer is NULL and pressing Left/Right does nothing.
+> Use BOOTSEL double-click for output modes.
+
 ## Notes
 
 - Supports both Bluetooth Classic and BLE controllers
 - Bond information persists across power cycles (stored in flash)
 - Multiple controllers merge to a single USB output (MERGE_BLEND mode)
-- Profile cycling: hold SELECT + D-pad Up/Down for 2 seconds to switch USB output modes
 - See [bt2usb app docs](../../apps/bt2usb.md) for supported controllers and output modes
 - For Pico 2 W builds, use `make bt2usb_pico2_w` instead
