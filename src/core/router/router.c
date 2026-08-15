@@ -903,6 +903,42 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     // emits the gamepad report.
                     x_current_state.as_gamepad |= dev->as_gamepad;
 
+                    // Raw HID keyboard state. The `keys` field above is the
+                    // lossy gamepad-mapped encoding; output paths that need real
+                    // keystrokes (sinput_mode's composite keyboard interface)
+                    // read kb_modifier/kb_keys instead, and those were being
+                    // dropped here. Modifier is a bitmask, so OR it like buttons;
+                    // keycodes are a 6-slot rollover set, so append each distinct
+                    // non-zero key until the slots are full.
+                    x_current_state.kb_modifier |= dev->kb_modifier;
+                    for (int j = 0; j < 6 && dev->kb_keys[j] != 0; j++) {
+                        uint8_t k = dev->kb_keys[j];
+                        bool dup = false;
+                        int free_slot = -1;
+                        for (int s = 0; s < 6; s++) {
+                            if (x_current_state.kb_keys[s] == k) { dup = true; break; }
+                            if (x_current_state.kb_keys[s] == 0) { free_slot = s; break; }
+                        }
+                        if (!dup && free_slot >= 0) {
+                            x_current_state.kb_keys[free_slot] = k;
+                        }
+                    }
+
+                    // Consumer control (media/volume) is a single usage selector,
+                    // not a bitmask — it cannot be OR'd. Use the first device
+                    // reporting one, mirroring the motion/pressure/touch rule.
+                    if (dev->consumer_usage != 0 && x_current_state.consumer_usage == 0) {
+                        x_current_state.consumer_usage = dev->consumer_usage;
+                    }
+
+                    // Chatpad (Xbox 360): first device that has one.
+                    if (dev->has_chatpad && !x_current_state.has_chatpad) {
+                        x_current_state.has_chatpad = true;
+                        x_current_state.chatpad[0] = dev->chatpad[0];
+                        x_current_state.chatpad[1] = dev->chatpad[1];
+                        x_current_state.chatpad[2] = dev->chatpad[2];
+                    }
+
                     // Analog: use furthest from center for sticks, max for triggers
                     // New format: [0]=LX, [1]=LY, [2]=RX, [3]=RY, [4]=L2, [5]=R2
                     for (int j = 0; j < ANALOG_COUNT; j++) {
@@ -926,6 +962,19 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     x_current_state.delta_y += dev->delta_y;
                     dev->delta_x = 0;
                     dev->delta_y = 0;
+
+                    // Scroll wheel is one-shot per event like delta_x/delta_y and
+                    // was the one relative axis this loop did not merge, so every
+                    // consumer (sinput mouse report, BLE mouse, Amiga wheel
+                    // accumulator) saw a permanent zero in blend mode. Clamped
+                    // because the field is int8_t, unlike the int16 deltas above.
+                    {
+                        int wheel = (int)x_current_state.delta_wheel + (int)dev->delta_wheel;
+                        if (wheel >  127) wheel =  127;
+                        if (wheel < -128) wheel = -128;
+                        x_current_state.delta_wheel = (int8_t)wheel;
+                    }
+                    dev->delta_wheel = 0;
 
                     // Motion: use first device that has motion data
                     if (dev->has_motion && !x_current_state.has_motion) {
@@ -959,11 +1008,21 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                         x_current_state.battery_charging = dev->battery_charging;
                     }
 
-                    // Use metadata from first active device
+                    // Use metadata from first active device.
+                    // transport/layout belong here too: sinput_mode.c reads both
+                    // off the merged event (update_device_info + cached_layout)
+                    // and INPUT_TRANSPORT_NONE / LAYOUT_UNKNOWN are both 0, so
+                    // omitting them didn't leave the value stale — it reported a
+                    // defined "unknown" for a device the router knew exactly.
                     if (first) {
                         x_current_state.dev_addr = dev->dev_addr;
                         x_current_state.instance = dev->instance;
                         x_current_state.type = dev->type;
+                        x_current_state.transport = dev->transport;
+                        x_current_state.layout = dev->layout;
+                        x_current_state.button_count = dev->button_count;
+                        x_current_state.has_rumble = dev->has_rumble;
+                        x_current_state.has_force_feedback = dev->has_force_feedback;
                         first = false;
                     }
                 }
