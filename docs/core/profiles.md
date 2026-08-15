@@ -98,14 +98,18 @@ own combos (`router_set_combo()`) take over and replace these defaults.
 
 | Hotkey (on the source controller) | Action |
 |-----------------------------------|--------|
-| **SELECT + D-pad Up** | Previous profile |
-| **SELECT + D-pad Down** | Next profile |
-| **SELECT + D-pad Left / Right** | D-pad ↔ stick swap: a 4-position slider that clamps at the ends, `[D-pad↔L-stick] [normal] [D-pad↔R-stick] [L-stick↔R-stick]` (Left steps toward the first, Right toward the last) |
-| **START + D-pad Up** | Shoulder swap toggle (L1↔L2, R1↔R2) |
+| **SELECT + D-pad Up** (hold ~0.7 s) | Previous profile |
+| **SELECT + D-pad Down** (hold ~0.7 s) | Next profile |
+| **SELECT + D-pad Left / Right** (hold ~0.7 s) | D-pad ↔ stick swap: a 4-position slider that clamps at the ends, `[D-pad↔L-stick] [normal] [D-pad↔R-stick] [L-stick↔R-stick]` (Left steps toward the first, Right toward the last) |
+| **START + D-pad Up** (hold ~0.7 s) | Shoulder swap toggle (L1↔L2, R1↔R2) |
 
-Profile switching is **instant** (no timed hold) and **clamps at the ends** -- it
-does not wrap past the first/last profile. The NeoPixel LED flashes to confirm
-(number of OFF blinks = profile index + 1) and the controller rumbles if capable.
+These default hotkeys require a brief **~0.7 s hold** (`ROUTER_DEFAULT_COMBO_HOLD_MS`)
+before they fire — a quick in-game SELECT/START + D-pad press passes straight
+through to the console instead of triggering the hotkey (and is not consumed).
+Once the hold elapses the switch is **immediate** and **clamps at the ends** (no
+wrap). The NeoPixel LED flashes to confirm (number of OFF blinks = profile index
++ 1) and the controller rumbles if capable. Apps that register their own combo
+table keep instant, un-held combos.
 
 Per-player profile switching is supported: each player can independently cycle
 profiles using the same combo on their own controller.

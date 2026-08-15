@@ -272,7 +272,15 @@ static struct {
     uint32_t output_mask;
     uint8_t required_layout;   // controller_layout_t, 0 = any layout
     bool fired;
+    uint32_t held_since;       // ms timestamp the combo became fully held (0 = not held)
 } router_combos[ROUTER_COMBO_MAX];
+
+// Built-in default combos (SELECT/START + D-pad) require a brief deliberate hold
+// before they fire AND before they consume the buttons, so a quick in-game
+// SELECT/START + D-pad passes through to the console instead of silently
+// switching a profile on the 40+ apps that inherit the defaults. App-registered
+// combo tables (router_default_combos_active == false) keep instant behavior.
+#define ROUTER_DEFAULT_COMBO_HOLD_MS 700
 
 // Active output count (for broadcast mode)
 static output_target_t active_outputs[MAX_OUTPUTS];
@@ -1281,7 +1289,22 @@ void router_submit_input(const input_event_t* event) {
         bool held = (event->buttons & in) == in;
         if (!held) {
             router_combos[c].fired = false;
+            router_combos[c].held_since = 0;
             continue;
+        }
+
+        // Built-in default combos require a brief deliberate hold before they
+        // fire or consume the buttons. Until the hold elapses we do NOT touch
+        // the outgoing report, so a quick in-game SELECT/START + D-pad passes
+        // straight through. App-registered combos keep instant behavior.
+        if (router_default_combos_active) {
+            uint32_t now = platform_time_ms();
+            if (router_combos[c].held_since == 0) {
+                router_combos[c].held_since = now ? now : 1;  // 0 means "not held"
+            }
+            if ((now - router_combos[c].held_since) < ROUTER_DEFAULT_COMBO_HOLD_MS) {
+                continue;  // hold not met yet — pass the buttons through
+            }
         }
 
         if (!did_remap) {
