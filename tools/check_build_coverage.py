@@ -330,9 +330,26 @@ def main() -> int:
     # `APPS` drives `make all`, which is how a change gets validated locally. It
     # does not decide what ships, so this is advisory and never fails the build.
     notes: list[str] = []
-    apps = re.search(r"^APPS := (.*)$", makefile, re.M)
-    if apps:
-        gap = sorted(covered["rpi"] - set(apps.group(1).split()))
+    # Both spellings of the list are accepted. It was one `APPS := a b c` line
+    # until PR #244 split it one-per-line (`APPS :=` then `APPS += <target>`),
+    # so matching only the `:=` form reads the empty anchor line and reports
+    # every matrix target as missing. `APPS := $(strip $(APPS))` is a rewrite of
+    # the list, not a new one, and must not reset it.
+    apps_list: list[str] = []
+    found_apps = False
+    for line in makefile.splitlines():
+        m = re.match(r"^APPS[ \t]*(\+=|:=|=)[ \t]*(.*)$", line)
+        if not m:
+            continue
+        op, rhs = m.group(1), m.group(2)
+        if "$(APPS)" in rhs:
+            continue
+        found_apps = True
+        if op != "+=":
+            apps_list = []
+        apps_list.extend(rhs.split())
+    if found_apps:
+        gap = sorted(covered["rpi"] - set(apps_list))
         if gap:
             notes.append(
                 f"note: {len(gap)} targets are in the CI matrix but not in the "

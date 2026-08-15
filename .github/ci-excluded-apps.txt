@@ -77,7 +77,6 @@ btusb2usb_feather_esp32s3                 # no recorded decision
 # --- nRF52840.
 mouthpad_aprbrother_nrf52840              # announced in CHANGELOG by name ("Builds: ...")
 bt2usb_aprbrother_nrf52840                # no recorded decision
-controller_btusb_seeed_xiao_nrf52840      # no recorded decision; the Feather variant ships, the XIAO one does not
 
 # ---------------------------------------------------------------------------
 # CMake executables (src/CMakeLists.txt) that no Makefile APP_/CONSOLE_ pair
