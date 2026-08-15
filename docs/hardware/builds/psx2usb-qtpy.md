@@ -85,25 +85,51 @@ make psx2usb_qtpy            # or psx2usb_kb2040 / psx2usb_pico
 make flash-psx2usb_qtpy      # or psx2usb_kb2040 / psx2usb_pico
 ```
 
-Output file: `releases/joypad_<commit>_psx2usb_<board>.uf2`
+Output file: `releases/joypad_<commit>_psx2usb_<board>.uf2` (a local build is tagged with the short commit hash; release builds are tagged with the version instead, e.g. `joypad_2.4.0_psx2usb_qtpy.uf2`).
+
+> ℹ️ **There is no prebuilt UF2 to download yet.** `psx2usb` was only added to the release build matrix on 2026-08-05, after v2.3.0 shipped — no release up to and including v2.3.0 contains a `psx2usb` asset. Until the next release, building from source with the commands above is the only way to get this firmware.
 
 ## Testing
 
 1. Wire the adapter per the table above.
 2. Plug the adapter into a PC via USB.
 3. The board enumerates as a Joypad SInput controller by default.
-4. Plug a PSX controller into the cable. Open a gamepad tester ([gamepad-tester.com](https://gamepad-tester.com), or `config.joypad.ai` for the live joypad-web view) and verify:
+4. Plug a PSX controller into the cable. Open a gamepad tester ([gamepad-tester.com](https://gamepad-tester.com), or [joypad.ai](https://joypad.ai), which reads the pad over WebHID and therefore works in **any** output mode) and verify:
    - **Digital pad** — all 12 face/d-pad/shoulder buttons + Select/Start register.
    - **DualShock** — both analog sticks center near 128, L3/R3 click, ANALOG button toggles modes (a brief A1/Guide press fires on each toggle).
-   - **DualShock 2** — per-button pressure visible in joypad-web's PS3-mode pressure view.
+   - **DualShock 2** — per-button pressure visible in the PS3-mode pressure view.
+
+> ⚠️ **`config.joypad.ai` is the configuration tool, not the tester, and it needs the USB serial (CDC) interface.** CDC is only present in the **SInput** (default), **Keyboard/Mouse** and CDC-only configuration descriptors. Cycle the adapter to XInput, PS3, PS4 or Switch and the CDC interface disappears from the descriptor, so config.joypad.ai can no longer see the board — triple-click BOOTSEL to return to SInput before configuring.
 
 ## Output Modes
 
-The adapter ships in SInput mode (the default — full feature set, recognized by Steam/SDL). **Double-click** the BOOTSEL button to cycle output modes: SInput → XInput → PS3 → PS4 → Switch → Keyboard/Mouse → …; **triple-click** resets to SInput. The NeoPixel reflects the active mode (white = SInput, green = XInput, blue = PS3/PS4, red = Switch, yellow = KB/Mouse).
+The adapter ships in SInput mode (the default — full feature set, recognized by Steam/SDL). **Double-click** the BOOTSEL button to cycle output modes: SInput → XInput → PS3 → PS4 → Switch → Keyboard/Mouse → …; **triple-click** resets to SInput.
 
 **Single press** of BOOTSEL emits A1 (Guide/PS button) while held — useful for navigating console home menus or triggering a PS-button init without a Select+Start combo.
 
 PS3 mode emits an authentic DS3 descriptor (works on real PS3 consoles).
+
+### Status LED — board-dependent
+
+The mode colour is driven through `leds_set_color()`, which only ever reaches a **NeoPixel**. What you see depends on the board:
+
+| Board | Status LED | Mode colour shown? |
+|-------|-----------|--------------------|
+| QT Py RP2040 | NeoPixel on GP12 (powered from GP11, driven high at init) | ✅ yes |
+| KB2040 | NeoPixel on GP17 | ✅ yes |
+| Raspberry Pi Pico | **none** | ❌ no |
+
+> ⚠️ **The Pi Pico build has no status LED at all.** The Pico has no NeoPixel, and the `psx2usb` target never defines `BOARD_LED_PIN`, so the plain GP25 LED is not driven either — `neopixel_init()` compiles down to an immediate return and `leds_set_color()` has nothing to write to. **Mode switches on a Pico are completely silent**; confirm the active mode from the USB device name on the host instead of looking for a light.
+
+On the two NeoPixel boards the colours are: white = SInput, green = XInput, blue = PS3/PS4 (dim/bright), red = Switch, yellow = KB/Mouse.
+
+### Controller-side combos
+
+These come from the shared USB-device layer and are not documented elsewhere for this adapter:
+
+- **Select + Start → A1 (Guide/PS)** — only on **genuine digital-only pads**. DualShock-family pads (DualShock, DS2-pressure, Dual Analog flight) reach A1 through their physical ANALOG button, so their Start+Select is deliberately left intact — otherwise output modes with no A1 (e.g. Xbox Original) would lose the ability to press the two together.
+- **Select (hold ~2 s) + D-pad Up/Down** — cycle button profiles.
+- Pads with **no Select button** — the Dual Analog flight stick (`0x53`), GunCon and PlayStation Mouse — therefore cannot reach either combo. Use BOOTSEL for A1 on those.
 
 ## Supported Devices
 
@@ -122,6 +148,6 @@ PS3 mode emits an authentic DS3 descriptor (works on real PS3 consoles).
 
 - No CPU overclock required (standard 125 MHz).
 - ANALOG button → A1/Guide is detected via the analog ↔ digital mode toggle; it fires a brief A1 pulse on every press so a console PS-button init still registers.
-- Rumble motor bytes are driven from the SInput/PS3 feedback state. The 7.5 V motor rail must be supplied externally (NOT through the QT Py / KB2040 / Pico).
+- Rumble motor bytes are pulled from the active output's feedback state each poll (heavy/low motor → the large PWM byte, light/high motor → the small on/off byte), so any output mode that reports rumble drives them. The motors only respond after the pad's `0x4D` enable-rumble mapping has been sent, which happens during DualShock configuration. A **JogCon is excluded** — it drives the same two motor bytes itself for the wheel force-feedback recentre, not host rumble. The 7.5 V motor rail must be supplied externally (NOT through the QT Py / KB2040 / Pico).
 - See [PSX input docs](../../input/psx.md) for protocol details (SIO bus, active pull-up, controller ID layout).
 - See [psx2usb app docs](../../apps/psx2usb.md) for feature details + USB output mode list.
