@@ -197,16 +197,21 @@ static inline unsigned flash_sanitize_record(flash_t* s)
 
 #undef FLASH_CLAMP_
 
-    // router_saved is a bool with no in-band invalid value, so it cannot be
-    // range-checked on its own — but it gates the router fields that
-    // gc2usb / controller_btusb / bt2wiiext restore at boot, and it is 0 on a
-    // clean record, so an incoherent one is what switches those restores on in
-    // the first place. If anything else in the record failed its range, the
-    // record was not written deliberately: clear the flag so those apps fall
-    // back to compile-time defaults instead of applying a plausible-looking 0.
-    if (fixed && s->router_saved) {
-        s->router_saved = 0;
-        fixed++;
+    // Two fields have no in-band invalid value, so they can't be range-checked
+    // on their own — but an incoherent record is exactly what turns them on:
+    //   router_saved         gates the router settings gc2usb / controller_btusb
+    //                        / bt2wiiext restore at boot (0 on a clean record).
+    //   builtin_disabled_mask hides built-in profiles from the SELECT+D-pad
+    //                        cycle; its valid range is build-dependent (one bit
+    //                        per built-in profile), so it can't be clamped, but
+    //                        a garbage value is what produced the "phantom
+    //                        disabled profile" seen on churned records.
+    // If anything else in the record failed its range, it wasn't written
+    // deliberately — reset both so those features fall back to defaults instead
+    // of applying a plausible-looking stray value.
+    if (fixed) {
+        if (s->router_saved)          { s->router_saved = 0;          fixed++; }
+        if (s->builtin_disabled_mask) { s->builtin_disabled_mask = 0; fixed++; }
     }
 
     return fixed;
