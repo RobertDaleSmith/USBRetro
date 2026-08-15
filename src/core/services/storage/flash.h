@@ -22,6 +22,13 @@
 #define CUSTOM_PROFILE_BUTTON_COUNT 26
 #define CUSTOM_PROFILE_MAX_COUNT 4
 
+// Highest valid value of flash_t.dpad_mode. Single source of truth for both
+// the setter (flash_set_dpad_mode) and the load-time sanitiser
+// (flash_sanitize_record) — those two disagreed once (#242 raised the setter
+// to 3 for the d-pad slider's 4th position while the sanitiser still clamped
+// at 2, so every reboot reverted it AND wiped router_saved with it).
+#define FLASH_DPAD_MODE_MAX 3
+
 // Button mapping values:
 // 0x00 = passthrough (no remap, keep original button)
 // 0x01-0x1A = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 24=F2, 25=L5, 26=R5)
@@ -114,7 +121,8 @@ typedef struct {
     uint8_t router_saved;        // Non-zero if router settings were explicitly saved
     uint8_t routing_mode;        // Router mode (0=simple, 1=merge, 2=broadcast)
     uint8_t merge_mode;          // Merge mode (0=priority, 1=blend, 2=all)
-    uint8_t dpad_mode;           // D-pad mode (0=normal, 1=dpad<->Lstick, 2=dpad<->Rstick, 3=Lstick<->Rstick)
+    uint8_t dpad_mode;           // D-pad mode — 0..FLASH_DPAD_MODE_MAX
+                                 // (0=normal, 1=dpad<->Lstick, 2=dpad<->Rstick, 3=Lstick<->Rstick)
     uint8_t bt_input_enabled;    // BT Central scanning (0=off, 1=on)
 
     // Native output pin overrides
@@ -188,7 +196,7 @@ static inline unsigned flash_sanitize_record(flash_t* s)
     FLASH_CLAMP_(ble_output_mode, 2);                         // BLE_MODE_COUNT - 1
     FLASH_CLAMP_(routing_mode, 2);                            // simple/merge/broadcast
     FLASH_CLAMP_(merge_mode, 2);                              // priority/blend/all
-    FLASH_CLAMP_(dpad_mode, 2);                               // dpad/lstick/rstick
+    FLASH_CLAMP_(dpad_mode, FLASH_DPAD_MODE_MAX);             // incl. Lstick<->Rstick
     FLASH_CLAMP_(bt_input_enabled, 1);
     FLASH_CLAMP_(shoulder_swap, 1);
     FLASH_CLAMP_(joybus_data_pin, 28);                        // 0=default, 1-28=GPIO
