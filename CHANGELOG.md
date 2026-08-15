@@ -33,7 +33,11 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   since the last save. (#221, #217)
 - **The default SELECT/START combos now need a ~0.7 s hold.** In 2.4.0 they matched on the first
   frame the buttons were seen together, so a normal SELECT + D-pad press in a game could switch
-  profiles or flip the D-pad slider. Apps with their own combo tables are unaffected. (#243)
+  profiles or flip the D-pad slider. The hold is measured on whichever edge the controller actually
+  sends: while still held once it elapses, or on the release if the pad only reports *changes* (the
+  USB HID gamepad path submits nothing during a static hold, so the timer cannot advance mid-hold on
+  those pads). A quick tap reaches neither and passes through. Apps with their own combo tables are
+  unaffected. (#243)
 - **D-pad mode 3 (L-stick ↔ R-stick) survives a reboot.** The 4th position of 2.4.0's D-pad slider
   applied live but was rejected by the flash setter, so it silently reset on every power cycle.
   (#242)
@@ -65,6 +69,10 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   only — while `BT.FORGET` needed an address that only that list could produce, making the delete
   path unreachable for Classic pads. (#230, #231)
 - **PS4 output writes the accelerometer rest value to Z**, not into a reserved byte. (#232)
+- **DualShock 4 / DualSense: a released touch no longer sticks.** The host-side "did this report
+  change?" test looked only at finger 1 — and on DS4 only at its coordinates, not its down bit — so
+  lifting the second finger, or a finger whose coordinates hadn't moved, produced no new report and
+  the touch point stayed active. Both fingers' down bit and position are now part of the diff.
 
 ### Added
 
