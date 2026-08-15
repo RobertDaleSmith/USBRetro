@@ -78,8 +78,9 @@ static bool xac_mode_send_report(uint8_t player_index,
     if (buttons & JP_BUTTON_B4) xac_buttons |= XAC_MASK_B4;  // Y
     if (buttons & JP_BUTTON_L1) xac_buttons |= XAC_MASK_L1;  // LB
     if (buttons & JP_BUTTON_R1) xac_buttons |= XAC_MASK_R1;  // RB
-    if (buttons & JP_BUTTON_L2) xac_buttons |= XAC_MASK_L2;  // LT (digital)
-    if (buttons & JP_BUTTON_R2) xac_buttons |= XAC_MASK_R2;  // RT (digital)
+    // xac_in_report_t is digital-only for LT/RT - see usbd_mode.h.
+    if (usbd_l2_digital(profile_out, buttons)) xac_buttons |= XAC_MASK_L2;  // LT (digital)
+    if (usbd_r2_digital(profile_out, buttons)) xac_buttons |= XAC_MASK_R2;  // RT (digital)
     if (buttons & JP_BUTTON_S1) xac_buttons |= XAC_MASK_S1;  // Back
     if (buttons & JP_BUTTON_S2) xac_buttons |= XAC_MASK_S2;  // Start
     if (buttons & JP_BUTTON_L3) xac_buttons |= XAC_MASK_L3;  // LS
