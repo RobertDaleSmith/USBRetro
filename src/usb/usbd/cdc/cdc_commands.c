@@ -2277,15 +2277,31 @@ static void cmd_ps4auth_clear(const char *json)
 // SETTINGS COMMANDS
 // ============================================================================
 
+// Read-only view of the device's current settings.
+//
+// Prefer the live runtime copy over flash_load(): flash_load() reads the flash
+// sector, which lags runtime_settings by up to SAVE_DEBOUNCE_MS (5s) after any
+// debounced write. A GET issued right after a SET would otherwise report the
+// pre-SET value, and the web config — which re-reads state after a write — shows
+// the setting snapping back. Falls back to the flash record when storage has not
+// been initialised; returns NULL when neither is available.
+static const flash_t* settings_for_read(flash_t* scratch)
+{
+    const flash_t* s = flash_get_settings();
+    if (s) return s;
+    return flash_load(scratch) ? scratch : NULL;
+}
+
 static void cmd_settings_get(const char* json)
 {
     (void)json;
-    flash_t flash_data;
-    if (flash_load(&flash_data)) {
+    flash_t scratch;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s) {
         snprintf(response_buf, sizeof(response_buf),
                  "{\"profile\":%d,\"mode\":%d}",
-                 flash_data.active_profile_index,
-                 flash_data.usb_output_mode);
+                 s->active_profile_index,
+                 s->usb_output_mode);
     } else {
         snprintf(response_buf, sizeof(response_buf),
                  "{\"profile\":0,\"mode\":0,\"valid\":false}");
@@ -2304,7 +2320,7 @@ static void cmd_router_get(const char* json)
 #define MERGE_MODE 0
 #endif
 
-    flash_t flash_data;
+    flash_t scratch;
 #if REQUIRE_BT_INPUT
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 1;
 #else
@@ -2315,10 +2331,11 @@ static void cmd_router_get(const char* json)
     // debounced). router_init() has already restored them from flash on boot.
     dm = router_get_dpad_mode();
     uint8_t ss = router_get_shoulder_swap() ? 1 : 0;
-    if (flash_load(&flash_data) && flash_data.router_saved) {
-        if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
-        if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
-        bti = flash_data.bt_input_enabled;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s && s->router_saved) {
+        if (s->routing_mode <= 2) rm = s->routing_mode;
+        if (s->merge_mode <= 2) mm = s->merge_mode;
+        bti = s->bt_input_enabled;
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"routing_mode\":%d,\"merge_mode\":%d,\"dpad_mode\":%d,"
@@ -2368,11 +2385,12 @@ static void cmd_caps_get(const char* json)
 #endif
 
     // Routing mode honors any persisted override (matches cmd_router_get).
-    flash_t flash_data;
+    flash_t scratch;
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE;
-    if (flash_load(&flash_data) && flash_data.router_saved) {
-        if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
-        if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s && s->router_saved) {
+        if (s->routing_mode <= 2) rm = s->routing_mode;
+        if (s->merge_mode <= 2) mm = s->merge_mode;
     }
 
     char* out = response_buf;
@@ -2539,20 +2557,25 @@ overflow:
 
 static void cmd_router_set(const char* json)
 {
-    flash_t flash_data;
-    if (!flash_load(&flash_data)) {
-        memset(&flash_data, 0, sizeof(flash_data));
+    // Mutate the live settings in place so the record we force out carries any
+    // other change still sitting in runtime_settings (a debounced profile or
+    // shoulder-swap write, say) instead of reverting it to the on-flash value.
+    flash_t scratch;
+    flash_t* settings = flash_get_settings();
+    if (!settings) {
+        if (!flash_load(&scratch)) memset(&scratch, 0, sizeof(scratch));
+        settings = &scratch;
     }
 
     int ival;
-    if (json_get_int(json, "routing_mode", &ival)) flash_data.routing_mode = (uint8_t)ival;
-    if (json_get_int(json, "merge_mode", &ival)) flash_data.merge_mode = (uint8_t)ival;
-    if (json_get_int(json, "dpad_mode", &ival)) flash_data.dpad_mode = (uint8_t)ival;
+    if (json_get_int(json, "routing_mode", &ival)) settings->routing_mode = (uint8_t)ival;
+    if (json_get_int(json, "merge_mode", &ival)) settings->merge_mode = (uint8_t)ival;
+    if (json_get_int(json, "dpad_mode", &ival)) settings->dpad_mode = (uint8_t)ival;
     bool bval;
-    if (json_get_bool(json, "bt_input", &bval)) flash_data.bt_input_enabled = bval ? 1 : 0;
-    flash_data.router_saved = 1;
+    if (json_get_bool(json, "bt_input", &bval)) settings->bt_input_enabled = bval ? 1 : 0;
+    settings->router_saved = 1;
 
-    flash_save_force(&flash_data);
+    flash_save_force(settings);
 
     snprintf(response_buf, sizeof(response_buf), "{\"ok\":true,\"reboot\":true}");
     send_json(response_buf);
@@ -2835,11 +2858,14 @@ static void cmd_wiimote_orient_set(const char* json)
     }
     wiimote_set_orient_mode((uint8_t)mode);
 
-    // Save to flash
-    flash_t flash_data;
-    if (flash_load(&flash_data)) {
-        flash_data.wiimote_orient_mode = (uint8_t)mode;
-        flash_save(&flash_data);
+    // Persist through the live settings, not a stack copy of the flash record:
+    // a stack copy leaves runtime_settings holding the old orientation, so the
+    // next unrelated flash_save(&runtime_settings) writes a higher-sequence
+    // record that silently reverts this change.
+    flash_t* settings = flash_get_settings();
+    if (settings) {
+        settings->wiimote_orient_mode = (uint8_t)mode;
+        flash_save(settings);
     }
 
     snprintf(response_buf, sizeof(response_buf),
