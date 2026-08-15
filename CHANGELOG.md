@@ -6,6 +6,91 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.4.1] — 2026-08-15
+
+Patch release. **Every adapter running 2.4.0 should update**: the universal profile hotkeys added in
+2.4.0 made a long-standing settings-corruption bug reachable on 43 of the 45 apps, from a gesture the
+2.4.0 notes tell users to press.
+
+### Fixed
+
+#### Saved settings and profiles
+
+- 🔴 **Switching profiles could scramble every saved setting.** `profile_save_to_flash()` declared a
+  256-byte `flash_t` on the stack, assigned exactly one field, and wrote the whole thing to flash —
+  so the other 255 bytes were uninitialized stack. `flash_save()` stamps the magic and schema
+  version itself, so the garbage record passed both load-time checks and came back as real settings:
+  USB/BLE output mode, routing and merge mode, D-pad mode, shoulder swap, Wiimote orientation, BT
+  scanning, the native-output pin overrides, and all four custom profiles. The save now routes
+  through the live settings copy and touches only the field it means to. (#216, #217)
+- 🔴 **An adapter that already carries a corrupt record now repairs itself on load.** Settings sectors
+  live at the top of flash and a UF2 does not erase them, so the writer fix alone left every
+  already-affected device broken — installing the fix changed nothing for them. Incoherent records
+  are now sanitized once on load instead of being trusted. (#222)
+- **Settings reads and writes go through the live runtime copy, not a stack copy of the flash
+  record.** The Wiimote orientation hotkey (Plus + D-pad) and `WIIMOTE.ORIENT.SET` did a
+  read-modify-write against the on-flash record, which silently reverted any other setting changed
+  since the last save. (#221, #217)
+- **The default SELECT/START combos now need a ~0.7 s hold.** In 2.4.0 they matched on the first
+  frame the buttons were seen together, so a normal SELECT + D-pad press in a game could switch
+  profiles or flip the D-pad slider. Apps with their own combo tables are unaffected. (#243)
+- **D-pad mode 3 (L-stick ↔ R-stick) survives a reboot.** The 4th position of 2.4.0's D-pad slider
+  applied live but was rejected by the flash setter, so it silently reset on every power cycle.
+  (#242)
+
+#### GameCube
+
+- **`usb2gc` / `wii2gc` recover from a missed console detect instead of latching config mode.** Play
+  vs. config mode was decided by a single `gpio_get()` 200 ms after boot and never re-checked, so one
+  bad sample stranded the adapter on the orange LED with no console output until it was replugged in
+  the right order. Detection now re-checks and self-corrects. (#241, likely relevant to #164/#165)
+- **Answer the analog poll mode the console actually asked for.** Bytes 4–7 of the joybus reply
+  change meaning per requested mode; the mode byte was read and discarded, so games asking for a
+  non-default mode got the wrong analog fields. (#206)
+- **Keyboard-mode toggle works on 65% keyboards.** The toggle now matches as a key set and adds a
+  **Ctrl+Alt+K** chord, for boards that have neither Scroll Lock nor an F13–F24 row. (#236,
+  discussion #220)
+
+#### Controllers and output
+
+- **Xbox triggers work on output modes with no analog trigger.** Switch, PS3 and the other
+  digital-only output modes now derive digital L2/R2 from the analog value, instead of dropping the
+  triggers entirely. (#98, #123, #152, #208)
+- **N64 host stick uses the correct ±84 reference deflection.** Scaling against 80 clipped the top of
+  the range, making the five furthest raw positions indistinguishable. (#211, #225)
+- **`MERGE_BLEND` no longer drops 9 fields.** It is the only routing path that rebuilds the merged
+  event by hand rather than assigning it, and nine fields were never copied across. (#234, #235)
+- **`BT.STATUS` lists bonded Classic controllers.** A powered-off DS4/DS5/Switch Pro/Wiimote appeared
+  nowhere in the web config's bond list, because the list was built from BLE Security Manager events
+  only — while `BT.FORGET` needed an address that only that list could produce, making the delete
+  path unreachable for Classic pads. (#230, #231)
+- **PS4 output writes the accelerometer rest value to Z**, not into a reserved byte. (#232)
+
+### Added
+
+- **iPega PG-9021 Classic Bluetooth gamepad driver**, wired into the RP2040, ESP32-S3 and nRF builds.
+  (#239, thanks @Atreus171)
+
+### Build & CI
+
+- Every driver the BTHID/device registries reference is now compiled, and CI fails if one is
+  referenced but not built. (#233)
+- `controller_btusb` builds for the **Seeed XIAO nRF52840**. (#219)
+- `APPS` / `RELEASE_APPS` list one app per line, so adding a target is a purely additive diff. (#244)
+
+### Documentation
+
+- `app.h` manifests no longer advertise feature flags the build never reads — several of them stated
+  the opposite of what the firmware does. (#198, #199)
+- **usb2gc build guide:** removed the dead GPIO 6 "console-presence sense wire" instruction, which
+  described a detection mechanism the firmware stopped using in April; documented how detection
+  really works and added bt2gc. (#237)
+- **psx2usb:** LED claims scoped per board, config-tool pointer corrected, real button combos
+  documented. (#240)
+- Build-guide controls, UF2 filenames and the output-mode cycle corrected across the guides. (#238)
+
+---
+
 ## [2.4.0] — 2026-08-14
 
 ### Added
