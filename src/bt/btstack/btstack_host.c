@@ -6266,6 +6266,48 @@ void btstack_host_delete_all_bonds(void)
     printf("[BTSTACK_HOST] All bonds cleared. Devices will need to re-pair.\n");
 }
 
+// Enumerate persisted Classic BT link keys.
+//
+// The last-connected slot above is written only from SM_EVENT_PAIRING_COMPLETE /
+// SM_EVENT_REENCRYPTION_COMPLETE — Security Manager events, which are BLE-only —
+// so it can never describe a bonded Classic pad. Classic bonds live in the link
+// key DB instead: hci_set_link_key_db() is called on both transports (the USB
+// dongle path in setup_tlv_storage() above, and the CYW43 path in the SDK's
+// btstack_cyw43.c), so gap_link_key_iterator_*() is the one accessor that works
+// for both.
+int btstack_host_list_classic_bonds(uint8_t addrs_out[][6], int max_count)
+{
+#ifdef ENABLE_CLASSIC
+    if (!addrs_out || max_count <= 0) return 0;
+
+    btstack_link_key_iterator_t it;
+    if (!gap_link_key_iterator_init(&it)) {
+        // iterator_init is optional in the btstack_link_key_db interface, and
+        // gap_link_key_iterator_init() also returns 0 before HCI reaches the
+        // working state. Report "no bonds" rather than failing the whole query.
+        return 0;
+    }
+
+    int count = 0;
+    bd_addr_t addr;
+    link_key_t link_key;
+    link_key_type_t type;
+    while (count < max_count &&
+           gap_link_key_iterator_get_next(&it, addr, link_key, &type)) {
+        memcpy(addrs_out[count++], addr, 6);
+    }
+    gap_link_key_iterator_done(&it);
+
+    // Don't leave key material on the stack — callers only ever want addresses.
+    memset(link_key, 0, sizeof(link_key));
+    return count;
+#else
+    (void)addrs_out;
+    (void)max_count;
+    return 0;
+#endif
+}
+
 bool btstack_host_get_last_connected(uint8_t bd_addr_out[6], char name_out[48])
 {
     if (!hid_state.has_last_connected) return false;

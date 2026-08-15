@@ -2735,7 +2735,45 @@ static void cmd_bt_status(const char* json)
                         bond_addr[0], bond_addr[1], bond_addr[2],
                         bond_addr[3], bond_addr[4], bond_addr[5]);
                 first = false;
+                // Track it so the Classic sweep below can't list it twice.
+                if (connected_count < 8) {
+                    memcpy(connected_addrs[connected_count++], bond_addr, 6);
+                }
             }
+        }
+    }
+
+    // Persisted Classic BT bonds (DS4/DS5, Switch Pro, Wiimote) that aren't
+    // currently connected. Without this the list shows nothing at all for a
+    // powered-off Classic pad — its link key is in flash and it will reconnect
+    // fine, but every surface said "no bonded devices", which reads as "the
+    // pairing didn't save". The last-connected slot above can't cover them: it
+    // is written from Security Manager events, which are BLE-only.
+    {
+        uint8_t classic_addrs[8][6];
+        int classic_count = btstack_host_list_classic_bonds(classic_addrs, 8);
+        for (int i = 0; i < classic_count; i++) {
+            // Leave room for this entry plus the closing "]}".
+            if (pos + 128 >= (int)sizeof(response_buf)) break;
+
+            bool already_shown = false;
+            for (int j = 0; j < connected_count; j++) {
+                if (memcmp(classic_addrs[i], connected_addrs[j], 6) == 0) {
+                    already_shown = true;
+                    break;
+                }
+            }
+            if (already_shown) continue;
+
+            // No name is stored alongside a link key, so the name is empty and
+            // the web config falls back to showing the address.
+            pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
+                    "%s{\"name\":\"\",\"addr\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
+                    "\"vid\":\"\",\"pid\":\"\",\"ble\":false,\"connected\":false}",
+                    first ? "" : ",",
+                    classic_addrs[i][0], classic_addrs[i][1], classic_addrs[i][2],
+                    classic_addrs[i][3], classic_addrs[i][4], classic_addrs[i][5]);
+            first = false;
         }
     }
 
