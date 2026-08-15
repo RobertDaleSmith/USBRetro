@@ -103,6 +103,11 @@ bool flash_load(flash_t* settings)
         return false;
     }
 
+    unsigned fixed = flash_sanitize_record(settings);
+    if (fixed) {
+        printf("[flash_nrf] %u incoherent field(s) in stored record reset to defaults\n", fixed);
+    }
+
     printf("[flash_nrf] Settings loaded\n");
     return true;
 }

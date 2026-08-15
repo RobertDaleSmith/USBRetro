@@ -246,6 +246,11 @@ bool flash_load(flash_t* settings)
     memcpy(settings, slot, sizeof(flash_t));
     current_sequence = slot->sequence;
 
+    unsigned fixed = flash_sanitize_record(settings);
+    if (fixed) {
+        printf("[flash] %u incoherent field(s) in stored record reset to defaults\n", fixed);
+    }
+
     return true;
 }
 
