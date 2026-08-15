@@ -276,7 +276,7 @@ void flash_factory_reset(void)
 // survives a reboot, mirroring the RP2040 flash_set_dpad_mode contract.
 void flash_set_dpad_mode(uint8_t mode)
 {
-    if (mode > 2) return;
+    if (mode > 3) return;   // 0-3; mode 3 = LSTICK<->RSTICK (see flash.c)
     if (!runtime_settings_loaded) return;
     if (runtime_settings.dpad_mode == mode && runtime_settings.router_saved) return;
     runtime_settings.dpad_mode  = mode;
