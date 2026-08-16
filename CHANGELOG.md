@@ -6,7 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [2.4.1] — 2026-08-15
+## [2.4.1] — 2026-08-16
 
 Patch release. **Every adapter running 2.4.0 should update**: the universal profile hotkeys added in
 2.4.0 made a long-standing settings-corruption bug reachable on 43 of the 45 apps, from a gesture the
@@ -38,6 +38,14 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   USB HID gamepad path submits nothing during a static hold, so the timer cannot advance mid-hold on
   those pads). A quick tap reaches neither and passes through. Apps with their own combo tables are
   unaffected. (#243)
+- **…and the hold now belongs to the controller that started it.** The combo table has one hold
+  timer per combo, not one per device, and every input event from every device ran through it — so
+  on any adapter with two or more controllers connected, a second player simply playing the game
+  cleared player 1's timer on each of their own events. The hold could never reach 0.7 s and all
+  five built-in hotkeys were unreachable; single-controller testing passes either way. The timer now
+  records which device opened it and ignores everyone else's events. Disconnecting a pad mid-hold
+  also clears its timer, instead of leaving a stale timestamp that fired the next press instantly.
+  (#249)
 - **D-pad mode 3 (L-stick ↔ R-stick) survives a reboot.** The 4th position of 2.4.0's D-pad slider
   applied live but was rejected by the flash setter, so it silently reset on every power cycle.
   (#242)
@@ -81,11 +89,33 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   change?" test looked only at finger 1 — and on DS4 only at its coordinates, not its down bit — so
   lifting the second finger, or a finger whose coordinates hadn't moved, produced no new report and
   the touch point stayed active. Both fingers' down bit and position are now part of the diff.
+- **Factory reset erases Bluetooth bonds too.** `SETTINGS.RESET` erased only the settings sector,
+  but BLE and Classic bonds live in a separate flash bank and survived — contradicting `flash.h`,
+  which documents the call as erasing "all stored data (settings, bonds, pad config)". A factory
+  reset from the web config is now a genuine clean slate on BT builds.
+- **The web config's "Enable Bluetooth Host" toggle no longer reads *off* on adapters whose whole job
+  is Bluetooth.** `ROUTER.GET` reported the persisted `bt_input_enabled` flag on every build, but the
+  dedicated BT bridges (`bt2usb`, `bt2gc`, `bt2n64`, `bt2nuon`, `bt2loopy`, …) never read that flag —
+  they always run the radio. On a fresh flash the byte is zero, so config.joypad.ai showed Bluetooth
+  disabled on a board that was actively scanning for controllers. `CAPS.GET` now carries a `bt_host`
+  capability pair mirroring `usb_host` (*present* = the stack is compiled in, *configurable* = the app
+  honours the runtime flag), and always-on bridges report `bt_input: true` with a read-only toggle.
+  Only `controller_btusb` and `bt2wiiext` actually honour the flag, and both stay user-settable.
 
 ### Added
 
 - **iPega PG-9021 Classic Bluetooth gamepad driver**, wired into the RP2040, ESP32-S3 and nRF builds.
   (#239, thanks @Atreus171)
+
+### Changed
+
+- **`bt2usb` now defaults to SInput output, like every other adapter.** It was the only build that
+  overrode `USBD_DEFAULT_MODE`, left at PS4 from the PS4 local-auth work, so a blank board came up
+  as a DualShock 4 instead of an SInput pad. **If your bt2usb board has never had its output mode
+  changed, it will come up in SInput after this update** — triple-click BOOTSEL is still the way
+  back to SInput, and double-click still cycles. A board with a mode saved in flash is unaffected;
+  the saved mode still wins. This also means a fresh bt2usb board is reachable from
+  config.joypad.ai out of the box, which PS4 mode (no CDC interface) blocked.
 
 ### Build & CI
 
@@ -112,6 +142,8 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 - **psx2usb:** LED claims scoped per board, config-tool pointer corrected, real button combos
   documented. (#240)
 - Build-guide controls, UF2 filenames and the output-mode cycle corrected across the guides. (#238)
+- **bt2usb build guide:** the three places it told users a fresh board comes up in PS4 mode now say
+  SInput, with a note for anyone updating from 2.4.0.
 
 ---
 

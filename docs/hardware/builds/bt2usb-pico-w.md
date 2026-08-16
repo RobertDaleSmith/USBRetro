@@ -2,10 +2,14 @@
 
 Bluetooth controllers to a USB gamepad via Raspberry Pi Pico W. No soldering required.
 
-On a freshly flashed board this build enumerates as a **PS4 (DualShock 4) controller**, not a
-generic HID gamepad — `bt2usb` is compiled with `USBD_DEFAULT_MODE=USB_OUTPUT_MODE_PS4`. The mode
-is switchable at runtime and **persists in flash**, so a board whose mode was changed previously
-comes back up in the saved mode, not in PS4. See [USB output modes](#usb-output-modes) below.
+On a freshly flashed board this build enumerates as an **SInput controller**, the same default as
+every other adapter (`USBD_DEFAULT_MODE=USB_OUTPUT_MODE_SINPUT`). The mode is switchable at runtime
+and **persists in flash**, so a board whose mode was changed previously comes back up in the saved
+mode, not in SInput. See [USB output modes](#usb-output-modes) below.
+
+> ⚠️ Before 2.4.1 `bt2usb` was the one build that overrode this and came up in **PS4** mode. A board
+> flashed with 2.4.0 or earlier that was never switched will move to SInput on its first 2.4.1 boot;
+> a board with a saved mode keeps it.
 
 ## Parts Needed
 
@@ -38,7 +42,7 @@ Alternatively, drag and drop the `.uf2` file onto the `RPI-RP2` drive that appea
    - **Switch Pro**: Hold the sync button on top
 3. With nothing connected, the Pico W scans automatically and will connect on its own
 4. The board LED shows which state it is in — see the table below
-5. The controller appears on the host PC (as a PS4 pad by default)
+5. The controller appears on the host PC (as an SInput pad by default)
 
 ### Board LED
 
@@ -85,7 +89,7 @@ Double-clicking BOOTSEL cycles through:
 SInput -> XInput -> PS3 -> PS4 -> Switch -> Keyboard/Mouse -> SInput
 ```
 
-A freshly flashed board starts in **PS4**, so the first double-click moves it to Switch.
+A freshly flashed board starts in **SInput**, so the first double-click moves it to XInput.
 Triple-click jumps straight back to SInput. Less common modes (DInput, PS Classic, Xbox Original,
 Xbox One, XAC) are not in the cycle — set those over the CDC config interface. **Each mode change
 re-enumerates the board on the USB bus**, so the host will briefly see the device disconnect and
