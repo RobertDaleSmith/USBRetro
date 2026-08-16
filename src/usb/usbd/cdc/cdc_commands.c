@@ -2684,8 +2684,11 @@ static void cmd_settings_reset(const char* json)
 
     // Bonds live in a separate flash bank (btstack_tlv), so flash_factory_reset()
     // alone leaves them behind. Clear them too so a factory reset really is a
-    // clean slate. Weak-stubbed on non-BT builds (stubs_peripheral.c).
+    // clean slate. Guarded on ENABLE_BTSTACK — btstack_host.h (the prototype) is
+    // only included for BT builds; non-BT builds have no bonds to clear anyway.
+#ifdef ENABLE_BTSTACK
     btstack_host_delete_all_bonds();
+#endif
 
 #ifdef CONFIG_PAD_INPUT
     pad_config_reset();
