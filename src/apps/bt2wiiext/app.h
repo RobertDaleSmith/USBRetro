@@ -17,6 +17,9 @@
 #define REQUIRE_BT_CYW43 1
 #define REQUIRE_USB_HOST 0
 #define MAX_USB_DEVICES 0
+// This app honours the runtime bt_input_enabled flag (see app.c), so the
+// web-config "Enable Bluetooth Host" toggle is a real, user-settable control.
+#define BT_INPUT_CONFIGURABLE 1
 
 // Output: Wii extension I2C slave at 0x52 (and no USB device).
 #define REQUIRE_USB_DEVICE 0

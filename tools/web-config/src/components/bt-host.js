@@ -77,6 +77,23 @@ export class BtHostCard {
         this.el.querySelector('#clearBtBtn').addEventListener('click', () => this.clearBtBonds());
     }
 
+    // Lock the "Enable Bluetooth Host" toggle on always-on BT bridges: BT is the
+    // only input and can't be turned off, so show it checked and disabled.
+    setBtHostReadOnly(ro) {
+        const toggle = this.el.querySelector('#btInputEnable');
+        const saveBtn = this.el.querySelector('#btHostSaveBtn');
+        if (ro) {
+            toggle.checked = true;
+            toggle.disabled = true;
+            if (saveBtn) saveBtn.style.display = 'none';
+            const hint = this.el.querySelector('#btHostCard .hint');
+            if (hint) hint.textContent = 'This adapter uses Bluetooth as its only input, so it is always on.';
+        } else {
+            toggle.disabled = false;
+            if (saveBtn) saveBtn.style.display = '';
+        }
+    }
+
     async load() {
         await this.loadWiimoteOrient();
         await this.loadBtStatus();
@@ -108,6 +125,16 @@ export class BtHostCard {
                 try {
                     const router = await this.protocol.getRouter();
                     this.el.querySelector('#btInputEnable').checked = router.bt_input || false;
+                } catch (e) {}
+                // Dedicated BT bridges (bt2usb, bt2gc, …) always run BT and can't
+                // disable their only input — CAPS reports bt_host present but not
+                // configurable, so render the toggle checked + read-only.
+                try {
+                    const caps = await this.protocol.getCapabilities();
+                    const bh = caps && caps.bt_host;
+                    if (bh && bh.present && !bh.configurable) {
+                        this.setBtHostReadOnly(true);
+                    }
                 } catch (e) {}
                 this._toggleLoaded = true;
                 this.dirty?.snapshot();

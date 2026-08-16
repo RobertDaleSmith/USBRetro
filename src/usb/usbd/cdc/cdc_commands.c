@@ -47,6 +47,26 @@
 #include "usb/usbd/modes/ps4_local_auth.h"
 #endif
 
+// Bluetooth host capability model (mirrors the usb_host present/configurable
+// split used by CAPS.GET). BT is "present" when the stack is compiled in.
+// It is "configurable" only for apps that actually honour the runtime
+// bt_input_enabled flag (controller_btusb, bt2wiiext, which #define
+// BT_INPUT_CONFIGURABLE). Dedicated BT bridges (bt2usb, bt2gc, bt2nuon, …)
+// always run BT and never read the flag, so their "Enable Bluetooth Host"
+// toggle is always-on / read-only and must report bt_input:true even on a
+// fresh flash — otherwise web config shows the toggle off while BT is running.
+#if defined(ENABLE_BTSTACK) || defined(CONFIG_BT_HOST)
+#  define BT_HOST_PRESENT 1
+#else
+#  define BT_HOST_PRESENT 0
+#endif
+#if defined(BT_INPUT_CONFIGURABLE) && BT_INPUT_CONFIGURABLE
+#  define BT_HOST_CONFIGURABLE 1
+#else
+#  define BT_HOST_CONFIGURABLE 0
+#endif
+#define BT_INPUT_ALWAYS_ON (BT_HOST_PRESENT && !BT_HOST_CONFIGURABLE)
+
 // ============================================================================
 // STATE
 // ============================================================================
@@ -2321,7 +2341,7 @@ static void cmd_router_get(const char* json)
 #endif
 
     flash_t scratch;
-#if REQUIRE_BT_INPUT
+#if BT_INPUT_ALWAYS_ON || REQUIRE_BT_INPUT
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 1;
 #else
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 0;
@@ -2335,7 +2355,9 @@ static void cmd_router_get(const char* json)
     if (s && s->router_saved) {
         if (s->routing_mode <= 2) rm = s->routing_mode;
         if (s->merge_mode <= 2) mm = s->merge_mode;
-        bti = s->bt_input_enabled;
+#if !BT_INPUT_ALWAYS_ON
+        bti = s->bt_input_enabled;   // always-on bridges ignore the persisted flag
+#endif
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"routing_mode\":%d,\"merge_mode\":%d,\"dpad_mode\":%d,"
@@ -2540,11 +2562,18 @@ static void cmd_caps_get(const char* json)
     const char* nin_src  = native_input  ? app_registry_input_source_name(native_input->source) : "";
     const char* nout_tgt = native_output ? app_registry_output_target_name(native_output->target) : "";
     int nout_players = native_output ? router_get_max_players(native_output->target) : 0;
+    // Bluetooth host capability (mirror of usb_host). present = stack compiled
+    // in; configurable = the app honours the runtime enable toggle. Dedicated BT
+    // bridges are present-but-not-configurable → read-only always-on page.
+    const char* bt_present      = BT_HOST_PRESENT      ? "true" : "false";
+    const char* bt_configurable = BT_HOST_CONFIGURABLE ? "true" : "false";
     n = snprintf(out, rem,
                  "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}"
+                 ",\"bt_host\":{\"present\":%s,\"configurable\":%s}"
                  ",\"native\":{\"in\":%s%s%s,\"in_source_name\":\"%s\""
                  ",\"out\":%s%s%s,\"out_target_name\":\"%s\",\"out_players\":%d}}",
                  uh_present, uh_configurable, uh_dp,
+                 bt_present, bt_configurable,
                  nin  ? "\"" : "null", nin  ? nin  : "", nin  ? "\"" : "", nin_src,
                  nout ? "\"" : "null", nout ? nout : "", nout ? "\"" : "", nout_tgt, nout_players);
     if (n < 0 || n >= rem) goto overflow;

@@ -33,6 +33,9 @@
 #ifndef REQUIRE_BT_INPUT
 #define REQUIRE_BT_INPUT 0          // BLE Central: scan for BT/BLE controllers
 #endif
+// This app honours the runtime bt_input_enabled flag, so the web-config
+// "Enable Bluetooth Host" toggle is a real, user-settable control.
+#define BT_INPUT_CONFIGURABLE 1
 
 // Output drivers
 #ifndef REQUIRE_BLE_OUTPUT
