@@ -41,6 +41,14 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 - **D-pad mode 3 (L-stick ↔ R-stick) survives a reboot.** The 4th position of 2.4.0's D-pad slider
   applied live but was rejected by the flash setter, so it silently reset on every power cycle.
   (#242)
+- 🔴 **…and selecting that slider position no longer wipes your router settings.** The write side
+  above was only half the fix: the load-time sanitizer kept its own copy of the valid range and still
+  clamped the D-pad mode at 2, so every boot reverted it. Worse, a clamp marks the record as one that
+  "was never written deliberately", and that branch also clears the saved-router flag — which gates
+  the entire restore block — so the reboot after touching the slider *also* dropped the persisted
+  **shoulder swap** and **un-hid every built-in profile** disabled in the web config, on all 45 apps.
+  The bound is now a single constant shared by the setter and the sanitizer. Genuinely out-of-range
+  values are still caught. (#250)
 
 #### GameCube
 
@@ -81,6 +89,14 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 
 ### Build & CI
 
+- 🔴 **Released firmware reports its own version correctly again.** Every 2.4.0 UF2 self-reported
+  `2.3.0`, and every 2.3.0 UF2 reported `2.2.0` — in the web config, in the boot banner, and in the
+  USB device descriptor, so there was no surface on which a user could confirm which build they were
+  running. The release workflow bumped `VERSION` in a new commit but the build jobs did not depend on
+  that job, so they compiled the tree from just before the bump. The builds now check out the bump
+  commit, and the run fails outright if the tree being compiled does not carry the version being
+  released — the original failure produced no error at all, which is how it survived two releases.
+  (#245, #246; thanks mitsuschi for the report)
 - Every driver the BTHID/device registries reference is now compiled, and CI fails if one is
   referenced but not built. (#233)
 - `controller_btusb` builds for the **Seeed XIAO nRF52840**. (#219)
