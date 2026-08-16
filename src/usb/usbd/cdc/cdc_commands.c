@@ -2653,6 +2653,11 @@ static void cmd_settings_reset(const char* json)
     // Factory reset — erase all stored data
     flash_factory_reset();
 
+    // Bonds live in a separate flash bank (btstack_tlv), so flash_factory_reset()
+    // alone leaves them behind. Clear them too so a factory reset really is a
+    // clean slate. Weak-stubbed on non-BT builds (stubs_peripheral.c).
+    btstack_host_delete_all_bonds();
+
 #ifdef CONFIG_PAD_INPUT
     pad_config_reset();
 #endif
