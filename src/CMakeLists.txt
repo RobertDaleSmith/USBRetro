@@ -1459,7 +1459,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         CONFIG_BT2USB=1
         CONFIG_USB=1
         DISABLE_USB_HOST=1
-        USBD_DEFAULT_MODE=USB_OUTPUT_MODE_PS4
+        USBD_DEFAULT_MODE=USB_OUTPUT_MODE_SINPUT
         USE_BOOTSEL_BUTTON=1
         CYW43_LWIP=0
         # BTstack uses async_context, not embedded run loop
