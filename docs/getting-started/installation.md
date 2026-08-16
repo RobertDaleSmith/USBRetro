@@ -142,14 +142,14 @@ The GC USB adapter automatically enters bootloader mode when powered on without 
 Several adapters support switchable button mapping profiles:
 
 ### GameCube (USB2GC)
-- Hold **Select** for 2 seconds
-- Then press **D-Pad Up/Down** to cycle profiles
+- Hold **Select + D-Pad Up** (previous) or **Select + D-Pad Down** (next) together for ~0.7 s
+- Stops at the first/last profile — it does not wrap
 - Profiles: Default, SNES, SSBM, MKWii, Fighting
 - See [GameCube app docs](../apps/usb2gc.md) for details
 
 ### 3DO (USB23DO)
-- Hold **Select** for 2 seconds
-- Then press **D-Pad Up/Down** to cycle profiles
+- Hold **Select + D-Pad Up** (previous) or **Select + D-Pad Down** (next) together for ~0.7 s
+- Stops at the first/last profile — it does not wrap
 - Profiles: Default, Fighting, Shooter
 - See [3DO app docs](../apps/usb23do.md) for details
 

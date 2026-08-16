@@ -40,11 +40,14 @@ Native 3DO controllers can be connected in series:
 
 Switch between optimized button mappings:
 
-**Switching Profiles:**
-1. Hold **Select** for 2 seconds
-2. Press **D-Pad Up/Down** to cycle profiles
-3. LED blinks and controller rumbles to confirm
-4. Profile saves to flash memory
+**Switching profiles:**
+
+1. Press **SELECT + D-Pad Up** (previous profile) or **SELECT + D-Pad Down** (next) — both buttons
+   together, not one after the other
+2. Keep them held for about **0.7 s**; a quick tap passes straight through to the game
+3. LED flashes and the controller rumbles to confirm
+4. The selection stops at the first and last profile — it does not wrap around
+5. Profile saves to flash (persists across power cycles)
 
 ## Button Mappings
 

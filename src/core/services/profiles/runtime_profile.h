@@ -75,7 +75,8 @@ void runtime_profile_clear(void);
 void runtime_autofire_clear(void);
 
 // Drive the state machine with the latest raw button state.
-// Call from the output device task loop alongside profile_check_switch_combo().
+// Call from the output device task loop. (Profile-switch combos are handled by the router's
+// combo table now — profile_check_switch_combo() no longer exists.)
 // l2/r2: raw analog values (0-255) for threshold and digital normalization.
 void runtime_profile_check_combo(uint32_t input_buttons, uint8_t l2, uint8_t r2);
 

@@ -180,7 +180,9 @@ Button remapping profiles are defined per-app in `profiles.h`. Each profile maps
 - Analog targets (button → analog axis value)
 - Analog sensitivity scaling
 
-Profile cycling: SELECT + D-pad Up/Down (held 2 seconds). Selection persists to flash via storage.
+Profile switching: SELECT + D-pad Up (previous) / Down (next), held together for
+`ROUTER_DEFAULT_COMBO_HOLD_MS` (700 ms). Clamps at the ends. Selection persists to flash via
+storage. Apps that call `router_set_combo()` replace the defaults and fire instantly.
 
 ### Storage
 

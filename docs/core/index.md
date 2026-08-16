@@ -66,8 +66,12 @@ Button remapping profiles are defined per-app in `profiles.h`. Each profile is a
 
 **User interaction:**
 
-- Hold SELECT + D-pad Up for 2 seconds to cycle to the next profile.
-- Hold SELECT + D-pad Down for 2 seconds to cycle to the previous profile.
+- Hold SELECT + D-pad Up together for ~0.7 s to step to the **previous** profile.
+- Hold SELECT + D-pad Down together for ~0.7 s to step to the **next** profile.
+- Both clamp at the ends of the list; they do not wrap around.
+- A press shorter than the hold passes through to the game untouched.
+- Apps that register their own combo table (`gc2usb`, `controller_btusb`) replace these and fire
+  instantly — the hold applies only to the router's built-in defaults.
 - The NeoPixel LED flashes to confirm the change.
 - The selected profile persists to flash and survives power cycles.
 
