@@ -89,6 +89,10 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   change?" test looked only at finger 1 — and on DS4 only at its coordinates, not its down bit — so
   lifting the second finger, or a finger whose coordinates hadn't moved, produced no new report and
   the touch point stayed active. Both fingers' down bit and position are now part of the diff.
+- **Factory reset erases Bluetooth bonds too.** `SETTINGS.RESET` erased only the settings sector,
+  but BLE and Classic bonds live in a separate flash bank and survived — contradicting `flash.h`,
+  which documents the call as erasing "all stored data (settings, bonds, pad config)". A factory
+  reset from the web config is now a genuine clean slate on BT builds.
 
 ### Added
 
