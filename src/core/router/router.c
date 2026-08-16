@@ -435,7 +435,9 @@ bool router_onboard_motion_get(int16_t accel[3], int16_t gyro[3]) {
 
 // Built-in hotkeys so profile-switch / d-pad-mode / shoulder-swap work on every
 // app out of the box (previously only gc2usb/controller_btusb registered combos).
-// All fire once per press (instant, no hold):
+// All require a ~0.7 s deliberate hold (ROUTER_DEFAULT_COMBO_HOLD_MS) before they fire and
+// before they consume the buttons — see the note above the constant. App-registered tables are
+// instant.
 //   SELECT + Up/Down     → profile prev/next   (clamps at the ends, no wrap)
 //   SELECT + Left/Right  → d-pad mode slider [left stick <- d-pad -> right stick]
 //   START  + Up          → shoulder swap toggle (L1<->L2, R1<->R2)

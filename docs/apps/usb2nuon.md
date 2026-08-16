@@ -31,7 +31,8 @@ Connects USB and Bluetooth controllers to a Nuon-enhanced DVD player via the Pol
 - **In-Game Reset (IGR)** -- Hold L1 + R1 + Start + Select:
   - Tap (release before 2s): sends Stop (returns to DVD menu)
   - Hold 2+ seconds: sends Power (powers off the player)
-- **Profiles** -- Hold Select 2s, then D-Pad Up/Down to cycle.
+- **Profiles** -- Hold SELECT + D-Pad Up (previous) or Down (next) together for ~0.7 s. Stops at
+  the ends; does not wrap.
 
 ## Supported Boards
 

@@ -59,7 +59,7 @@ Outputs translate the common input format into console-specific or USB protocols
 
 Built-in services provide cross-cutting features available to all apps:
 
-**Profiles** — Button remapping. Each app can define multiple profiles (e.g., Default, SSBM, MKWii for GameCube). Users cycle profiles by holding SELECT + D-pad Up/Down for 2 seconds. Selection persists to flash.
+**Profiles** — Button remapping. Each app can define multiple profiles (e.g., Default, SSBM, MKWii for GameCube). Users step profiles by holding SELECT + D-pad Up (previous) or Down (next) together for ~0.7 s; the selection clamps at the ends rather than wrapping, and persists to flash.
 
 **Player Management** — Tracks connected controllers, assigns player slots, and manages feedback routing (rumble, player LEDs, RGB).
 

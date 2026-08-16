@@ -17,12 +17,14 @@ Switch between pre-configured profiles to match different gamepads and playstyle
 - **Pad B** - NEOGEO Pad Type 2 (KOF/Fighting Style)
 
 
-**Switching Profiles:**
-1. Hold **Select** for 2 seconds
-2. Press **D-Pad Up** to cycle forward
-3. Press **D-Pad Down** to cycle backward
-4. Controller rumbles and LED flashes to confirm
-5. Profile saves to flash memory (persists across power cycles)
+**Switching profiles:**
+
+1. Press **SELECT + D-Pad Up** (previous profile) or **SELECT + D-Pad Down** (next) — both buttons
+   together, not one after the other
+2. Keep them held for about **0.7 s**; a quick tap passes straight through to the game
+3. LED flashes and the controller rumbles to confirm
+4. The selection stops at the first and last profile — it does not wrap around
+5. Profile saves to flash (persists across power cycles)
 
 
 ## Button Mappings

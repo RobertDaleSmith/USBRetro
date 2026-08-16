@@ -26,7 +26,7 @@ Connects USB and Bluetooth controllers to a 3DO console via the PBUS daisy-chain
 
 ## Profiles
 
-Hold **Select** for 2 seconds, then press **D-Pad Up/Down** to cycle.
+Press **SELECT + D-Pad Up** (previous profile) or **SELECT + D-Pad Down** (next) together and hold for about **0.7 s** — pressing them one after the other does nothing, and a quick tap passes through to the game. The selection stops at the ends rather than wrapping.
 
 | Profile | Description |
 |---------|-------------|
