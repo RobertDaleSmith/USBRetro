@@ -93,6 +93,14 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
   but BLE and Classic bonds live in a separate flash bank and survived — contradicting `flash.h`,
   which documents the call as erasing "all stored data (settings, bonds, pad config)". A factory
   reset from the web config is now a genuine clean slate on BT builds.
+- **The web config's "Enable Bluetooth Host" toggle no longer reads *off* on adapters whose whole job
+  is Bluetooth.** `ROUTER.GET` reported the persisted `bt_input_enabled` flag on every build, but the
+  dedicated BT bridges (`bt2usb`, `bt2gc`, `bt2n64`, `bt2nuon`, `bt2loopy`, …) never read that flag —
+  they always run the radio. On a fresh flash the byte is zero, so config.joypad.ai showed Bluetooth
+  disabled on a board that was actively scanning for controllers. `CAPS.GET` now carries a `bt_host`
+  capability pair mirroring `usb_host` (*present* = the stack is compiled in, *configurable* = the app
+  honours the runtime flag), and always-on bridges report `bt_input: true` with a read-only toggle.
+  Only `controller_btusb` and `bt2wiiext` actually honour the flag, and both stay user-settable.
 
 ### Added
 
