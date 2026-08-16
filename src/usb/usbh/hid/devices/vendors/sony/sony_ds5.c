@@ -61,6 +61,14 @@ bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
     return true;
   }
 
+  // Check tpad_f2_down and tpad_f2_pos too — without this, releasing the SECOND
+  // finger while the first is unchanged produced no new report, so the second
+  // touch point stayed stuck active (seen releasing a two-finger touch).
+  if (rpt1->tpad_f2_down != rpt2->tpad_f2_down ||
+    memcmp(rpt1->tpad_f2_pos, rpt2->tpad_f2_pos, sizeof(rpt1->tpad_f2_pos)) != 0) {
+    return true;
+  }
+
   return false;
 }
 

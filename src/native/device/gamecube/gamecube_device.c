@@ -86,6 +86,49 @@ uint8_t hid_to_gc_key[256] = {[0 ... 255] = GC_KEY_NOT_FOUND};
 uint8_t gc_last_rumble = 0;
 uint8_t gc_kb_counter = 0;
 
+// ============================================================================
+// KEYBOARD MODE ACTIVATION CHORD
+// ============================================================================
+// Third activation binding, for keyboards that have neither Scroll Lock nor an
+// F13-F24 row — 65% boards and smaller (discussion #220).
+//
+// It has to be a chord rather than a fourth single key. gc_kb_key_lookup_init()
+// below gives the GameCube keyboard its own keycode for 77 of the 112 HID codes
+// in 0x04-0x73, and a toggle bound to one of those would switch the mode *and*
+// type the character into the game. The 35 codes it leaves free are Scroll Lock,
+// Pause, Num Lock, the numeric keypad, F13-F24 and EUROPE_1/2 — i.e. exactly the
+// clusters a 65% board drops. (EUROPE_2 is free only because the GameCube
+// keyboard is US/JP; it is a real typing key on every ISO board, so it is not a
+// candidate either.) There is no single key that is both present on a small
+// board and free of a GameCube keycode, which is why Scroll Lock and F14 were
+// picked in the first place.
+//
+// To rebind, change these three defines. The modifier side does not matter:
+// process_hid_keyboard() folds right Ctrl/Alt onto the LEFT keycodes before the
+// event reaches us, so Ctrl and Alt on either side of the space bar both work.
+#define GC_KB_TOGGLE_MOD1  HID_KEY_CONTROL_LEFT
+#define GC_KB_TOGGLE_MOD2  HID_KEY_ALT_LEFT
+#define GC_KB_TOGGLE_KEY   HID_KEY_K
+
+// event->keys is a lossy 32-bit packing of the USB HID keyboard report: up to
+// three keycodes, with any held modifiers shifted in at the low end (see
+// process_hid_keyboard in hid_keyboard.c). A trigger therefore has to be matched
+// as set membership over the four bytes, not as equality against the whole word.
+// Comparing the word — as this did until now — means the key only toggles when
+// pressed completely alone: holding any modifier shifts the keycode up a byte
+// and the compare silently fails.
+//
+// No false matches are possible: modifier keycodes (0xE0-0xE7) never appear in
+// the report's keycode[] array, and an unused byte is 0 while every trigger
+// constant is non-zero.
+static inline bool gc_keys_contain(uint32_t keys, uint8_t code)
+{
+  return (uint8_t)( keys        & 0xFF) == code ||
+         (uint8_t)((keys >>  8) & 0xFF) == code ||
+         (uint8_t)((keys >> 16) & 0xFF) == code ||
+         (uint8_t)((keys >> 24) & 0xFF) == code;
+}
+
 // Helper function to scale analog values relative to center (128)
 // Clamps to 1-255 range - some GameCube games reject 0 as invalid
 static inline uint8_t scale_toward_center(uint8_t val, float scale, uint8_t center)
@@ -243,6 +286,7 @@ void ngc_init()
   printf("[gc] joybus DATA pin: GPIO %d%s\n", data_pin,
          (data_pin != GC_DATA_PIN) ? " (override)" : "");
   GamecubeConsole_init(&gc, data_pin, pio, sm, offset);
+  gc._reading_mode = GamecubeMode_3;  // every poll overwrites this; 3 is the sane default
   gc_report = default_gc_report;
 
   const profile_t* profile = profile_get_active(OUTPUT_TARGET_GAMECUBE);
@@ -267,6 +311,82 @@ uint8_t furthest_from_center(uint8_t a, uint8_t b, uint8_t center)
   }
 }
 
+// ============================================================================
+// ANALOG POLL MODES
+// ============================================================================
+// A console polls with {0x40, analog_mode, motor_state}. Buttons and the main
+// stick occupy bytes 0-3 of the 8-byte reply in every mode; bytes 4-7 change
+// meaning with the requested mode, because the controller's full state is 10
+// bytes and only 8 of them fit in the reply. joybus-pio stores the mode byte in
+// GamecubeConsole._reading_mode and never reads it back (its SendReport still
+// carries the upstream "TODO: Translate report according to reading mode"), so
+// every reply has gone out in mode 3 regardless of what was asked for.
+//
+// Layouts below are from libjoybus (src/target/gc_controller.c, unit-tested)
+// and agree with BlueRetro (main/wired/nsi.c) on modes 0/1/3/4. A packed pair
+// puts the FIRST axis in the HIGH nibble.
+//
+//   mode 0, 5-7 : cx         cy         L:4|R:4    A:4|B:4
+//   mode 1      : cx:4|cy:4  L          R          A:4|B:4
+//   mode 2      : cx:4|cy:4  L:4|R:4    A          B
+//   mode 3      : cx         cy         L          R         <- default
+//   mode 4      : cx         cy         A          B
+//
+// Analog A/B only existed on pre-production controllers; a retail pad reports
+// zero for both, which is also what our origin reply already claims
+// (gc_origin_t.reserved0 / reserved1).
+#define GC_ANALOG_A 0
+#define GC_ANALOG_B 0
+
+static void __not_in_flash_func(gc_pack_analog_mode)(gc_report_t* dest,
+                                                     const gc_report_t* src,
+                                                     int mode)
+{
+  *dest = *src;  // bytes 0-3 (buttons + main stick) are mode-independent
+
+  const uint8_t cx = src->cstick_x;
+  const uint8_t cy = src->cstick_y;
+  const uint8_t l  = src->l_analog;
+  const uint8_t r  = src->r_analog;
+  const uint8_t a  = GC_ANALOG_A;
+  const uint8_t b  = GC_ANALOG_B;
+
+  switch (mode)
+  {
+    case GamecubeMode_1:
+      dest->raw8[4] = (cx & 0xF0) | (cy >> 4);
+      dest->raw8[5] = l;
+      dest->raw8[6] = r;
+      dest->raw8[7] = (a & 0xF0) | (b >> 4);
+      break;
+    case GamecubeMode_2:
+      dest->raw8[4] = (cx & 0xF0) | (cy >> 4);
+      dest->raw8[5] = (l & 0xF0) | (r >> 4);
+      dest->raw8[6] = a;
+      dest->raw8[7] = b;
+      break;
+    case GamecubeMode_3:
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = l;
+      dest->raw8[7] = r;
+      break;
+    case GamecubeMode_4:
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = a;
+      dest->raw8[7] = b;
+      break;
+    case GamecubeMode_0:
+    default:  // modes 5-7 pack the same way as mode 0
+      dest->raw8[4] = cx;
+      dest->raw8[5] = cy;
+      dest->raw8[6] = (l & 0xF0) | (r >> 4);
+      dest->raw8[7] = (a & 0xF0) | (b >> 4);
+      break;
+  }
+}
+
 // core1_task - inner-loop for the second core
 void __not_in_flash_func(core1_task)(void)
 {
@@ -278,8 +398,20 @@ void __not_in_flash_func(core1_task)(void)
     // Wait for GameCube console to poll controller
     gc_rumble = GamecubeConsole_WaitForPoll(&gc) ? 255 : 0;
 
-    // Send GameCube controller button report
-    GamecubeConsole_SendReport(&gc, &gc_report);
+    // Send the report packed for the analog mode the console actually asked
+    // for. Mode 3 is what every production game but Luigi's Mansion uses and
+    // goes out untouched; a keyboard poll (0x54) reuses the same argument byte
+    // for something that is not an analog mode, so it is excluded.
+    if (gc_state.button_mode == BUTTON_MODE_KB || gc._reading_mode == GamecubeMode_3)
+    {
+      GamecubeConsole_SendReport(&gc, &gc_report);
+    }
+    else
+    {
+      gc_report_t packed_report;
+      gc_pack_analog_mode(&packed_report, &gc_report, gc._reading_mode);
+      GamecubeConsole_SendReport(&gc, &packed_report);
+    }
 
     gc_kb_counter++;
     gc_kb_counter &= 15;
@@ -368,7 +500,11 @@ void __not_in_flash_func(update_output)(void)
   }
 
   // Handle keyboard mode toggle
-  bool kbModeButtonPress = event->keys == HID_KEY_SCROLL_LOCK || event->keys == HID_KEY_F14;
+  bool kbModeButtonPress = gc_keys_contain(event->keys, HID_KEY_SCROLL_LOCK) ||
+                           gc_keys_contain(event->keys, HID_KEY_F14) ||
+                           (gc_keys_contain(event->keys, GC_KB_TOGGLE_MOD1) &&
+                            gc_keys_contain(event->keys, GC_KB_TOGGLE_MOD2) &&
+                            gc_keys_contain(event->keys, GC_KB_TOGGLE_KEY));
   if (kbModeButtonPress)
   {
     if (!kbModeButtonHeld)
@@ -444,6 +580,17 @@ void __not_in_flash_func(update_output)(void)
     uint8_t k0 = (uint8_t)((event->keys >>  0) & 0xFF);
     uint8_t k1 = (uint8_t)((event->keys >>  8) & 0xFF);
     uint8_t k2 = (uint8_t)((event->keys >> 16) & 0xFF);
+
+    // Don't type the activation chord itself. Scroll Lock and F14 were never an
+    // issue — the lookup table has no GameCube keycode for either — but Ctrl,
+    // Alt and every letter are all mapped (GC_KEY_LEFTCTRL, GC_KEY_LEFTALT,
+    // GC_KEY_K), so without this the chord would be sent to the game for as long
+    // as it is held, starting on the frame that enters keyboard mode. Suppress
+    // while the chord is matched rather than only on its leading edge.
+    if (kbModeButtonPress) {
+      k0 = k1 = k2 = 0;
+    }
+
     new_report.keyboard.keypress[0] = gc_kb_key_lookup(k0);
     new_report.keyboard.keypress[1] = gc_kb_key_lookup(k1);
     new_report.keyboard.keypress[2] = gc_kb_key_lookup(k2);
@@ -518,6 +665,94 @@ static bool gc_set_native_config(const char* json, char* response_buf, uint16_t 
     sleep_ms(150);
     platform_reboot();
     return true;
+}
+
+// ============================================================================
+// CONSOLE PRESENCE DETECTION
+// ============================================================================
+// The joybus data line idles HIGH only while a powered console holds it up
+// through its ~1k pull-up; our internal ~50k pull-down wins when nothing is
+// attached. That is the whole test: HIGH -> play mode, LOW -> CDC config mode.
+//
+// It used to be one gpio_get() taken 200 ms after boot, and a single sample can
+// miss two ways. The adapter draws its power from the same connector as the
+// console, so both come up together and the console's line is not guaranteed to
+// be high at t=200 ms; and a sample can land inside a joybus transfer, which
+// drives the line low for the length of the burst. Either miss stuck the
+// adapter in config mode for good -- nothing re-checked it and nothing
+// recovered, so the only way out was a replug in the right order (#164, #165).
+//
+// So: keep sampling for a while instead of once, and re-check while in config
+// mode so a console that shows up late is picked up without a replug.
+
+#define GC_DETECT_SETTLE_MS     200  // let the line settle before the first sample
+#define GC_DETECT_WINDOW_MS     800  // keep sampling this long before giving up
+#define GC_DETECT_POLL_MS         5
+
+#define GC_RECHECK_INTERVAL_MS  250  // how often to re-sample while in config mode
+#define GC_RECHECK_CONFIRM       10  // consecutive highs (2.5 s) before rebooting
+
+static uint gc_detect_pin = GC_DATA_PIN;
+
+uint gamecube_detect_pin(void)
+{
+    flash_init();  // idempotent -- needed this early to read the pin override
+    flash_t* settings = flash_get_settings();
+    if (settings && settings->joybus_data_pin > 0 && settings->joybus_data_pin <= 28) {
+        return settings->joybus_data_pin;
+    }
+    return GC_DATA_PIN;
+}
+
+bool gamecube_console_detect(void)
+{
+    // Honour the runtime pin override so detection uses the same pin joybus
+    // init will claim later.
+    gc_detect_pin = gamecube_detect_pin();
+
+    gpio_init(gc_detect_pin);
+    gpio_set_dir(gc_detect_pin, GPIO_IN);
+    gpio_pull_down(gc_detect_pin);
+
+    sleep_ms(GC_DETECT_SETTLE_MS);
+    if (gpio_get(gc_detect_pin)) return true;  // unchanged 200 ms boot into play mode
+
+    for (uint32_t waited = 0; waited < GC_DETECT_WINDOW_MS; waited += GC_DETECT_POLL_MS) {
+        sleep_ms(GC_DETECT_POLL_MS);
+        if (gpio_get(gc_detect_pin)) {
+            printf("[gc] console detected after %lu ms\n",
+                   (unsigned long)(GC_DETECT_SETTLE_MS + waited + GC_DETECT_POLL_MS));
+            return true;
+        }
+    }
+    return false;
+}
+
+void gamecube_config_mode_task(void)
+{
+    static uint32_t last_sample_ms = 0;
+    static uint8_t high_streak = 0;
+
+    uint32_t now = platform_time_ms();
+    if ((uint32_t)(now - last_sample_ms) < GC_RECHECK_INTERVAL_MS) return;
+    last_sample_ms = now;
+
+    // Nothing but a console can pull this line high: joybus never claimed the
+    // pin in config mode, so it is still an input with our pull-down engaged.
+    if (!gpio_get(gc_detect_pin)) {
+        high_streak = 0;
+        return;
+    }
+    if (++high_streak < GC_RECHECK_CONFIRM) return;
+    high_streak = 0;
+
+    // Don't yank the board out from under someone who is configuring it: a CDC
+    // host has to assert DTR for this to be true, so a plain power source or a
+    // console-only hookup -- the case we are here to recover -- does not count.
+    if (tud_cdc_connected()) return;
+
+    printf("[gc] console appeared after boot - rebooting into play mode\n");
+    platform_reboot();
 }
 
 // ============================================================================

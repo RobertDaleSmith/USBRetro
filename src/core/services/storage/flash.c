@@ -246,6 +246,11 @@ bool flash_load(flash_t* settings)
     memcpy(settings, slot, sizeof(flash_t));
     current_sequence = slot->sequence;
 
+    unsigned fixed = flash_sanitize_record(settings);
+    if (fixed) {
+        printf("[flash] %u incoherent field(s) in stored record reset to defaults\n", fixed);
+    }
+
     return true;
 }
 
@@ -529,7 +534,12 @@ uint8_t flash_get_active_profile_index(void)
 // Idempotent — skips the write if value + saved-flag already match.
 void flash_set_dpad_mode(uint8_t mode)
 {
-    if (mode > 2) return;
+    // Mode 3 (LSTICK<->RSTICK) was added alongside the 4-position d-pad slider
+    // hotkey; this guard still said 2 and silently dropped it, so the slider's
+    // rightmost position never survived a reboot. The bound is shared with
+    // flash_sanitize_record() — raising one without the other is what let the
+    // load side keep reverting what the write side had just fixed.
+    if (mode > FLASH_DPAD_MODE_MAX) return;
     if (!runtime_settings_loaded) {
         flash_t tmp;
         if (!flash_load(&tmp)) memset(&tmp, 0, sizeof(tmp));

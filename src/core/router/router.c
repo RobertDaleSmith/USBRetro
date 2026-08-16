@@ -272,7 +272,24 @@ static struct {
     uint32_t output_mask;
     uint8_t required_layout;   // controller_layout_t, 0 = any layout
     bool fired;
+    uint32_t held_since;       // ms timestamp the combo became fully held (0 = not held)
+    uint32_t held_dev;         // device that owns the in-progress hold (0 = none)
 } router_combos[ROUTER_COMBO_MAX];
+
+// Identity of the device an event came from, for combo hold ownership. Raw
+// dev_addr/instance rather than the shared player slot: a Joy-Con Grip's two
+// interfaces are one player but only one of them is pressing the combo, so the
+// other half's traffic must not count as the holder. Never 0 — 0 means "none".
+static inline uint32_t combo_dev_key(const input_event_t* event) {
+    return 0x10000u | ((uint32_t)event->dev_addr << 8) | (uint8_t)event->instance;
+}
+
+// Built-in default combos (SELECT/START + D-pad) require a brief deliberate hold
+// before they fire AND before they consume the buttons, so a quick in-game
+// SELECT/START + D-pad passes through to the console instead of silently
+// switching a profile on the 40+ apps that inherit the defaults. App-registered
+// combo tables (router_default_combos_active == false) keep instant behavior.
+#define ROUTER_DEFAULT_COMBO_HOLD_MS 700
 
 // Active output count (for broadcast mode)
 static output_target_t active_outputs[MAX_OUTPUTS];
@@ -895,6 +912,42 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     // emits the gamepad report.
                     x_current_state.as_gamepad |= dev->as_gamepad;
 
+                    // Raw HID keyboard state. The `keys` field above is the
+                    // lossy gamepad-mapped encoding; output paths that need real
+                    // keystrokes (sinput_mode's composite keyboard interface)
+                    // read kb_modifier/kb_keys instead, and those were being
+                    // dropped here. Modifier is a bitmask, so OR it like buttons;
+                    // keycodes are a 6-slot rollover set, so append each distinct
+                    // non-zero key until the slots are full.
+                    x_current_state.kb_modifier |= dev->kb_modifier;
+                    for (int j = 0; j < 6 && dev->kb_keys[j] != 0; j++) {
+                        uint8_t k = dev->kb_keys[j];
+                        bool dup = false;
+                        int free_slot = -1;
+                        for (int s = 0; s < 6; s++) {
+                            if (x_current_state.kb_keys[s] == k) { dup = true; break; }
+                            if (x_current_state.kb_keys[s] == 0) { free_slot = s; break; }
+                        }
+                        if (!dup && free_slot >= 0) {
+                            x_current_state.kb_keys[free_slot] = k;
+                        }
+                    }
+
+                    // Consumer control (media/volume) is a single usage selector,
+                    // not a bitmask — it cannot be OR'd. Use the first device
+                    // reporting one, mirroring the motion/pressure/touch rule.
+                    if (dev->consumer_usage != 0 && x_current_state.consumer_usage == 0) {
+                        x_current_state.consumer_usage = dev->consumer_usage;
+                    }
+
+                    // Chatpad (Xbox 360): first device that has one.
+                    if (dev->has_chatpad && !x_current_state.has_chatpad) {
+                        x_current_state.has_chatpad = true;
+                        x_current_state.chatpad[0] = dev->chatpad[0];
+                        x_current_state.chatpad[1] = dev->chatpad[1];
+                        x_current_state.chatpad[2] = dev->chatpad[2];
+                    }
+
                     // Analog: use furthest from center for sticks, max for triggers
                     // New format: [0]=LX, [1]=LY, [2]=RX, [3]=RY, [4]=L2, [5]=R2
                     for (int j = 0; j < ANALOG_COUNT; j++) {
@@ -918,6 +971,19 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     x_current_state.delta_y += dev->delta_y;
                     dev->delta_x = 0;
                     dev->delta_y = 0;
+
+                    // Scroll wheel is one-shot per event like delta_x/delta_y and
+                    // was the one relative axis this loop did not merge, so every
+                    // consumer (sinput mouse report, BLE mouse, Amiga wheel
+                    // accumulator) saw a permanent zero in blend mode. Clamped
+                    // because the field is int8_t, unlike the int16 deltas above.
+                    {
+                        int wheel = (int)x_current_state.delta_wheel + (int)dev->delta_wheel;
+                        if (wheel >  127) wheel =  127;
+                        if (wheel < -128) wheel = -128;
+                        x_current_state.delta_wheel = (int8_t)wheel;
+                    }
+                    dev->delta_wheel = 0;
 
                     // Motion: use first device that has motion data
                     if (dev->has_motion && !x_current_state.has_motion) {
@@ -951,11 +1017,21 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                         x_current_state.battery_charging = dev->battery_charging;
                     }
 
-                    // Use metadata from first active device
+                    // Use metadata from first active device.
+                    // transport/layout belong here too: sinput_mode.c reads both
+                    // off the merged event (update_device_info + cached_layout)
+                    // and INPUT_TRANSPORT_NONE / LAYOUT_UNKNOWN are both 0, so
+                    // omitting them didn't leave the value stale — it reported a
+                    // defined "unknown" for a device the router knew exactly.
                     if (first) {
                         x_current_state.dev_addr = dev->dev_addr;
                         x_current_state.instance = dev->instance;
                         x_current_state.type = dev->type;
+                        x_current_state.transport = dev->transport;
+                        x_current_state.layout = dev->layout;
+                        x_current_state.button_count = dev->button_count;
+                        x_current_state.has_rumble = dev->has_rumble;
+                        x_current_state.has_force_feedback = dev->has_force_feedback;
                         first = false;
                     }
                 }
@@ -1275,12 +1351,56 @@ void router_submit_input(const input_event_t* event) {
         if (router_combos[c].required_layout &&
             event->layout != router_combos[c].required_layout) {
             router_combos[c].fired = false;
+            router_combos[c].held_since = 0;   // both halves of the state, or a
+            router_combos[c].held_dev = 0;     // stale timer outlives the filter
             continue;
         }
 
         bool held = (event->buttons & in) == in;
-        if (!held) {
-            router_combos[c].fired = false;
+
+        // Decide whether to run the combo action this pass.
+        //
+        // Default combos require a deliberate ~0.7s hold, so a quick in-game
+        // SELECT/START + D-pad passes straight through instead of switching a
+        // profile. The catch: the USB HID input path is change-gated (a driver
+        // only submits an event when the report *changes* — hid_gamepad.c), so a
+        // static hold produces no events after the press and a timer can't
+        // advance on the input path alone. So fire on WHICHEVER edge arrives:
+        // while still held once the hold has elapsed (streaming controllers), or
+        // on the release edge if it was held long enough (change-gated ones). A
+        // quick tap (< hold) reaches neither and passes through. App-registered
+        // combos stay instant.
+        //
+        // The hold is owned by ONE device. router_combos[] is global while the
+        // router runs up to MAX_PLAYERS_PER_OUTPUT players, so without an owner
+        // every event from a second controller arrives with held == false and
+        // resets the timer — on a 2+ pad adapter player 1 could never accumulate
+        // 0.7s and the default hotkeys would be unreachable.
+        bool process;
+        if (!router_default_combos_active) {
+            process = held;
+        } else {
+            uint32_t key = combo_dev_key(event);
+            if (router_combos[c].held_since != 0 && router_combos[c].held_dev != key) {
+                continue;  // someone else's hold in progress — don't touch it
+            }
+            uint32_t now = platform_time_ms();
+            if (held && router_combos[c].held_since == 0) {
+                router_combos[c].held_since = now ? now : 1;  // 0 = not held
+                router_combos[c].held_dev = key;
+            }
+            bool elapsed = router_combos[c].held_since != 0 &&
+                           (now - router_combos[c].held_since) >= ROUTER_DEFAULT_COMBO_HOLD_MS;
+            process = held ? elapsed                                // streaming: fire while held
+                           : (elapsed && !router_combos[c].fired);  // release: fire on the up-edge
+        }
+
+        if (!process) {
+            if (!held) {  // released (or quick tap): clear state, pass through
+                router_combos[c].fired = false;
+                router_combos[c].held_since = 0;
+                router_combos[c].held_dev = 0;
+            }
             continue;
         }
 
@@ -1372,6 +1492,15 @@ void router_submit_input(const input_event_t* event) {
                 }
                 remapped.buttons &= ~in;
                 break;
+        }
+
+        // If this was the release-edge fire (change-gated controller went quiet
+        // during the hold), the action just ran via the !fired latch above —
+        // clear the hold so the next press starts fresh.
+        if (!held) {
+            router_combos[c].fired = false;
+            router_combos[c].held_since = 0;
+            router_combos[c].held_dev = 0;
         }
     }
     if (did_remap) event = &remapped;
@@ -1682,6 +1811,19 @@ void router_reset_outputs(void) {
 void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
     printf(LOG_TAG "Device disconnected: dev_addr=%d, instance=%d\n", dev_addr, instance);
 
+    // Drop any combo hold this device owned. Unplugging mid-hold produces no
+    // further events from it, so nothing else would ever clear the timer and
+    // the next press would measure against a stale timestamp — firing on frame
+    // one, which is exactly what the hold guard exists to prevent.
+    uint32_t gone = 0x10000u | ((uint32_t)dev_addr << 8) | (uint8_t)instance;
+    for (int c = 0; c < ROUTER_COMBO_MAX; c++) {
+        if (router_combos[c].held_dev == gone) {
+            router_combos[c].held_since = 0;
+            router_combos[c].held_dev = 0;
+            router_combos[c].fired = false;
+        }
+    }
+
     // Find the player index for this device
     int player_index = find_player_index(dev_addr, instance);
 
@@ -1816,12 +1958,16 @@ void router_set_combo(uint8_t index, uint32_t input_mask, uint32_t output_mask) 
             router_combos[i].output_mask = 0;
             router_combos[i].required_layout = 0;
             router_combos[i].fired = false;
+            router_combos[i].held_since = 0;
+            router_combos[i].held_dev = 0;
         }
     }
     router_combos[index].input_mask = input_mask;
     router_combos[index].output_mask = output_mask;
     router_combos[index].required_layout = 0;  // any layout by default
     router_combos[index].fired = false;
+    router_combos[index].held_since = 0;
+    router_combos[index].held_dev = 0;
 }
 
 void router_set_combo_layout(uint8_t index, uint8_t required_layout) {

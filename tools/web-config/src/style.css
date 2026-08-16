@@ -346,6 +346,67 @@ input[type="text"] {
 input[type="text"]:focus { outline: none; border-color: var(--accent); }
 
 /* ================================================================
+   FILE PICKERS (PS4 auth key upload)
+   ================================================================ */
+.ps4-auth-files { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.ps4-auth-files .file-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ps4-auth-files .file-row .label {
+    width: 84px;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--font-mono, monospace);
+}
+/* Hide the native input but keep it focusable via its <label for=…> */
+.ps4-auth-files .file-input {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+.ps4-auth-files .file-choose {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 6px 14px;
+    font-size: 13px;
+    line-height: 1;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s, background 0.15s;
+}
+.ps4-auth-files .file-choose:hover,
+.ps4-auth-files .file-input:focus + .file-choose { border-color: var(--accent); }
+.ps4-auth-files .file-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ps4-auth-files .file-badge {
+    flex-shrink: 0;
+    min-width: 48px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* ================================================================
    CARDS
    ================================================================ */
 

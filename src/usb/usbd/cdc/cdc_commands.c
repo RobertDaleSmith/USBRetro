@@ -49,6 +49,26 @@
 #include "usb/usbd/modes/ps4_local_auth.h"
 #endif
 
+// Bluetooth host capability model (mirrors the usb_host present/configurable
+// split used by CAPS.GET). BT is "present" when the stack is compiled in.
+// It is "configurable" only for apps that actually honour the runtime
+// bt_input_enabled flag (controller_btusb, bt2wiiext, which #define
+// BT_INPUT_CONFIGURABLE). Dedicated BT bridges (bt2usb, bt2gc, bt2nuon, …)
+// always run BT and never read the flag, so their "Enable Bluetooth Host"
+// toggle is always-on / read-only and must report bt_input:true even on a
+// fresh flash — otherwise web config shows the toggle off while BT is running.
+#if defined(ENABLE_BTSTACK) || defined(CONFIG_BT_HOST)
+#  define BT_HOST_PRESENT 1
+#else
+#  define BT_HOST_PRESENT 0
+#endif
+#if defined(BT_INPUT_CONFIGURABLE) && BT_INPUT_CONFIGURABLE
+#  define BT_HOST_CONFIGURABLE 1
+#else
+#  define BT_HOST_CONFIGURABLE 0
+#endif
+#define BT_INPUT_ALWAYS_ON (BT_HOST_PRESENT && !BT_HOST_CONFIGURABLE)
+
 // ============================================================================
 // STATE
 // ============================================================================
@@ -2279,15 +2299,31 @@ static void cmd_ps4auth_clear(const char *json)
 // SETTINGS COMMANDS
 // ============================================================================
 
+// Read-only view of the device's current settings.
+//
+// Prefer the live runtime copy over flash_load(): flash_load() reads the flash
+// sector, which lags runtime_settings by up to SAVE_DEBOUNCE_MS (5s) after any
+// debounced write. A GET issued right after a SET would otherwise report the
+// pre-SET value, and the web config — which re-reads state after a write — shows
+// the setting snapping back. Falls back to the flash record when storage has not
+// been initialised; returns NULL when neither is available.
+static const flash_t* settings_for_read(flash_t* scratch)
+{
+    const flash_t* s = flash_get_settings();
+    if (s) return s;
+    return flash_load(scratch) ? scratch : NULL;
+}
+
 static void cmd_settings_get(const char* json)
 {
     (void)json;
-    flash_t flash_data;
-    if (flash_load(&flash_data)) {
+    flash_t scratch;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s) {
         snprintf(response_buf, sizeof(response_buf),
                  "{\"profile\":%d,\"mode\":%d}",
-                 flash_data.active_profile_index,
-                 flash_data.usb_output_mode);
+                 s->active_profile_index,
+                 s->usb_output_mode);
     } else {
         snprintf(response_buf, sizeof(response_buf),
                  "{\"profile\":0,\"mode\":0,\"valid\":false}");
@@ -2306,8 +2342,8 @@ static void cmd_router_get(const char* json)
 #define MERGE_MODE 0
 #endif
 
-    flash_t flash_data;
-#if REQUIRE_BT_INPUT
+    flash_t scratch;
+#if BT_INPUT_ALWAYS_ON || REQUIRE_BT_INPUT
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 1;
 #else
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE, dm = 0, bti = 0;
@@ -2317,10 +2353,13 @@ static void cmd_router_get(const char* json)
     // debounced). router_init() has already restored them from flash on boot.
     dm = router_get_dpad_mode();
     uint8_t ss = router_get_shoulder_swap() ? 1 : 0;
-    if (flash_load(&flash_data) && flash_data.router_saved) {
-        if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
-        if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
-        bti = flash_data.bt_input_enabled;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s && s->router_saved) {
+        if (s->routing_mode <= 2) rm = s->routing_mode;
+        if (s->merge_mode <= 2) mm = s->merge_mode;
+#if !BT_INPUT_ALWAYS_ON
+        bti = s->bt_input_enabled;   // always-on bridges ignore the persisted flag
+#endif
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"routing_mode\":%d,\"merge_mode\":%d,\"dpad_mode\":%d,"
@@ -2370,11 +2409,12 @@ static void cmd_caps_get(const char* json)
 #endif
 
     // Routing mode honors any persisted override (matches cmd_router_get).
-    flash_t flash_data;
+    flash_t scratch;
     uint8_t rm = ROUTING_MODE, mm = MERGE_MODE;
-    if (flash_load(&flash_data) && flash_data.router_saved) {
-        if (flash_data.routing_mode <= 2) rm = flash_data.routing_mode;
-        if (flash_data.merge_mode <= 2) mm = flash_data.merge_mode;
+    const flash_t* s = settings_for_read(&scratch);
+    if (s && s->router_saved) {
+        if (s->routing_mode <= 2) rm = s->routing_mode;
+        if (s->merge_mode <= 2) mm = s->merge_mode;
     }
 
     char* out = response_buf;
@@ -2524,11 +2564,18 @@ static void cmd_caps_get(const char* json)
     const char* nin_src  = native_input  ? app_registry_input_source_name(native_input->source) : "";
     const char* nout_tgt = native_output ? app_registry_output_target_name(native_output->target) : "";
     int nout_players = native_output ? router_get_max_players(native_output->target) : 0;
+    // Bluetooth host capability (mirror of usb_host). present = stack compiled
+    // in; configurable = the app honours the runtime enable toggle. Dedicated BT
+    // bridges are present-but-not-configurable → read-only always-on page.
+    const char* bt_present      = BT_HOST_PRESENT      ? "true" : "false";
+    const char* bt_configurable = BT_HOST_CONFIGURABLE ? "true" : "false";
     n = snprintf(out, rem,
                  "],\"usb_host\":{\"present\":%s,\"configurable\":%s,\"dp\":%d}"
+                 ",\"bt_host\":{\"present\":%s,\"configurable\":%s}"
                  ",\"native\":{\"in\":%s%s%s,\"in_source_name\":\"%s\""
                  ",\"out\":%s%s%s,\"out_target_name\":\"%s\",\"out_players\":%d}}",
                  uh_present, uh_configurable, uh_dp,
+                 bt_present, bt_configurable,
                  nin  ? "\"" : "null", nin  ? nin  : "", nin  ? "\"" : "", nin_src,
                  nout ? "\"" : "null", nout ? nout : "", nout ? "\"" : "", nout_tgt, nout_players);
     if (n < 0 || n >= rem) goto overflow;
@@ -2541,20 +2588,25 @@ overflow:
 
 static void cmd_router_set(const char* json)
 {
-    flash_t flash_data;
-    if (!flash_load(&flash_data)) {
-        memset(&flash_data, 0, sizeof(flash_data));
+    // Mutate the live settings in place so the record we force out carries any
+    // other change still sitting in runtime_settings (a debounced profile or
+    // shoulder-swap write, say) instead of reverting it to the on-flash value.
+    flash_t scratch;
+    flash_t* settings = flash_get_settings();
+    if (!settings) {
+        if (!flash_load(&scratch)) memset(&scratch, 0, sizeof(scratch));
+        settings = &scratch;
     }
 
     int ival;
-    if (json_get_int(json, "routing_mode", &ival)) flash_data.routing_mode = (uint8_t)ival;
-    if (json_get_int(json, "merge_mode", &ival)) flash_data.merge_mode = (uint8_t)ival;
-    if (json_get_int(json, "dpad_mode", &ival)) flash_data.dpad_mode = (uint8_t)ival;
+    if (json_get_int(json, "routing_mode", &ival)) settings->routing_mode = (uint8_t)ival;
+    if (json_get_int(json, "merge_mode", &ival)) settings->merge_mode = (uint8_t)ival;
+    if (json_get_int(json, "dpad_mode", &ival)) settings->dpad_mode = (uint8_t)ival;
     bool bval;
-    if (json_get_bool(json, "bt_input", &bval)) flash_data.bt_input_enabled = bval ? 1 : 0;
-    flash_data.router_saved = 1;
+    if (json_get_bool(json, "bt_input", &bval)) settings->bt_input_enabled = bval ? 1 : 0;
+    settings->router_saved = 1;
 
-    flash_save_force(&flash_data);
+    flash_save_force(settings);
 
     snprintf(response_buf, sizeof(response_buf), "{\"ok\":true,\"reboot\":true}");
     send_json(response_buf);
@@ -2631,6 +2683,14 @@ static void cmd_settings_reset(const char* json)
 
     // Factory reset — erase all stored data
     flash_factory_reset();
+
+    // Bonds live in a separate flash bank (btstack_tlv), so flash_factory_reset()
+    // alone leaves them behind. Clear them too so a factory reset really is a
+    // clean slate. Guarded on ENABLE_BTSTACK — btstack_host.h (the prototype) is
+    // only included for BT builds; non-BT builds have no bonds to clear anyway.
+#ifdef ENABLE_BTSTACK
+    btstack_host_delete_all_bonds();
+#endif
 
 #ifdef CONFIG_PAD_INPUT
     pad_config_reset();
@@ -2737,7 +2797,45 @@ static void cmd_bt_status(const char* json)
                         bond_addr[0], bond_addr[1], bond_addr[2],
                         bond_addr[3], bond_addr[4], bond_addr[5]);
                 first = false;
+                // Track it so the Classic sweep below can't list it twice.
+                if (connected_count < 8) {
+                    memcpy(connected_addrs[connected_count++], bond_addr, 6);
+                }
             }
+        }
+    }
+
+    // Persisted Classic BT bonds (DS4/DS5, Switch Pro, Wiimote) that aren't
+    // currently connected. Without this the list shows nothing at all for a
+    // powered-off Classic pad — its link key is in flash and it will reconnect
+    // fine, but every surface said "no bonded devices", which reads as "the
+    // pairing didn't save". The last-connected slot above can't cover them: it
+    // is written from Security Manager events, which are BLE-only.
+    {
+        uint8_t classic_addrs[8][6];
+        int classic_count = btstack_host_list_classic_bonds(classic_addrs, 8);
+        for (int i = 0; i < classic_count; i++) {
+            // Leave room for this entry plus the closing "]}".
+            if (pos + 128 >= (int)sizeof(response_buf)) break;
+
+            bool already_shown = false;
+            for (int j = 0; j < connected_count; j++) {
+                if (memcmp(classic_addrs[i], connected_addrs[j], 6) == 0) {
+                    already_shown = true;
+                    break;
+                }
+            }
+            if (already_shown) continue;
+
+            // No name is stored alongside a link key, so the name is empty and
+            // the web config falls back to showing the address.
+            pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,
+                    "%s{\"name\":\"\",\"addr\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
+                    "\"vid\":\"\",\"pid\":\"\",\"ble\":false,\"connected\":false}",
+                    first ? "" : ",",
+                    classic_addrs[i][0], classic_addrs[i][1], classic_addrs[i][2],
+                    classic_addrs[i][3], classic_addrs[i][4], classic_addrs[i][5]);
+            first = false;
         }
     }
 
@@ -2799,11 +2897,14 @@ static void cmd_wiimote_orient_set(const char* json)
     }
     wiimote_set_orient_mode((uint8_t)mode);
 
-    // Save to flash
-    flash_t flash_data;
-    if (flash_load(&flash_data)) {
-        flash_data.wiimote_orient_mode = (uint8_t)mode;
-        flash_save(&flash_data);
+    // Persist through the live settings, not a stack copy of the flash record:
+    // a stack copy leaves runtime_settings holding the old orientation, so the
+    // next unrelated flash_save(&runtime_settings) writes a higher-sequence
+    // record that silently reverts this change.
+    flash_t* settings = flash_get_settings();
+    if (settings) {
+        settings->wiimote_orient_mode = (uint8_t)mode;
+        flash_save(settings);
     }
 
     snprintf(response_buf, sizeof(response_buf),

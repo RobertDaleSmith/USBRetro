@@ -8,10 +8,29 @@
 #include "../usbd.h"
 #include "descriptors/ps4_descriptors.h"
 #include "core/buttons.h"
+#include <stddef.h>
 #include <string.h>
 
 #ifndef DISABLE_USB_HOST
 #include "usb/usbh/hid/devices/vendors/sony/sony_ds4.h"
+
+// ps4_report_buffer below is the wire report *including* the report ID at
+// index 0, so every field sits one byte later than in sony_ds4_report_t --
+// the same DS4 layout this firmware already parses on the host side. The two
+// were agreed by hand and nothing enforced it, which is how the accelerometer
+// rest value came to be written one byte past the axis it was meant for.
+// These pin the offsets this file hardcodes to the struct, so the next edit to
+// either one fails the build instead of shipping a silent byte shift.
+_Static_assert(offsetof(sony_ds4_report_t, gyro) + 1 == 13,
+               "DS4 gyro must start at report byte 13");
+_Static_assert(offsetof(sony_ds4_report_t, accel) + 1 == 19,
+               "DS4 accel must start at report byte 19");
+_Static_assert(offsetof(sony_ds4_report_t, headset) + 1 == 30,
+               "DS4 status/power byte must be report byte 30");
+_Static_assert(offsetof(sony_ds4_report_t, tpad_counter) + 1 == 34,
+               "DS4 touchpad packet counter must be report byte 34");
+_Static_assert(offsetof(sony_ds4_report_t, tpad_f1_pos) + 1 == 36,
+               "DS4 touchpad finger 1 position must start at report byte 36");
 #endif
 
 #ifdef ENABLE_PS4_LOCAL_AUTH
@@ -72,9 +91,13 @@ static void ps4_mode_init(void)
     ps4_report_buffer[4] = 0x80;  // RY center
     ps4_report_buffer[5] = PS4_HAT_NOTHING;  // D-pad neutral (0x08), no buttons
     // Bytes 6-9: buttons and triggers already 0
-    // Set accelerometer rest state (1G on Z-axis seen in Brook as 0x2060 at offset 24-25)
-    ps4_report_buffer[24] = 0x60;
-    ps4_report_buffer[25] = 0x20;
+    // Set accelerometer rest state (1G on Z-axis seen in Brook as 0x2060).
+    // Accel is three little-endian int16s at bytes 19-24, so Z is 23 (low) /
+    // 24 (high). This used to write 24/25, one byte high: the rest value never
+    // landed on Z, and byte 25 -- unknown_a[0], a reserved field that nothing
+    // else in this file ever writes -- kept 0x20 in every report that went out.
+    ps4_report_buffer[23] = 0x60;
+    ps4_report_buffer[24] = 0x20;
     // Set power level (0x1b = full battery + charging, matches Brook at offset 30)
     ps4_report_buffer[30] = 0x1b;
     // Set touchpad state (33=active, 34=increment, 35-42=fingers)
@@ -173,13 +196,16 @@ static bool ps4_mode_send_report(uint8_t player_index,
     }
     
     // Hybrid Trigger Logic (High Compatibility):
-    // Digital bits are flipped at threshold 5 to support SF6 strokes,
-    // while keeping analog values raw for FC26 replay sensitivity.
-    uint8_t l2_val = profile_out->l2_analog;
+    // Digital bits are flipped at USBD_TRIGGER_DIGITAL_THRESHOLD to support
+    // SF6 strokes, while keeping analog values raw for FC26 replay
+    // sensitivity. This mode has had it right all along - the shared helper
+    // exists so the four modes that were missing it cannot drift to some
+    // other threshold. Same value, same behaviour. See usbd_mode.h.
+    uint8_t l2_val = profile_out->l2_analog;   // raw, for bytes 8-9 below
     uint8_t r2_val = profile_out->r2_analog;
 
-    if (l2_val >= 5 || (buttons & JP_BUTTON_L2)) byte6 |= 0x04; // L2 Digital
-    if (r2_val >= 5 || (buttons & JP_BUTTON_R2)) byte6 |= 0x08; // R2 Digital
+    if (usbd_l2_digital(profile_out, buttons)) byte6 |= 0x04; // L2 Digital
+    if (usbd_r2_digital(profile_out, buttons)) byte6 |= 0x08; // R2 Digital
 
     if (buttons & JP_BUTTON_S1) byte6 |= 0x10;  // Share
     if (!(s2_r1_combo)) {

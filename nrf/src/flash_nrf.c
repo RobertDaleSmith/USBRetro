@@ -103,6 +103,11 @@ bool flash_load(flash_t* settings)
         return false;
     }
 
+    unsigned fixed = flash_sanitize_record(settings);
+    if (fixed) {
+        printf("[flash_nrf] %u incoherent field(s) in stored record reset to defaults\n", fixed);
+    }
+
     printf("[flash_nrf] Settings loaded\n");
     return true;
 }
@@ -279,7 +284,7 @@ void flash_cycle_profile_prev(void)
 // compiled into the nRF build too.
 void flash_set_dpad_mode(uint8_t mode)
 {
-    if (mode > 2) return;
+    if (mode > 3) return;   // 0-3; mode 3 = LSTICK<->RSTICK (see flash.c)
     if (!runtime_settings_loaded) return;
     if (runtime_settings.dpad_mode == mode && runtime_settings.router_saved) return;
     runtime_settings.dpad_mode  = mode;

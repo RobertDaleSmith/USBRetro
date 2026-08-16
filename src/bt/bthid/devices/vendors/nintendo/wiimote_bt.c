@@ -399,11 +399,16 @@ static void wiimote_process_report(bthid_device_t* device, const uint8_t* data, 
                         wiimote_orient_mode = new_mode;
                         printf("[WIIMOTE] Hotkey: orientation set to %s\n",
                                wiimote_get_orient_mode_name(wiimote_orient_mode));
-                        // Queue flash save (deferred until BT disconnects)
-                        flash_t flash_data;
-                        if (flash_load(&flash_data)) {
-                            flash_data.wiimote_orient_mode = wiimote_orient_mode;
-                            flash_save(&flash_data);
+                        // Queue flash save (debounced). Mutate the live settings
+                        // rather than a stack copy of the flash record: a stack
+                        // copy leaves runtime_settings holding the old value, so
+                        // the next unrelated flash_save(&runtime_settings) writes
+                        // a higher-sequence record that reverts this change — and
+                        // it clobbers any debounced save already pending.
+                        flash_t* settings = flash_get_settings();
+                        if (settings) {
+                            settings->wiimote_orient_mode = wiimote_orient_mode;
+                            flash_save(settings);
                         }
                     }
                 }
@@ -950,11 +955,14 @@ const bthid_driver_t wiimote_bt_driver = {
 
 void wiimote_bt_register(void)
 {
-    // Load orientation mode from flash
-    flash_t flash_data;
-    if (flash_load(&flash_data)) {
-        if (flash_data.wiimote_orient_mode <= WII_ORIENT_MODE_VERTICAL) {
-            wiimote_orient_mode = flash_data.wiimote_orient_mode;
+    // Load orientation mode from the live settings, falling back to the flash
+    // record if storage hasn't been initialised yet.
+    flash_t scratch;
+    const flash_t* settings = flash_get_settings();
+    if (!settings && flash_load(&scratch)) settings = &scratch;
+    if (settings) {
+        if (settings->wiimote_orient_mode <= WII_ORIENT_MODE_VERTICAL) {
+            wiimote_orient_mode = settings->wiimote_orient_mode;
             printf("[WIIMOTE] Loaded orientation mode from flash: %s\n",
                    wiimote_get_orient_mode_name(wiimote_orient_mode));
         }

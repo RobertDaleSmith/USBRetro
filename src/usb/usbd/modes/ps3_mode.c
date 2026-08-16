@@ -74,8 +74,11 @@ static bool ps3_mode_send_report(uint8_t player_index,
 
     // Digital buttons byte 1
     ps3_report.buttons[1] = 0;
-    if (buttons & JP_BUTTON_L2) ps3_report.buttons[1] |= PS3_BTN_L2;
-    if (buttons & JP_BUTTON_R2) ps3_report.buttons[1] |= PS3_BTN_R2;
+    // A real DS3 carries pressure AND a digital bit; the XMB and most games
+    // read the digital bit, so an analog-only input source (XInput) needs it
+    // derived or the trigger does nothing at all. See usbd_mode.h. (#152)
+    if (usbd_l2_digital(profile_out, buttons)) ps3_report.buttons[1] |= PS3_BTN_L2;
+    if (usbd_r2_digital(profile_out, buttons)) ps3_report.buttons[1] |= PS3_BTN_R2;
     if (buttons & JP_BUTTON_L1) ps3_report.buttons[1] |= PS3_BTN_L1;
     if (buttons & JP_BUTTON_R1) ps3_report.buttons[1] |= PS3_BTN_R1;
     if (buttons & JP_BUTTON_B4) ps3_report.buttons[1] |= PS3_BTN_TRIANGLE;

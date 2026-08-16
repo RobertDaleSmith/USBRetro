@@ -4,8 +4,12 @@
 // Uses Pico W's built-in CYW43 Bluetooth to receive controllers,
 // outputs to Nuon via Polyface PIO protocol.
 //
-// This manifest declares what drivers and services this app needs.
-// The build system uses these flags to conditionally compile only required code.
+// This manifest is a human-readable summary of what this app uses.
+// It is NOT consumed by the build system. The authoritative per-target
+// configuration lives in src/CMakeLists.txt. Only #ifndef-guarded flags are
+// read by code (see REQUIRE_BT_INPUT / REQUIRE_BLE_OUTPUT in controller_btusb);
+// every other flag here is descriptive only and changing it has no effect.
+// See issue #198.
 
 #ifndef APP_BT2NUON_H
 #define APP_BT2NUON_H

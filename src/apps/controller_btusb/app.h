@@ -3,6 +3,11 @@
 //
 // Same concept as controller (GPIO inputs) but with BLE output like usb2ble.
 // First sensor: JoyWing (seesaw I2C). Future: GPIO pads, arcade inputs, etc.
+//
+// NOTE: this manifest is a human-readable summary and is NOT consumed by the
+// build system. Only the #ifndef-guarded flags below (REQUIRE_BT_INPUT,
+// REQUIRE_BLE_OUTPUT) are read by code, and src/CMakeLists.txt overrides them.
+// Every other flag here is descriptive only. See issue #198.
 
 #ifndef APP_CONTROLLER_BTUSB_H
 #define APP_CONTROLLER_BTUSB_H
@@ -20,10 +25,17 @@
 
 // Input drivers
 #define REQUIRE_USB_HOST 0
-#define REQUIRE_GPIO_INPUT 0
+#define REQUIRE_GPIO_INPUT 0        // Descriptive only, and misleading: GPIO input IS
+                                    // built on nRF. nrf/CMakeLists.txt:508 sets
+                                    // CONFIG_PAD_INPUT=1 + SENSOR_PAD=1, implemented by
+                                    // nrf/src/platform_gpio_nrf.c with pin config from
+                                    // PAD.CONFIG.SET (nrf/src/pad_config_storage_nrf.c).
 #ifndef REQUIRE_BT_INPUT
 #define REQUIRE_BT_INPUT 0          // BLE Central: scan for BT/BLE controllers
 #endif
+// This app honours the runtime bt_input_enabled flag, so the web-config
+// "Enable Bluetooth Host" toggle is a real, user-settable control.
+#define BT_INPUT_CONFIGURABLE 1
 
 // Output drivers
 #ifndef REQUIRE_BLE_OUTPUT

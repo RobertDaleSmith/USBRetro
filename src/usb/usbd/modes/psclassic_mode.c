@@ -36,7 +36,6 @@ static bool psclassic_mode_send_report(uint8_t player_index,
 {
     (void)player_index;
     (void)event;
-    (void)profile_out;
 
     // Start with D-pad centered
     psclassic_report.buttons = PSCLASSIC_DPAD_CENTER;
@@ -64,8 +63,10 @@ static bool psclassic_mode_send_report(uint8_t player_index,
         | (buttons & JP_BUTTON_B3 ? PSCLASSIC_MASK_SQUARE   : 0)
         | (buttons & JP_BUTTON_L1 ? PSCLASSIC_MASK_L1       : 0)
         | (buttons & JP_BUTTON_R1 ? PSCLASSIC_MASK_R1       : 0)
-        | (buttons & JP_BUTTON_L2 ? PSCLASSIC_MASK_L2       : 0)
-        | (buttons & JP_BUTTON_R2 ? PSCLASSIC_MASK_R2       : 0)
+        // psclassic_in_report_t is buttons-only - no analog trigger field to
+        // fall back on for an analog-only input source. See usbd_mode.h.
+        | (usbd_l2_digital(profile_out, buttons) ? PSCLASSIC_MASK_L2 : 0)
+        | (usbd_r2_digital(profile_out, buttons) ? PSCLASSIC_MASK_R2 : 0)
         | (buttons & JP_BUTTON_S1 ? PSCLASSIC_MASK_SELECT   : 0)
         | (buttons & JP_BUTTON_S2 ? PSCLASSIC_MASK_START    : 0);
 

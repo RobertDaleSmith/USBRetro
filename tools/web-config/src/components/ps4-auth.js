@@ -41,20 +41,26 @@ export class Ps4AuthCard {
                     </div>
 
                     <div class="ps4-auth-files">
-                        <div class="row">
+                        <div class="file-row">
                             <span class="label">key.prm</span>
-                            <input type="file" id="ps4KeyFile" accept=".prm,.pem,.key,.txt">
-                            <span class="value" id="ps4KeyBadge">—</span>
+                            <label class="file-choose" for="ps4KeyFile">Choose file…</label>
+                            <input type="file" id="ps4KeyFile" class="file-input" accept=".prm,.pem,.key,.txt">
+                            <span class="file-name" id="ps4KeyName">No file selected</span>
+                            <span class="file-badge" id="ps4KeyBadge">—</span>
                         </div>
-                        <div class="row">
+                        <div class="file-row">
                             <span class="label">serial.txt</span>
-                            <input type="file" id="ps4SerialFile" accept=".txt">
-                            <span class="value" id="ps4SerialBadge">—</span>
+                            <label class="file-choose" for="ps4SerialFile">Choose file…</label>
+                            <input type="file" id="ps4SerialFile" class="file-input" accept=".txt">
+                            <span class="file-name" id="ps4SerialName">No file selected</span>
+                            <span class="file-badge" id="ps4SerialBadge">—</span>
                         </div>
-                        <div class="row">
+                        <div class="file-row">
                             <span class="label">sig.bin</span>
-                            <input type="file" id="ps4SigFile" accept=".bin">
-                            <span class="value" id="ps4SigBadge">—</span>
+                            <label class="file-choose" for="ps4SigFile">Choose file…</label>
+                            <input type="file" id="ps4SigFile" class="file-input" accept=".bin">
+                            <span class="file-name" id="ps4SigName">No file selected</span>
+                            <span class="file-badge" id="ps4SigBadge">—</span>
                         </div>
                     </div>
 
@@ -111,6 +117,9 @@ export class Ps4AuthCard {
         if (!file) return;
         const badge = this.el.querySelector(
             which === 'key' ? '#ps4KeyBadge' : which === 'serial' ? '#ps4SerialBadge' : '#ps4SigBadge');
+        const nameEl = this.el.querySelector(
+            which === 'key' ? '#ps4KeyName' : which === 'serial' ? '#ps4SerialName' : '#ps4SigName');
+        if (nameEl) nameEl.textContent = file.name;
         try {
             if (which === 'key') await this.validateKey(file);
             else if (which === 'serial') await this.validateSerial(file);

@@ -131,7 +131,13 @@ bool diff_report_ds4(sony_ds4_report_t const* rpt1, sony_ds4_report_t const* rpt
   result |= memcmp(&rpt1->rz + 1, &rpt2->rz + 1, 2);
   result |= (rpt1->ps != rpt2->ps);
   result |= (rpt1->tpad != rpt2->tpad);
+  // Both touch fingers, position AND the down/up bit — checking only f1's
+  // position missed finger releases (the down bit flips without the coords
+  // changing) and finger 2 entirely, leaving a released touch stuck active.
+  result |= (rpt1->tpad_f1_down != rpt2->tpad_f1_down);
   result |= memcmp(&rpt1->tpad_f1_pos, &rpt2->tpad_f1_pos, 3);
+  result |= (rpt1->tpad_f2_down != rpt2->tpad_f2_down);
+  result |= memcmp(&rpt1->tpad_f2_pos, &rpt2->tpad_f2_pos, 3);
 
   return result;
 }

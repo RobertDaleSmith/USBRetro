@@ -74,8 +74,10 @@ static bool switch_mode_send_report(uint8_t player_index,
     if (buttons & JP_BUTTON_B4) switch_report.buttons |= SWITCH_MASK_X;     // B4 (top)    -> X
     if (buttons & JP_BUTTON_L1) switch_report.buttons |= SWITCH_MASK_L;     // L
     if (buttons & JP_BUTTON_R1) switch_report.buttons |= SWITCH_MASK_R;     // R
-    if (buttons & JP_BUTTON_L2) switch_report.buttons |= SWITCH_MASK_ZL;    // ZL
-    if (buttons & JP_BUTTON_R2) switch_report.buttons |= SWITCH_MASK_ZR;    // ZR
+    // switch_in_report_t has no analog trigger field, so an analog-only input
+    // source (XInput) loses ZL/ZR entirely without this. See usbd_mode.h. (#98)
+    if (usbd_l2_digital(profile_out, buttons)) switch_report.buttons |= SWITCH_MASK_ZL;  // ZL
+    if (usbd_r2_digital(profile_out, buttons)) switch_report.buttons |= SWITCH_MASK_ZR;  // ZR
     if (buttons & JP_BUTTON_S1) switch_report.buttons |= SWITCH_MASK_MINUS; // Minus
     if (buttons & JP_BUTTON_S2) switch_report.buttons |= SWITCH_MASK_PLUS;  // Plus
     if (buttons & JP_BUTTON_L3) switch_report.buttons |= SWITCH_MASK_L3;
