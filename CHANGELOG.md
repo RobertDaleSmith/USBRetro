@@ -106,6 +106,10 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 
 - **iPega PG-9021 Classic Bluetooth gamepad driver**, wired into the RP2040, ESP32-S3 and nRF builds.
   (#239, thanks @Atreus171)
+- **First release UF2 for `controller_btusb` on the Seeed XIAO nRF52840.** v2.4.0 and every release
+  before it shipped no asset for that board — it had to be built from source. This release adds
+  `joypad_2.4.1_controller_btusb_seeed_xiao_nrf52840.uf2`, taking the release from 69 UF2s to 70.
+  (#219)
 
 ### Changed
 
