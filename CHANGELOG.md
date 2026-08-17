@@ -139,6 +139,14 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 
 ### Documentation
 
+- 🔴 **Sixteen pages documented a profile-switch gesture that does not exist.** They instructed
+  *"hold Select for 2 seconds, then press D-Pad Up/Down"* — a two-step sequence nothing implements,
+  so a user who held Select, released it, and then pressed the D-pad got no response at all. The
+  real gesture is **SELECT + D-Pad Up/Down pressed together and held ~0.7 s**. Four of those pages
+  also had the direction inverted (Up is *previous*, Down is *next*), and every one of them said
+  "cycle" although the built-in hotkeys clamp at the ends instead of wrapping. The bt2usb build
+  guide separately claimed SELECT + D-Pad Left/Right does nothing on bt2usb — it is the D-pad
+  slider, live on every app that takes the default combos. (#253)
 - `app.h` manifests no longer advertise feature flags the build never reads — several of them stated
   the opposite of what the firmware does. (#198, #199)
 - **usb2gc build guide:** removed the dead GPIO 6 "console-presence sense wire" instruction, which
