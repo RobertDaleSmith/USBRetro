@@ -120,12 +120,13 @@ Patch release. **Every adapter running 2.4.0 should update**: the universal prof
 ### Build & CI
 
 - 🔴 **Released firmware reports its own version correctly again.** Every 2.4.0 UF2 self-reported
-  `2.3.0`, and every 2.3.0 UF2 reported `2.2.0` — in the web config, in the boot banner, and in the
-  USB device descriptor, so there was no surface on which a user could confirm which build they were
-  running. The release workflow bumped `VERSION` in a new commit but the build jobs did not depend on
-  that job, so they compiled the tree from just before the bump. The builds now check out the bump
-  commit, and the run fails outright if the tree being compiled does not carry the version being
-  released — the original failure produced no error at all, which is how it survived two releases.
+  `2.3.0` — in the web config, in the boot banner, and in the USB device descriptor, so there was no
+  surface on which a user could confirm which build they were running. The release workflow bumped
+  `VERSION` in a new commit but the build jobs did not depend on that job, so they compiled the tree
+  from just before the bump. The builds now check out the bump commit, and the run fails outright if
+  the tree being compiled does not carry the version being released — the original failure produced
+  no error at all, which is how it went unnoticed. **2.3.0 and 2.2.0 are unaffected**: both were
+  released with `VERSION` bumped in the repo beforehand, so there was no bump commit to miss.
   (#245, #246; thanks mitsuschi for the report)
 - Every driver the BTHID/device registries reference is now compiled, and CI fails if one is
   referenced but not built. (#233)
