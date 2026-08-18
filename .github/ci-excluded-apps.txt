@@ -101,3 +101,21 @@ joypad_gc2usb_rp2040zero                  # redundant: APP_gc2usb_rp2040zero bui
 wch                                       # full CH32V307 usb2usb port (all output modes, host registry, router, CDC), on main since 2026-06-04, builds a standalone wch.elf that ships nowhere. Not merely unwired: needs WCH gcc 8.2.0, pinned because newer GCC miscompiles the USB timing code, which no stock runner has. Shipping it is a product call (#212)
 gba/joypad                                # GBA multiboot payload, NOT a standalone artifact: its output is committed as src/native/host/gc/gba_payload.c and ships embedded inside gc2usb's UF2, so it already reaches users. Building it in CI would need devkitARM. Caveat: nothing checks the committed payload still matches this source
 tools/sinput-verify                       # host-side SInput verification tool, not firmware; never a release artifact
+
+# ---------------------------------------------------------------------------
+# Targets introduced by PRs that are open alongside this one. Seeded here so the
+# guard is correct in ANY merge order: an exclusion naming a target that does not
+# exist yet is silently tolerated (only a target that is BOTH matrixed and
+# excluded is an error), so these lines are inert until their PR lands and green
+# the moment it does. Without them, each of these PRs turns this job red on merge
+# purely by composition — every one of them is MERGEABLE and green on its own.
+#
+# Excluded rather than matrixed on the policy Robert stated closing #227:
+# "isn't hardware-tested/verified yet, so I don't want to ship it in the release
+# matrix." Adding a target to a matrix means publishing a release asset for it.
+# Drop the line and add a matrix entry once the board is verified on hardware.
+# Added 2026-08-18.
+#
+usb2wiiext_kb2040                         # added by #226 (USB controllers -> Wii extension port); new app, not hardware-verified. #227 policy
+usb2wiiext_pico                           # added by #226 (USB controllers -> Wii extension port); new app, not hardware-verified. #227 policy
+controller_btusb_rp2040zero               # added by #248 (hand-wired GPIO pad -> USB, radio-less board); not hardware-verified. #227 policy
