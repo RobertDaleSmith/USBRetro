@@ -137,9 +137,19 @@ controller_btusb_rp2040zero               # added by #248 (hand-wired GPIO pad -
 #
 # The fix belongs in #175, not on this branch — four CONSOLE_ + four APP_
 # entries + four build_app recipes, mirroring the existing usb2neogeo
-# wiring. With those present, `make usb2neogeo_te_kb2040` resolves and the
-# four lines below become live and correct (rpi: 101 targets, 39 excluded).
-# Until then the guard is red on #175 on purpose.
+# wiring. That already exists on `fix/pr175-neogeo-te-buildable`
+# (a6608e76), which also fixes the six compile errors #175 has against
+# today's main. Composed all three and re-ran the check:
+#
+#   this branch alone                    -> exit 0
+#   + #175                               -> exit 1, four cmake: problems
+#   + #175 + fix/pr175-neogeo-te-buildable -> exit 0
+#     (rpi: 101 targets, 39 excluded; cmake: 80 of 83 reachable)
+#
+# So the four lines below are correct for the composition that includes
+# that branch, and inert for #175 on its own. Until it lands the guard is
+# red on #175 on purpose: an app `make` cannot build is the finding, not
+# an inconvenience to be excluded away.
 usb2neogeo_te_kb2040       # PR #175 (GerryHolt): tournament-edition Neo Geo app; hardware-verified only on the contributor's Augie adapter, not in the release matrix per the #227 policy. Inert until #175 adds APP_usb2neogeo_te_kb2040 — see the note above.
 usb2neogeo_te_pico         # PR #175 (GerryHolt): see usb2neogeo_te_kb2040
 usb2neogeo_te_rp2040zero   # PR #175 (GerryHolt): see usb2neogeo_te_kb2040
