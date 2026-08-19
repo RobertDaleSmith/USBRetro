@@ -84,6 +84,10 @@ CONSOLE_neogeo := joypad_neogeo
 CONSOLE_neogeo_pico := joypad_neogeo_pico
 CONSOLE_neogeo_rp2040zero := joypad_neogeo_rp2040zero
 CONSOLE_neogeo_retrofrog := joypad_neogeo_retrofrog
+CONSOLE_neogeo_te := joypad_neogeo_te
+CONSOLE_neogeo_te_pico := joypad_neogeo_te_pico
+CONSOLE_neogeo_te_rp2040zero := joypad_neogeo_te_rp2040zero
+CONSOLE_neogeo_te_pico2p := joypad_neogeo_te_pico2p
 CONSOLE_n642dc := joypad_n642dc
 CONSOLE_n642dc_pico2_w := joypad_n642dc_pico2_w
 CONSOLE_n642nuon := joypad_n642nuon
@@ -161,6 +165,10 @@ APP_usb2neogeo_kb2040 := kb2040 neogeo usb2neogeo_kb2040 USB/BT NEOGEO
 APP_usb2neogeo_pico := pico neogeo_pico usb2neogeo_pico USB/BT NEOGEO
 APP_usb2neogeo_rp2040zero := rp2040zero neogeo_rp2040zero usb2neogeo_rp2040zero USB/BT NEOGEO
 APP_usb2neogeo_retrofrog := rp2040zero neogeo_retrofrog usb2neogeo_retrofrog USB/BT NEOGEO
+APP_usb2neogeo_te_kb2040 := kb2040 neogeo_te usb2neogeo_te_kb2040 USB/BT NEOGEO
+APP_usb2neogeo_te_pico := pico neogeo_te_pico usb2neogeo_te_pico USB/BT NEOGEO
+APP_usb2neogeo_te_rp2040zero := rp2040zero neogeo_te_rp2040zero usb2neogeo_te_rp2040zero USB/BT NEOGEO
+APP_usb2neogeo_te_pico2p := pico neogeo_te_pico2p usb2neogeo_te_pico2p USB/BT NEOGEO
 APP_n642dc_kb2040 := kb2040 n642dc n642dc_kb2040 N64 Dreamcast
 APP_n642dc_pico2_w := pico2_w n642dc_pico2_w n642dc_pico2_w N64 Dreamcast
 APP_gc2dc_kb2040 := kb2040 gc2dc gc2dc_kb2040 GameCube Dreamcast
@@ -264,6 +272,10 @@ APPS += usb2neogeo_kb2040
 APPS += usb2neogeo_pico
 APPS += usb2neogeo_rp2040zero
 APPS += usb2neogeo_retrofrog
+APPS += usb2neogeo_te_kb2040
+APPS += usb2neogeo_te_pico
+APPS += usb2neogeo_te_rp2040zero
+APPS += usb2neogeo_te_pico2p
 APPS += n642dc_kb2040
 APPS += n642dc_pico2_w
 APPS += n642nuon_pico
@@ -372,6 +384,10 @@ help:
 	@echo "  make usb2neogeo_pico    - USB/BT -> NEOGEO (Pi Pico)"
 	@echo "  make usb2neogeo_rp2040zero - USB/BT -> NEOGEO (RP2040-Zero)"
 	@echo "  make usb2neogeo_retrofrog  - USB/BT -> NEOGEO (Retro Frog USB4NeoGeo)"
+	@echo "  make usb2neogeo_te_kb2040  - USB/BT -> NEOGEO Tournament Edition (KB2040)"
+	@echo "  make usb2neogeo_te_pico    - USB/BT -> NEOGEO Tournament Edition (Pi Pico)"
+	@echo "  make usb2neogeo_te_rp2040zero - USB/BT -> NEOGEO TE (RP2040-Zero)"
+	@echo "  make usb2neogeo_te_pico2p  - USB/BT -> NEOGEO TE 2-player (Pi Pico)"
 	@echo "  make n642dc_kb2040      - N64 -> Dreamcast (KB2040)"
 	@echo "  make n642dc_pico2_w     - N64 -> Dreamcast (Pi Pico 2 W)"
 	@echo "  make n642nuon_pico    - N64 -> Nuon (KB2040)"
@@ -648,6 +664,22 @@ usb2neogeo_rp2040zero:
 .PHONY: usb2neogeo_retrofrog
 usb2neogeo_retrofrog:
 	$(call build_app,usb2neogeo_retrofrog)
+
+.PHONY: usb2neogeo_te_kb2040
+usb2neogeo_te_kb2040:
+	$(call build_app,usb2neogeo_te_kb2040)
+
+.PHONY: usb2neogeo_te_pico
+usb2neogeo_te_pico:
+	$(call build_app,usb2neogeo_te_pico)
+
+.PHONY: usb2neogeo_te_rp2040zero
+usb2neogeo_te_rp2040zero:
+	$(call build_app,usb2neogeo_te_rp2040zero)
+
+.PHONY: usb2neogeo_te_pico2p
+usb2neogeo_te_pico2p:
+	$(call build_app,usb2neogeo_te_pico2p)
 .PHONY: n642dc_kb2040
 n642dc_kb2040:
 	$(call build_app,n642dc_kb2040)

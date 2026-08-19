@@ -1,4 +1,5 @@
 #include "remap.h"
+#include <stdio.h>
 #include "core/buttons.h"
 #include "platform/platform.h"
 #include <string.h>

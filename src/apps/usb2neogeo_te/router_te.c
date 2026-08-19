@@ -1108,14 +1108,14 @@ void router_submit_input(const input_event_t* event) {
                 break;
             case 5:  // Next Profile
                 if (!router_combos[c].fired) {
-                    profile_cycle_next(0);
+                    profile_cycle_next(0, true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;
                 break;
             case 6:  // Previous Profile
                 if (!router_combos[c].fired) {
-                    profile_cycle_prev(0);
+                    profile_cycle_prev(0, true);
                     router_combos[c].fired = true;
                 }
                 remapped.buttons &= ~in;

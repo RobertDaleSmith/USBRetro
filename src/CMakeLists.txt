@@ -184,7 +184,6 @@ set(BTHID_DEVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/nintendo/wiimote_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/microsoft/xbox_ble.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/generic/sinput_ble.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/google/stadia_bt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/valve/steam_controller_2_ble.c
     ${CMAKE_CURRENT_SOURCE_DIR}/bt/bthid/devices/vendors/valve/steam_controller_ble.c
