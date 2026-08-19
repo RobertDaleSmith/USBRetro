@@ -119,7 +119,28 @@ tools/sinput-verify                       # host-side SInput verification tool, 
 usb2wiiext_kb2040                         # added by #226 (USB controllers -> Wii extension port); new app, not hardware-verified. #227 policy
 usb2wiiext_pico                           # added by #226 (USB controllers -> Wii extension port); new app, not hardware-verified. #227 policy
 controller_btusb_rp2040zero               # added by #248 (hand-wired GPIO pad -> USB, radio-less board); not hardware-verified. #227 policy
-usb2neogeo_te_kb2040       # PR #175 (GerryHolt): tournament-edition Neo Geo app; hardware-verified only on the contributor's Augie adapter, not in the release matrix per the #227 policy
+# --- CONTINGENT: these four are INERT until #175 wires its Makefile.
+#
+# Measured 2026-08-19 by composing this branch with #175's head
+# (1d045262) and running the check, rather than by reading either diff:
+#
+#   guard + #175 as it stands  -> exit 1, four `cmake:` problems
+#   guard + #175 + the Makefile entries below -> exit 0
+#
+# #175 adds four `add_executable(joypad_neogeo_te*)` and *zero* Makefile
+# entries, so `make` cannot build that app by any name. That is the exact
+# door the cmake reachability check was added to close, and the four lines
+# below do not close it: the cmake check compares CMake executable names
+# (`joypad_neogeo_te*`), while these are make-target names. They match
+# nothing today. Excluding under `joypad_*` instead would silence the
+# check on precisely what it exists to catch, so it is not done here.
+#
+# The fix belongs in #175, not on this branch — four CONSOLE_ + four APP_
+# entries + four build_app recipes, mirroring the existing usb2neogeo
+# wiring. With those present, `make usb2neogeo_te_kb2040` resolves and the
+# four lines below become live and correct (rpi: 101 targets, 39 excluded).
+# Until then the guard is red on #175 on purpose.
+usb2neogeo_te_kb2040       # PR #175 (GerryHolt): tournament-edition Neo Geo app; hardware-verified only on the contributor's Augie adapter, not in the release matrix per the #227 policy. Inert until #175 adds APP_usb2neogeo_te_kb2040 — see the note above.
 usb2neogeo_te_pico         # PR #175 (GerryHolt): see usb2neogeo_te_kb2040
 usb2neogeo_te_rp2040zero   # PR #175 (GerryHolt): see usb2neogeo_te_kb2040
 usb2neogeo_te_pico2p       # PR #175 (GerryHolt): 2-player variant; see usb2neogeo_te_kb2040
