@@ -315,9 +315,20 @@ void router_set_tap_exclusive(output_target_t output, router_tap_callback_t call
 // ============================================================================
 
 // Output state structure (replaces players[] array)
+//
+// Cross-core handoff: Core 0 (input) produces, Core 1 (PIO console output)
+// consumes. `seq` is a seqlock version counter guarding `current_state` against
+// torn reads — the console could otherwise poll mid-write and get a frame with
+// some fields new and some stale (e.g. new buttons + old stick). Even = stable,
+// odd = write-in-progress; it increments by 2 per publish. A plain `volatile
+// uint32_t` (aligned 32-bit access is atomic on every target; RP2040's M0+ has
+// no CAS but needs none here — single writer per slot) plus __atomic_thread_fence
+// release/acquire barriers. Producers MUST write via router_publish(); consumers
+// read via router_get_output() (see router.c). Do not touch `current_state`
+// directly across cores.
 typedef struct {
-    input_event_t current_state;    // Latest event (atomic write)
-    volatile bool updated;           // New data flag
+    input_event_t current_state;    // Latest event (seqlock-protected payload)
+    volatile uint32_t seq;           // Seqlock version (even=stable, odd=writing)
     uint8_t player_id;               // Player slot assignment
     input_source_t source;           // Source of this input (for priority)
 } output_state_t;

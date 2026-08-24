@@ -226,6 +226,23 @@ static const char* get_device_name(const input_event_t* event) {
 // Each output has up to MAX_PLAYERS_PER_OUTPUT player slots
 static output_state_t router_outputs[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
 
+// ---- Cross-core seqlock handoff (see output_state_t doc in router.h) ----------
+// Producer (Core 0) publishes a full event into a slot wait-free; consumer
+// (Core 1) reads a torn-free snapshot via router_get_output(). Barriers use GCC
+// __atomic builtins (no <stdatomic.h>, C++-safe) → DMB on ARM / MEMW on Xtensa.
+// Bound the consumer's retries so a pathological collision run can't stall the
+// timing-critical console core — it falls back to "no new data" (reuse last frame).
+#define ROUTER_CONSUME_MAX_RETRY 4
+
+static inline void router_publish(output_state_t* s, const input_event_t* ev) {
+    uint32_t seq = s->seq;
+    s->seq = seq + 1;                          // odd: write in progress
+    __atomic_thread_fence(__ATOMIC_RELEASE);   // payload writes land after the odd bump
+    s->current_state = *ev;
+    __atomic_thread_fence(__ATOMIC_RELEASE);   // publish only after payload is committed
+    s->seq = seq + 2;                          // even: new version visible
+}
+
 // Router configuration (set at init)
 static router_config_t router_config;
 
@@ -500,7 +517,7 @@ void router_init(const router_config_t* config) {
     for (uint8_t output = 0; output < MAX_OUTPUTS; output++) {
         for (uint8_t player = 0; player < MAX_PLAYERS_PER_OUTPUT; player++) {
             init_input_event(&router_outputs[output][player].current_state);
-            router_outputs[output][player].updated = false;
+            router_outputs[output][player].seq = 0;   // even, "no data yet"
             router_outputs[output][player].player_id = player;
             router_outputs[output][player].source = INPUT_SOURCE_USB_HOST;  // Default
 
@@ -797,9 +814,8 @@ static inline void router_simple_mode(const input_event_t* event, output_target_
 
         // Store to output slot (skip when tap-exclusive — tap delivers directly)
         if (!output_tap_exclusive[output]) {
-            router_outputs[output][player_index].current_state = *final_event;
-            router_outputs[output][player_index].updated = true;
             router_outputs[output][player_index].source = INPUT_SOURCE_USB_HOST;
+            router_publish(&router_outputs[output][player_index], final_event);
         }
 
         // Notify tap if registered (for push-based outputs like UART)
@@ -844,10 +860,14 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
         final_event = event;  // Zero-copy pass-through
     }
 
+    // Build the merged result in a local, then publish once (seqlock) so Core 1
+    // never sees a torn frame mid-blend. See output_state_t doc in router.h.
+    input_event_t merged;
+
     switch (router_config.merge_mode) {
         case MERGE_ALL:
             // Latest active input wins (overwrites previous state)
-            router_outputs[output][0].current_state = *final_event;
+            merged = *final_event;
             break;
 
         case MERGE_BLEND: {
@@ -882,8 +902,7 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                 // Update this device's state
                 blend_devices[output][slot].state = *final_event;
 
-                // Now re-blend ALL active devices
-                output_state_t* out = &router_outputs[output][0];
+                // Now re-blend ALL active devices into a local, published below
 
                 // Start with neutral state (all buttons released)
                 // Note: deltas are cleared here but accumulated fresh from blend devices
@@ -1052,7 +1071,7 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
                     x_current_state.gyro_range = onboard_motion.gyro_range;
                     x_current_state.has_motion = true;
                 }
-                out->current_state = x_current_state;
+                merged = x_current_state;
             }
             break;
         }
@@ -1060,22 +1079,24 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
         case MERGE_PRIORITY:
             // High priority input wins, low priority fallback
             // Used by Super3D0USB (USB priority, SNES fallback)
-            // Check if this source has higher priority than current
+            // Start from the current published state; USB (highest priority)
+            // overwrites it. Reading the slot here is producer-core-safe.
+            merged = router_outputs[output][0].current_state;
             if (router_outputs[output][0].source <= INPUT_SOURCE_USB_HOST) {
                 // USB has highest priority (0), always wins
-                router_outputs[output][0].current_state = *final_event;
+                merged = *final_event;
             }
             // Lower priority sources only update if no USB input active
             // TODO: Track activity timeout for priority fallback
             break;
     }
 
-    router_outputs[output][0].updated = true;
     router_outputs[output][0].source = INPUT_SOURCE_USB_HOST;
+    router_publish(&router_outputs[output][0], &merged);
 
     // Notify tap if registered (for push-based outputs like UART)
     if (output_taps[output]) {
-        output_taps[output](output, 0, &router_outputs[output][0].current_state);
+        output_taps[output](output, 0, &merged);
     }
 }
 
@@ -1648,9 +1669,8 @@ void router_submit_input(const input_event_t* event) {
                             }
 
                             if (!output_tap_exclusive[target]) {
-                                router_outputs[target][target_player].current_state = *final_event;
-                                router_outputs[target][target_player].updated = true;
                                 router_outputs[target][target_player].source = INPUT_SOURCE_USB_HOST;
+                                router_publish(&router_outputs[target][target_player], final_event);
                             }
 
                             if (output_taps[target]) {
@@ -1670,36 +1690,57 @@ void router_submit_input(const input_event_t* event) {
 // OUTPUT RETRIEVAL (Core 1 - Poll or Event Driven)
 // ============================================================================
 
-// Static buffer for returning copies (so we can clear original deltas)
+// Consumer-side (Core 1) private buffers: the returned snapshot, and the last
+// seq we handed out per slot (edge detection — return each published event once,
+// NULL otherwise, matching the old `updated`-flag semantics several consumers
+// rely on). Written only by the consumer, never by the producer.
 static input_event_t router_output_copy[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
+static uint32_t router_output_last_seq[MAX_OUTPUTS][MAX_PLAYERS_PER_OUTPUT];
 
 const input_event_t* __not_in_flash_func(router_get_output)(output_target_t output, uint8_t player_id) {
     if (output >= MAX_OUTPUTS || player_id >= MAX_PLAYERS_PER_OUTPUT) {
         return NULL;
     }
 
-    if (router_outputs[output][player_id].updated) {
-        router_outputs[output][player_id].updated = false;  // Mark as read
-        
-        // Copy to static buffer so caller gets the deltas
-        router_output_copy[output][player_id] = router_outputs[output][player_id].current_state;
-        
-        // Clear deltas from original (they've been consumed)
-        router_outputs[output][player_id].current_state.delta_x = 0;
-        router_outputs[output][player_id].current_state.delta_y = 0;
-        
-        return &router_output_copy[output][player_id];
-    }
+    output_state_t* s = &router_outputs[output][player_id];
 
-    // No update - return NULL (don't re-process same deltas)
-    return NULL;
+    // Seqlock read: copy the payload between two matching even seq reads. If the
+    // producer wrote concurrently (seq odd, or changed across the copy), retry —
+    // bounded so the timing-critical console core can't stall (falls back to
+    // "no new data"). Copy straight into the private return buffer; a torn
+    // attempt is simply overwritten by the next try and never returned.
+    uint32_t s1, s2;
+    int tries = 0;
+    do {
+        s1 = s->seq;
+        if (s1 & 1u) {                          // writer mid-update
+            if (++tries > ROUTER_CONSUME_MAX_RETRY) return NULL;
+            continue;
+        }
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        router_output_copy[output][player_id] = s->current_state;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        s2 = s->seq;
+    } while (s1 != s2 && ++tries <= ROUTER_CONSUME_MAX_RETRY);
+
+    if ((s1 & 1u) || s1 != s2) return NULL;     // gave up cleanly → reuse last frame
+
+    // Edge detect: only hand out each published version once. seq==0 means "no
+    // data yet". Deltas are one-shot for free (each version returned exactly
+    // once), so no write-back into shared state is needed.
+    if (s1 == 0 || s1 == router_output_last_seq[output][player_id]) {
+        return NULL;
+    }
+    router_output_last_seq[output][player_id] = s1;
+    return &router_output_copy[output][player_id];
 }
 
 bool router_has_updates(output_target_t output) {
     if (output >= MAX_OUTPUTS) return false;
 
     for (uint8_t player = 0; player < MAX_PLAYERS_PER_OUTPUT; player++) {
-        if (router_outputs[output][player].updated) {
+        uint32_t seq = router_outputs[output][player].seq;
+        if ((seq & 1u) == 0 && seq != 0 && seq != router_output_last_seq[output][player]) {
             return true;
         }
     }
@@ -1792,11 +1833,13 @@ output_state_t* router_get_state_ptr(output_target_t output) {
 void router_reset_outputs(void) {
     printf(LOG_TAG "Resetting all outputs to neutral\n");
 
-    // Reset all output states
+    // Reset all output states — publish a neutral event so consumers see the
+    // change (seqlock bump) and drive their outputs to neutral.
+    input_event_t neutral;
+    init_input_event(&neutral);
     for (uint8_t output = 0; output < MAX_OUTPUTS; output++) {
         for (uint8_t player = 0; player < MAX_PLAYERS_PER_OUTPUT; player++) {
-            init_input_event(&router_outputs[output][player].current_state);
-            router_outputs[output][player].updated = true;  // Signal that state changed
+            router_publish(&router_outputs[output][player], &neutral);
         }
 
         // Clear blend device tracking
@@ -1853,10 +1896,12 @@ void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
         }
     }
 
-    // For MERGE mode, all inputs go to player 0 - re-blend remaining devices
+    // For MERGE mode, all inputs go to player 0 - re-blend remaining devices.
+    // Build into a local and publish once (seqlock) so Core 1 never sees a torn
+    // frame mid-reblend.
     if (router_config.mode == ROUTING_MODE_MERGE) {
-        output_state_t* out_state = &router_outputs[output][0];
-        init_input_event(&out_state->current_state);
+        input_event_t rebuilt;
+        init_input_event(&rebuilt);
 
         if (router_config.merge_mode == MERGE_BLEND) {
             // Re-blend all remaining active devices
@@ -1866,31 +1911,31 @@ void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
                 input_event_t* dev = &blend_devices[output][i].state;
 
                 // Buttons: OR together
-                out_state->current_state.buttons |= dev->buttons;
-                out_state->current_state.keys |= dev->keys;
+                rebuilt.buttons |= dev->buttons;
+                rebuilt.keys |= dev->keys;
 
                 // Analog: use furthest from center for sticks, max for triggers
                 // Format: [0]=LX, [1]=LY, [2]=RX, [3]=RY, [4]=L2, [5]=R2
                 for (int j = 0; j < ANALOG_COUNT; j++) {
                     if (j >= ANALOG_L2) {
                         // Triggers: use max value
-                        if (dev->analog[j] > out_state->current_state.analog[j]) {
-                            out_state->current_state.analog[j] = dev->analog[j];
+                        if (dev->analog[j] > rebuilt.analog[j]) {
+                            rebuilt.analog[j] = dev->analog[j];
                         }
                     } else {
                         // Sticks: use furthest from center
-                        int8_t cur_delta = (int8_t)(out_state->current_state.analog[j] - 128);
+                        int8_t cur_delta = (int8_t)(rebuilt.analog[j] - 128);
                         int8_t dev_delta = (int8_t)(dev->analog[j] - 128);
                         if (abs(dev_delta) > abs(cur_delta)) {
-                            out_state->current_state.analog[j] = dev->analog[j];
+                            rebuilt.analog[j] = dev->analog[j];
                         }
                     }
                 }
 
                 // Battery: use first device that reports battery
-                if (dev->battery_level > 0 && out_state->current_state.battery_level == 0) {
-                    out_state->current_state.battery_level = dev->battery_level;
-                    out_state->current_state.battery_charging = dev->battery_charging;
+                if (dev->battery_level > 0 && rebuilt.battery_level == 0) {
+                    rebuilt.battery_level = dev->battery_level;
+                    rebuilt.battery_charging = dev->battery_charging;
                 }
             }
         }
@@ -1898,38 +1943,39 @@ void router_device_disconnected(uint8_t dev_addr, int8_t instance) {
         // No input controller reported a battery → fall back to this device's
         // own battery (e.g. controller_btusb on a LiPo) so the SInput report
         // carries real charge_level/plug_status.
-        if (out_state->current_state.battery_level == 0 && onboard_batt_pct >= 0) {
-            out_state->current_state.battery_level = (uint8_t)onboard_batt_pct;
-            out_state->current_state.battery_charging = onboard_batt_charging;
+        if (rebuilt.battery_level == 0 && onboard_batt_pct >= 0) {
+            rebuilt.battery_level = (uint8_t)onboard_batt_pct;
+            rebuilt.battery_charging = onboard_batt_charging;
         }
         // Onboard IMU motion when no input device supplied any.
-        if (!out_state->current_state.has_motion && onboard_motion.valid) {
+        if (!rebuilt.has_motion && onboard_motion.valid) {
             for (int mi = 0; mi < 3; mi++) {
-                out_state->current_state.accel[mi] = onboard_motion.accel[mi];
-                out_state->current_state.gyro[mi] = onboard_motion.gyro[mi];
+                rebuilt.accel[mi] = onboard_motion.accel[mi];
+                rebuilt.gyro[mi] = onboard_motion.gyro[mi];
             }
-            out_state->current_state.accel_range = onboard_motion.accel_range;
-            out_state->current_state.gyro_range = onboard_motion.gyro_range;
-            out_state->current_state.has_motion = true;
+            rebuilt.accel_range = onboard_motion.accel_range;
+            rebuilt.gyro_range = onboard_motion.gyro_range;
+            rebuilt.has_motion = true;
         }
 
-        out_state->updated = true;
+        router_publish(&router_outputs[output][0], &rebuilt);
 
         // Always notify tap with current state (zeroed or re-blended)
         if (output_taps[output]) {
-            output_taps[output](output, 0, &out_state->current_state);
+            output_taps[output](output, 0, &rebuilt);
         }
 
         printf(LOG_TAG "Updated merged output (player 0)\n");
     } else {
         // SIMPLE/BROADCAST mode: clear this player's specific output state
         if (player_index >= 0 && player_index < MAX_PLAYERS_PER_OUTPUT) {
-            init_input_event(&router_outputs[output][player_index].current_state);
-            router_outputs[output][player_index].updated = true;
+            input_event_t cleared;
+            init_input_event(&cleared);
+            router_publish(&router_outputs[output][player_index], &cleared);
 
             // Notify tap if registered (sends zeroed state to USB/UART output)
             if (output_taps[output]) {
-                output_taps[output](output, player_index, &router_outputs[output][player_index].current_state);
+                output_taps[output](output, player_index, &cleared);
             }
 
             printf(LOG_TAG "Cleared output state for player %d\n", player_index);
