@@ -8,7 +8,13 @@
 
 #define INVALID_REPORT_ID -1 // means 1/X of half range of analog would be dead zone
 #define DEAD_ZONE 4U
-#define MAX_BUTTONS 12 // max generic HID buttons to map
+#define MAX_BUTTONS 12 // max generic HID buttons mapped to named JP_BUTTON slots
+// Spillover net: buttons beyond the 12 named slots (usages 13..24) are captured
+// and routed to input_event.aux_buttons (12 spare SInput slots) so a controller
+// with >12 buttons never silently loses the overflow — it lands on distinct,
+// bindable buttons instead of vanishing. See process_hid_gamepad().
+#define MAX_AUX_BUTTONS 12
+#define MAX_TOTAL_BUTTONS (MAX_BUTTONS + MAX_AUX_BUTTONS) // 24
 #define HID_DEBUG 1
 
 #define HID_GAMEPAD  0x00
