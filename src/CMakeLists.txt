@@ -271,6 +271,7 @@ set(USB_DEVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/psclassic_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/pcemini_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/ps4_mode.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/dualsense_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/xid_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/xbone_mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd/modes/xac_mode.c

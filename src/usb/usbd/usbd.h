@@ -33,6 +33,7 @@ typedef enum {
     USB_OUTPUT_MODE_PCEMINI,            // PC Engine Mini (TurboGrafx-16 Mini)
     USB_OUTPUT_MODE_CDC,                // CDC-only (serial config, no HID)
     USB_OUTPUT_MODE_GBA_LINK,           // GBA Link Cable bridge for Dolphin (USB vendor)
+    USB_OUTPUT_MODE_DUALSENSE,          // PS5 DualSense passthrough (experimental, sniff-gated)
     USB_OUTPUT_MODE_COUNT
 } usb_output_mode_t;
 
