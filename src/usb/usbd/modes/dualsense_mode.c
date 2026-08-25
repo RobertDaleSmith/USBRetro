@@ -104,7 +104,9 @@ static bool ds5_mode_send_report(uint8_t player_index,
 
     // Bytes 11-63: vendor (IMU/touchpad/battery) left zeroed for now.
 
-    return tud_hid_report(0x01, ds5_report_buffer, sizeof(ds5_report_buffer));
+    // Send report_id=0x01 + 63 data bytes (skip our buffer[0] report-id; TinyUSB
+    // prepends the id itself → 64 bytes on the wire, matching the descriptor).
+    return tud_hid_report(0x01, &ds5_report_buffer[1], 63);
 }
 
 // GET_REPORT feature dispatch — auth signature/status/reset via ds5_auth.
@@ -112,6 +114,13 @@ static uint16_t ds5_mode_get_report(uint8_t report_id, hid_report_type_t report_
                                     uint8_t* buffer, uint16_t reqlen)
 {
     if (report_type != HID_REPORT_TYPE_FEATURE) return 0;
+
+    // Firmware-info report 0x20 — hosts query it to identify the DualSense.
+    if (report_id == DS5_REPORT_ID_FIRMWARE) {
+        uint16_t n = reqlen < sizeof(ds5_feature_20) ? reqlen : sizeof(ds5_feature_20);
+        memcpy(buffer, ds5_feature_20, n);
+        return n;
+    }
 
     switch (report_id) {
         case DS5_REPORT_ID_AUTH_RESPONSE:  // 0xF1
