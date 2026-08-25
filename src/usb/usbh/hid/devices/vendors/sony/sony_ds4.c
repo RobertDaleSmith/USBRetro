@@ -1,5 +1,6 @@
 // sony_ds4.c
 #include "sony_ds4.h"
+#include "ds5_auth.h"
 #include <stdio.h>
 #include "core/buttons.h"
 #include "core/router/router.h"
@@ -595,6 +596,10 @@ uint8_t* ds3_get_verify_buffer(void) {
 void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
                                     uint16_t len) {
+    // DualSense (PS5) auth passthrough shares this global callback. Route first;
+    // it only consumes completions for its own registered DualSense.
+    if (ds5_auth_on_get_report_complete(dev_addr, idx, report_id, len)) return;
+
     // Handle DS3 BT address verification (report 0xF5)
     if (report_id == 0xF5) {
         // Notify DS3 driver that GET_REPORT completed
@@ -674,6 +679,9 @@ void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
 void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
                                     uint16_t len) {
+    // DualSense (PS5) auth passthrough shares this global callback (see above).
+    if (ds5_auth_on_set_report_complete(dev_addr, idx, report_id, len)) return;
+
     // DS3 BT address programming complete
     if (report_id == 0xF5) {
         if (len == 8) {

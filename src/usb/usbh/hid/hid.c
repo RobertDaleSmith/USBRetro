@@ -10,6 +10,7 @@
 #include "usb/usbh/hid/hid_utils.h"
 #include "usb/usbh/hid/hid_registry.h"
 #include "usb/usbh/hid/devices/vendors/sony/sony_ds4.h"
+#include "usb/usbh/hid/devices/vendors/sony/ds5_auth.h"
 
 #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
@@ -52,6 +53,8 @@ void hid_task(void)
 {
   // Process DS4 auth passthrough
   ds4_auth_task();
+  // Process DS5 (DualSense) auth passthrough — see ds5_auth.h (sniff-gated)
+  ds5_auth_task();
 
   // Get test mode counter (for LED test patterns)
   uint8_t test_counter = codes_get_test_counter();
@@ -198,6 +201,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     // Register DS4 for auth passthrough
     ds4_auth_register(dev_addr, instance);
     break;
+  case CONTROLLER_DUALSENSE:
+    // Register DualSense for PS5 auth passthrough (sniff-gated, see ds5_auth.h)
+    ds5_auth_register(dev_addr, instance);
+    break;
   default:
     break;
   }
@@ -261,6 +268,9 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     // Unregister DS4 from auth passthrough
     if (dev_type == CONTROLLER_DUALSHOCK4) {
       ds4_auth_unregister(dev_addr, instance);
+    }
+    if (dev_type == CONTROLLER_DUALSENSE) {
+      ds5_auth_unregister(dev_addr, instance);
     }
     break;
   case CONTROLLER_KEYBOARD:
