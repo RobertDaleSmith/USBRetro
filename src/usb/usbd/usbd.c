@@ -587,6 +587,7 @@ void usbd_init(void)
                 settings->usb_output_mode == USB_OUTPUT_MODE_XINPUT ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_PS3 ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_PS4 ||
+                settings->usb_output_mode == USB_OUTPUT_MODE_DUALSENSE ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_XBONE ||
@@ -2252,8 +2253,9 @@ __attribute__((weak)) void app_on_console_shutdown(void)
 
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer, uint16_t bufsize)
 {
-    printf("[usbd] set_report_cb: itf=%d report_id=0x%02x type=%d len=%d mode=%d\n",
-           itf, report_id, report_type, bufsize, output_mode);
+    // NOTE: no per-call logging here. This runs on every host SET_REPORT, and a
+    // host that streams output reports (e.g. macOS/PS5 pushing DualSense LED/haptics)
+    // would turn a blocking UART printf into a Core0-starving storm → USB timeouts.
 
     // SInput/KB/Mouse composite: route by interface
     if (output_mode == USB_OUTPUT_MODE_SINPUT ||

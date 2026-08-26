@@ -243,6 +243,11 @@ static void ds5_mode_handle_output(uint8_t report_id, const uint8_t* data, uint1
         ds5_out.led_b = fb->lightbar_b;
     }
     ds5_out.available = true;
+    // NOTE: feedback to the connected pad is intentionally NOT driven here. Any
+    // route that touches the feedback subsystem (this path OR the app get_feedback
+    // path) wedges TinyUSB's tud_task within ~5-9s of macOS steady state — a
+    // low-level native-USB/RP2040 interaction still under investigation. Input
+    // passthrough is stable without it.
 }
 
 static uint8_t ds5_mode_get_rumble(void)
@@ -253,11 +258,13 @@ static uint8_t ds5_mode_get_rumble(void)
 static bool ds5_mode_get_feedback(output_feedback_t* fb)
 {
     if (!ds5_out.available) return false;
-    fb->rumble_left = ds5_out.motor_left;
-    fb->rumble_right = ds5_out.motor_right;
-    fb->led_r = ds5_out.led_r;
-    fb->led_g = ds5_out.led_g;
-    fb->led_b = ds5_out.led_b;
+    // ONE-AT-A-TIME bring-up: player LED only. Rumble + RGB held at zero so the
+    // app's feedback_set_rumble/feedback_set_led_rgb paths stay inert this pass.
+    fb->rumble_left = 0;
+    fb->rumble_right = 0;
+    fb->led_r = 0;
+    fb->led_g = 0;
+    fb->led_b = 0;
     // DualSense player-LED bitmask → player number (popcount of the lit LEDs).
     uint8_t n = 0, m = ds5_out.player_leds;
     while (m) { n += (m & 1); m >>= 1; }
@@ -280,9 +287,11 @@ const usbd_mode_t dualsense_mode = {
     .init = ds5_mode_init,
     .send_report = ds5_mode_send_report,
     .is_ready = ds5_mode_is_ready,
-    .handle_output = ds5_mode_handle_output,
-    .get_rumble = ds5_mode_get_rumble,
-    .get_feedback = ds5_mode_get_feedback,
+    // Output/feedback to the connected pad DISABLED — it wedges tud_task (see
+    // handle_output note). Stable input passthrough + device-side output only.
+    .handle_output = NULL,
+    .get_rumble = NULL,
+    .get_feedback = NULL,
     .get_report = ds5_mode_get_report,
     .get_class_driver = NULL,
     .task = NULL,
