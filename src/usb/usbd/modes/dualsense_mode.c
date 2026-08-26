@@ -246,7 +246,12 @@ static void ds5_mode_handle_output(uint8_t report_id, const uint8_t* data, uint1
     // Cortex-M0+ inside tud_task. Bit 12 lives in the high byte (bit 4 = 0x10).
     if ((data[1] & 0x10) && len > offsetof(ds5_feedback_t, player_led))
         new_pl = fb->player_led & 0x1F;
-    if (len >= sizeof(ds5_feedback_t)) {
+    // Lightbar RGB (@44-46) only when the host asserts the lightbar flag (bit 10
+    // = high byte bit 2 = 0x04), byte-wise for the same odd-alignment reason.
+    // Gate on the field offset, NOT sizeof(ds5_feedback_t): the struct is
+    // unpacked with a uint16_t so it pads to 48, and a 47-byte body would drop
+    // the RGB entirely.
+    if ((data[1] & 0x04) && len >= offsetof(ds5_feedback_t, lightbar_r) + 3) {
         new_r = fb->lightbar_r;
         new_g = fb->lightbar_g;
         new_b = fb->lightbar_b;
