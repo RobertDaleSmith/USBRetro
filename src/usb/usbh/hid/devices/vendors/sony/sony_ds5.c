@@ -355,7 +355,10 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t*
     ds5_devices[dev_addr].instances[instance].led_r = ds5_fb.lightbar_r;
     ds5_devices[dev_addr].instances[instance].led_g = ds5_fb.lightbar_g;
     ds5_devices[dev_addr].instances[instance].led_b = ds5_fb.lightbar_b;
-    tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
+    // DualSense USB output report is 0x02 (BT is 0x31). Report ID 5 was a DS4
+    // copy-paste (DS4 USB output = 5) and the DualSense silently ignored it, so
+    // rumble/lightbar/player-LEDs never reached a connected DualSense.
+    tuh_hid_send_report(dev_addr, instance, 0x02, &ds5_fb, sizeof(ds5_fb));
   }
 }
 
