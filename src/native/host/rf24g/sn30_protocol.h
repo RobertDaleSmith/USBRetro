@@ -3,7 +3,8 @@
 // Every value here was recovered from a logic-analyser tap on the SPI bus
 // between the original 8BitDo receiver's MCU and its radio. They are
 // ground truth read off real register writes, not inference -- do not
-// "fix" them.
+// "fix" them. Full capture notes and reverse-engineering detail:
+// https://github.com/FatBeard/sf30-2.4g-protocol
 //
 // Deliberately free of pico-sdk / platform calls -- see rf24g_hal.h. Only
 // rf24g_host.c includes this file, and it must include rf24g_hal.h first

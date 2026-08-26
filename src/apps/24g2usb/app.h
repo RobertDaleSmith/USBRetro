@@ -31,12 +31,9 @@
 
 // Output drivers
 #define REQUIRE_USB_DEVICE 1
-#define USB_OUTPUT_PORTS 1              // Single gamepad for now. SInput/HID/XInput
-                                        // modes all (void)player_index and write to
-                                        // the single ITF_NUM_HID_GAMEPAD interface
-                                        // (see usb/usbd/modes/sinput_mode.c:402) --
-                                        // only gc_adapter_mode routes player_index to
-                                        // distinct ports. Same situation as bt2usb.
+#define USB_OUTPUT_PORTS 1              // SInput/HID/XInput modes all write to a
+                                        // single HID interface regardless of
+                                        // player_index -- same as bt2usb.
 
 // Services
 #define REQUIRE_PLAYER_MANAGEMENT 1

@@ -23,37 +23,22 @@
 //
 // Both handlers -- and everything they call, transitively -- are
 // __not_in_flash_func. This is defense in depth, NOT fault avoidance: every
-// flash write in this codebase (core/services/storage/flash.c's
-// flash_write_page()/flash_erase_sector()) disables core-0 interrupts for
-// the entire XIP-off window, so the radio ISR cannot fire mid-write at all
-// regardless of where its code lives. __not_in_flash_func here is a second,
-// independent guarantee that doesn't depend on that interrupt-disable
-// window staying as wide as it is today -- if it were ever narrowed, a
-// flash-resident handler pulled in mid-erase would hard-fault immediately
-// instead of working by accident. (The ISR entry path itself --
-// ram_vector_table's flash-resident dispatchers before control reaches this
-// file's RAM trampolines in rf24g_hal_rp2040.c -- is not fully RAM-resident
-// regardless; that's accepted for the same reason: interrupts are off, so
-// it can't execute mid-write either.)
+// flash write in this codebase disables core-0 interrupts for the entire
+// XIP-off window, so the radio ISR can't fire mid-write regardless of where
+// its code lives. This is a second, independent guarantee against that
+// window ever narrowing -- if it did, a flash-resident handler pulled in
+// mid-erase would hard-fault instead of working by accident. A ~45ms sector
+// erase costs roughly 3-9 missed dwells at the 10070us dwell period;
+// MAX_MISSES (128, ~1.29s) tolerates that without dropping the link.
 //
-// The real, non-hypothetical cost of a flash write while the controller is
-// linked: interrupts off for a ~4KB sector erase (~45ms, flash_erase_sector())
-// costs roughly 3-9 missed dwells at the 10070us DWELL_US period. MAX_MISSES
-// is 128 (~1.29s) before the link is considered dropped, and every received
-// frame re-syncs both hop index and phase (see handle_frame()), so the link
-// rides out an erase without dropping.
+// __not_in_flash_func places a function's OWN code in RAM, not its callees',
+// so it's repeated down the whole ISR/alarm call chain (this file,
+// nrf24l01.c, rf24g_hal_rp2040.c). Code NOT reachable from that chain (init,
+// the public task/stats/pairing entry points) is free to live in flash.
 //
-// __not_in_flash_func places a function's OWN code in RAM; it does nothing
-// for functions it calls, so the attribute has to be repeated all the way
-// down the call chain (this file, nrf24l01.c, rf24g_hal_rp2040.c). Anything
-// NOT reachable from the ISR/alarm chain (init, the public task/stats/pairing
-// entry points called from ordinary core-0 code) is free to live in flash
-// and use platform_time_us()/platform_time_ms() normally.
-//
-// rf24g_host_task(), called from core 0, does NO radio I/O at all -- it only
-// drains the ring buffer, builds input_event_t's and calls
-// router_submit_input(), plus the non-timing-critical pairing-confirmation
-// and per-second stats bookkeeping.
+// rf24g_host_task(), called from core 0, does NO radio I/O -- it only drains
+// the ring buffer, builds input_event_t's and calls router_submit_input(),
+// plus pairing-confirmation and per-second stats bookkeeping.
 
 #include "rf24g_host.h"
 #include "rf24g_hal.h"       // must precede sn30_protocol.h: this is where
@@ -137,21 +122,13 @@ typedef enum {
 #define RF24G_HIST_BUCKETS 6
 
 typedef struct {
-    // Pipe 0 (the only pipe -- see RF24G_PIPE_MASK) is always enabled --
-    // there is no "claimed" flag to track here. This struct is purely
-    // link/scheduling state; whether the controller has ever been heard from
-    // this boot lives in s_seen instead.
+    // Pipe 0 is always enabled -- no "claimed" flag needed here. Purely
+    // link/scheduling state; s_seen tracks whether ever heard from this boot.
     //
-    // linked/misses/pkts_total/pkts_window/period_us are `volatile`-qualified
-    // fields: they're written from ISR/alarm context (handle_frame(),
-    // on_alarm(), drop_slot_link()) and read (pkts_window: read AND cleared)
-    // from ordinary core-0 task context (rf24g_host_is_connected(),
-    // rf24g_host_get_device_count(), rf24g_host_print_stats(),
-    // rf24g_host_task(), pairing_confirm_task()) -- same cross-context
-    // pattern as s_seen/s_unlink_pending/s_pair_result below, so they need
-    // the same guarantee against the compiler caching a stale value across a
-    // call that doesn't itself write them. The remaining fields never leave
-    // ISR/alarm context and don't need it.
+    // The `volatile` fields below cross the ISR/core-0 boundary (written in
+    // handle_frame()/on_alarm(), read or read-and-cleared from ordinary
+    // core-0 task functions), same pattern as s_seen/s_unlink_pending below.
+    // The rest never leave ISR/alarm context and don't need it.
     volatile bool linked;  // has received at least one ordinary (non-probe) frame
     bool     confirmed;    // a SECOND frame arrived after the acquisition jump
 
@@ -172,41 +149,29 @@ typedef struct {
 
 static bool s_initialized = false;
 
-// volatile: written from ISR/alarm context (on_radio_irq(), on_alarm(),
-// enter_park(), enter_search(), pairing_end()) and read from core-0 task
-// context (rf24g_host_is_pairing(), rf24g_host_state_name()) -- same
-// cross-context pattern as the other volatile state in this file.
-static volatile rf24g_link_state_t s_state = RF24G_LINK_PARK;
-static volatile uint8_t   s_cur_ch     = SN30_PARK_CH;  // also read from
-                                                   // rf24g_host_print_stats()
-                                                   // on core 0
-static bool               s_following  = false;  // whether the current dwell
-                                                   // is following the link
-                                                   // (false during PARK/
-                                                   // SEARCH/PAIRING)
+// Both volatile: written from ISR/alarm context, read from core-0 task
+// functions (rf24g_host_is_pairing(), rf24g_host_state_name(),
+// rf24g_host_print_stats()).
+static volatile rf24g_link_state_t s_state  = RF24G_LINK_PARK;
+static volatile uint8_t            s_cur_ch = SN30_PARK_CH;
+static bool               s_following  = false;  // dwell is following the
+                                                   // link? false in PARK/
+                                                   // SEARCH/PAIRING
 static uint8_t            s_sweep_idx  = 0;    // SEARCH sweep position
 static uint16_t           s_sweep_hops = 0;
 
 // The controller's link/scheduling state.
 static rf24g_slot_t s_slot;
 
-// Receiver identity: an FNV-1a hash of the board's own factory-programmed
-// unique ID, computed once in rf24g_host_init_pins() (before radio_init())
-// and never touched again -- see sn30_protocol.h's "Receiver identity". It
-// comes out identical on every boot by construction, so there is nothing to
-// persist to flash and nothing lost on a power cycle; a controller paired
-// to this board stays paired across a reboot or a reflash, and needs
-// re-pairing only if it moves to a different board.
+// FNV-1a hash of the board's factory unique ID, computed once in
+// rf24g_host_init_pins() -- see sn30_protocol.h's "Receiver identity". Comes
+// out identical on every boot, so a controller stays paired across a reboot
+// or reflash and needs re-pairing only if it moves to a different board.
 static uint8_t s_receiver_id[4];
 
-// Whether the controller has been heard from (received at least one LINKED
-// frame, i.e. actually paired and talking) at any point this boot. The pipe
-// is always open (see RF24G_PIPE_MASK in apply_pipe_addresses()), so
-// nothing needs to be tracked to gate reception; this exists purely so
-// rf24g_host_print_stats() can report whether the controller has ever
-// checked in this boot, distinct from whether it's linked right now.
-// ISR-side single writer (handle_frame()), core-0 reader -- volatile and a
-// plain assignment are sufficient, no lock needed.
+// Whether the controller has ever linked this boot -- diagnostic only, for
+// rf24g_host_print_stats(); the pipe is always open regardless. ISR-side
+// single writer (handle_frame()), core-0 reader.
 static volatile bool s_seen = false;
 
 static uint32_t s_stats_window_ms = 0;
@@ -228,13 +193,9 @@ static volatile uint8_t s_ring_head = 0;   // ISR writes
 static volatile uint8_t s_ring_tail = 0;   // rf24g_host_task() reads
 
 // Whether the ISR unlinked the controller and its player registration still
-// needs tearing down. The ISR must not do it itself: remove_players_by_address()
-// lives in manager.c, i.e. in flash, and calling it from the RAM-resident
-// ISR/alarm chain would break the __not_in_flash_func discipline this
-// file's header documents (interrupts are actually off for the whole of a
-// flash write, so this specific call wouldn't fault today -- see the header
-// for why the discipline is kept anyway). The ISR sets this flag;
-// rf24g_host_task() does the actual removal on core 0.
+// needs tearing down. remove_players_by_address() is flash-resident, so the
+// ISR can't call it directly (see file header); it sets this flag instead,
+// and rf24g_host_task() does the actual removal on core 0.
 static volatile bool s_unlink_pending = false;   // ISR sets, task clears
 
 static void __not_in_flash_func(ring_push)(uint8_t b2, uint8_t b3)
@@ -272,28 +233,16 @@ static uint16_t s_pair_requests;
 static uint16_t s_pair_cycle_reqs;
 static uint8_t  s_pair_reply[SN30_PAIR_RSP_LEN];
 
-// Tracks whether pairing_end() most recently accepted a claim that hasn't
-// yet been confirmed by an actual frame arriving. pairing_end() only sees
-// "the controller stopped asking", which does not by itself mean the
-// controller took the address -- so pairing_confirm_task() separately
-// watches pkts_total for PAIR_CONFIRM_US and reports whichever way it goes.
-// Purely diagnostic: the pipe is already open unconditionally (see
-// RF24G_PIPE_MASK), so there is nothing to roll back either way. Note that
-// "never confirmed" does NOT mean "never taken": a controller that already
-// held this address, or that will not transmit until power-cycled, is
-// silent here and confirms nothing, yet is paired and links on its next
-// power-on.
+// Tracks whether pairing_end() accepted a claim not yet confirmed by an
+// actual frame arriving -- "controller stopped asking" isn't proof it took
+// the address, so pairing_confirm_task() separately watches pkts_total for
+// PAIR_CONFIRM_US. Purely diagnostic: the pipe is already open regardless,
+// so there's nothing to roll back. "Never confirmed" does NOT mean "never
+// taken": a controller that already held this address, or won't transmit
+// until power-cycled, stays silent here yet links on its next power-on.
 //
-// Written by pairing_end() in alarm/ISR context, read and cleared by
-// pairing_confirm_task() on core 0, so volatile like s_pair_result and
-// s_unlink_pending. The deadline is on the rf24g_hal_time_us() timebase,
-// NOT platform_time_ms(): pairing_end() is reachable from on_alarm(), and
-// platform_time_ms() is flash-resident, which is exactly what this file's
-// __not_in_flash_func call graph exists to keep out of the ISR chain (see
-// the file header). rf24g_hal_time_us() is __not_in_flash_func and already
-// the ISR chain's clock everywhere else. PAIR_CONFIRM_US is 8s, far inside
-// the ~35 minutes of headroom the signed-difference comparison has before
-// a uint32 us counter wrap could confuse it.
+// Deadline uses rf24g_hal_time_us(), not platform_time_ms() (flash-resident,
+// unsafe from on_alarm() -- see file header).
 static volatile bool     s_pair_prov_active = false;
 static volatile uint32_t s_pair_prov_pkts = 0;
 static volatile uint32_t s_pair_prov_deadline_us = 0;
@@ -703,43 +652,27 @@ static void __not_in_flash_func(on_alarm)(void)
         // handle_frame()).
         s->hop_idx = sn30_next_idx(s->hop_idx);
 
-        // Advance the anchor by exactly one period -- NOT to `now`. `now` is
-        // the previous deadline, which already includes HOP_GUARD_US, so
-        // re-anchoring there slips the whole schedule HOP_GUARD_US later on
-        // every miss; after P/HOP_GUARD_US (7) consecutive misses the dwell
-        // no longer contains the transmitter's slot at all, and the link
-        // cannot re-sync until it coincides by luck. Keeping the anchor on
-        // the transmitter's own grid makes the free-run drift-free; a
-        // received frame still re-syncs index AND phase in handle_frame()
-        // exactly as before.
+        // Advance by exactly one period, NOT to `now` -- `now` already
+        // includes HOP_GUARD_US, so re-anchoring there slips the schedule on
+        // every miss until the dwell no longer contains the transmitter's
+        // slot at all. Staying on the transmitter's own grid is drift-free;
+        // a received frame still re-syncs both in handle_frame().
         s->last_rx_us += s->period_us;
 
-        // Catch up in whole periods if a long stall (e.g. a flash sector
-        // erase, which runs with core-0 interrupts off) left the anchor more
-        // than one period behind, rather than letting schedule_next()'s
-        // `deadline = now` clamp spin the alarm at RF24G_ALARM_MIN_US
-        // intervals.
-        //
-        // BOUNDED, with a fallback, because this runs in alarm-ISR context
-        // where an unbounded loop is a hang and not merely a slowdown.
-        // period_us should never be 0 -- it is seeded to DWELL_US and only
-        // ever reassigned from rf24g_div_u32() -- but rf24g_div_u32() guards
-        // its own divisor for exactly the "don't trust that invariant
-        // forever" reason, and a 0 reaching here would spin this loop
-        // forever rather than just degrade a dwell. 8 periods is ~81ms,
-        // comfortably past the ~45ms worst-case flash_erase_sector() stall
-        // this exists to absorb.
+        // Catch up in whole periods if a long stall (e.g. a flash erase,
+        // which runs with interrupts off) left the anchor over a period
+        // behind. Bounded, with a fallback below, because this is alarm-ISR
+        // context where an unbounded loop is a hang, not a slowdown. 8
+        // periods (~81ms) comfortably covers the ~45ms worst-case erase
+        // stall this exists to absorb.
         for (uint8_t catchup = 0;
              catchup < 8 && (int32_t)((s->last_rx_us + s->period_us) - now) < 0;
              catchup++) {
             s->last_rx_us += s->period_us;
         }
 
-        // Still behind after the bound: a stall far longer than this
-        // arithmetic can absorb, or a degenerate period. Give up on holding
-        // the transmitter's grid and take the phase slip ONCE -- which is
-        // what the pre-fix code did on every single miss. The next received
-        // frame re-syncs both phase and index in handle_frame() regardless.
+        // Still behind after the bound: take the phase slip once rather than
+        // spin further. The next received frame re-syncs regardless.
         if ((int32_t)((s->last_rx_us + s->period_us) - now) < 0)
             s->last_rx_us = now;
 
