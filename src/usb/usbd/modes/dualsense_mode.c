@@ -18,6 +18,7 @@
 #endif
 #include "core/buttons.h"
 #include "platform/platform.h"
+#include "app_config.h"   // LED_Px_PATTERN — reverse-map host player-LED patterns
 #include "tusb.h"
 #include <stdio.h>
 #include <string.h>
@@ -238,7 +239,13 @@ static void ds5_mode_handle_output(uint8_t report_id, const uint8_t* data, uint1
     uint8_t new_mr = fb->rumble_r;
     uint8_t new_pl = ds5_out.player_leds;
     uint8_t new_r  = ds5_out.led_r, new_g = ds5_out.led_g, new_b = ds5_out.led_b;
-    if (len > offsetof(ds5_feedback_t, player_led)) new_pl = fb->player_led;
+    // Player LED only when the host asserts the player_led flag (bit 12); a
+    // report without it must not clear the pattern we last latched. NOTE: read
+    // the flag byte-wise — flags is a uint16_t at data[0..1] and `data` is often
+    // odd-aligned, so `fb->flags` (an unpacked 16-bit load) HardFaults the
+    // Cortex-M0+ inside tud_task. Bit 12 lives in the high byte (bit 4 = 0x10).
+    if ((data[1] & 0x10) && len > offsetof(ds5_feedback_t, player_led))
+        new_pl = fb->player_led & 0x1F;
     if (len >= sizeof(ds5_feedback_t)) {
         new_r = fb->lightbar_r;
         new_g = fb->lightbar_g;
@@ -267,6 +274,28 @@ static uint8_t ds5_mode_get_rumble(void)
     return (ds5_out.motor_left > ds5_out.motor_right) ? ds5_out.motor_left : ds5_out.motor_right;
 }
 
+// Reverse of output_sony_ds5()'s player-number → DualSense LED pattern mapping
+// (LED_Px_PATTERN in app_config.h). The host's output report carries the raw
+// 5-bit pattern; translate it back to a player number for the feedback system,
+// so the pattern round-trips identically to how we drive a connected pad.
+static uint8_t ds5_playerled_pattern_to_number(uint8_t pattern)
+{
+    switch (pattern & 0x1F) {
+        case LED_P1_PATTERN: return 1;
+        case LED_P2_PATTERN: return 2;
+        case LED_P3_PATTERN: return 3;
+        case LED_P4_PATTERN: return 4;
+        case LED_P5_PATTERN: return 5;
+#ifdef LED_P6_PATTERN
+        case LED_P6_PATTERN: return 6;
+#endif
+#ifdef LED_P7_PATTERN
+        case LED_P7_PATTERN: return 7;
+#endif
+        default: return 0;  // unrecognized / off
+    }
+}
+
 static bool ds5_mode_get_feedback(output_feedback_t* fb)
 {
     if (!ds5_out.available) return false;
@@ -278,6 +307,16 @@ static bool ds5_mode_get_feedback(output_feedback_t* fb)
     fb->led_r = ds5_out.led_r;
     fb->led_g = ds5_out.led_g;
     fb->led_b = ds5_out.led_b;
+    // Translate the host's 5-bit player-LED pattern back to a player number
+    // (reverse of the host-side player-number → pattern mapping). Emit it ONLY
+    // when it actually changes: feedback_set_led_player() writes the LED RGB,
+    // which the cascade's feedback_set_led_rgb() then overwrites, so calling it
+    // every pass forces led_dirty on and adds churn at the host's output rate.
+    // The host streams identical reports continuously, so gate to real changes.
+    static uint8_t last_player = 0;
+    uint8_t player = ds5_playerled_pattern_to_number(ds5_out.player_leds);
+    fb->led_player = (player != last_player) ? player : 0;
+    last_player = player;
     fb->dirty = true;
     ds5_out.available = false;
     return true;
