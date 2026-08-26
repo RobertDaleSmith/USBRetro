@@ -1446,6 +1446,14 @@ static uint8_t usbd_get_rumble(void)
             }
             return 0;
         }
+        case USB_OUTPUT_MODE_DUALSENSE: {
+            // PS5 DualSense: delegate to mode interface
+            const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_DUALSENSE];
+            if (mode && mode->get_rumble) {
+                return mode->get_rumble();
+            }
+            return 0;
+        }
 #if CFG_TUD_GC_ADAPTER
         case USB_OUTPUT_MODE_GC_ADAPTER: {
             // GC Adapter: delegate to mode interface
@@ -1518,6 +1526,15 @@ static bool usbd_get_feedback(output_feedback_t* fb)
         case USB_OUTPUT_MODE_PS4: {
             // PS4: delegate to mode interface
             const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_PS4];
+            if (mode && mode->get_feedback) {
+                return mode->get_feedback(fb);
+            }
+            return false;
+        }
+
+        case USB_OUTPUT_MODE_DUALSENSE: {
+            // PS5 DualSense: delegate to mode interface
+            const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_DUALSENSE];
             if (mode && mode->get_feedback) {
                 return mode->get_feedback(fb);
             }
