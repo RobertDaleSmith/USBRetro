@@ -234,20 +234,32 @@ static void ds5_mode_handle_output(uint8_t report_id, const uint8_t* data, uint1
 
     // Parse whatever fields the host sent (rumble @2/3, player_led @43, RGB @44-46).
     const ds5_feedback_t* fb = (const ds5_feedback_t*)data;
-    ds5_out.motor_right = fb->rumble_r;
-    ds5_out.motor_left  = fb->rumble_l;
-    if (len > offsetof(ds5_feedback_t, player_led)) ds5_out.player_leds = fb->player_led;
+    uint8_t new_ml = fb->rumble_l;
+    uint8_t new_mr = fb->rumble_r;
+    uint8_t new_pl = ds5_out.player_leds;
+    uint8_t new_r  = ds5_out.led_r, new_g = ds5_out.led_g, new_b = ds5_out.led_b;
+    if (len > offsetof(ds5_feedback_t, player_led)) new_pl = fb->player_led;
     if (len >= sizeof(ds5_feedback_t)) {
-        ds5_out.led_r = fb->lightbar_r;
-        ds5_out.led_g = fb->lightbar_g;
-        ds5_out.led_b = fb->lightbar_b;
+        new_r = fb->lightbar_r;
+        new_g = fb->lightbar_g;
+        new_b = fb->lightbar_b;
     }
-    ds5_out.available = true;
-    // NOTE: feedback to the connected pad is intentionally NOT driven here. Any
-    // route that touches the feedback subsystem (this path OR the app get_feedback
-    // path) wedges TinyUSB's tud_task within ~5-9s of macOS steady state — a
-    // low-level native-USB/RP2040 interaction still under investigation. Input
-    // passthrough is stable without it.
+
+    // Change-gate like sinput_mode_handle_output / ps4_mode: only mark feedback
+    // available when a value actually changes. The host's DualSense driver
+    // streams identical output reports continuously; without this gate
+    // get_feedback would fire the whole cascade every loop forever.
+    if (new_ml != ds5_out.motor_left || new_mr != ds5_out.motor_right ||
+        new_pl != ds5_out.player_leds ||
+        new_r != ds5_out.led_r || new_g != ds5_out.led_g || new_b != ds5_out.led_b) {
+        ds5_out.motor_left  = new_ml;
+        ds5_out.motor_right = new_mr;
+        ds5_out.player_leds = new_pl;
+        ds5_out.led_r = new_r;
+        ds5_out.led_g = new_g;
+        ds5_out.led_b = new_b;
+        ds5_out.available = true;
+    }
 }
 
 static uint8_t ds5_mode_get_rumble(void)
@@ -258,17 +270,14 @@ static uint8_t ds5_mode_get_rumble(void)
 static bool ds5_mode_get_feedback(output_feedback_t* fb)
 {
     if (!ds5_out.available) return false;
-    // ONE-AT-A-TIME bring-up: player LED only. Rumble + RGB held at zero so the
-    // app's feedback_set_rumble/feedback_set_led_rgb paths stay inert this pass.
-    fb->rumble_left = 0;
-    fb->rumble_right = 0;
-    fb->led_r = 0;
-    fb->led_g = 0;
-    fb->led_b = 0;
-    // DualSense player-LED bitmask → player number (popcount of the lit LEDs).
-    uint8_t n = 0, m = ds5_out.player_leds;
-    while (m) { n += (m & 1); m >>= 1; }
-    fb->led_player = n;
+    // Mirror ps4_mode_get_feedback: two 8-bit motors + RGB lightbar. The host's
+    // DualSense driver refreshes these continuously; the connected pad's
+    // output_sony_ds5() dirty-check throttles what actually goes out.
+    fb->rumble_left  = ds5_out.motor_left;
+    fb->rumble_right = ds5_out.motor_right;
+    fb->led_r = ds5_out.led_r;
+    fb->led_g = ds5_out.led_g;
+    fb->led_b = ds5_out.led_b;
     fb->dirty = true;
     ds5_out.available = false;
     return true;
@@ -287,11 +296,11 @@ const usbd_mode_t dualsense_mode = {
     .init = ds5_mode_init,
     .send_report = ds5_mode_send_report,
     .is_ready = ds5_mode_is_ready,
-    // Output/feedback to the connected pad DISABLED — it wedges tud_task (see
-    // handle_output note). Stable input passthrough + device-side output only.
-    .handle_output = NULL,
-    .get_rumble = NULL,
-    .get_feedback = NULL,
+    // Feedback to the connected pad: host DualSense driver → handle_output →
+    // get_feedback → output_sony_ds5() (report 0x02). Modeled on ps4_mode.
+    .handle_output = ds5_mode_handle_output,
+    .get_rumble = ds5_mode_get_rumble,
+    .get_feedback = ds5_mode_get_feedback,
     .get_report = ds5_mode_get_report,
     .get_class_driver = NULL,
     .task = NULL,

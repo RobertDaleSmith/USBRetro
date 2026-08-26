@@ -355,7 +355,13 @@ void output_sony_ds5(uint8_t dev_addr, uint8_t instance, device_output_config_t*
     ds5_devices[dev_addr].instances[instance].led_r = ds5_fb.lightbar_r;
     ds5_devices[dev_addr].instances[instance].led_g = ds5_fb.lightbar_g;
     ds5_devices[dev_addr].instances[instance].led_b = ds5_fb.lightbar_b;
-    tuh_hid_send_report(dev_addr, instance, 5, &ds5_fb, sizeof(ds5_fb));
+    // DualSense USB output report is 0x02 (report 5 is the DS4 output report and
+    // a silent no-op on a DualSense — this is why rumble/LEDs did nothing). The
+    // body is the 47-byte common block followed by reserved padding, 62 bytes
+    // total (Linux hid-playstation DS_OUTPUT_REPORT_USB_SIZE = 63 incl. id).
+    uint8_t out[62] = {0};
+    memcpy(out, &ds5_fb, sizeof(ds5_fb));
+    tuh_hid_send_report(dev_addr, instance, 0x02, out, sizeof(out));
   }
 }
 
