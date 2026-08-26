@@ -69,6 +69,16 @@ bool diff_report_ds5(sony_ds5_report_t const* rpt1, sony_ds5_report_t const* rpt
     return true;
   }
 
+  // Motion: a DualSense streams gyro/accel every report. Submit on ANY change
+  // so the output IMU tracks at the full poll rate (matching a direct connection)
+  // — a threshold here makes motion update in coarse steps (jumpy). Sensor noise
+  // means a real controller is essentially never identical frame-to-frame, so
+  // this streams continuously exactly like the real thing.
+  for (int i = 0; i < 3; i++) {
+    if (rpt1->gyro[i]  != rpt2->gyro[i]) return true;
+    if (rpt1->accel[i] != rpt2->accel[i]) return true;
+  }
+
   return false;
 }
 
