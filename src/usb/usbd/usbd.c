@@ -125,7 +125,7 @@ static const char* mode_names[] = {
     [USB_OUTPUT_MODE_PCEMINI] = "PCE Mini",
     [USB_OUTPUT_MODE_CDC] = "CDC Config",
     [USB_OUTPUT_MODE_GBA_LINK] = "GBA Link (Dolphin)",
-    [USB_OUTPUT_MODE_DUALSENSE] = "PS5 DualSense",
+    [USB_OUTPUT_MODE_DUALSENSE] = "DualSense",
 };
 
 // ============================================================================
