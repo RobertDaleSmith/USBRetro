@@ -11,6 +11,7 @@
 #include "usb/usbh/hid/hid_registry.h"
 #include "usb/usbh/hid/devices/vendors/sony/sony_ds4.h"
 #include "usb/usbh/hid/devices/vendors/sony/ds5_auth.h"
+#include "usb/usbh/hid/devices/vendors/sony/p5general_host.h"
 
 #define LANGUAGE_ID 0x0409
 #define MAX_REPORTS 5
@@ -55,6 +56,8 @@ void hid_task(void)
   ds4_auth_task();
   // Process DS5 (DualSense) auth passthrough — see ds5_auth.h (sniff-gated)
   ds5_auth_task();
+  // Process P5General dongle relay (PS5 native output) — see p5general_host.h
+  p5general_host_task();
 
   // Get test mode counter (for LED test patterns)
   uint8_t test_counter = codes_get_test_counter();
@@ -209,6 +212,11 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     break;
   }
 
+  // A P5General auth dongle (VID 0x2B81) may enumerate as a generic HID gamepad;
+  // claim it for the PS5-native relay (self-gates on VID/PID) so its reports are
+  // routed to the dongle relay instead of the input pipeline.
+  p5general_host_mount(dev_addr, instance);
+
   if (dev_type == CONTROLLER_UNKNOWN)
   {
     // Safe on ARM Cortex-M0+: suppress alignment warning for packed struct access
@@ -256,6 +264,9 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
 
+  // Release the P5General dongle if this was it (self-gates on dev_addr).
+  p5general_host_unmount(dev_addr);
+
   // Reset device states
   dev_type_t dev_type = devices[dev_addr].instances[instance].type;
   switch (dev_type)
@@ -290,6 +301,14 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
+  // P5General dongle: its interrupt-IN report IS the signed controller report.
+  // Route it to the relay (NOT the input pipeline) and re-arm.
+  if (p5general_host_is_dongle(dev_addr)) {
+    p5general_host_report_received(dev_addr, instance, report, len);
+    tuh_hid_receive_report(dev_addr, instance);
+    return;
+  }
+
   dev_type_t dev_type = devices[dev_addr].instances[instance].type;
   if (dev_type == CONTROLLER_UNKNOWN)
   {

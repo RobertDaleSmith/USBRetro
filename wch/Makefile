@@ -166,6 +166,7 @@ SRC_C += \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_ds3.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_ds4.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/ds5_auth.c \
+	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/p5general_host.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_ds5.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/sony/sony_psc.c \
 	$(JOYPAD)/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c \
@@ -187,6 +188,7 @@ SRC_C += \
 	$(JOYPAD)/usb/usbd/modes/pcemini_mode.c \
 	$(JOYPAD)/usb/usbd/modes/ps4_mode.c \
 	$(JOYPAD)/usb/usbd/modes/dualsense_mode.c \
+	$(JOYPAD)/usb/usbd/modes/p5general_mode.c \
 	$(JOYPAD)/usb/usbd/modes/xid_mode.c \
 	$(JOYPAD)/usb/usbd/modes/xbone_mode.c \
 	$(JOYPAD)/usb/usbd/modes/xac_mode.c \

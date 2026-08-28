@@ -27,6 +27,7 @@
 #include "descriptors/psclassic_descriptors.h"
 #include "descriptors/ps4_descriptors.h"
 #include "descriptors/dualsense_descriptors.h"
+#include "descriptors/p5general_descriptors.h"
 #include "descriptors/xbone_descriptors.h"
 #include "descriptors/xac_descriptors.h"
 #include "descriptors/kbmouse_descriptors.h"
@@ -126,6 +127,7 @@ static const char* mode_names[] = {
     [USB_OUTPUT_MODE_CDC] = "CDC Config",
     [USB_OUTPUT_MODE_GBA_LINK] = "GBA Link (Dolphin)",
     [USB_OUTPUT_MODE_DUALSENSE] = "DualSense",
+    [USB_OUTPUT_MODE_PS5] = "PlayStation 5",
 };
 
 // ============================================================================
@@ -151,6 +153,7 @@ void usbd_register_modes(void)
     usbd_modes[USB_OUTPUT_MODE_PSCLASSIC] = &psclassic_mode;
     usbd_modes[USB_OUTPUT_MODE_PS4] = &ps4_mode;
     usbd_modes[USB_OUTPUT_MODE_DUALSENSE] = &dualsense_mode;
+    usbd_modes[USB_OUTPUT_MODE_PS5] = &p5general_mode;
     usbd_modes[USB_OUTPUT_MODE_XBOX_ORIGINAL] = &xid_mode;
     usbd_modes[USB_OUTPUT_MODE_XBONE] = &xbone_mode;
     usbd_modes[USB_OUTPUT_MODE_XAC] = &xac_mode;
@@ -363,6 +366,7 @@ bool usbd_set_mode(usb_output_mode_t mode)
         mode != USB_OUTPUT_MODE_PS3 &&
         mode != USB_OUTPUT_MODE_PS4 &&
         mode != USB_OUTPUT_MODE_DUALSENSE &&
+        mode != USB_OUTPUT_MODE_PS5 &&
         mode != USB_OUTPUT_MODE_SWITCH &&
         mode != USB_OUTPUT_MODE_PSCLASSIC &&
         mode != USB_OUTPUT_MODE_XBONE &&
@@ -588,6 +592,7 @@ void usbd_init(void)
                 settings->usb_output_mode == USB_OUTPUT_MODE_PS3 ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_PS4 ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_DUALSENSE ||
+                settings->usb_output_mode == USB_OUTPUT_MODE_PS5 ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_SWITCH ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_PSCLASSIC ||
                 settings->usb_output_mode == USB_OUTPUT_MODE_XBONE ||
@@ -687,6 +692,13 @@ void usbd_init(void)
             // PS5 DualSense passthrough: delegate to mode interface
             if (usbd_modes[USB_OUTPUT_MODE_DUALSENSE] && usbd_modes[USB_OUTPUT_MODE_DUALSENSE]->init) {
                 usbd_modes[USB_OUTPUT_MODE_DUALSENSE]->init();
+            }
+            break;
+
+        case USB_OUTPUT_MODE_PS5:
+            // PS5 native (P5General dongle): delegate to mode interface
+            if (usbd_modes[USB_OUTPUT_MODE_PS5] && usbd_modes[USB_OUTPUT_MODE_PS5]->init) {
+                usbd_modes[USB_OUTPUT_MODE_PS5]->init();
             }
             break;
 
@@ -931,6 +943,18 @@ void usbd_task(void)
         case USB_OUTPUT_MODE_DUALSENSE: {
             // PS5 DualSense passthrough: delegate to mode interface
             const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_DUALSENSE];
+            if (mode) {
+                if (mode->task) mode->task();
+                if (mode->is_ready && mode->is_ready()) {
+                    usbd_send_report(0);
+                }
+            }
+            break;
+        }
+
+        case USB_OUTPUT_MODE_PS5: {
+            // PS5 native (P5General dongle): delegate to mode interface
+            const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_PS5];
             if (mode) {
                 if (mode->task) mode->task();
                 if (mode->is_ready && mode->is_ready()) {
@@ -1276,6 +1300,22 @@ static bool usbd_send_ds5_report(uint8_t player_index)
     return mode->send_report(player_index, event, &profile_out, processed_buttons);
 }
 
+// Send PS5 (P5General) report - delegates to mode interface. Unlike DualSense,
+// each report is signed by the dongle before it goes to the PS5; the mode's
+// send_report drives that pipeline (build -> dongle -> forward signed report).
+static bool usbd_send_p5general_report(uint8_t player_index)
+{
+    const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_PS5];
+    if (!mode || !mode->send_report) return false;
+    if (mode->is_ready && !mode->is_ready()) return false;
+    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) return false;
+    const input_event_t* event = &pending_events[player_index];
+    pending_flags[player_index] = false;
+    profile_output_t profile_out;
+    uint32_t processed_buttons = apply_usbd_profile_player(event, &profile_out, player_index);
+    return mode->send_report(player_index, event, &profile_out, processed_buttons);
+}
+
 // Send Xbox One report - delegates to mode interface
 static bool usbd_send_xbone_report(uint8_t player_index)
 {
@@ -1390,6 +1430,8 @@ bool usbd_send_report(uint8_t player_index)
             return usbd_send_ps4_report(player_index);
         case USB_OUTPUT_MODE_DUALSENSE:
             return usbd_send_ds5_report(player_index);
+        case USB_OUTPUT_MODE_PS5:
+            return usbd_send_p5general_report(player_index);
         case USB_OUTPUT_MODE_XBONE:
             return usbd_send_xbone_report(player_index);
         case USB_OUTPUT_MODE_XAC:
@@ -1723,6 +1765,8 @@ uint8_t const *tud_descriptor_device_cb(void)
             return (uint8_t const *)&ps4_device_descriptor;
         case USB_OUTPUT_MODE_DUALSENSE:
             return (uint8_t const *)&ds5_device_descriptor;
+        case USB_OUTPUT_MODE_PS5:
+            return (uint8_t const *)&p5general_device_descriptor;
         case USB_OUTPUT_MODE_XBONE:
             return (uint8_t const *)&xbone_device_descriptor;
         case USB_OUTPUT_MODE_XAC:
@@ -1889,6 +1933,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index)
             return ps4_config_descriptor;
         case USB_OUTPUT_MODE_DUALSENSE:
             return ds5_config_descriptor;
+        case USB_OUTPUT_MODE_PS5:
+            return p5general_config_descriptor;
         case USB_OUTPUT_MODE_XBONE:
             return xbone_config_descriptor;
         case USB_OUTPUT_MODE_XAC:
@@ -2076,6 +2122,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PS4_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_DUALSENSE) {
                 str = DS5_MANUFACTURER;
+            } else if (output_mode == USB_OUTPUT_MODE_PS5) {
+                str = P5GENERAL_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_XAC) {
                 str = XAC_MANUFACTURER;
             } else if (output_mode == USB_OUTPUT_MODE_GC_ADAPTER) {
@@ -2109,6 +2157,8 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
                 str = PS4_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_DUALSENSE) {
                 str = DS5_PRODUCT;
+            } else if (output_mode == USB_OUTPUT_MODE_PS5) {
+                str = P5GENERAL_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_XAC) {
                 str = XAC_PRODUCT;
             } else if (output_mode == USB_OUTPUT_MODE_GC_ADAPTER) {
@@ -2181,6 +2231,9 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf)
     if (output_mode == USB_OUTPUT_MODE_DUALSENSE) {
         return ds5_report_descriptor;
     }
+    if (output_mode == USB_OUTPUT_MODE_PS5) {
+        return p5general_report_descriptor;
+    }
     if (output_mode == USB_OUTPUT_MODE_XAC) {
         const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_XAC];
         if (mode && mode->get_report_descriptor) {
@@ -2233,6 +2286,16 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
             uint16_t result = mode->get_report(report_id, report_type, buffer, reqlen);
             if (result > 0) return result;
         }
+    }
+
+    // PS5 native (P5General) definition + auth feature reports (0x03/F1/F2)
+    if (output_mode == USB_OUTPUT_MODE_PS5) {
+        const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_PS5];
+        if (mode && mode->get_report) {
+            uint16_t result = mode->get_report(report_id, report_type, buffer, reqlen);
+            if (result > 0) return result;
+        }
+        if (report_type == HID_REPORT_TYPE_FEATURE) return 0;  // STALL unknown features
     }
 
     // Default: return current input report
@@ -2314,6 +2377,14 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         }
         if (report_type == HID_REPORT_TYPE_FEATURE) {
             ds5_mode_set_feature_report(report_id, buffer, bufsize);
+        }
+        return;
+    }
+
+    // PS5 native (P5General) auth feature reports (F0 challenge from the console)
+    if (output_mode == USB_OUTPUT_MODE_PS5) {
+        if (report_type == HID_REPORT_TYPE_FEATURE) {
+            p5general_mode_set_feature_report(report_id, buffer, bufsize);
         }
         return;
     }

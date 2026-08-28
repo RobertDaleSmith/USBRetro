@@ -133,6 +133,9 @@ void ps4_mode_set_feature_report(uint8_t report_id, const uint8_t* buffer, uint1
 extern const usbd_mode_t dualsense_mode;
 // DualSense (PS5) auth feature report handler (called from tud_hid_set_report_cb)
 void ds5_mode_set_feature_report(uint8_t report_id, const uint8_t* buffer, uint16_t bufsize);
+extern const usbd_mode_t p5general_mode;
+// P5General (PS5 native) auth feature report handler (called from tud_hid_set_report_cb)
+void p5general_mode_set_feature_report(uint8_t report_id, const uint8_t* buffer, uint16_t bufsize);
 extern const usbd_mode_t xid_mode;
 extern const usbd_mode_t xbone_mode;
 extern const usbd_mode_t xac_mode;
