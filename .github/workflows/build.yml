@@ -354,6 +354,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2pce
           path: organized/usb2pce/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2gc
         uses: actions/upload-artifact@v4
@@ -361,6 +362,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2gc
           path: organized/usb2gc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2nuon
         uses: actions/upload-artifact@v4
@@ -368,6 +370,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2nuon
           path: organized/usb2nuon/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2dc
         uses: actions/upload-artifact@v4
@@ -375,6 +378,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2dc
           path: organized/usb2dc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2neogeo
         uses: actions/upload-artifact@v4
@@ -382,6 +386,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2neogeo
           path: organized/usb2neogeo/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload n642dc
         uses: actions/upload-artifact@v4
@@ -389,6 +394,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_n642dc
           path: organized/n642dc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb23do
         uses: actions/upload-artifact@v4
@@ -396,6 +402,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb23do
           path: organized/usb23do/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2uart
         uses: actions/upload-artifact@v4
@@ -403,6 +410,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2uart
           path: organized/usb2uart/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload usb2usb
         uses: actions/upload-artifact@v4
@@ -410,6 +418,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_usb2usb
           path: organized/usb2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload bt2usb
         uses: actions/upload-artifact@v4
@@ -417,6 +426,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2usb
           path: organized/bt2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload bt2n64
         uses: actions/upload-artifact@v4
@@ -424,6 +434,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2n64
           path: organized/bt2n64/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload bt2nuon
         uses: actions/upload-artifact@v4
@@ -431,6 +442,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2nuon
           path: organized/bt2nuon/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload n642nuon
         uses: actions/upload-artifact@v4
@@ -438,6 +450,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_n642nuon
           path: organized/n642nuon/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload btusb2usb
         uses: actions/upload-artifact@v4
@@ -445,6 +458,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_btusb2usb
           path: organized/btusb2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload snes2usb
         uses: actions/upload-artifact@v4
@@ -452,6 +466,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_snes2usb
           path: organized/snes2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload n642usb
         uses: actions/upload-artifact@v4
@@ -459,6 +474,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_n642usb
           path: organized/n642usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload gc2usb
         uses: actions/upload-artifact@v4
@@ -466,6 +482,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_gc2usb
           path: organized/gc2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload lodgenet2usb
         uses: actions/upload-artifact@v4
@@ -473,6 +490,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_lodgenet2usb
           path: organized/lodgenet2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload lodgenet2n64
         uses: actions/upload-artifact@v4
@@ -480,6 +498,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_lodgenet2n64
           path: organized/lodgenet2n64/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload lodgenet2gc
         uses: actions/upload-artifact@v4
@@ -487,6 +506,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_lodgenet2gc
           path: organized/lodgenet2gc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload nes2usb
         uses: actions/upload-artifact@v4
@@ -494,6 +514,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_nes2usb
           path: organized/nes2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload pce2usb
         uses: actions/upload-artifact@v4
@@ -501,6 +522,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_pce2usb
           path: organized/pce2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload jvs2usb
         uses: actions/upload-artifact@v4
@@ -508,6 +530,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_jvs2usb
           path: organized/jvs2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload neogeo2usb
         uses: actions/upload-artifact@v4
@@ -515,6 +538,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_neogeo2usb
           path: organized/neogeo2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload wii2usb
         uses: actions/upload-artifact@v4
@@ -522,6 +546,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_wii2usb
           path: organized/wii2usb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload wii2gc
         uses: actions/upload-artifact@v4
@@ -529,6 +554,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_wii2gc
           path: organized/wii2gc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload bt2wiiext
         uses: actions/upload-artifact@v4
@@ -536,6 +562,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2wiiext
           path: organized/bt2wiiext/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload bt2gc
         uses: actions/upload-artifact@v4
@@ -543,6 +570,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_bt2gc
           path: organized/bt2gc/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload controllers
         uses: actions/upload-artifact@v4
@@ -553,6 +581,7 @@ jobs:
             organized/controller_fisherprice_v2/*.uf2
             organized/controller_alpakka/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload controller_btusb
         uses: actions/upload-artifact@v4
@@ -560,6 +589,7 @@ jobs:
           name: joypad_${{ steps.commit.outputs.hash }}_controller_btusb
           path: organized/controller_btusb/*.uf2
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload release-firmware
         uses: actions/upload-artifact@v4
