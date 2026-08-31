@@ -1916,6 +1916,47 @@ if (PICO_BOARD STREQUAL "pico_w" OR
     pico_enable_stdio_usb(joypad_btusb2usb 0)
     pico_enable_stdio_uart(joypad_btusb2usb 1)
 
+    # --- USB to WiFi Remote Play (Pico W / Pico 2 W: PIO-USB host + CYW43 WiFi station) ---
+    # USB controllers via PIO-USB host → PS Remote Play over WiFi (station mode).
+    # Native USB device = CDC for web-config provisioning. CYW43 in WiFi (lwip)
+    # mode, NOT Bluetooth — so no BTstack. Session engine is stubbed (staged
+    # chiaki port; needs a Pico 2 W for RAM). Same PIO0/CYW43-PIO1 coexistence as
+    # btusb2usb. See .dev/docs/ps5-remoteplay-output.md.
+    add_executable(joypad_usb2wifi)
+    target_compile_definitions(joypad_usb2wifi PRIVATE
+        CONFIG_USB2WIFI=1
+        CONFIG_USB=1
+        CONFIG_NO_NEOPIXEL=1
+        PICO_DEFAULT_PIO_USB_DP_PIN=16
+        BOARD_TUH_RHPORT=1
+        USE_BOOTSEL_BUTTON=1
+        CYW43_LWIP=1
+        PICO_CYW43_ARCH_POLL=1
+    )
+    target_sources(joypad_usb2wifi PUBLIC
+        ${COMMON_SOURCES}
+        ${USB_DEVICE_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_config.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/wifi_station.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/remoteplay_output.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi/app.c
+    )
+    target_include_directories(joypad_usb2wifi PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi
+        ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(joypad_usb2wifi PRIVATE
+        ${COMMON_LIBRARIES}
+        tinyusb_device
+        tinyusb_pico_pio_usb
+        pico_cyw43_arch_lwip_poll
+    )
+    joypad_target_common(joypad_usb2wifi)
+    pico_enable_stdio_usb(joypad_usb2wifi 0)
+    pico_enable_stdio_uart(joypad_usb2wifi 1)
+
     # --- USB to BLE (Pico W / Pico 2 W: PIO-USB host + CYW43 BLE peripheral output) ---
     # USB controllers via PIO-USB host → BLE gamepad output via HOGP peripheral.
     # Uses CYW43 Bluetooth for BLE advertising + GATT server (hids_device).

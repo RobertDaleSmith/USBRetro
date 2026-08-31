@@ -3,6 +3,7 @@ import { DeviceInfoCard } from './components/device-info.js';
 import { UsbOutputCard } from './components/usb-output.js';
 import { BtOutputCard } from './components/bt-output.js';
 import { NativeOutputCard } from './components/native-output.js';
+import { WifiOutputCard } from './components/wifi-output.js';
 import { PadConfigCard } from './components/pad-config.js';
 import { ProfilesCard, BUTTON_NAMES, BUTTON_LABELS, REMAPPABLE_COUNT } from './components/profiles.js';
 import { InputTestCard } from './components/input-test.js';
@@ -29,6 +30,7 @@ const PAGE_GROUPS = {
     'usb':           'output',
     'bluetooth':     'output',
     'native-output': 'output',
+    'wifi-output':   'output',
     'leds':          'output',
     'face':          'output',
     'feedback':      'output',
@@ -73,6 +75,7 @@ class JoypadConfigApp {
         this.ps4Auth = new Ps4AuthCard(document.getElementById('cardPs4Auth'), this.protocol, log);
         this.btOutput = new BtOutputCard(document.getElementById('cardBtOutput'), this.protocol, log);
         this.nativeOutput = new NativeOutputCard(document.getElementById('cardNativeOutput'), this.protocol, log);
+        this.wifiOutput = new WifiOutputCard(document.getElementById('cardWifiOutput'), this.protocol, log);
         this.padConfig = new PadConfigCard(document.getElementById('cardPadConfig'), this.protocol, log);
         this.feedback = new FeedbackCard(document.getElementById('cardFeedback'), this.protocol, log);
         this.router = new RouterCard(document.getElementById('cardRouter'), this.protocol, log);
@@ -90,6 +93,7 @@ class JoypadConfigApp {
         this.ps4Auth.render();
         this.btOutput.render();
         this.nativeOutput.render();
+        this.wifiOutput.render();
         this.padConfig.render();
         this.feedback.render();
         this.router.render();
@@ -294,6 +298,10 @@ class JoypadConfigApp {
         if (nativeLink) {
             nativeLink.style.display = this.nativeOutput.isAvailable() ? '' : 'none';
         }
+        const wifiLink = document.getElementById('navWifiOutput');
+        if (wifiLink) {
+            wifiLink.style.display = this.wifiOutput.isAvailable() ? '' : 'none';
+        }
 
         // Hide the PS4 Auth section (on the USB Device page) when the firmware
         // doesn't answer PS4AUTH.STATUS (ESP/nRF, older builds).
@@ -316,6 +324,9 @@ class JoypadConfigApp {
             this.navigateTo('usb');
         }
         if (this.currentPage === 'bluetooth' && !this.btOutput.isAvailable()) {
+            this.navigateTo('usb');
+        }
+        if (this.currentPage === 'wifi-output' && !this.wifiOutput.isAvailable()) {
             this.navigateTo('usb');
         }
         if (this.currentPage === 'native-output' && !this.nativeOutput.isAvailable()) {
@@ -471,6 +482,7 @@ class JoypadConfigApp {
         await this.ps4Auth.load();
         await this.btOutput.load();
         await this.nativeOutput.load();
+        await this.wifiOutput.load();
         await this.padConfig.load();
         await this.feedback.load();
         await this.router.load();

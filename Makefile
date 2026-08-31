@@ -109,6 +109,7 @@ CONSOLE_btusb2usb := joypad_btusb2usb
 CONSOLE_usb2ble := joypad_usb2ble
 CONSOLE_n64 := joypad_n64
 CONSOLE_wifi2usb := joypad_wifi2usb
+CONSOLE_usb2wifi := joypad_usb2wifi
 CONSOLE_snes2usb := joypad_snes2usb
 CONSOLE_psx2usb := joypad_psx2usb
 CONSOLE_nes2usb := joypad_nes2usb
@@ -211,6 +212,8 @@ APP_usb2ble_pico2_w := pico2_w usb2ble usb2ble_pico2_w USB BLE
 APP_usb2n64_kb2040 := kb2040 n64 usb2n64_kb2040 USB/BT N64
 APP_wifi2usb_pico_w := pico_w wifi2usb wifi2usb_pico_w WiFi USB
 APP_wifi2usb_pico2_w := pico2_w wifi2usb wifi2usb_pico2_w WiFi USB
+APP_usb2wifi_pico_w := pico_w usb2wifi usb2wifi_pico_w USB RemotePlay
+APP_usb2wifi_pico2_w := pico2_w usb2wifi usb2wifi_pico2_w USB RemotePlay
 APP_snes2usb_kb2040 := kb2040 snes2usb snes2usb_kb2040 SNES USB
 APP_psx2usb_qtpy := qtpy psx2usb psx2usb_qtpy PS1/PS2 USB
 APP_psx2usb_kb2040 := kb2040 psx2usb psx2usb_kb2040 PS1/PS2 USB
@@ -1150,6 +1153,14 @@ wifi2usb_pico_w:
 .PHONY: wifi2usb_pico2_w
 wifi2usb_pico2_w:
 	$(call build_app,wifi2usb_pico2_w)
+
+.PHONY: usb2wifi_pico_w
+usb2wifi_pico_w:
+	$(call build_app,usb2wifi_pico_w)
+
+.PHONY: usb2wifi_pico2_w
+usb2wifi_pico2_w:
+	$(call build_app,usb2wifi_pico2_w)
 
 .PHONY: snes2usb_kb2040
 snes2usb_kb2040:

@@ -1,0 +1,137 @@
+// remoteplay_output.c - PS Remote Play OutputInterface (usb2wifi)
+// SPDX-License-Identifier: Apache-2.0
+#include "remoteplay_output.h"
+#include "rp_config.h"
+#include "wifi_station.h"
+#include "rp_session.h"
+#include "core/router/router.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+// --- tiny JSON field extractor: copies "key":"value" string into out ---------
+static bool json_str(const char* json, const char* key, char* out, int outlen)
+{
+    char pat[48];
+    snprintf(pat, sizeof(pat), "\"%s\"", key);
+    const char* p = strstr(json, pat);
+    if (!p) return false;
+    p = strchr(p + strlen(pat), ':');
+    if (!p) return false;
+    p++;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != '"') return false;
+    p++;
+    int i = 0;
+    while (*p && *p != '"' && i < outlen - 1) out[i++] = *p++;
+    out[i] = '\0';
+    return true;
+}
+
+// hex string -> bytes; returns true if exactly `nbytes` decoded.
+static bool hex_bytes(const char* hex, uint8_t* out, int nbytes)
+{
+    if ((int)strlen(hex) != nbytes * 2) return false;
+    for (int i = 0; i < nbytes; i++) {
+        char b[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
+        char* end = NULL;
+        long v = strtol(b, &end, 16);
+        if (end != b + 2) return false;
+        out[i] = (uint8_t)v;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+static void rp_out_init(void)
+{
+    rp_config_init();
+    rp_session_init();
+    if (wifi_station_init()) {
+        wifi_station_connect();
+    }
+}
+
+static void rp_out_task(void)
+{
+    wifi_station_task();
+    rp_session_task();
+
+    // Forward the merged controller state to the session.
+    const input_event_t* ev = router_get_output(OUTPUT_TARGET_REMOTE_PLAY, 0);
+    if (ev) {
+        rp_session_set_controller_state(ev, ev->buttons);
+    }
+}
+
+static bool rp_out_get_feedback(output_feedback_t* fb)
+{
+    return rp_session_get_feedback(fb);
+}
+
+// GET: report status (for the web config page).
+static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
+{
+    rp_config_t* cfg = rp_config_get();
+    char ip[16]; wifi_station_get_ip(ip, sizeof(ip));
+    const char* wstate =
+        wifi_station_is_connected() ? "connected" :
+        (wifi_station_get_state() == WIFI_STA_CONNECTING ? "connecting" :
+         (wifi_station_get_state() == WIFI_STA_FAILED ? "failed" : "idle"));
+    int n = snprintf(buf, buf_size,
+        "\"type\":\"remoteplay\",\"wifi_ssid\":\"%s\",\"wifi_state\":\"%s\","
+        "\"ip\":\"%s\",\"ps5_ip\":\"%s\",\"have_wifi\":%s,"
+        "\"have_registration\":%s,\"session\":\"%s\"",
+        cfg->wifi_ssid, wstate, ip, cfg->ps5_ip,
+        cfg->have_wifi ? "true" : "false",
+        cfg->have_registration ? "true" : "false",
+        rp_session_state_str());
+    return (n < 0) ? 0 : (uint16_t)n;
+}
+
+// SET: provision WiFi creds + PSN account + PS5 IP + RP-Key (all optional per
+// call). account_id (8B), rp_key (16B), regist_key (16B) are hex strings.
+static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp_size)
+{
+    bool changed = false;
+    char ssid[RP_SSID_MAX], pass[RP_PASS_MAX], ip[RP_IP_MAX], hex[80];
+
+    if (json_str(json, "wifi_ssid", ssid, sizeof(ssid))) {
+        if (!json_str(json, "wifi_pass", pass, sizeof(pass))) pass[0] = '\0';
+        if (rp_config_set_wifi(ssid, pass)) { changed = true; wifi_station_connect(); }
+    }
+    if (json_str(json, "ps5_ip", ip, sizeof(ip))) {
+        if (rp_config_set_ps5_ip(ip)) changed = true;
+    }
+    if (json_str(json, "account_id", hex, sizeof(hex))) {
+        uint8_t id[RP_ACCOUNT_LEN];
+        if (hex_bytes(hex, id, RP_ACCOUNT_LEN)) { rp_config_set_account_id(id); changed = true; }
+    }
+    if (json_str(json, "rp_key", hex, sizeof(hex))) {
+        uint8_t k[RP_KEY_LEN], rk[RP_REGIST_LEN] = {0};
+        char rhex[80];
+        if (json_str(json, "regist_key", rhex, sizeof(rhex))) hex_bytes(rhex, rk, RP_REGIST_LEN);
+        if (hex_bytes(hex, k, RP_KEY_LEN)) { rp_config_set_keys(k, rk); changed = true; }
+    }
+    if (changed) rp_config_save();
+    snprintf(resp, resp_size, "{\"status\":\"%s\"}", changed ? "ok" : "no-change");
+    return changed;
+}
+
+const OutputInterface remoteplay_output_interface = {
+    .name = "PS Remote Play",
+    .target = OUTPUT_TARGET_REMOTE_PLAY,
+    .init = rp_out_init,
+    .task = rp_out_task,
+    .core1_task = NULL,
+    .get_feedback = rp_out_get_feedback,
+    .get_rumble = NULL,
+    .get_player_led = NULL,
+    .get_profile_count = NULL,
+    .get_active_profile = NULL,
+    .set_active_profile = NULL,
+    .get_profile_name = NULL,
+    .get_trigger_threshold = NULL,
+    .get_native_config = rp_out_get_native_config,
+    .set_native_config = rp_out_set_native_config,
+};
