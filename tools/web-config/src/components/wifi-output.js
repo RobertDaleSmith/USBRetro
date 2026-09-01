@@ -1,15 +1,16 @@
 /**
  * WiFi / PS Remote Play Output Page (usb2wifi app).
  *
- * Provisions the Remote Play output: WiFi SSID/password (station mode), the PS5
- * IP, and the credentials from `remote-play-lab/rp.py` (PSN Account ID + RP-Key
- * + Registration Key). Talks to the firmware's remoteplay OutputInterface via
- * the generic OUTPUT.NATIVE.GET/SET (type == "remoteplay").
+ * Provisions the Remote Play output: WiFi (scan + connect, station mode), PSN
+ * sign-in, and the target PS5. Talks to the firmware's remoteplay
+ * OutputInterface via the generic OUTPUT.NATIVE.GET/SET (type == "remoteplay").
  *
- * Account ID / RP-Key / Regist Key are entered as hex; rp.py's profile stores
- * the account id as base64 and the keys as hex — paste them from
- * ~/.pyremoteplay/.profile.json (RP-Key, RegistKey) and the account id from
- * `rp.py list` (id=...), base64-decoded to 8 bytes -> 16 hex chars.
+ * PSN sign-in is on-device: this page opens Sony's OAuth login in a new tab,
+ * the user pastes back the post-login redirect URL, and the firmware does the
+ * HTTPS token exchange itself ({psn_code}) — deriving the account id on-chip.
+ * (The browser can't: Sony's endpoint blocks cross-origin fetches via CORS +
+ * anti-bot edge.) RP-Key / Regist Key (from device pairing) are still manual
+ * under "Advanced" until on-device registration lands.
  */
 export class WifiOutputCard {
     constructor(el, protocol, log) {
@@ -37,6 +38,7 @@ export class WifiOutputCard {
                     <div class="device-info">
                         <div class="row"><span class="label">WiFi</span><span class="value" id="rpWifiState">—</span></div>
                         <div class="row"><span class="label">Adapter IP</span><span class="value" id="rpIp">—</span></div>
+                        <div class="row"><span class="label">PSN account</span><span class="value" id="rpAccountState">—</span></div>
                         <div class="row"><span class="label">Session</span><span class="value" id="rpSession">—</span></div>
                     </div>
 
@@ -62,6 +64,23 @@ export class WifiOutputCard {
                         .rp-ap-row .rp-ap-sig { opacity:0.7; font-variant-numeric:tabular-nums; }
                     </style>
 
+                    <h3>PlayStation account</h3>
+                    <p class="hint">
+                        Sign in with your PSN account so the adapter can link to your console.
+                        Click <b>Sign in</b>, log in on Sony's page, then copy the URL of the
+                        blank/redirect page you land on and paste it below. The adapter completes
+                        the sign-in on-device — nothing is entered by hand.
+                    </p>
+                    <div class="button-row">
+                        <button id="rpSignInBtn" title="Open Sony's login in a new tab">Sign in to PlayStation</button>
+                    </div>
+                    <div class="form-row">
+                        <label for="rpRedirect">Redirect URL</label>
+                        <input type="text" id="rpRedirect" placeholder="https://remoteplay.dl.playstation.net/remoteplay/redirect?code=…">
+                        <button id="rpCompleteBtn">Complete</button>
+                    </div>
+                    <div id="rpOauthMsg" class="hint"></div>
+
                     <h3>PlayStation 5</h3>
                     <div class="form-row">
                         <label for="rpPs5Ip">PS5 IP</label>
@@ -69,13 +88,18 @@ export class WifiOutputCard {
                         <button id="rpScanBtn" title="Find consoles on your network">Scan</button>
                     </div>
                     <div id="rpHosts" class="rp-ap-list"></div>
-                    <div class="form-row"><label for="rpAccount">Account ID (16 hex)</label><input type="text" id="rpAccount" placeholder="d83c2a2b2d0c3809" maxlength="16"></div>
-                    <div class="form-row"><label for="rpKey">RP-Key (32 hex)</label><input type="text" id="rpKey" maxlength="32"></div>
-                    <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
 
-                    <div class="button-row">
-                        <button id="rpSaveBtn">Save PS5 credentials</button>
-                    </div>
+                    <details class="rp-advanced">
+                        <summary>Advanced — manual credentials</summary>
+                        <p class="hint">Paired keys from <code>remote-play-lab/rp.py</code>. On-device
+                            pairing is coming; until then, provision RP-Key + Regist Key here.</p>
+                        <div class="form-row"><label for="rpAccount">Account ID (16 hex)</label><input type="text" id="rpAccount" placeholder="d83c2a2b2d0c3809" maxlength="16"></div>
+                        <div class="form-row"><label for="rpKey">RP-Key (32 hex)</label><input type="text" id="rpKey" maxlength="32"></div>
+                        <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
+                        <div class="button-row">
+                            <button id="rpSaveBtn">Save credentials</button>
+                        </div>
+                    </details>
                     <div id="rpStatusMsg" class="hint"></div>
                 </div>
             </div>`;
@@ -83,6 +107,90 @@ export class WifiOutputCard {
         this.el.querySelector('#rpScanBtn').addEventListener('click', () => this.scan());
         this.el.querySelector('#rpWifiScanBtn').addEventListener('click', () => this.wifiScan());
         this.el.querySelector('#rpWifiConnectBtn').addEventListener('click', () => this.connectWifi());
+        this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
+        this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
+    }
+
+    // Sony OAuth authorize URL — mirrors mouthpad-utility RPOAuth.swift. The full
+    // 4-scope set is required; single-scope psn:clientapp returns "Something went
+    // wrong." after login.
+    #loginURL() {
+        const clientId = 'ba495a24-818c-472b-b12d-ff231c1b5745';
+        const redirect = 'https://remoteplay.dl.playstation.net/remoteplay/redirect';
+        const scope = [
+            'psn:clientapp',
+            'referenceDataService:countryConfig.read',
+            'pushNotification:webSocket.desktop.connect',
+            'sessionManager:remotePlaySession.system.update',
+        ].join(' ');
+        const q = new URLSearchParams({
+            service_entity: 'urn:service-entity:psn',
+            response_type: 'code',
+            client_id: clientId,
+            redirect_uri: redirect,
+            scope,
+            request_locale: 'en_US',
+            ui: 'pr',
+            service_logo: 'ps',
+            layout_type: 'popup',
+            smcid: 'remoteplay',
+            prompt: 'always',
+            PlatformPrivacyWs1: 'minimal',
+        });
+        return 'https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/authorize?' + q.toString();
+    }
+
+    signIn() {
+        window.open(this.#loginURL(), '_blank', 'noopener');
+        this.#oauthMsg('Log in on the new tab, then paste the redirect URL you land on below.', 'success');
+        this.el.querySelector('#rpRedirect')?.focus();
+    }
+
+    // Pull the ?code=… out of a pasted redirect URL (or accept a bare code).
+    #extractCode(s) {
+        s = (s || '').trim();
+        if (!s) return null;
+        try {
+            const u = new URL(s);
+            const code = u.searchParams.get('code');
+            if (code) return code;
+        } catch { /* not a URL — maybe a bare code */ }
+        const m = s.match(/[?&]code=([^&\s]+)/);
+        if (m) return decodeURIComponent(m[1]);
+        if (/^[A-Za-z0-9._-]{8,}$/.test(s)) return s;   // looks like a bare code
+        return null;
+    }
+
+    async completeSignIn() {
+        const raw = this.el.querySelector('#rpRedirect').value;
+        const code = this.#extractCode(raw);
+        if (!code) { this.#oauthMsg('Paste the full redirect URL (it contains ?code=…)', 'error'); return; }
+        const btn = this.el.querySelector('#rpCompleteBtn');
+        btn.disabled = true; btn.textContent = 'Signing in…';
+        try {
+            const r = await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { psn_code: code });
+            if (r && r.status && r.status !== 'signing-in') {
+                this.#oauthMsg(`Could not start: ${r.error || r.status}`, 'error');
+            } else {
+                this.#oauthMsg('Exchanging token on device…', 'success');
+                // Poll oauth state until it settles (device does the HTTPS exchange).
+                for (let i = 0; i < 20; i++) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    await this.refresh();
+                    const st = this._oauth || '';
+                    if (st === 'done') { this.#oauthMsg('Signed in ✓', 'success'); this.el.querySelector('#rpRedirect').value = ''; break; }
+                    if (st === 'error') { this.#oauthMsg(`Sign-in failed: ${this._oauthError || 'unknown error'}`, 'error'); break; }
+                }
+            }
+        } catch (e) {
+            this.#oauthMsg(`Sign-in failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Complete';
+    }
+
+    #oauthMsg(text, kind) {
+        const e = this.el.querySelector('#rpOauthMsg');
+        if (e) { e.textContent = text; e.className = 'hint ' + (kind === 'error' ? 'error' : 'success'); }
     }
 
     async connectWifi() {
@@ -204,6 +312,14 @@ export class WifiOutputCard {
             set('#rpWifiState', `${r.wifi_state || '—'}${r.wifi_ssid ? ' (' + r.wifi_ssid + ')' : ''}`);
             set('#rpIp', r.ip || '—');
             set('#rpSession', r.session || '—');
+            this._oauth = r.oauth || '';
+            this._oauthError = r.oauth_error || '';
+            const acctStr = r.have_account
+                ? (r.psn_online_id ? `signed in as ${r.psn_online_id}` : 'signed in ✓')
+                : (r.oauth && r.oauth !== 'idle' && r.oauth !== 'done'
+                    ? r.oauth + '…'
+                    : 'not signed in');
+            set('#rpAccountState', acctStr);
             this.renderHosts(r.hosts);
             this.renderAps(r.aps);
             const ssid = this.el.querySelector('#rpSsid');

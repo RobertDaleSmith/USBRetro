@@ -1939,6 +1939,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_config.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/wifi_station.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_discovery.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_oauth.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/remoteplay_output.c
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi/app.c
@@ -1947,12 +1948,21 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi
         ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
         ${CMAKE_CURRENT_SOURCE_DIR}
+        # on the include path so -DMBEDTLS_CONFIG_FILE="rp_mbedtls_config.h" resolves
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay
+    )
+    # TLS client for PSN OAuth (rp_oauth.c): altcp_tls + mbedTLS with a TLS-1.2
+    # client config (distinct from the PS4 RSA-only ps4_mbedtls_config.h).
+    target_compile_definitions(joypad_usb2wifi PRIVATE
+        MBEDTLS_CONFIG_FILE="rp_mbedtls_config.h"
     )
     target_link_libraries(joypad_usb2wifi PRIVATE
         ${COMMON_LIBRARIES}
         tinyusb_device
         tinyusb_pico_pio_usb
         pico_cyw43_arch_lwip_poll
+        pico_lwip_mbedtls
+        pico_mbedtls
     )
     joypad_target_common(joypad_usb2wifi)
     pico_enable_stdio_usb(joypad_usb2wifi 0)

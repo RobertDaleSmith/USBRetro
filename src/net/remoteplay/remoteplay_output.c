@@ -5,6 +5,7 @@
 #include "wifi_station.h"
 #include "rp_session.h"
 #include "rp_discovery.h"
+#include "rp_oauth.h"
 #include "core/router/router.h"
 #include "platform/platform.h"
 #include <stdio.h>
@@ -55,6 +56,7 @@ static void rp_out_init(void)
 {
     rp_config_init();
     rp_session_init();
+    rp_oauth_init();
 }
 
 static void rp_out_task(void)
@@ -65,6 +67,7 @@ static void rp_out_task(void)
     }
     if (wifi_started) wifi_station_task();
     rp_discovery_task();
+    rp_oauth_task();
     rp_session_task();
 
     // Forward the merged controller state to the session.
@@ -88,12 +91,18 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
         wifi_station_is_connected() ? "connected" :
         (wifi_station_get_state() == WIFI_STA_CONNECTING ? "connecting" :
          (wifi_station_get_state() == WIFI_STA_FAILED ? "failed" : "idle"));
+    bool have_account = false;
+    for (int i = 0; i < RP_ACCOUNT_LEN; i++)
+        if (cfg->account_id[i]) { have_account = true; break; }
     int n = snprintf(buf, buf_size,
         "\"type\":\"remoteplay\",\"wifi_ssid\":\"%s\",\"wifi_state\":\"%s\","
         "\"ip\":\"%s\",\"ps5_ip\":\"%s\",\"have_wifi\":%s,"
+        "\"have_account\":%s,\"psn_online_id\":\"%s\",\"oauth\":\"%s\",\"oauth_error\":\"%s\","
         "\"have_registration\":%s,\"session\":\"%s\",\"scanning\":%s,\"hosts\":[",
         cfg->wifi_ssid, wstate, ip, cfg->ps5_ip,
         cfg->have_wifi ? "true" : "false",
+        have_account ? "true" : "false",
+        rp_oauth_online_id(), rp_oauth_state_str(), rp_oauth_error(),
         cfg->have_registration ? "true" : "false",
         rp_session_state_str(),
         rp_discovery_in_progress() ? "true" : "false");
@@ -144,6 +153,21 @@ static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp
         rp_discovery_start();
         snprintf(resp, resp_size, "{\"status\":\"scanning\"}");
         return true;
+    }
+    // Action: PSN sign-in. Browser hands us the authorization code from Sony's
+    // post-login redirect; the device does the HTTPS token exchange on-chip and
+    // derives the 8-byte account id (browser can't — CORS + Sony anti-bot edge).
+    {
+        char code[260];
+        if (json_str(json, "psn_code", code, sizeof(code))) {
+            if (!wifi_station_is_connected()) {
+                snprintf(resp, resp_size, "{\"status\":\"error\",\"error\":\"wifi not connected\"}");
+                return false;
+            }
+            bool ok = rp_oauth_start(code);
+            snprintf(resp, resp_size, "{\"status\":\"%s\"}", ok ? "signing-in" : "busy");
+            return ok;
+        }
     }
 
     bool changed = false;

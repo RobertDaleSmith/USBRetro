@@ -48,6 +48,11 @@
 // No netconn API
 #define LWIP_NETCONN                0
 
+// ALTCP + TLS (mbedTLS) — on-device HTTPS for PSN OAuth (rp_oauth.c)
+#define LWIP_ALTCP                  1
+#define LWIP_ALTCP_TLS              1
+#define LWIP_ALTCP_TLS_MBEDTLS      1
+
 // Disable stats for smaller footprint
 #define MEM_STATS                   0
 #define SYS_STATS                   0
