@@ -29,6 +29,7 @@ void wifi_station_connect(void);
 void wifi_station_task(void);
 
 wifi_station_state_t wifi_station_get_state(void);
+bool wifi_station_is_initialized(void);   // CYW43 up (safe to touch its LED)
 bool wifi_station_is_connected(void);
 // Fills a dotted-quad string of our IP (empty if not connected). buf >= 16.
 void wifi_station_get_ip(char* buf, int buflen);

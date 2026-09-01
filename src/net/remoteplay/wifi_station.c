@@ -94,6 +94,7 @@ void wifi_station_task(void)
 }
 
 wifi_station_state_t wifi_station_get_state(void) { return state; }
+bool wifi_station_is_initialized(void) { return inited; }
 bool wifi_station_is_connected(void) { return state == WIFI_STA_CONNECTED; }
 
 void wifi_station_get_ip(char* buf, int buflen)

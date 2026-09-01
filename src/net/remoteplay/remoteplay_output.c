@@ -5,6 +5,7 @@
 #include "wifi_station.h"
 #include "rp_session.h"
 #include "core/router/router.h"
+#include "platform/platform.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -43,18 +44,25 @@ static bool hex_bytes(const char* hex, uint8_t* out, int nbytes)
 }
 
 // ---------------------------------------------------------------------------
+// WiFi/CYW43 bring-up is DEFERRED out of init() into the task, gated a couple
+// seconds after boot. main.c runs output init() BEFORE stdio + the main loop,
+// so a slow/blocking cyw43_arch_init() here would stall USB enumeration (no CDC,
+// no UART). Bringing it up in the loop lets the USB device enumerate first.
+static bool wifi_started = false;
+
 static void rp_out_init(void)
 {
     rp_config_init();
     rp_session_init();
-    if (wifi_station_init()) {
-        wifi_station_connect();
-    }
 }
 
 static void rp_out_task(void)
 {
-    wifi_station_task();
+    if (!wifi_started && platform_time_ms() > 2000) {
+        wifi_started = true;
+        if (wifi_station_init()) wifi_station_connect();
+    }
+    if (wifi_started) wifi_station_task();
     rp_session_task();
 
     // Forward the merged controller state to the session.

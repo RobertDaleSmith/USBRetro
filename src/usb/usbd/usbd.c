@@ -98,7 +98,7 @@ static char usb_serial_str[USB_SERIAL_LEN + 1];
 
 // Current output mode — override per-app via -DUSBD_DEFAULT_MODE=USB_OUTPUT_MODE_xxx
 #ifndef USBD_DEFAULT_MODE
-#  if defined(CONFIG_USB2BLE) || defined(CONFIG_NGC)
+#  if defined(CONFIG_USB2BLE) || defined(CONFIG_NGC) || defined(CONFIG_USB2WIFI)
 #    define USBD_DEFAULT_MODE USB_OUTPUT_MODE_CDC
 #  else
 #    define USBD_DEFAULT_MODE USB_OUTPUT_MODE_SINPUT

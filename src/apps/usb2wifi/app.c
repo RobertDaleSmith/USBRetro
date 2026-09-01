@@ -77,7 +77,8 @@ void app_init(void)
     players_init_with_config(&player_cfg);
 
     // Native USB device = CDC only (web config); the real output is over WiFi.
-    usbd_set_mode(USB_OUTPUT_MODE_CDC);
+    // CDC is the compile-time default for CONFIG_USB2WIFI (see usbd.c), so the
+    // device enumerates as CDC from the first tusb_init — no runtime switch here.
 
     printf("[app:usb2wifi] Init complete — USB host in, Remote Play (WiFi) out, "
            "CDC config. Session engine: %s\n", rp_session_state_str());
@@ -90,6 +91,9 @@ void app_init(void)
 void app_task(void)
 {
     // Onboard CYW43 LED: solid when WiFi connected, blink while connecting.
+    // Only after CYW43 is initialised (deferred ~2s post-boot) — touching its
+    // GPIO before init would fault.
+    if (!wifi_station_is_initialized()) return;
     static uint32_t last = 0;
     static bool on = false;
     uint32_t now = to_ms_since_boot(get_absolute_time());
