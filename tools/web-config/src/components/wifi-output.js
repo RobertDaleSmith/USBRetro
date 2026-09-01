@@ -45,7 +45,12 @@ export class WifiOutputCard {
                     <div class="form-row"><label for="rpPass">Password</label><input type="password" id="rpPass" maxlength="63"></div>
 
                     <h3>PlayStation 5</h3>
-                    <div class="form-row"><label for="rpPs5Ip">PS5 IP</label><input type="text" id="rpPs5Ip" placeholder="192.168.1.107"></div>
+                    <div class="form-row">
+                        <label for="rpPs5Ip">PS5 IP</label>
+                        <input type="text" id="rpPs5Ip" placeholder="192.168.1.107">
+                        <button id="rpScanBtn" title="Find consoles on your network">Scan</button>
+                    </div>
+                    <div id="rpHosts" class="hint"></div>
                     <div class="form-row"><label for="rpAccount">Account ID (16 hex)</label><input type="text" id="rpAccount" placeholder="d83c2a2b2d0c3809" maxlength="16"></div>
                     <div class="form-row"><label for="rpKey">RP-Key (32 hex)</label><input type="text" id="rpKey" maxlength="32"></div>
                     <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
@@ -57,6 +62,39 @@ export class WifiOutputCard {
                 </div>
             </div>`;
         this.el.querySelector('#rpSaveBtn').addEventListener('click', () => this.save());
+        this.el.querySelector('#rpScanBtn').addEventListener('click', () => this.scan());
+    }
+
+    async scan() {
+        const btn = this.el.querySelector('#rpScanBtn');
+        btn.disabled = true; btn.textContent = 'Scanning…';
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { scan: 1 });
+            // Poll for results while the ~3s device-side scan runs.
+            for (let i = 0; i < 5; i++) {
+                await new Promise(r => setTimeout(r, 800));
+                await this.refresh();
+            }
+        } catch (e) {
+            this.#msg(`Scan failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Scan';
+    }
+
+    renderHosts(hosts) {
+        const box = this.el.querySelector('#rpHosts');
+        if (!box) return;
+        if (!hosts || !hosts.length) { box.textContent = ''; return; }
+        box.innerHTML = 'Found: ' + hosts.map((h, i) =>
+            `<a href="#" data-ip="${h.ip}" class="rp-host">${h.name} (${h.ps5 ? 'PS5' : 'PS4'}, ${h.ready ? 'ready' : 'standby'}) — ${h.ip}</a>`
+        ).join(' · ');
+        box.querySelectorAll('.rp-host').forEach(a => a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const ip = a.getAttribute('data-ip');
+            const ipInput = this.el.querySelector('#rpPs5Ip');
+            if (ipInput) ipInput.value = ip;
+            this.#msg(`Selected ${ip} — Save to store it`, 'success');
+        }));
     }
 
     async refresh() {
@@ -69,6 +107,7 @@ export class WifiOutputCard {
             set('#rpWifiState', `${r.wifi_state || '—'}${r.wifi_ssid ? ' (' + r.wifi_ssid + ')' : ''}`);
             set('#rpIp', r.ip || '—');
             set('#rpSession', r.session || '—');
+            this.renderHosts(r.hosts);
             const ssid = this.el.querySelector('#rpSsid');
             if (ssid && !ssid.value && r.wifi_ssid) ssid.value = r.wifi_ssid;
             const ip = this.el.querySelector('#rpPs5Ip');

@@ -1938,6 +1938,7 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${USB_DEVICE_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_config.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/wifi_station.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_discovery.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/remoteplay_output.c
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi/app.c

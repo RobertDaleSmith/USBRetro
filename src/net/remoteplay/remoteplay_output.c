@@ -4,6 +4,7 @@
 #include "rp_config.h"
 #include "wifi_station.h"
 #include "rp_session.h"
+#include "rp_discovery.h"
 #include "core/router/router.h"
 #include "platform/platform.h"
 #include <stdio.h>
@@ -63,6 +64,7 @@ static void rp_out_task(void)
         if (wifi_station_init()) wifi_station_connect();
     }
     if (wifi_started) wifi_station_task();
+    rp_discovery_task();
     rp_session_task();
 
     // Forward the merged controller state to the session.
@@ -89,18 +91,38 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
     int n = snprintf(buf, buf_size,
         "\"type\":\"remoteplay\",\"wifi_ssid\":\"%s\",\"wifi_state\":\"%s\","
         "\"ip\":\"%s\",\"ps5_ip\":\"%s\",\"have_wifi\":%s,"
-        "\"have_registration\":%s,\"session\":\"%s\"",
+        "\"have_registration\":%s,\"session\":\"%s\",\"scanning\":%s,\"hosts\":[",
         cfg->wifi_ssid, wstate, ip, cfg->ps5_ip,
         cfg->have_wifi ? "true" : "false",
         cfg->have_registration ? "true" : "false",
-        rp_session_state_str());
-    return (n < 0) ? 0 : (uint16_t)n;
+        rp_session_state_str(),
+        rp_discovery_in_progress() ? "true" : "false");
+    if (n < 0) return 0;
+
+    // Append discovered consoles (auto-fill candidates).
+    rp_discovery_host_t hs[RP_DISCOVERY_MAX_HOSTS];
+    uint8_t hc = rp_discovery_get_hosts(hs, RP_DISCOVERY_MAX_HOSTS);
+    for (uint8_t i = 0; i < hc && n < (int)buf_size - 96; i++) {
+        n += snprintf(buf + n, buf_size - n,
+            "%s{\"ip\":\"%s\",\"name\":\"%s\",\"ps5\":%s,\"ready\":%s}",
+            i ? "," : "", hs[i].ip, hs[i].name,
+            hs[i].is_ps5 ? "true" : "false", hs[i].ready ? "true" : "false");
+    }
+    n += snprintf(buf + n, buf_size - n, "]");
+    return (uint16_t)n;
 }
 
 // SET: provision WiFi creds + PSN account + PS5 IP + RP-Key (all optional per
 // call). account_id (8B), rp_key (16B), regist_key (16B) are hex strings.
 static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp_size)
 {
+    // Action: trigger a LAN scan for consoles (auto-fill IP). Not a config change.
+    if (strstr(json, "\"scan\"")) {
+        rp_discovery_start();
+        snprintf(resp, resp_size, "{\"status\":\"scanning\"}");
+        return true;
+    }
+
     bool changed = false;
     char ssid[RP_SSID_MAX], pass[RP_PASS_MAX], ip[RP_IP_MAX], hex[80];
 
