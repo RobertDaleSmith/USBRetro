@@ -335,7 +335,8 @@ select {
 }
 select:focus { outline: none; border-color: var(--accent); }
 
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
     padding: 10px;
     background: var(--bg-input);
     border: 1px solid var(--border);
@@ -343,7 +344,8 @@ input[type="text"] {
     color: var(--text);
     font-size: 14px;
 }
-input[type="text"]:focus { outline: none; border-color: var(--accent); }
+input[type="text"]:focus,
+input[type="password"]:focus { outline: none; border-color: var(--accent); }
 
 /* ================================================================
    FILE PICKERS (PS4 auth key upload)

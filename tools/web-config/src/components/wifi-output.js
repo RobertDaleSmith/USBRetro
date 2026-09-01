@@ -68,7 +68,7 @@ export class WifiOutputCard {
                         <input type="text" id="rpPs5Ip" placeholder="192.168.1.107">
                         <button id="rpScanBtn" title="Find consoles on your network">Scan</button>
                     </div>
-                    <div id="rpHosts" class="hint"></div>
+                    <div id="rpHosts" class="rp-ap-list"></div>
                     <div class="form-row"><label for="rpAccount">Account ID (16 hex)</label><input type="text" id="rpAccount" placeholder="d83c2a2b2d0c3809" maxlength="16"></div>
                     <div class="form-row"><label for="rpKey">RP-Key (32 hex)</label><input type="text" id="rpKey" maxlength="32"></div>
                     <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
@@ -176,16 +176,21 @@ export class WifiOutputCard {
     renderHosts(hosts) {
         const box = this.el.querySelector('#rpHosts');
         if (!box) return;
-        if (!hosts || !hosts.length) { box.textContent = ''; return; }
-        box.innerHTML = 'Found: ' + hosts.map((h, i) =>
-            `<a href="#" data-ip="${h.ip}" class="rp-host">${h.name} (${h.ps5 ? 'PS5' : 'PS4'}, ${h.ready ? 'ready' : 'standby'}) — ${h.ip}</a>`
-        ).join(' · ');
-        box.querySelectorAll('.rp-host').forEach(a => a.addEventListener('click', (e) => {
-            e.preventDefault();
-            const ip = a.getAttribute('data-ip');
+        if (!hosts || !hosts.length) { box.innerHTML = ''; return; }
+        const cur = this.el.querySelector('#rpPs5Ip')?.value || '';
+        box.innerHTML = hosts.map(h => {
+            const sel = h.ip === cur ? ' selected' : '';
+            return `<div class="rp-ap-row${sel}" data-ip="${h.ip}">
+                <span class="rp-ap-name">${h.ps5 ? '🎮' : '🎮'} ${h.name} <span class="rp-ap-sig">${h.ps5 ? 'PS5' : 'PS4'} · ${h.ready ? 'ready' : 'standby'}</span></span>
+                <span class="rp-ap-sig">${h.ip}</span>
+            </div>`;
+        }).join('');
+        box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', () => {
+            const ip = row.getAttribute('data-ip');
             const ipInput = this.el.querySelector('#rpPs5Ip');
             if (ipInput) ipInput.value = ip;
-            this.#msg(`Selected ${ip} — Save to store it`, 'success');
+            box.querySelectorAll('.rp-ap-row').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
         }));
     }
 
