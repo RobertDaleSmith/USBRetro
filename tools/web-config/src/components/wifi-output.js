@@ -41,13 +41,26 @@ export class WifiOutputCard {
                     </div>
 
                     <h3>WiFi network</h3>
-                    <div class="form-row">
-                        <label for="rpSsid">SSID</label>
-                        <input type="text" id="rpSsid" maxlength="32">
-                        <button id="rpWifiScanBtn" title="Scan for networks">Scan</button>
+                    <div class="button-row">
+                        <button id="rpWifiScanBtn" title="Scan for networks">Scan for networks</button>
                     </div>
-                    <div id="rpAps" class="hint"></div>
+                    <div id="rpAps" class="rp-ap-list"></div>
+                    <div class="form-row"><label for="rpSsid">SSID</label><input type="text" id="rpSsid" maxlength="32"></div>
                     <div class="form-row"><label for="rpPass">Password</label><input type="password" id="rpPass" maxlength="63"></div>
+                    <div class="button-row">
+                        <button id="rpWifiConnectBtn">Connect</button>
+                        <span id="rpWifiMsg" class="hint"></span>
+                    </div>
+
+                    <style>
+                        .rp-ap-list { display:flex; flex-direction:column; gap:2px; margin:6px 0; }
+                        .rp-ap-row { display:flex; justify-content:space-between; align-items:center;
+                            padding:6px 10px; border:1px solid var(--border,#333); border-radius:6px;
+                            cursor:pointer; }
+                        .rp-ap-row:hover { background:var(--hover,rgba(128,128,128,0.12)); }
+                        .rp-ap-row.selected { border-color:var(--accent,#4a9eff); background:rgba(74,158,255,0.12); }
+                        .rp-ap-row .rp-ap-sig { opacity:0.7; font-variant-numeric:tabular-nums; }
+                    </style>
 
                     <h3>PlayStation 5</h3>
                     <div class="form-row">
@@ -61,7 +74,7 @@ export class WifiOutputCard {
                     <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
 
                     <div class="button-row">
-                        <button id="rpSaveBtn">Save to device</button>
+                        <button id="rpSaveBtn">Save PS5 credentials</button>
                     </div>
                     <div id="rpStatusMsg" class="hint"></div>
                 </div>
@@ -69,6 +82,35 @@ export class WifiOutputCard {
         this.el.querySelector('#rpSaveBtn').addEventListener('click', () => this.save());
         this.el.querySelector('#rpScanBtn').addEventListener('click', () => this.scan());
         this.el.querySelector('#rpWifiScanBtn').addEventListener('click', () => this.wifiScan());
+        this.el.querySelector('#rpWifiConnectBtn').addEventListener('click', () => this.connectWifi());
+    }
+
+    async connectWifi() {
+        const ssid = this.el.querySelector('#rpSsid').value.trim();
+        const pass = this.el.querySelector('#rpPass').value;
+        if (!ssid) { this.#wifiMsg('Pick a network or type an SSID', 'error'); return; }
+        const btn = this.el.querySelector('#rpWifiConnectBtn');
+        btn.disabled = true; btn.textContent = 'Connecting…';
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { wifi_ssid: ssid, wifi_pass: pass });
+            this.#wifiMsg(`Connecting to "${ssid}"…`, 'success');
+            // Poll the WiFi state until it settles.
+            for (let i = 0; i < 12; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                await this.refresh();
+                const st = this.el.querySelector('#rpWifiState')?.textContent || '';
+                if (st.startsWith('connected')) { this.#wifiMsg('Connected ✓', 'success'); break; }
+                if (st.startsWith('failed'))    { this.#wifiMsg('Connection failed — check password', 'error'); break; }
+            }
+        } catch (e) {
+            this.#wifiMsg(`Connect failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Connect';
+    }
+
+    #wifiMsg(text, kind) {
+        const e = this.el.querySelector('#rpWifiMsg');
+        if (e) { e.textContent = text; e.className = 'hint ' + (kind === 'error' ? 'error' : 'success'); }
     }
 
     async wifiScan() {
@@ -86,20 +128,32 @@ export class WifiOutputCard {
         btn.disabled = false; btn.textContent = 'Scan';
     }
 
+    #signalBars(rssi) {
+        // rssi ~ -30 (strong) .. -90 (weak)
+        const n = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
+        return '▂▄▆█'.slice(0, n) + '·'.repeat(4 - n);
+    }
+
     renderAps(aps) {
         const box = this.el.querySelector('#rpAps');
         if (!box) return;
-        if (!aps || !aps.length) { box.textContent = ''; return; }
-        box.innerHTML = 'Networks: ' + aps.map(a =>
-            `<a href="#" data-ssid="${a.ssid.replace(/"/g, '&quot;')}" class="rp-ap">${a.ssid}${a.secure ? ' 🔒' : ''} (${a.rssi})</a>`
-        ).join(' · ');
-        box.querySelectorAll('.rp-ap').forEach(a => a.addEventListener('click', (e) => {
-            e.preventDefault();
-            const ssid = a.getAttribute('data-ssid');
+        if (!aps || !aps.length) { box.innerHTML = ''; return; }
+        const cur = this.el.querySelector('#rpSsid')?.value || '';
+        box.innerHTML = aps.map(a => {
+            const s = (a.ssid || '').replace(/"/g, '&quot;');
+            const sel = a.ssid === cur ? ' selected' : '';
+            return `<div class="rp-ap-row${sel}" data-ssid="${s}">
+                <span class="rp-ap-name">${a.secure ? '🔒 ' : ''}${a.ssid || '(hidden)'}</span>
+                <span class="rp-ap-sig">${this.#signalBars(a.rssi)}</span>
+            </div>`;
+        }).join('');
+        box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', () => {
+            const ssid = row.getAttribute('data-ssid');
             const inp = this.el.querySelector('#rpSsid');
             if (inp) inp.value = ssid;
-            const pass = this.el.querySelector('#rpPass');
-            if (pass) pass.focus();
+            box.querySelectorAll('.rp-ap-row').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
+            this.el.querySelector('#rpPass')?.focus();
         }));
     }
 
@@ -159,15 +213,13 @@ export class WifiOutputCard {
     #hexOk(s, n) { return typeof s === 'string' && new RegExp(`^[0-9a-fA-F]{${n}}$`).test(s); }
 
     async save() {
+        // WiFi is handled by the Connect button; Save stores the PS5 credentials.
         const payload = {};
-        const ssid = this.el.querySelector('#rpSsid').value.trim();
-        const pass = this.el.querySelector('#rpPass').value;
         const ip = this.el.querySelector('#rpPs5Ip').value.trim();
         const acct = this.el.querySelector('#rpAccount').value.trim();
         const key = this.el.querySelector('#rpKey').value.trim();
         const regist = this.el.querySelector('#rpRegist').value.trim();
 
-        if (ssid) { payload.wifi_ssid = ssid; payload.wifi_pass = pass; }
         if (ip) payload.ps5_ip = ip;
         if (acct) {
             if (!this.#hexOk(acct, 16)) return this.#msg('Account ID must be 16 hex chars', 'error');
