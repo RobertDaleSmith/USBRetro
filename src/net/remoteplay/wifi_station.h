@@ -31,6 +31,17 @@ void wifi_station_task(void);
 wifi_station_state_t wifi_station_get_state(void);
 bool wifi_station_is_initialized(void);   // CYW43 up (safe to touch its LED)
 bool wifi_station_is_connected(void);
+
+// --- AP scan (for web-config network picker) --------------------------------
+#define WIFI_AP_MAX 16
+typedef struct {
+    char    ssid[33];
+    int16_t rssi;
+    bool    secure;
+} wifi_ap_t;
+void wifi_ap_scan_start(void);            // requires CYW43 up; safe to repeat
+bool wifi_ap_scan_in_progress(void);
+uint8_t wifi_ap_get_results(wifi_ap_t* out, uint8_t max);  // sorted by rssi
 // Fills a dotted-quad string of our IP (empty if not connected). buf >= 16.
 void wifi_station_get_ip(char* buf, int buflen);
 

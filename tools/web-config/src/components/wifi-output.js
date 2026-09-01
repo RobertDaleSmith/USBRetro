@@ -41,7 +41,12 @@ export class WifiOutputCard {
                     </div>
 
                     <h3>WiFi network</h3>
-                    <div class="form-row"><label for="rpSsid">SSID</label><input type="text" id="rpSsid" maxlength="32"></div>
+                    <div class="form-row">
+                        <label for="rpSsid">SSID</label>
+                        <input type="text" id="rpSsid" maxlength="32">
+                        <button id="rpWifiScanBtn" title="Scan for networks">Scan</button>
+                    </div>
+                    <div id="rpAps" class="hint"></div>
                     <div class="form-row"><label for="rpPass">Password</label><input type="password" id="rpPass" maxlength="63"></div>
 
                     <h3>PlayStation 5</h3>
@@ -63,6 +68,39 @@ export class WifiOutputCard {
             </div>`;
         this.el.querySelector('#rpSaveBtn').addEventListener('click', () => this.save());
         this.el.querySelector('#rpScanBtn').addEventListener('click', () => this.scan());
+        this.el.querySelector('#rpWifiScanBtn').addEventListener('click', () => this.wifiScan());
+    }
+
+    async wifiScan() {
+        const btn = this.el.querySelector('#rpWifiScanBtn');
+        btn.disabled = true; btn.textContent = 'Scanning…';
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { wifiscan: 1 });
+            for (let i = 0; i < 5; i++) {
+                await new Promise(r => setTimeout(r, 700));
+                await this.refresh();
+            }
+        } catch (e) {
+            this.#msg(`WiFi scan failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Scan';
+    }
+
+    renderAps(aps) {
+        const box = this.el.querySelector('#rpAps');
+        if (!box) return;
+        if (!aps || !aps.length) { box.textContent = ''; return; }
+        box.innerHTML = 'Networks: ' + aps.map(a =>
+            `<a href="#" data-ssid="${a.ssid.replace(/"/g, '&quot;')}" class="rp-ap">${a.ssid}${a.secure ? ' 🔒' : ''} (${a.rssi})</a>`
+        ).join(' · ');
+        box.querySelectorAll('.rp-ap').forEach(a => a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const ssid = a.getAttribute('data-ssid');
+            const inp = this.el.querySelector('#rpSsid');
+            if (inp) inp.value = ssid;
+            const pass = this.el.querySelector('#rpPass');
+            if (pass) pass.focus();
+        }));
     }
 
     async scan() {
@@ -108,6 +146,7 @@ export class WifiOutputCard {
             set('#rpIp', r.ip || '—');
             set('#rpSession', r.session || '—');
             this.renderHosts(r.hosts);
+            this.renderAps(r.aps);
             const ssid = this.el.querySelector('#rpSsid');
             if (ssid && !ssid.value && r.wifi_ssid) ssid.value = r.wifi_ssid;
             const ip = this.el.querySelector('#rpPs5Ip');

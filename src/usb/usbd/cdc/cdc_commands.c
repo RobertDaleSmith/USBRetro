@@ -2648,7 +2648,7 @@ static void cmd_output_native_get(const char* json)
         send_json(response_buf);
         return;
     }
-    char body[512];
+    char body[1024];   // room for remoteplay's WiFi AP + console lists
     uint16_t len = out->get_native_config(body, sizeof(body));
     if (len == 0) {
         snprintf(response_buf, sizeof(response_buf), "{\"ok\":true,\"available\":false}");

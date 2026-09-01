@@ -39,9 +39,10 @@ void wifi_station_connect(void)
         return;
     }
     printf("[wifi_sta] connecting to '%s'...\n", cfg->wifi_ssid);
-    // Async connect; link status is polled in the task.
+    // WPA2_MIXED covers WPA2 TKIP+AES (broader than AES-only); works for most
+    // home networks incl. WPA2/WPA3-transition APs. Async; link status polled.
     int r = cyw43_arch_wifi_connect_async(cfg->wifi_ssid, cfg->wifi_pass,
-                                          CYW43_AUTH_WPA2_AES_PSK);
+                                          CYW43_AUTH_WPA2_MIXED_PSK);
     state = (r == 0) ? WIFI_STA_CONNECTING : WIFI_STA_FAILED;
     if (r != 0) {
         printf("[wifi_sta] connect_async failed (%d)\n", r);
@@ -96,6 +97,66 @@ void wifi_station_task(void)
 wifi_station_state_t wifi_station_get_state(void) { return state; }
 bool wifi_station_is_initialized(void) { return inited; }
 bool wifi_station_is_connected(void) { return state == WIFI_STA_CONNECTED; }
+
+// --- AP scan ----------------------------------------------------------------
+static wifi_ap_t aps[WIFI_AP_MAX];
+static uint8_t   ap_count = 0;
+static bool      scan_active = false;
+
+static int scan_cb(void* env, const cyw43_ev_scan_result_t* r)
+{
+    (void)env;
+    if (!r || r->ssid_len == 0) return 0;
+    char ssid[33];
+    int n = r->ssid_len < 32 ? r->ssid_len : 32;
+    memcpy(ssid, r->ssid, n); ssid[n] = '\0';
+    for (uint8_t i = 0; i < ap_count; i++) {         // dedup: keep strongest
+        if (strcmp(aps[i].ssid, ssid) == 0) {
+            if (r->rssi > aps[i].rssi) aps[i].rssi = r->rssi;
+            return 0;
+        }
+    }
+    if (ap_count >= WIFI_AP_MAX) return 0;
+    wifi_ap_t* a = &aps[ap_count++];
+    snprintf(a->ssid, sizeof(a->ssid), "%s", ssid);
+    a->rssi = r->rssi;
+    a->secure = (r->auth_mode != 0);
+    return 0;
+}
+
+void wifi_ap_scan_start(void)
+{
+    if (!inited || scan_active) return;
+    ap_count = 0;
+    cyw43_wifi_scan_options_t opts = {0};
+    cyw43_arch_lwip_begin();
+    int err = cyw43_wifi_scan(&cyw43_state, &opts, NULL, scan_cb);
+    cyw43_arch_lwip_end();
+    scan_active = (err == 0);
+    printf("[wifi_sta] AP scan %s\n", scan_active ? "started" : "failed");
+}
+
+bool wifi_ap_scan_in_progress(void)
+{
+    if (scan_active && !cyw43_wifi_scan_active(&cyw43_state)) {
+        scan_active = false;
+        printf("[wifi_sta] AP scan done: %u\n", ap_count);
+    }
+    return scan_active;
+}
+
+uint8_t wifi_ap_get_results(wifi_ap_t* out, uint8_t max)
+{
+    uint8_t n = ap_count < max ? ap_count : max;
+    // simple insertion sort by rssi desc
+    for (uint8_t i = 0; i < n; i++) {
+        out[i] = aps[i];
+        for (uint8_t j = i; j > 0 && out[j].rssi > out[j-1].rssi; j--) {
+            wifi_ap_t t = out[j]; out[j] = out[j-1]; out[j-1] = t;
+        }
+    }
+    return n;
+}
 
 void wifi_station_get_ip(char* buf, int buflen)
 {

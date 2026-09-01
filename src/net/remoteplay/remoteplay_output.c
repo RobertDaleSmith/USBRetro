@@ -108,6 +108,23 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
             i ? "," : "", hs[i].ip, hs[i].name,
             hs[i].is_ps5 ? "true" : "false", hs[i].ready ? "true" : "false");
     }
+    n += snprintf(buf + n, buf_size - n, "],\"wifiscanning\":%s,\"aps\":[",
+                  wifi_ap_scan_in_progress() ? "true" : "false");
+
+    // Append scanned WiFi APs (network picker).
+    wifi_ap_t ap[WIFI_AP_MAX];
+    uint8_t ac = wifi_ap_get_results(ap, WIFI_AP_MAX);
+    for (uint8_t i = 0; i < ac && n < (int)buf_size - 64; i++) {
+        // escape " and \ in SSIDs for valid JSON
+        char esc[40]; int e = 0;
+        for (const char* s = ap[i].ssid; *s && e < (int)sizeof(esc) - 2; s++) {
+            if (*s == '"' || *s == '\\') esc[e++] = '\\';
+            esc[e++] = *s;
+        }
+        esc[e] = '\0';
+        n += snprintf(buf + n, buf_size - n, "%s{\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}",
+                      i ? "," : "", esc, ap[i].rssi, ap[i].secure ? "true" : "false");
+    }
     n += snprintf(buf + n, buf_size - n, "]");
     return (uint16_t)n;
 }
@@ -116,7 +133,13 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
 // call). account_id (8B), rp_key (16B), regist_key (16B) are hex strings.
 static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp_size)
 {
-    // Action: trigger a LAN scan for consoles (auto-fill IP). Not a config change.
+    // Action: scan for WiFi APs (network picker). Not a config change.
+    if (strstr(json, "\"wifiscan\"")) {
+        wifi_ap_scan_start();
+        snprintf(resp, resp_size, "{\"status\":\"wifiscanning\"}");
+        return true;
+    }
+    // Action: scan the LAN for consoles (auto-fill IP). Not a config change.
     if (strstr(json, "\"scan\"")) {
         rp_discovery_start();
         snprintf(resp, resp_size, "{\"status\":\"scanning\"}");

@@ -53,7 +53,9 @@ export class NativeOutputCard {
         const card = this.el.querySelector('#nativeOutputCard');
         try {
             const result = await this.protocol.getNativeOutput();
-            if (!result.ok || !result.available) {
+            // The Remote Play (WiFi) output uses OUTPUT.NATIVE too, but has its
+            // own dedicated page (wifi-output.js) — don't also show it here.
+            if (!result.ok || !result.available || result.type === 'remoteplay') {
                 card.style.display = 'none';
                 this.visible = false;
                 return;
