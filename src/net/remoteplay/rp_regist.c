@@ -210,15 +210,22 @@ static void parse_response(void)
         fail("response decrypt failed"); return;
     }
 
-    char rp_hex[40], regist_hex[40];
+    char rp_hex[48], regist_hex[48];
     uint8_t rp_key[RP_KEY_LEN], regist_key[RP_REGIST_LEN];
+    // RP-Key is exactly 16 bytes (32 hex).
     if (!header_value((char*)body, content, "RP-Key", rp_hex, sizeof(rp_hex)) ||
         hex_decode(rp_hex, (int)strlen(rp_hex), rp_key, RP_KEY_LEN) != RP_KEY_LEN) {
         fail("no RP-Key in response"); return;
     }
-    if (!header_value((char*)body, content, "PS5-RegistKey", regist_hex, sizeof(regist_hex)) ||
-        hex_decode(regist_hex, (int)strlen(regist_hex), regist_key, RP_REGIST_LEN) != RP_REGIST_LEN) {
+    // RegistKey is variable-length (up to 16 bytes), zero-padded — like chiaki's
+    // parse_hex. Don't require a full 16 bytes (an 8-char key decodes to 4).
+    memset(regist_key, 0, sizeof(regist_key));
+    if (!header_value((char*)body, content, "PS5-RegistKey", regist_hex, sizeof(regist_hex))) {
         fail("no RegistKey in response"); return;
+    }
+    if (hex_decode(regist_hex, (int)strlen(regist_hex), regist_key, RP_REGIST_LEN) < 0) {
+        char m[56]; snprintf(m, sizeof(m), "bad RegistKey (len %u)", (unsigned)strlen(regist_hex));
+        fail(m); return;
     }
 
     rp_config_set_keys(rp_key, regist_key);
