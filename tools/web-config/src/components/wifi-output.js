@@ -26,23 +26,18 @@ export class WifiOutputCard {
     render() {
         this.el.innerHTML = `
             <div class="card">
-                <h2>PS Remote Play (WiFi)</h2>
+                <h2>WiFi</h2>
                 <div class="card-content">
                     <p class="hint">
-                        Drive a PS5 over WiFi via PS Remote Play. Pair once on a PC with
-                        <code>remote-play-lab/rp.py</code>, then paste the resulting WiFi + PSN
-                        credentials here. The adapter connects to your network and, once the
-                        session engine is enabled, forwards your controller to the console.
+                        Connect the adapter to your network. This is the adapter's base WiFi link —
+                        used by PS Remote Play below, and by other WiFi features.
                     </p>
 
                     <div class="device-info">
-                        <div class="row"><span class="label">WiFi</span><span class="value" id="rpWifiState">—</span></div>
+                        <div class="row"><span class="label">Status</span><span class="value" id="rpWifiState">—</span></div>
                         <div class="row"><span class="label">Adapter IP</span><span class="value" id="rpIp">—</span></div>
-                        <div class="row"><span class="label">PSN account</span><span class="value" id="rpAccountState">—</span></div>
-                        <div class="row"><span class="label">Session</span><span class="value" id="rpSession">—</span></div>
                     </div>
 
-                    <h3>WiFi network</h3>
                     <div class="button-row">
                         <button id="rpWifiScanBtn" title="Scan for networks">Scan for networks</button>
                     </div>
@@ -63,6 +58,21 @@ export class WifiOutputCard {
                         .rp-ap-row.selected { border-color:var(--accent,#4a9eff); background:rgba(74,158,255,0.12); }
                         .rp-ap-row .rp-ap-sig { opacity:0.7; font-variant-numeric:tabular-nums; }
                     </style>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>PlayStation Remote Play</h2>
+                <div class="card-content">
+                    <p class="hint">
+                        Play a PS5 over your network. Needs WiFi connected (above) plus a PSN
+                        sign-in and a one-time console pairing — all on-device, no PC.
+                    </p>
+
+                    <div class="device-info">
+                        <div class="row"><span class="label">PSN account</span><span class="value" id="rpAccountState">—</span></div>
+                        <div class="row"><span class="label">Session</span><span class="value" id="rpSession">—</span></div>
+                    </div>
 
                     <h3>PlayStation account</h3>
                     <p class="hint">
