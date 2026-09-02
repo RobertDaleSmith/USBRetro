@@ -188,6 +188,11 @@ export class WifiOutputCard {
         const btn = this.el.querySelector('#rpStreamBtn');
         btn.disabled = true;
         try {
+            if (on) {
+                // target the currently-discovered PS5 (its IP may have changed)
+                const ps5 = (this._hosts || []).find(h => h.ps5);
+                if (ps5) await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ps5.ip });
+            }
             await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { stream: on ? 1 : 0 });
             this.#streamMsg(on ? 'Starting… (TV may blank — that\'s Remote Play)' : 'Stopping…', 'success');
             setTimeout(() => this.refresh(), 400);
@@ -426,7 +431,10 @@ export class WifiOutputCard {
             return;
         }
         box.innerHTML = hosts.map(h => {
-            const linked = h.ip === linkedIp;
+            // Registration is per-account, not per-IP: a paired PS5 stays linked even
+            // if its DHCP address changed. We store one registration, so any
+            // discovered PS5 is "the linked one" when have_registration is set.
+            const linked = h.ip === linkedIp || (this._haveReg && h.ps5);
             const type = h.ps5 ? 'PS5' : 'PS4';
             const action = linked
                 ? `<span class="rp-badge linked">Linked ✓</span>`
