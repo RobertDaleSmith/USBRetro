@@ -119,8 +119,14 @@ static uint16_t s_reasm_len;
 
 static uint32_t now_ms(void) { return platform_time_ms(); }
 
+// forward decl: send a clean DISCONNECT over takion (defined after takion helpers)
+static void stream_send_disconnect(void);
+
 static void fail(const char* m)
 {
+    // If we were in a live stream, tell the console we're leaving so it releases
+    // the Remote Play slot (otherwise it stays "in use" and refuses reconnects).
+    if (s_state==S_STREAM && s_crypt_ready) stream_send_disconnect();
     snprintf(s_err, sizeof(s_err), "%s", m);
     s_state = S_ERROR; s_pub = RP_SESS_ERROR;
     printf("[rp_stream] error: %s\n", m);
@@ -571,6 +577,14 @@ static void start_takion(void)
     printf("[rp_stream] takion INIT sent\n");
 }
 
+// Send a DISCONNECT so the console releases the Remote Play slot.
+static void stream_send_disconnect(void)
+{
+    uint8_t dis[16]; size_t dl=rp_proto_encode_type_only(dis,sizeof(dis),RP_TKMSG_DISCONNECT);
+    takion_send_data(dis,(uint16_t)dl,1,false);
+    printf("[rp_stream] sent DISCONNECT\n");
+}
+
 // ============================ keep-alive ====================================
 // Stream heartbeat: type-only HEARTBEAT protobuf as a reliable DATA message.
 static void send_heartbeat(void)
@@ -648,11 +662,7 @@ void rp_session_stop(void)
 {
     // If a session is up, send a Takion DISCONNECT so the console cleanly exits
     // Remote Play and restores its local TV output.
-    if (s_state==S_STREAM && s_udp && s_crypt_ready) {
-        uint8_t dis[16]; size_t dl=rp_proto_encode_type_only(dis,sizeof(dis),RP_TKMSG_DISCONNECT);
-        takion_send_data(dis,(uint16_t)dl,1,false);
-        printf("[rp_stream] sent DISCONNECT\n");
-    }
+    if (s_state==S_STREAM && s_udp && s_crypt_ready) stream_send_disconnect();
     tcp_close_safe();
     if (s_udp){ udp_recv(s_udp,NULL,NULL); udp_remove(s_udp); s_udp=NULL; }
     if (s_ecdh.ready) rp_ecdh_fini(&s_ecdh);
