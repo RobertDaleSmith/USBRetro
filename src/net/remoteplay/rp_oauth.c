@@ -22,6 +22,7 @@
 #include "lwip/ip_addr.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/platform_time.h"
+#include "mbedtls/memory_buffer_alloc.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -45,8 +46,15 @@
 #define RP_CODE_MAX    256
 #define RP_TOKEN_MAX   256
 
+// Dedicated mbedTLS arena. 64KB comfortably holds the TLS-1.2 handshake peak
+// (16KB in + 2KB out + cert parse + ECDHE working set). Static → always present,
+// never fragmented by the rest of the firmware. 8-byte aligned for the allocator.
+#define RP_MBED_POOL_SIZE  (64 * 1024)
+static uint8_t s_mbed_pool[RP_MBED_POOL_SIZE] __attribute__((aligned(8)));
+static bool    s_pool_inited = false;
+
 static rp_oauth_state_t s_state = RP_OAUTH_IDLE;
-static char             s_err[64];
+static char             s_err[80];
 static char             s_online_id[24];
 
 static char             s_code[RP_CODE_MAX];
@@ -107,6 +115,20 @@ static void fail(const char* msg)
     snprintf(s_err, sizeof(s_err), "%s", msg);
     s_state = RP_OAUTH_ERROR;
     printf("[rp_oauth] error: %s\n", msg);
+}
+
+// Error + mbedTLS pool high-water (so an out-of-arena failure is visible over
+// CDC even with no UART): "<msg> (pool used=<cur>/<max> of 64k)".
+static void fail_mem(const char* msg)
+{
+    size_t cur = 0, curb = 0, mx = 0, mxb = 0;
+    mbedtls_memory_buffer_alloc_cur_get(&cur, &curb);
+    mbedtls_memory_buffer_alloc_max_get(&mx, &mxb);
+    (void)curb; (void)mxb;
+    snprintf(s_err, sizeof(s_err), "%s (pool %u/%u of %uk)",
+             msg, (unsigned)cur, (unsigned)mx, (unsigned)(RP_MBED_POOL_SIZE / 1024));
+    s_state = RP_OAUTH_ERROR;
+    printf("[rp_oauth] error: %s\n", s_err);
 }
 
 // Tear down the current TLS connection (config kept until the whole flow ends).
@@ -229,7 +251,7 @@ static void on_response_complete(void)
         s_info_phase = true;
         s_state = RP_OAUTH_CONNECTING;
         s_pcb = altcp_tls_new(s_tls_conf, IPADDR_TYPE_V4);
-        if (!s_pcb) { fail("tls alloc failed (phase2)"); return; }
+        if (!s_pcb) { fail_mem("tls alloc failed (phase2)"); return; }
         mbedtls_ssl_set_hostname((mbedtls_ssl_context*)altcp_tls_context(s_pcb),
                                  RP_OAUTH_HOST);
         altcp_arg(s_pcb, NULL);
@@ -286,7 +308,7 @@ static void start_connect(void)
 {
     s_state = RP_OAUTH_CONNECTING;
     s_pcb = altcp_tls_new(s_tls_conf, IPADDR_TYPE_V4);
-    if (!s_pcb) { fail("tls alloc failed"); return; }
+    if (!s_pcb) { fail_mem("tls alloc failed"); return; }
     mbedtls_ssl_set_hostname((mbedtls_ssl_context*)altcp_tls_context(s_pcb),
                              RP_OAUTH_HOST);
     altcp_arg(s_pcb, NULL);
@@ -307,6 +329,11 @@ static void dns_cb(const char* name, const ip_addr_t* ipaddr, void* arg)
 // --- public API -------------------------------------------------------------
 void rp_oauth_init(void)
 {
+    // Hand mbedTLS its dedicated arena before any TLS allocation happens.
+    if (!s_pool_inited) {
+        mbedtls_memory_buffer_alloc_init(s_mbed_pool, sizeof(s_mbed_pool));
+        s_pool_inited = true;
+    }
     s_state = RP_OAUTH_IDLE;
     s_err[0] = s_online_id[0] = '\0';
 }
@@ -325,7 +352,7 @@ bool rp_oauth_start(const char* code)
     s_deadline_ms = now_ms() + RP_TIMEOUT_MS;
 
     s_tls_conf = altcp_tls_create_config_client(NULL, 0);  // no CA -> VERIFY_NONE
-    if (!s_tls_conf) { fail("tls config alloc failed"); return false; }
+    if (!s_tls_conf) { fail_mem("tls config alloc failed"); return false; }
 
     printf("[rp_oauth] starting exchange (code len=%u)\n", (unsigned)strlen(code));
     s_state = RP_OAUTH_RESOLVING;

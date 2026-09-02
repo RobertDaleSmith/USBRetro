@@ -43,6 +43,15 @@ long rp_mbedtls_time(long* t);           // defined in rp_oauth.c
 #define MBEDTLS_ENTROPY_C
 #define MBEDTLS_CTR_DRBG_C
 
+// Memory: use a dedicated static pool for all mbedTLS allocations instead of the
+// libc heap. The board runs PIO-USB host + CYW43 + lwip concurrently, so the
+// shared heap is tight/fragmented and the ~16KB TLS session buffer failed to
+// allocate ("tls alloc failed"). A contiguous static arena is deterministic.
+// rp_oauth.c calls mbedtls_memory_buffer_alloc_init() once. MEMORY_DEBUG lets us
+// report pool high-water back over CDC (UART logging is unavailable here).
+#define MBEDTLS_MEMORY_BUFFER_ALLOC_C
+#define MBEDTLS_MEMORY_DEBUG
+
 // --- TLS 1.2 client -----------------------------------------------------------
 #define MBEDTLS_SSL_TLS_C
 #define MBEDTLS_SSL_CLI_C
