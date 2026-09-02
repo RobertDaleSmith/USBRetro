@@ -14,9 +14,15 @@
 #define LWIP_SOCKET                 0
 
 // Memory configuration (poll mode compatible)
-#define MEM_LIBC_MALLOC             1
+// NOTE: altcp_tls forces mbedTLS to allocate through lwip's mem_malloc (its
+// tls_malloc shim) whenever MBEDTLS_PLATFORM_MEMORY is set — so the TLS session
+// (~16KB input buffer + handshake working set) comes out of THIS heap, not libc
+// and not a private pool. It must be large enough for one TLS 1.2 session plus
+// lwip's own PBUF_RAM/segment traffic. Use the internal heap (LIBC_MALLOC off)
+// so MEM_SIZE is authoritative and deterministic.
+#define MEM_LIBC_MALLOC             0
 #define MEM_ALIGNMENT               4
-#define MEM_SIZE                    4000
+#define MEM_SIZE                    (96 * 1024)
 
 // TCP/UDP configuration
 #define MEMP_NUM_TCP_SEG            32
@@ -53,8 +59,9 @@
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
 
-// Disable stats for smaller footprint
-#define MEM_STATS                   0
+// MEM_STATS on so rp_oauth can report internal-heap free/used over CDC if a TLS
+// allocation ever comes up short (no UART logging on this wiring).
+#define MEM_STATS                   1
 #define SYS_STATS                   0
 #define MEMP_STATS                  0
 #define LINK_STATS                  0

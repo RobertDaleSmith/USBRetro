@@ -22,7 +22,7 @@
 #include "lwip/ip_addr.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/platform_time.h"
-#include "mbedtls/memory_buffer_alloc.h"
+#include "lwip/stats.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -45,13 +45,6 @@
 #define RP_RESP_MAX    4096
 #define RP_CODE_MAX    256
 #define RP_TOKEN_MAX   256
-
-// Dedicated mbedTLS arena. 64KB comfortably holds the TLS-1.2 handshake peak
-// (16KB in + 2KB out + cert parse + ECDHE working set). Static → always present,
-// never fragmented by the rest of the firmware. 8-byte aligned for the allocator.
-#define RP_MBED_POOL_SIZE  (64 * 1024)
-static uint8_t s_mbed_pool[RP_MBED_POOL_SIZE] __attribute__((aligned(8)));
-static bool    s_pool_inited = false;
 
 static rp_oauth_state_t s_state = RP_OAUTH_IDLE;
 static char             s_err[80];
@@ -117,16 +110,19 @@ static void fail(const char* msg)
     printf("[rp_oauth] error: %s\n", msg);
 }
 
-// Error + mbedTLS pool high-water (so an out-of-arena failure is visible over
-// CDC even with no UART): "<msg> (pool used=<cur>/<max> of 64k)".
+// Error + lwip heap state (TLS allocs come from the lwip heap via altcp). Makes
+// an out-of-heap failure visible over CDC with no UART:
+// "<msg> (lwip mem used=<used>/<max> avail=<avail>)".
 static void fail_mem(const char* msg)
 {
-    size_t cur = 0, curb = 0, mx = 0, mxb = 0;
-    mbedtls_memory_buffer_alloc_cur_get(&cur, &curb);
-    mbedtls_memory_buffer_alloc_max_get(&mx, &mxb);
-    (void)curb; (void)mxb;
-    snprintf(s_err, sizeof(s_err), "%s (pool %u/%u of %uk)",
-             msg, (unsigned)cur, (unsigned)mx, (unsigned)(RP_MBED_POOL_SIZE / 1024));
+#if MEM_STATS
+    unsigned used  = (unsigned)lwip_stats.mem.used;
+    unsigned mx    = (unsigned)lwip_stats.mem.max;
+    unsigned avail = (unsigned)lwip_stats.mem.avail;
+    snprintf(s_err, sizeof(s_err), "%s (lwip mem %u/%u avail %u)", msg, used, mx, avail);
+#else
+    snprintf(s_err, sizeof(s_err), "%s", msg);
+#endif
     s_state = RP_OAUTH_ERROR;
     printf("[rp_oauth] error: %s\n", s_err);
 }
@@ -329,11 +325,6 @@ static void dns_cb(const char* name, const ip_addr_t* ipaddr, void* arg)
 // --- public API -------------------------------------------------------------
 void rp_oauth_init(void)
 {
-    // Hand mbedTLS its dedicated arena before any TLS allocation happens.
-    if (!s_pool_inited) {
-        mbedtls_memory_buffer_alloc_init(s_mbed_pool, sizeof(s_mbed_pool));
-        s_pool_inited = true;
-    }
     s_state = RP_OAUTH_IDLE;
     s_err[0] = s_online_id[0] = '\0';
 }
