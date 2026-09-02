@@ -82,31 +82,36 @@ export class WifiOutputCard {
                     </div>
                     <div id="rpOauthMsg" class="hint"></div>
 
-                    <h3>PlayStation 5</h3>
-                    <div class="form-row">
-                        <label for="rpPs5Ip">PS5 IP</label>
-                        <input type="text" id="rpPs5Ip" placeholder="192.168.1.107">
-                        <button id="rpScanBtn" title="Find consoles on your network">Scan</button>
+                    <h3>PlayStations</h3>
+                    <div class="button-row">
+                        <button id="rpScanBtn" title="Find consoles on your network">Scan for consoles</button>
+                        <span id="rpScanMsg" class="hint"></span>
                     </div>
-                    <div id="rpHosts" class="rp-ap-list"></div>
-
-                    <h3>Pair with console</h3>
-                    <p class="hint">
-                        On the PS5: <b>Settings → System → Remote Play → Link Device</b>. It shows
-                        an 8-digit PIN. Select your console above, enter the PIN here, and Pair.
-                        The adapter registers on-device and stores the keys (RP-Key + Regist Key).
-                    </p>
-                    <div class="form-row">
-                        <label for="rpPin">Link PIN</label>
-                        <input type="text" id="rpPin" inputmode="numeric" maxlength="8" placeholder="12345678">
-                        <button id="rpPairBtn">Pair</button>
-                    </div>
+                    <div id="rpConsoles" class="rp-console-list"></div>
                     <div id="rpPairMsg" class="hint"></div>
 
+                    <style>
+                        .rp-console-list { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+                        .rp-console { border:1px solid var(--border,#333); border-radius:8px; overflow:hidden; }
+                        .rp-console-row { display:flex; align-items:center; gap:10px; padding:10px 12px; }
+                        .rp-console-ico { font-size:20px; }
+                        .rp-console-text { flex:1 1 auto; min-width:0; }
+                        .rp-console-name { font-weight:600; }
+                        .rp-console-sub { opacity:0.65; font-size:0.85em; font-variant-numeric:tabular-nums; }
+                        .rp-badge { font-size:0.8em; padding:3px 9px; border-radius:999px; white-space:nowrap; }
+                        .rp-badge.linked { background:rgba(60,190,110,0.18); color:#3cbe6e; }
+                        .rp-badge.standby { background:rgba(128,128,128,0.16); opacity:0.8; }
+                        .rp-link-panel { border-top:1px solid var(--border,#333); padding:10px 12px;
+                            background:rgba(74,158,255,0.06); }
+                        .rp-link-panel .form-row { margin:6px 0; }
+                        .rp-empty { opacity:0.6; padding:10px 2px; }
+                    </style>
+
                     <details class="rp-advanced">
-                        <summary>Advanced — manual credentials</summary>
-                        <p class="hint">Paired keys from <code>remote-play-lab/rp.py</code>. On-device
-                            pairing is coming; until then, provision RP-Key + Regist Key here.</p>
+                        <summary>Advanced</summary>
+                        <p class="hint">Manually target a console by IP (if discovery can't find it), or
+                            paste paired keys from <code>remote-play-lab/rp.py</code>.</p>
+                        <div class="form-row"><label for="rpPs5Ip">Console IP</label><input type="text" id="rpPs5Ip" placeholder="192.168.1.107"></div>
                         <div class="form-row"><label for="rpAccount">Account ID (16 hex)</label><input type="text" id="rpAccount" placeholder="d83c2a2b2d0c3809" maxlength="16"></div>
                         <div class="form-row"><label for="rpKey">RP-Key (32 hex)</label><input type="text" id="rpKey" maxlength="32"></div>
                         <div class="form-row"><label for="rpRegist">Regist Key (32 hex)</label><input type="text" id="rpRegist" maxlength="32"></div>
@@ -124,37 +129,6 @@ export class WifiOutputCard {
         this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
         this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
         this.el.querySelector('#rpUnlinkBtn').addEventListener('click', () => this.unlink());
-        this.el.querySelector('#rpPairBtn').addEventListener('click', () => this.pair());
-    }
-
-    async pair() {
-        const pin = (this.el.querySelector('#rpPin').value || '').trim();
-        const ip = (this.el.querySelector('#rpPs5Ip').value || '').trim();
-        if (!ip) { this.#pairMsg('Select or enter your console IP first', 'error'); return; }
-        if (!/^\d{8}$/.test(pin)) { this.#pairMsg('Enter the 8-digit PIN from the console', 'error'); return; }
-        const btn = this.el.querySelector('#rpPairBtn');
-        btn.disabled = true; btn.textContent = 'Pairing…';
-        try {
-            // Make sure the target IP is saved, then start registration.
-            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ip });
-            const r = await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { pair_pin: pin });
-            if (r && r.status && r.status !== 'pairing') {
-                this.#pairMsg(`Couldn't start: ${r.status}`, 'error');
-            } else {
-                this.#pairMsg('Registering with console…', 'success');
-                for (let i = 0; i < 15; i++) {
-                    await new Promise(res => setTimeout(res, 1000));
-                    await this.refresh();
-                    const st = this._regist || '';
-                    if (st === 'paired') { this.#pairMsg('Paired ✓ — RP-Key stored', 'success'); this.el.querySelector('#rpPin').value = ''; break; }
-                    if (st === 'error') { this.#pairMsg(`Pairing failed: ${this._registError || 'unknown'}`, 'error'); break; }
-                    if (st === 'unavailable') { this.#pairMsg('This firmware build has pairing stubbed out', 'error'); break; }
-                }
-            }
-        } catch (e) {
-            this.#pairMsg(`Pair failed: ${e.message}`, 'error');
-        }
-        btn.disabled = false; btn.textContent = 'Pair';
     }
 
     #pairMsg(text, kind) {
@@ -343,35 +317,96 @@ export class WifiOutputCard {
         btn.disabled = false; btn.textContent = 'Scan';
     }
 
-    renderHosts(hosts) {
-        const box = this.el.querySelector('#rpHosts');
+    #esc(s) { return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    // One clean row per discovered console, with linked/not-linked state and an
+    // inline Link → PIN flow. `this._expandedIp` is the console whose link panel
+    // is open; refresh() freezes the list while a panel is open so typing/focus
+    // isn't clobbered by polling.
+    renderConsoles(hosts) {
+        const box = this.el.querySelector('#rpConsoles');
         if (!box) return;
-        if (!hosts || !hosts.length) { box.innerHTML = ''; return; }
-        const cur = this.el.querySelector('#rpPs5Ip')?.value || '';
+        hosts = hosts || [];
+        const linkedIp = this._haveReg ? (this._linkedIp || '') : '';
+        if (!hosts.length) {
+            box.innerHTML = `<div class="rp-empty">No consoles found yet. Make sure your PS5 is on
+                (or in rest mode with Remote Play enabled) and on this network, then Scan.</div>`;
+            return;
+        }
         box.innerHTML = hosts.map(h => {
-            const sel = h.ip === cur ? ' selected' : '';
-            const nm = (h.name || 'PlayStation').replace(/"/g, '&quot;');
-            return `<div class="rp-ap-row${sel}" data-ip="${h.ip}" data-name="${nm}">
-                <span class="rp-ap-name">🎮 ${h.name} <span class="rp-ap-sig">${h.ps5 ? 'PS5' : 'PS4'} · ${h.ready ? 'ready' : 'standby'}</span></span>
-                <span class="rp-ap-sig">${h.ip}</span>
+            const linked = h.ip === linkedIp;
+            const type = h.ps5 ? 'PS5' : 'PS4';
+            const action = linked
+                ? `<span class="rp-badge linked">Linked ✓</span>`
+                : `<button class="rp-link-btn" data-ip="${h.ip}">Link</button>`;
+            const panel = (this._expandedIp === h.ip && !linked)
+                ? `<div class="rp-link-panel">
+                       <p class="hint" style="margin-top:0">On the console: <b>Settings → System →
+                         Remote Play → Link Device</b>, then enter the 8-digit PIN it shows.</p>
+                       <div class="form-row">
+                         <input type="text" class="rp-pin" inputmode="numeric" maxlength="8" placeholder="12345678" value="${this._pinDraft || ''}">
+                         <button class="rp-pair-btn" data-ip="${h.ip}">Pair</button>
+                         <button class="rp-cancel-btn secondary">Cancel</button>
+                       </div>
+                     </div>`
+                : '';
+            return `<div class="rp-console" data-ip="${h.ip}">
+                <div class="rp-console-row">
+                    <span class="rp-console-ico">🎮</span>
+                    <div class="rp-console-text">
+                        <div class="rp-console-name">${this.#esc(h.name)}</div>
+                        <div class="rp-console-sub">${type} · ${h.ready ? 'ready' : 'rest mode'} · ${h.ip}</div>
+                    </div>
+                    ${action}
+                </div>
+                ${panel}
             </div>`;
         }).join('');
-        box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', async () => {
-            const ip = row.getAttribute('data-ip');
-            const name = row.getAttribute('data-name') || 'PlayStation';
-            const ipInput = this.el.querySelector('#rpPs5Ip');
-            if (ipInput) ipInput.value = ip;
-            box.querySelectorAll('.rp-ap-row').forEach(r => r.classList.remove('selected'));
-            row.classList.add('selected');
-            // Persist the target IP so it's remembered. Note: this only SELECTS the
-            // console — it can't stream yet (the Remote Play engine isn't built).
-            try {
-                await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ip });
-                this.#msg(`Target set: ${name} (${ip}). Pairing + streaming engine not built yet — see Session status.`, 'success');
-            } catch (e) {
-                this.#msg(`Could not save target: ${e.message}`, 'error');
-            }
+
+        box.querySelectorAll('.rp-link-btn').forEach(b => b.addEventListener('click', () => {
+            this._expandedIp = b.getAttribute('data-ip');
+            this._pinDraft = '';
+            this.renderConsoles(this._hosts);
+            this.el.querySelector('.rp-console[data-ip="' + this._expandedIp + '"] .rp-pin')?.focus();
         }));
+        box.querySelectorAll('.rp-cancel-btn').forEach(b => b.addEventListener('click', () => {
+            this._expandedIp = null; this._pinDraft = '';
+            this.#pairMsg('', '');
+            this.renderConsoles(this._hosts);
+        }));
+        box.querySelectorAll('.rp-pin').forEach(inp => inp.addEventListener('input', () => {
+            this._pinDraft = inp.value;
+        }));
+        box.querySelectorAll('.rp-pair-btn').forEach(b => b.addEventListener('click', () => {
+            this.pair(b.getAttribute('data-ip'), (this._pinDraft || '').trim());
+        }));
+    }
+
+    async pair(ip, pin) {
+        if (!ip) { this.#pairMsg('No console selected', 'error'); return; }
+        if (!/^\d{8}$/.test(pin)) { this.#pairMsg('Enter the 8-digit PIN from the console', 'error'); return; }
+        this._pairing = true;
+        this.#pairMsg('Registering with console…', 'success');
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ip });
+            const r = await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { pair_pin: pin });
+            if (r && r.status && r.status !== 'pairing') {
+                this.#pairMsg(`Couldn't start: ${r.status}`, 'error');
+            } else {
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(res => setTimeout(res, 1000));
+                    await this.refresh();
+                    const st = this._regist || '';
+                    if (st === 'paired') { this.#pairMsg('Paired ✓', 'success'); this._expandedIp = null; this._pinDraft = ''; break; }
+                    if (st === 'error') { this.#pairMsg(`Pairing failed: ${this._registError || 'unknown'}`, 'error'); break; }
+                    if (st === 'unavailable') { this.#pairMsg('This firmware build has pairing stubbed — flash the latest usb2wifi.', 'error'); break; }
+                }
+            }
+        } catch (e) {
+            this.#pairMsg(`Pair failed: ${e.message}`, 'error');
+        }
+        this._pairing = false;
+        this.renderConsoles(this._hosts);
     }
 
     async refresh() {
@@ -397,13 +432,18 @@ export class WifiOutputCard {
             this._oauthError = r.oauth_error || '';
             this._regist = r.regist || '';
             this._registError = r.regist_error || '';
+            this._haveReg = !!r.have_registration;
+            this._linkedIp = r.ps5_ip || '';
+            this._hosts = r.hosts || [];
             const acctStr = r.have_account
                 ? (r.psn_online_id ? `signed in as ${r.psn_online_id}` : 'signed in ✓')
                 : (r.oauth && r.oauth !== 'idle' && r.oauth !== 'done'
                     ? r.oauth + '…'
                     : 'not signed in');
             set('#rpAccountState', acctStr);
-            this.renderHosts(r.hosts);
+            // Freeze the console list while a link panel is open / pairing so the
+            // PIN input and focus aren't clobbered by polling.
+            if (!this._expandedIp && !this._pairing) this.renderConsoles(this._hosts);
             this.renderAps(r.aps);
             const ssid = this.el.querySelector('#rpSsid');
             if (ssid && !ssid.value && r.wifi_ssid) ssid.value = r.wifi_ssid;
