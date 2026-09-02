@@ -3,6 +3,11 @@ name: Build & Release
 on:
   push:
     branches: [main]
+  # Open PRs against main get a build-only run: the three matrix jobs compile
+  # and stop there. A branch pushed without a PR runs nothing, so work in
+  # progress doesn't burn minutes or storage.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       bump_version:
@@ -305,6 +310,10 @@ jobs:
   # Collect all artifacts and create combined release package
   collect:
     needs: [check-version, build-rpi, build-esp, build-nrf]
+    # Packaging only — PR runs stop after the build jobs. This is where the 30
+    # per-app artifacts are produced, so skipping it keeps PR storage at the
+    # matrix jobs' retention-days: 1.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Download all firmware artifacts
@@ -624,6 +633,10 @@ jobs:
   # src/CMakeLists.txt). That is exactly what shipped: the v2.3.0 assets report
   # 2.2.0 and the v2.4.0 assets report 2.3.0.
   check-version:
+    # Runs on PRs too — the build jobs need its `sha` output. Its only writes
+    # (the version bump and its commit) are already gated on workflow_dispatch,
+    # so on a PR this is read-only: resolve the SHA, read VERSION, decide
+    # should_release.
     runs-on: ubuntu-latest
     permissions:
       contents: write
