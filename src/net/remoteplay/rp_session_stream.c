@@ -194,7 +194,13 @@ static err_t sessreq_recv(void* a, struct tcp_pcb* pcb, struct pbuf* p, err_t e)
     char* he=NULL; for (uint16_t i=0;i+3<s_rx_len;i++) if(!memcmp(s_rx+i,"\r\n\r\n",4)){he=(char*)s_rx+i+4;break;}
     if (!he) return ERR_OK;
     int hlen=(int)(he-(char*)s_rx);
-    if (s_rx[9] != '2') { fail("sessreq rejected (not registered?)"); tcp_close_safe(); return ERR_OK; }
+    if (s_rx[9] != '2') {
+        // capture the HTTP status code + RP-Application-Reason for diagnosis
+        char code[8]={0}; for(int i=0;i<7 && 9+i<hlen && s_rx[9+i]!=' ' && s_rx[9+i]!='\r';i++) code[i]=s_rx[9+i];
+        char reason[24]; if(!header_val((char*)s_rx,hlen,"RP-Application-Reason",reason,sizeof(reason))) reason[0]=0;
+        char m[80]; snprintf(m,sizeof(m),"sessreq HTTP %s%s%s",code, reason[0]?" reason=":"", reason);
+        fail(m); tcp_close_safe(); return ERR_OK;
+    }
     char nb[64];
     if (!header_val((char*)s_rx,hlen,"RP-Nonce",nb,sizeof(nb))) { fail("no RP-Nonce"); tcp_close_safe(); return ERR_OK; }
     size_t nlen=sizeof(s_nonce);
