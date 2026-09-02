@@ -79,6 +79,7 @@ long rp_mbedtls_time(long* t);           // defined in rp_oauth.c
 #define MBEDTLS_BIGNUM_C
 
 // Curves offered in the handshake.
+#define MBEDTLS_ECP_DP_SECP256K1_ENABLED   // Remote Play session ECDH uses secp256k1
 #define MBEDTLS_ECP_DP_SECP256R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP384R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP521R1_ENABLED

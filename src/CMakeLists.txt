@@ -1930,7 +1930,12 @@ if (PICO_BOARD STREQUAL "pico_w" OR
     if(EXISTS ${CHIAKI_RPCRYPT})
         set(RP_REGIST_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist.c
-            ${CHIAKI_RPCRYPT})
+            ${CHIAKI_RPCRYPT}
+            # session-engine crypto: reuse chiaki's gkcrypt.c byte-exact (init with
+            # key_buf_chunks=0 → no worker thread). ecdh is reimplemented (chiaki's
+            # mbedtls path uses an old ECDH struct API pico's mbedtls dropped).
+            ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/gkcrypt.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_chiaki_shim.c)
         message(STATUS "usb2wifi: chiaki vendored — on-device PS5 pairing enabled")
     else()
         set(RP_REGIST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist_stub.c)
