@@ -121,6 +121,18 @@ size_t rp_proto_encode_type_only(uint8_t* out, size_t out_cap, uint32_t type)
     return w.ok ? w.len : 0;
 }
 
+#define F_TKMSG_DISCONNECT_PAYLOAD 10
+#define F_DISCONNECT_REASON        1
+size_t rp_proto_encode_disconnect(uint8_t* out, size_t out_cap, const char* reason)
+{
+    rp_pb_writer w; rp_pb_init(&w, out, out_cap);
+    rp_pb_varint_field(&w, F_TKMSG_TYPE, RP_TKMSG_DISCONNECT);
+    size_t m = rp_pb_submsg_begin(&w, F_TKMSG_DISCONNECT_PAYLOAD);
+    rp_pb_bytes_field(&w, F_DISCONNECT_REASON, (const uint8_t*)reason, strlen(reason));
+    rp_pb_submsg_end(&w, m);
+    return w.ok ? w.len : 0;
+}
+
 // --- reader -------------------------------------------------------------------
 static bool get_varint(const uint8_t** p, const uint8_t* end, uint64_t* out)
 {

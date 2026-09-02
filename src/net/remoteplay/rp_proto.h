@@ -35,6 +35,10 @@ size_t rp_proto_encode_controller_connection(uint8_t* out, size_t out_cap, bool 
 // A bare TakionMessage with only `type` set (e.g. STREAMINFOACK=14). Returns length.
 size_t rp_proto_encode_type_only(uint8_t* out, size_t out_cap, uint32_t type);
 
+// DISCONNECT with a reason string (the console needs the payload to release the
+// Remote Play slot; a type-only disconnect is ignored). Returns length.
+size_t rp_proto_encode_disconnect(uint8_t* out, size_t out_cap, const char* reason);
+
 // BANG decode result.
 typedef struct {
     bool    found;

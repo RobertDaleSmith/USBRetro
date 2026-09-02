@@ -577,11 +577,12 @@ static void start_takion(void)
     printf("[rp_stream] takion INIT sent\n");
 }
 
-// Send a DISCONNECT so the console releases the Remote Play slot.
+// Send a DISCONNECT (with reason payload) so the console releases the Remote Play
+// slot. UDP, so send it a few times to beat packet loss.
 static void stream_send_disconnect(void)
 {
-    uint8_t dis[16]; size_t dl=rp_proto_encode_type_only(dis,sizeof(dis),RP_TKMSG_DISCONNECT);
-    takion_send_data(dis,(uint16_t)dl,1,false);
+    uint8_t dis[48]; size_t dl=rp_proto_encode_disconnect(dis,sizeof(dis),"Client Disconnecting");
+    for (int i=0;i<3;i++) takion_send_data(dis,(uint16_t)dl,1,false);
     printf("[rp_stream] sent DISCONNECT\n");
 }
 
