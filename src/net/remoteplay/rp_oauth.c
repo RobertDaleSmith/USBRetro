@@ -317,9 +317,32 @@ static void start_connect(void)
 static void dns_cb(const char* name, const ip_addr_t* ipaddr, void* arg)
 {
     (void)name; (void)arg;
-    if (!ipaddr) { fail("dns lookup failed"); return; }
+    if (!ipaddr) {
+        const ip_addr_t* srv = dns_getserver(0);
+        char e[80];
+        snprintf(e, sizeof(e), "dns lookup failed (server %s)",
+                 srv ? ipaddr_ntoa(srv) : "none");
+        fail(e);
+        return;
+    }
     s_ip = *ipaddr;
+    printf("[rp_oauth] resolved %s -> %s\n", RP_OAUTH_HOST, ipaddr_ntoa(ipaddr));
     start_connect();
+}
+
+// DHCP usually supplies a DNS server, but some routers/leases don't (or lwip
+// hasn't captured it yet). Fall back to public resolvers so name resolution of
+// the Sony auth host works regardless.
+static void ensure_dns_server(void)
+{
+    const ip_addr_t* d0 = dns_getserver(0);
+    if (d0 && !ip_addr_isany(d0)) return;   // DHCP gave us one
+    ip_addr_t g, c;
+    IP_ADDR4(&g, 8, 8, 8, 8);
+    IP_ADDR4(&c, 1, 1, 1, 1);
+    dns_setserver(0, &g);
+    dns_setserver(1, &c);
+    printf("[rp_oauth] no DHCP DNS; using 8.8.8.8 / 1.1.1.1\n");
 }
 
 // --- public API -------------------------------------------------------------
@@ -349,6 +372,7 @@ bool rp_oauth_start(const char* code)
     s_state = RP_OAUTH_RESOLVING;
 
     cyw43_arch_lwip_begin();
+    ensure_dns_server();
     err_t e = dns_gethostbyname(RP_OAUTH_HOST, &s_ip, dns_cb, NULL);
     cyw43_arch_lwip_end();
     if (e == ERR_OK) {           // cached -> resolve immediately
