@@ -511,13 +511,31 @@ static void takion_recv(void* a, struct udp_pcb* pcb, struct pbuf* p, const ip_a
         uint32_t seq=tk_rd32(pl+0);
         takion_send_data_ack(seq);
         uint8_t* data=pl+9; int dlen=plsz-9; if(dlen<0) dlen=0;
+        uint8_t flags=hdr[0xd];
         // during BANG_WAIT the payload is the BANG protobuf (unencrypted)
         if (s_state==S_BANG_WAIT) {
-            if (s_reasm_len+dlen<=sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
-            uint8_t flags=hdr[0xd];
+            if (s_reasm_len+dlen<=(int)sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
             if (flags&1) { handle_bang(s_reasm,s_reasm_len); s_reasm_len=0; }
         }
-        // streaming: incoming DATA (streaminfo etc) — decrypt+ignore for input-only
+        // streaming: incoming DATA is gkcrypt-encrypted. Decrypt, reassemble, and
+        // if it's STREAMINFO reply STREAMINFOACK so the console fully starts the
+        // stream (otherwise it can sit on a black screen — chiaki does this).
+        else if (s_state==S_STREAM && s_crypt_ready) {
+            uint32_t kp=tk_rd32(hdr+8);
+            if (dlen>0) chiaki_gkcrypt_decrypt(&s_gk_remote, kp, data, dlen);
+            if (s_reasm_len+dlen<=(int)sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
+            if (flags&1) {
+                int mt=rp_proto_parse_message(s_reasm,s_reasm_len,NULL);
+                if (mt==RP_TKMSG_STREAMINFO) {
+                    uint8_t ack[16]; size_t al=rp_proto_encode_type_only(ack,sizeof(ack),RP_TKMSG_STREAMINFOACK);
+                    takion_send_data(ack,(uint16_t)al,1,false);
+                    printf("[rp_stream] STREAMINFOACK sent\n");
+                } else if (mt==RP_TKMSG_DISCONNECT) {
+                    fail("console disconnected");
+                }
+                s_reasm_len=0;
+            }
+        }
     }
 }
 
