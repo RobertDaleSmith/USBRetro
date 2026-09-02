@@ -45,7 +45,7 @@
 #define RESP_MAX        1500
 
 static rp_regist_state_t s_state = RP_REGIST_IDLE;
-static char              s_err[96];
+static char              s_err[200];
 
 static ChiakiRPCrypt     s_crypt;    // kept between request build and response decrypt
 static uint8_t           s_payload[0x400];
@@ -185,6 +185,28 @@ static bool build_request(void)
     return true;
 }
 
+// Collect the "Key" names (text before ':') from a header blob, comma-joined.
+// Diagnostic: shows what the console actually returned when a field is missing.
+static void list_keys(const char* body, int len, char* out, int outmax)
+{
+    int o = 0; out[0] = '\0';
+    int i = 0;
+    while (i < len && o < outmax - 2) {
+        int ks = i;
+        while (i < len && body[i] != ':' && body[i] != '\r' && body[i] != '\n') i++;
+        if (i < len && body[i] == ':') {
+            int klen = i - ks;
+            if (klen > 0 && klen < 40) {
+                if (o && o < outmax - 1) out[o++] = ',';
+                for (int j = 0; j < klen && o < outmax - 1; j++) out[o++] = body[ks + j];
+            }
+        }
+        while (i < len && body[i] != '\n') i++;
+        if (i < len) i++;
+    }
+    out[o] = '\0';
+}
+
 // --- response parse -----------------------------------------------------------
 static void parse_response(void)
 {
@@ -220,8 +242,14 @@ static void parse_response(void)
     // RegistKey is variable-length (up to 16 bytes), zero-padded — like chiaki's
     // parse_hex. Don't require a full 16 bytes (an 8-char key decodes to 4).
     memset(regist_key, 0, sizeof(regist_key));
-    if (!header_value((char*)body, content, "PS5-RegistKey", regist_hex, sizeof(regist_hex))) {
-        fail("no RegistKey in response"); return;
+    // Accept the documented PS5 name, plus a couple of fallbacks; if none match,
+    // report every key the console sent so we can see the real name.
+    if (!header_value((char*)body, content, "PS5-RegistKey", regist_hex, sizeof(regist_hex)) &&
+        !header_value((char*)body, content, "PS4-RegistKey", regist_hex, sizeof(regist_hex)) &&
+        !header_value((char*)body, content, "RP-RegistKey", regist_hex, sizeof(regist_hex))) {
+        char keys[150]; list_keys((char*)body, content, keys, sizeof(keys));
+        char m[200]; snprintf(m, sizeof(m), "no RegistKey; got keys=[%s]", keys);
+        fail(m); return;
     }
     if (hex_decode(regist_hex, (int)strlen(regist_hex), regist_key, RP_REGIST_LEN) < 0) {
         char m[56]; snprintf(m, sizeof(m), "bad RegistKey (len %u)", (unsigned)strlen(regist_hex));
