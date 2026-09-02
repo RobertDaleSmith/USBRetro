@@ -189,7 +189,8 @@ static err_t sessreq_connected(void* a, struct tcp_pcb* pcb, err_t e)
 }
 
 static void tcp_err_cb(void* a, err_t e){ (void)a; s_tcp=NULL;
-    if (s_state!=S_DONE && s_state!=S_ERROR){ char m[40]; snprintf(m,sizeof(m),"tcp err %d",(int)e); fail(m);} }
+    if (s_state!=S_DONE && s_state!=S_ERROR){ char m[56];
+        snprintf(m,sizeof(m),"tcp reset (err %d) in %s — is the PS5 awake?",(int)e,rp_session_state_str()); fail(m);} }
 
 static void start_sessreq(void)
 {
@@ -527,6 +528,7 @@ void rp_session_start(void)
     rand_bytes(s_handshake_key,sizeof(s_handshake_key));
     static const uint8_t did_pre[10]={0x00,0x18,0x00,0x00,0x00,0x07,0x00,0x40,0x00,0x80};
     memcpy(s_did,did_pre,10); rand_bytes(s_did+10,16); memset(s_did+26,0,6);
+    if (s_ecdh.ready) rp_ecdh_fini(&s_ecdh);
     if (!rp_ecdh_init(&s_ecdh)){ fail("ecdh init"); return; }
     s_crypt_ready=false; s_fb_seq=0; s_key_pos=0; s_session_id_len=0;
     printf("[rp_stream] starting session to %s\n",c->ps5_ip);
@@ -561,7 +563,13 @@ void rp_session_task(void)
         case S_STREAM:
             if (t-s_last_fb_ms>=16) { s_last_fb_ms=t; send_feedback_state(); }
             break;
-        case S_ERROR: case S_DONE: break;
+        case S_ERROR: {
+            // keep retrying the whole session (e.g. while the console wakes up)
+            static uint32_t eretry=0;
+            if (t>eretry) { eretry=t+5000; tcp_close_safe(); rp_session_start(); }
+            break;
+        }
+        case S_DONE: break;
         default: break;
     }
     // timeouts
