@@ -40,22 +40,48 @@ export class WifiOutputCard {
 
                     <div class="button-row">
                         <button id="rpWifiScanBtn" title="Scan for networks">Scan for networks</button>
+                        <button id="rpWifiOtherBtn" class="secondary" title="Join a hidden or unlisted network">Other network…</button>
                     </div>
                     <div id="rpAps" class="rp-ap-list"></div>
-                    <div class="form-row"><label for="rpSsid">SSID</label><input type="text" id="rpSsid" maxlength="32"></div>
-                    <div class="form-row"><label for="rpPass">Password</label><input type="password" id="rpPass" maxlength="63"></div>
-                    <div class="button-row">
-                        <button id="rpWifiConnectBtn">Connect</button>
-                        <span id="rpWifiMsg" class="hint"></span>
+
+                    <!-- Connect dialog: opened by clicking an AP (SSID prefilled) or "Other network…" -->
+                    <div id="rpWifiModal" class="rp-modal" hidden>
+                        <div class="rp-modal-box">
+                            <h3 id="rpWifiModalTitle" style="margin-top:0">Connect to WiFi</h3>
+                            <div class="form-row"><label for="rpSsid">Network</label><input type="text" id="rpSsid" maxlength="32" placeholder="Network name"></div>
+                            <div class="form-row"><label for="rpPass">Password</label><input type="password" id="rpPass" maxlength="63" placeholder="Leave blank if open"></div>
+                            <div id="rpWifiMsg" class="hint"></div>
+                            <div class="button-row" style="justify-content:flex-end">
+                                <button id="rpWifiCancelBtn" class="secondary">Cancel</button>
+                                <button id="rpWifiConnectBtn">Connect</button>
+                            </div>
+                        </div>
                     </div>
 
                     <style>
-                        .rp-ap-list { display:flex; flex-direction:column; gap:2px; margin:6px 0; }
-                        .rp-ap-row { display:flex; justify-content:space-between; align-items:center;
-                            padding:6px 10px; border:1px solid var(--border,#333); border-radius:6px;
+                        .rp-ap-list { display:flex; flex-direction:column; gap:4px; margin:8px 0; }
+                        .rp-ap-row { display:flex; justify-content:space-between; align-items:center; gap:12px;
+                            padding:9px 12px; border:1px solid var(--border,#333); border-radius:8px;
                             cursor:pointer; }
                         .rp-ap-row:hover { background:var(--hover,rgba(128,128,128,0.12)); }
-                        .rp-ap-row.selected { border-color:var(--accent,#4a9eff); background:rgba(74,158,255,0.12); }
+                        .rp-ap-row.connected { border-color:#3cbe6e; background:rgba(60,190,110,0.08); }
+                        .rp-ap-name { display:flex; align-items:center; gap:7px; min-width:0; }
+                        .rp-ap-name .txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+                        .rp-ap-right { display:flex; align-items:center; gap:10px; }
+                        .rp-ap-check { color:#3cbe6e; }
+                        /* signal strength: 4 rising bars, filled by level */
+                        .rp-sig { display:inline-flex; align-items:flex-end; gap:2px; height:14px; }
+                        .rp-sig i { width:3px; border-radius:1px; background:currentColor; opacity:0.22; }
+                        .rp-sig i:nth-child(1){height:5px} .rp-sig i:nth-child(2){height:8px}
+                        .rp-sig i:nth-child(3){height:11px} .rp-sig i:nth-child(4){height:14px}
+                        .rp-sig.l1 i:nth-child(-n+1), .rp-sig.l2 i:nth-child(-n+2),
+                        .rp-sig.l3 i:nth-child(-n+3), .rp-sig.l4 i:nth-child(-n+4) { opacity:1; }
+                        .rp-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex;
+                            align-items:center; justify-content:center; z-index:1000; }
+                        .rp-modal[hidden] { display:none; }
+                        .rp-modal-box { background:var(--card-bg,#1e1e1e); border:1px solid var(--border,#333);
+                            border-radius:12px; padding:20px; width:min(90vw,380px);
+                            box-shadow:0 10px 40px rgba(0,0,0,0.4); }
                         .rp-ap-row .rp-ap-sig { opacity:0.7; font-variant-numeric:tabular-nums; }
                     </style>
                 </div>
@@ -136,6 +162,9 @@ export class WifiOutputCard {
         this.el.querySelector('#rpScanBtn').addEventListener('click', () => this.scan());
         this.el.querySelector('#rpWifiScanBtn').addEventListener('click', () => this.wifiScan());
         this.el.querySelector('#rpWifiConnectBtn').addEventListener('click', () => this.connectWifi());
+        this.el.querySelector('#rpWifiOtherBtn').addEventListener('click', () => this.openWifiModal('', true, 'Other network'));
+        this.el.querySelector('#rpWifiCancelBtn').addEventListener('click', () => this.closeWifiModal());
+        this.el.querySelector('#rpWifiModal').addEventListener('click', (e) => { if (e.target.id === 'rpWifiModal') this.closeWifiModal(); });
         this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
         this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
         this.el.querySelector('#rpUnlinkBtn').addEventListener('click', () => this.unlink());
@@ -239,23 +268,41 @@ export class WifiOutputCard {
         if (e) { e.textContent = text; e.className = 'hint ' + (kind === 'error' ? 'error' : 'success'); }
     }
 
+    openWifiModal(ssid, editable, title) {
+        const m = this.el.querySelector('#rpWifiModal');
+        const ssidInput = this.el.querySelector('#rpSsid');
+        this.el.querySelector('#rpWifiModalTitle').textContent = title || (ssid ? `Connect to “${ssid}”` : 'Connect to WiFi');
+        ssidInput.value = ssid || '';
+        ssidInput.readOnly = !editable;
+        this.el.querySelector('#rpPass').value = '';
+        this.#wifiMsg('', '');
+        m.hidden = false;
+        (editable ? ssidInput : this.el.querySelector('#rpPass')).focus();
+    }
+
+    closeWifiModal() {
+        const m = this.el.querySelector('#rpWifiModal');
+        if (m) m.hidden = true;
+    }
+
     async connectWifi() {
         const ssid = this.el.querySelector('#rpSsid').value.trim();
         const pass = this.el.querySelector('#rpPass').value;
-        if (!ssid) { this.#wifiMsg('Pick a network or type an SSID', 'error'); return; }
+        if (!ssid) { this.#wifiMsg('Enter a network name', 'error'); return; }
         const btn = this.el.querySelector('#rpWifiConnectBtn');
         btn.disabled = true; btn.textContent = 'Connecting…';
         try {
             await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { wifi_ssid: ssid, wifi_pass: pass });
-            this.#wifiMsg(`Connecting to "${ssid}"…`, 'success');
-            // Poll the WiFi state until it settles.
+            this.#wifiMsg(`Connecting to “${ssid}”…`, 'success');
+            let done = false;
             for (let i = 0; i < 12; i++) {
                 await new Promise(r => setTimeout(r, 1000));
                 await this.refresh();
-                const st = this.el.querySelector('#rpWifiState')?.textContent || '';
-                if (st.startsWith('connected')) { this.#wifiMsg('Connected ✓', 'success'); break; }
-                if (st.startsWith('failed'))    { this.#wifiMsg('Connection failed — check password', 'error'); break; }
+                const st = this._wifiState || '';
+                if (st.startsWith('connected')) { done = true; this.closeWifiModal(); break; }
+                if (st.startsWith('failed'))    { this.#wifiMsg('Connection failed — check the password', 'error'); break; }
             }
+            if (!done && !(this._wifiState || '').startsWith('failed')) this.#wifiMsg('Still connecting… you can close this.', 'success');
         } catch (e) {
             this.#wifiMsg(`Connect failed: ${e.message}`, 'error');
         }
@@ -282,32 +329,35 @@ export class WifiOutputCard {
         btn.disabled = false; btn.textContent = 'Scan';
     }
 
-    #signalBars(rssi) {
-        // rssi ~ -30 (strong) .. -90 (weak)
-        const n = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
-        return '▂▄▆█'.slice(0, n) + '·'.repeat(4 - n);
+    // RSSI (~ -30 strong .. -90 weak) -> 1..4 bars, rendered as 4 rising bars.
+    #sigBars(rssi) {
+        const l = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -78 ? 2 : 1;
+        return `<span class="rp-sig l${l}" title="${rssi} dBm"><i></i><i></i><i></i><i></i></span>`;
     }
 
     renderAps(aps) {
         const box = this.el.querySelector('#rpAps');
         if (!box) return;
         if (!aps || !aps.length) { box.innerHTML = ''; return; }
-        const cur = this.el.querySelector('#rpSsid')?.value || '';
+        const connected = this._wifiState && this._wifiState.startsWith('connected') ? (this._wifiSsid || '') : '';
         box.innerHTML = aps.map(a => {
-            const s = (a.ssid || '').replace(/"/g, '&quot;');
-            const sel = a.ssid === cur ? ' selected' : '';
-            return `<div class="rp-ap-row${sel}" data-ssid="${s}">
-                <span class="rp-ap-name">${a.secure ? '🔒 ' : ''}${a.ssid || '(hidden)'}</span>
-                <span class="rp-ap-sig">${this.#signalBars(a.rssi)}</span>
+            const s = this.#esc(a.ssid || '');
+            const isConn = a.ssid && a.ssid === connected;
+            return `<div class="rp-ap-row${isConn ? ' connected' : ''}" data-ssid="${s}" data-secure="${a.secure ? 1 : 0}">
+                <span class="rp-ap-name">
+                    <span>${a.secure ? '🔒' : '🔓'}</span>
+                    <span class="txt">${s || '(hidden)'}</span>
+                </span>
+                <span class="rp-ap-right">
+                    ${isConn ? '<span class="rp-ap-check">✓ Connected</span>' : ''}
+                    ${this.#sigBars(a.rssi)}
+                </span>
             </div>`;
         }).join('');
         box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', () => {
             const ssid = row.getAttribute('data-ssid');
-            const inp = this.el.querySelector('#rpSsid');
-            if (inp) inp.value = ssid;
-            box.querySelectorAll('.rp-ap-row').forEach(r => r.classList.remove('selected'));
-            row.classList.add('selected');
-            this.el.querySelector('#rpPass')?.focus();
+            if (ssid === connected) return;   // already on this one
+            this.openWifiModal(ssid, false, `Connect to “${ssid}”`);
         }));
     }
 
@@ -426,6 +476,8 @@ export class WifiOutputCard {
             this.available = true;
             if (!this.el.querySelector('#rpSaveBtn')) this.render();
             const set = (id, v) => { const e = this.el.querySelector(id); if (e) e.textContent = v; };
+            this._wifiState = r.wifi_state || '';
+            this._wifiSsid = r.wifi_ssid || '';
             set('#rpWifiState', `${r.wifi_state || '—'}${r.wifi_ssid ? ' (' + r.wifi_ssid + ')' : ''}`);
             set('#rpIp', r.ip || '—');
             const sessionLabel = {
