@@ -39,6 +39,9 @@ void rp_session_start(void)
 
 void rp_session_stop(void) { s_state = RP_SESS_IDLE; }
 
+void rp_session_set_enabled(bool enabled) { (void)enabled; }
+bool rp_session_is_enabled(void) { return false; }
+
 void rp_session_task(void)
 {
     // Auto-start once wifi + registration are ready.

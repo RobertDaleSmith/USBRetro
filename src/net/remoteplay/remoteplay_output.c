@@ -159,6 +159,15 @@ static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp
         snprintf(resp, resp_size, "{\"status\":\"scanning\"}");
         return true;
     }
+    // Action: enable/disable streaming (opt-in — connecting puts the PS5 into
+    // Remote Play and blanks its local TV, so it must be explicitly started).
+    if (strstr(json, "\"stream\"")) {
+        bool en = strstr(json, "\"stream\":1") || strstr(json, "\"stream\": 1") ||
+                  strstr(json, "\"stream\":true");
+        rp_session_set_enabled(en);
+        snprintf(resp, resp_size, "{\"status\":\"%s\"}", en ? "streaming-enabled" : "streaming-stopped");
+        return true;
+    }
     // Action: unlink / factory-reset the Remote Play provisioning.
     if (strstr(json, "\"rp_reset\"")) {
         rp_config_clear();

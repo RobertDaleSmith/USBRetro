@@ -73,6 +73,10 @@ typedef enum {
 static rp_session_state_t s_pub = RP_SESS_IDLE;
 static sstate_t   s_state = S_IDLE;
 static char       s_err[80];
+// Streaming is OPT-IN: the session does NOT auto-connect. Enable via the web
+// config / {stream:1}. Auto-connecting would put the PS5 into Remote Play mode
+// (blanking its local TV) unasked, which is surprising and disruptive.
+static bool       s_stream_enabled = false;
 
 // identity / keys
 static ChiakiRPCrypt s_rpcrypt;
@@ -575,11 +579,29 @@ void rp_session_start(void)
 
 void rp_session_stop(void)
 {
+    // If a session is up, send a Takion DISCONNECT so the console cleanly exits
+    // Remote Play and restores its local TV output.
+    if (s_state==S_STREAM && s_udp && s_crypt_ready) {
+        uint8_t dis[16]; size_t dl=rp_proto_encode_type_only(dis,sizeof(dis),RP_TKMSG_DISCONNECT);
+        takion_send_data(dis,(uint16_t)dl,1,false);
+        printf("[rp_stream] sent DISCONNECT\n");
+    }
     tcp_close_safe();
     if (s_udp){ udp_recv(s_udp,NULL,NULL); udp_remove(s_udp); s_udp=NULL; }
     if (s_ecdh.ready) rp_ecdh_fini(&s_ecdh);
+    s_crypt_ready=false;
     s_state=S_IDLE; s_pub=RP_SESS_IDLE;
 }
+
+// Enable/disable streaming. Disabling tears down any active session (with a clean
+// DISCONNECT) so the console's TV comes back.
+void rp_session_set_enabled(bool en)
+{
+    s_stream_enabled = en;
+    if (!en) rp_session_stop();
+    printf("[rp_stream] streaming %s\n", en?"ENABLED":"disabled");
+}
+bool rp_session_is_enabled(void){ return s_stream_enabled; }
 
 void rp_session_task(void)
 {
@@ -588,7 +610,7 @@ void rp_session_task(void)
         case S_IDLE: {
             rp_config_t* c=rp_config_get();
             static uint32_t retry=0;
-            if (c->have_registration && wifi_station_is_connected() && t>retry) {
+            if (s_stream_enabled && c->have_registration && wifi_station_is_connected() && t>retry) {
                 retry=t+3000; rp_session_start();
             }
             break;
@@ -602,9 +624,10 @@ void rp_session_task(void)
             if (t-s_last_fb_ms>=16) { s_last_fb_ms=t; send_feedback_state(); }
             break;
         case S_ERROR: {
-            // keep retrying the whole session (e.g. while the console wakes up)
+            // keep retrying the whole session (e.g. while the console wakes up),
+            // but only while streaming is enabled.
             static uint32_t eretry=0;
-            if (t>eretry) { eretry=t+5000; tcp_close_safe(); rp_session_start(); }
+            if (s_stream_enabled && t>eretry) { eretry=t+5000; tcp_close_safe(); rp_session_start(); }
             break;
         }
         case S_DONE: break;

@@ -29,6 +29,10 @@ void rp_session_init(void);
 void rp_session_start(void);
 void rp_session_stop(void);
 void rp_session_task(void);
+// Streaming is opt-in (auto-connect off by default, so the console isn't put into
+// Remote Play unasked). Enable to connect; disable to tear down cleanly.
+void rp_session_set_enabled(bool enabled);
+bool rp_session_is_enabled(void);
 rp_session_state_t rp_session_get_state(void);
 const char* rp_session_state_str(void);
 bool rp_session_is_ready(void);
