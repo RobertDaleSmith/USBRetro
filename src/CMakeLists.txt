@@ -1935,12 +1935,21 @@ if (PICO_BOARD STREQUAL "pico_w" OR
             # key_buf_chunks=0 → no worker thread). ecdh is reimplemented (chiaki's
             # mbedtls path uses an old ECDH struct API pico's mbedtls dropped).
             ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/gkcrypt.c
+            # pure serialization reused byte-exact (controller state, launch spec, base64)
+            ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/feedback.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/launchspec.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/base64.c
             ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_chiaki_shim.c
-            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_crypto.c)
-        message(STATUS "usb2wifi: chiaki vendored — on-device PS5 pairing enabled")
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_crypto.c
+            # the poll-mode streaming session engine + protobuf codec
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_proto.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stream.c)
+        message(STATUS "usb2wifi: chiaki vendored — PS5 pairing + streaming engine enabled")
     else()
-        set(RP_REGIST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist_stub.c)
-        message(STATUS "usb2wifi: chiaki not vendored — PS5 pairing stubbed")
+        set(RP_REGIST_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist_stub.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c)
+        message(STATUS "usb2wifi: chiaki not vendored — PS5 pairing + streaming stubbed")
     endif()
 
     add_executable(joypad_usb2wifi)
@@ -1961,13 +1970,17 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/wifi_station.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_discovery.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_oauth.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/remoteplay_output.c
+        # rp_session engine (stream when chiaki vendored, else stub) is in RP_REGIST_SOURCES
         ${RP_REGIST_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi/app.c
     )
     if(EXISTS ${CHIAKI_RPCRYPT})
         target_include_directories(joypad_usb2wifi PUBLIC
+            # compat shims FIRST: satisfy chiaki's <sys/socket.h>/<arpa/inet.h>/
+            # <netdb.h> includes with minimal bare-metal stubs (types + byte order;
+            # never linked — we reimplement the socket paths on raw lwip)
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/chiaki_compat
             ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/include)
         target_compile_definitions(joypad_usb2wifi PRIVATE
             CHIAKI_LIB_ENABLE_MBEDTLS=1 RP_HAVE_REGIST=1)

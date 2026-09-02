@@ -56,3 +56,16 @@ void *chiaki_aligned_alloc(size_t alignment, size_t size)
     return malloc(size);   // only used by gkcrypt's key_buf path, which we don't take
 }
 void chiaki_aligned_free(void *ptr) { free(ptr); }
+
+// --- inet_pton (IPv4 only) — referenced by reused chiaki files ----------------
+struct in_addr;
+int inet_pton(int af, const char *src, void *dst)
+{
+    (void)af;
+    unsigned v[4]; int n = 0;
+    if (sscanf(src, "%u.%u.%u.%u", &v[0], &v[1], &v[2], &v[3]) != 4) return 0;
+    for (n = 0; n < 4; n++) if (v[n] > 255) return 0;
+    unsigned char *o = (unsigned char*)dst;
+    o[0] = v[0]; o[1] = v[1]; o[2] = v[2]; o[3] = v[3];
+    return 1;
+}
