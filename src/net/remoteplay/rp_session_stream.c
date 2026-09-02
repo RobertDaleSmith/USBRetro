@@ -771,10 +771,11 @@ void rp_session_task(void)
             if (t-s_last_hb_ms>=1000)  { s_last_hb_ms=t;   send_heartbeat(); }
             break;
         case S_ERROR: {
-            // keep retrying the whole session (e.g. while the console wakes up),
-            // but only while streaming is enabled.
+            // Retry while streaming is enabled, but back off ~15s: a failed attempt
+            // that got a nonce leaves a session slot on the console, so hammering
+            // keeps it busy. 15s lets the console release before we try again.
             static uint32_t eretry=0;
-            if (s_stream_enabled && t>eretry) { eretry=t+5000; tcp_close_safe(); rp_session_start(); }
+            if (s_stream_enabled && t>eretry) { eretry=t+15000; tcp_close_safe(); rp_session_start(); }
             break;
         }
         case S_DONE: break;
