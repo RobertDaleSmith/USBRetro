@@ -143,6 +143,18 @@ export class WifiOutputCard {
                         .rp-empty { opacity:0.6; padding:10px 2px; }
                     </style>
 
+                    <h3>Remote Play</h3>
+                    <p class="hint">
+                        Start a live session to the selected, paired console. Your controller
+                        (plugged into the adapter) drives the PS5. <b>Heads-up:</b> while Remote Play
+                        is active the console hands its video to the adapter, so your TV may go
+                        blank — that's normal. Stop to hand it back.
+                    </p>
+                    <div class="button-row">
+                        <button id="rpStreamBtn">Start Remote Play</button>
+                        <span id="rpStreamMsg" class="hint"></span>
+                    </div>
+
                     <details class="rp-advanced">
                         <summary>Advanced</summary>
                         <p class="hint">Manually target a console by IP (if discovery can't find it), or
@@ -168,6 +180,26 @@ export class WifiOutputCard {
         this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
         this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
         this.el.querySelector('#rpUnlinkBtn').addEventListener('click', () => this.unlink());
+        this.el.querySelector('#rpStreamBtn').addEventListener('click', () => this.toggleStream());
+    }
+
+    async toggleStream() {
+        const on = !this._streaming;
+        const btn = this.el.querySelector('#rpStreamBtn');
+        btn.disabled = true;
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { stream: on ? 1 : 0 });
+            this.#streamMsg(on ? 'Starting… (TV may blank — that\'s Remote Play)' : 'Stopping…', 'success');
+            setTimeout(() => this.refresh(), 400);
+        } catch (e) {
+            this.#streamMsg(`Failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false;
+    }
+
+    #streamMsg(text, kind) {
+        const e = this.el.querySelector('#rpStreamMsg');
+        if (e) { e.textContent = text; e.className = 'hint ' + (kind === 'error' ? 'error' : 'success'); }
     }
 
     #pairMsg(text, kind) {
@@ -494,6 +526,13 @@ export class WifiOutputCard {
             this._oauthError = r.oauth_error || '';
             this._regist = r.regist || '';
             this._registError = r.regist_error || '';
+            this._streaming = !!r.streaming;
+            const sbtn = this.el.querySelector('#rpStreamBtn');
+            if (sbtn) {
+                sbtn.textContent = this._streaming ? 'Stop Remote Play' : 'Start Remote Play';
+                sbtn.classList.toggle('secondary', this._streaming);
+                sbtn.disabled = !r.have_registration;
+            }
             this._haveReg = !!r.have_registration;
             this._linkedIp = r.ps5_ip || '';
             this._hosts = r.hosts || [];
