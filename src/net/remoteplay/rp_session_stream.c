@@ -105,6 +105,7 @@ static uint32_t s_prev_buttons;
 static uint8_t  s_prev_l2, s_prev_r2;
 static uint16_t s_hist_seq;
 static uint16_t s_fb_seq;
+static int      s_consec_fail;   // consecutive connect failures (cap retries)
 static uint64_t s_key_pos;
 static uint32_t s_last_fb_ms, s_last_hb_ms, s_last_cong_ms;
 static uint16_t s_recv_count;   // takion packets received since last congestion report
@@ -501,7 +502,7 @@ static void handle_bang(const uint8_t* proto, size_t len)
         static uint8_t cc[32]; size_t cl=rp_proto_encode_controller_connection(cc,sizeof(cc),true);
         takion_send_data(cc,(uint16_t)cl,1,false);
         memset(&s_cstate, 0, sizeof(s_cstate));
-        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0;
+        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0;
         if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
         printf("[rp_stream] STREAMING\n");
@@ -771,11 +772,18 @@ void rp_session_task(void)
             if (t-s_last_hb_ms>=1000)  { s_last_hb_ms=t;   send_heartbeat(); }
             break;
         case S_ERROR: {
-            // Retry while streaming is enabled, but back off ~15s: a failed attempt
-            // that got a nonce leaves a session slot on the console, so hammering
-            // keeps it busy. 15s lets the console release before we try again.
+            // Retry while streaming is enabled, backing off ~15s. But cap consecutive
+            // failures: a failed ctrl leaves a slot on the console, so endless retries
+            // keep it busy forever. After 3 tries, stop and let it clear (~2 min) —
+            // the user re-presses Start. s_consec_fail resets on a successful stream.
             static uint32_t eretry=0;
-            if (s_stream_enabled && t>eretry) { eretry=t+15000; tcp_close_safe(); rp_session_start(); }
+            if (s_stream_enabled && t>eretry) {
+                eretry=t+15000;
+                if (++s_consec_fail>=3) {
+                    s_stream_enabled=false; s_consec_fail=0;
+                    snprintf(s_err,sizeof(s_err),"couldn't connect (console busy?) — wait ~2 min, then Start again");
+                } else { tcp_close_safe(); rp_session_start(); }
+            }
             break;
         }
         case S_DONE: break;
