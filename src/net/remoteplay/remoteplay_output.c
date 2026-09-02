@@ -154,6 +154,12 @@ static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp
         snprintf(resp, resp_size, "{\"status\":\"scanning\"}");
         return true;
     }
+    // Action: unlink / factory-reset the Remote Play provisioning.
+    if (strstr(json, "\"rp_reset\"")) {
+        rp_config_clear();
+        snprintf(resp, resp_size, "{\"status\":\"cleared\"}");
+        return true;
+    }
     // Action: PSN sign-in. Browser hands us the authorization code from Sony's
     // post-login redirect; the device does the HTTPS token exchange on-chip and
     // derives the 8-byte account id (browser can't — CORS + Sony anti-bot edge).

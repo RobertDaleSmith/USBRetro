@@ -73,6 +73,7 @@ export class WifiOutputCard {
                     </p>
                     <div class="button-row">
                         <button id="rpSignInBtn" title="Open Sony's login in a new tab">Sign in to PlayStation</button>
+                        <button id="rpUnlinkBtn" class="secondary" title="Clear saved PSN account + keys">Unlink</button>
                     </div>
                     <div class="form-row">
                         <label for="rpRedirect">Redirect URL</label>
@@ -109,6 +110,18 @@ export class WifiOutputCard {
         this.el.querySelector('#rpWifiConnectBtn').addEventListener('click', () => this.connectWifi());
         this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
         this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
+        this.el.querySelector('#rpUnlinkBtn').addEventListener('click', () => this.unlink());
+    }
+
+    async unlink() {
+        if (!confirm('Clear the saved PSN account and pairing keys from this adapter?')) return;
+        try {
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { rp_reset: 1 });
+            this.#oauthMsg('Unlinked — sign in again to relink.', 'success');
+            setTimeout(() => this.refresh(), 300);
+        } catch (e) {
+            this.#oauthMsg(`Unlink failed: ${e.message}`, 'error');
+        }
     }
 
     // Sony OAuth authorize URL — mirrors mouthpad-utility RPOAuth.swift. The full

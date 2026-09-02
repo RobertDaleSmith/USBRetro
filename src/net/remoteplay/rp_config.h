@@ -35,7 +35,8 @@ typedef struct {
 
 void rp_config_init(void);                 // load from flash (or defaults)
 rp_config_t* rp_config_get(void);
-void rp_config_save(void);                 // persist to flash (TODO)
+void rp_config_save(void);                 // persist to flash
+void rp_config_clear(void);                // wipe config + erase flash store
 
 // Provisioning setters (from web config / CDC). Return true on valid input.
 bool rp_config_set_wifi(const char* ssid, const char* pass);
