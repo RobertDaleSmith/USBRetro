@@ -99,6 +99,11 @@ static uint8_t  s_cookie[TK_COOKIE_SIZE];
 
 // feedback
 static ChiakiControllerState s_cstate;
+static ChiakiFeedbackHistoryBuffer s_hist;
+static bool     s_hist_init;
+static uint32_t s_prev_buttons;
+static uint8_t  s_prev_l2, s_prev_r2;
+static uint16_t s_hist_seq;
 static uint16_t s_fb_seq;
 static uint64_t s_key_pos;
 static uint32_t s_last_fb_ms, s_last_hb_ms, s_last_cong_ms;
@@ -496,7 +501,8 @@ static void handle_bang(const uint8_t* proto, size_t len)
         static uint8_t cc[32]; size_t cl=rp_proto_encode_controller_connection(cc,sizeof(cc),true);
         takion_send_data(cc,(uint16_t)cl,1,false);
         memset(&s_cstate, 0, sizeof(s_cstate));
-        s_recv_count=0;
+        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0;
+        if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
         printf("[rp_stream] STREAMING\n");
     } else if (type==RP_TKMSG_DISCONNECT) {
@@ -638,6 +644,66 @@ static void send_feedback_state(void)
     tk_send(pkt,sizeof(pkt));
 }
 
+// Buttons (incl. D-pad) are NOT in the state packet — they ride a FEEDBACK_HISTORY
+// packet (type 1) as edge events. Send the formatted history buffer, encrypted +
+// GMAC'd like the state packet.
+static void send_feedback_history(void)
+{
+    uint8_t body[0x2f0]; size_t bsz=sizeof(body);
+    if (chiaki_feedback_history_buffer_format(&s_hist, body, &bsz)!=CHIAKI_ERR_SUCCESS || bsz==0) return;
+    static uint8_t pkt[0x300];
+    if (0xc+bsz>sizeof(pkt)) return;
+    memset(pkt,0,0xc);
+    pkt[0]=TK_TYPE_FBHISTORY; tk_wr16(pkt+1,s_hist_seq++); pkt[3]=0;
+    memcpy(pkt+0xc, body, bsz);
+    uint16_t total=(uint16_t)(0xc+bsz);
+    uint64_t kp=s_key_pos;
+    chiaki_gkcrypt_encrypt(&s_gk_local, kp+0x10, pkt+0xc, bsz);
+    tk_wr32(pkt+4,(uint32_t)kp);
+    chiaki_gkcrypt_gmac(&s_gk_local, kp, pkt, total, pkt+8);
+    s_key_pos += total;
+    tk_send(pkt,total);
+}
+
+// Detect button/trigger changes vs last sent, push edge events, send history.
+static const uint64_t RP_CBTN[16] = {
+    CHIAKI_CONTROLLER_BUTTON_CROSS, CHIAKI_CONTROLLER_BUTTON_MOON,
+    CHIAKI_CONTROLLER_BUTTON_BOX, CHIAKI_CONTROLLER_BUTTON_PYRAMID,
+    CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT, CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT,
+    CHIAKI_CONTROLLER_BUTTON_DPAD_UP, CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN,
+    CHIAKI_CONTROLLER_BUTTON_L1, CHIAKI_CONTROLLER_BUTTON_R1,
+    CHIAKI_CONTROLLER_BUTTON_L3, CHIAKI_CONTROLLER_BUTTON_R3,
+    CHIAKI_CONTROLLER_BUTTON_OPTIONS, CHIAKI_CONTROLLER_BUTTON_SHARE,
+    CHIAKI_CONTROLLER_BUTTON_TOUCHPAD, CHIAKI_CONTROLLER_BUTTON_PS,
+};
+static void feedback_history_update(void)
+{
+    uint32_t b=s_cstate.buttons;
+    uint32_t changed=b^s_prev_buttons;
+    bool any=false;
+    for (int i=0;i<16;i++) {
+        if (changed & (uint32_t)RP_CBTN[i]) {
+            ChiakiFeedbackHistoryEvent ev;
+            chiaki_feedback_history_event_set_button(&ev, RP_CBTN[i], (b&(uint32_t)RP_CBTN[i])?0xff:0);
+            chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
+        }
+    }
+    if (s_cstate.l2_state!=s_prev_l2) {
+        ChiakiFeedbackHistoryEvent ev;
+        chiaki_feedback_history_event_set_button(&ev, CHIAKI_CONTROLLER_ANALOG_BUTTON_L2, s_cstate.l2_state);
+        chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
+    }
+    if (s_cstate.r2_state!=s_prev_r2) {
+        ChiakiFeedbackHistoryEvent ev;
+        chiaki_feedback_history_event_set_button(&ev, CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, s_cstate.r2_state);
+        chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
+    }
+    if (any) {
+        s_prev_buttons=b; s_prev_l2=s_cstate.l2_state; s_prev_r2=s_cstate.r2_state;
+        send_feedback_history();
+    }
+}
+
 // ============================ public API ====================================
 void rp_session_init(void){ s_state=S_IDLE; s_pub=RP_SESS_IDLE; s_err[0]=0; }
 
@@ -699,6 +765,7 @@ void rp_session_task(void)
         case S_TAKION_INIT:  if (!s_udp) start_takion(); break;
         case S_BIG:          send_big(); break;   // send_big advances to S_BANG_WAIT
         case S_STREAM:
+            feedback_history_update();  // buttons/D-pad on change (FEEDBACK_HISTORY)
             if (t-s_last_fb_ms>=16)    { s_last_fb_ms=t;   send_feedback_state(); }
             if (t-s_last_cong_ms>=200) { s_last_cong_ms=t; send_congestion(); }
             if (t-s_last_hb_ms>=1000)  { s_last_hb_ms=t;   send_heartbeat(); }
