@@ -301,17 +301,27 @@ export class WifiOutputCard {
         const cur = this.el.querySelector('#rpPs5Ip')?.value || '';
         box.innerHTML = hosts.map(h => {
             const sel = h.ip === cur ? ' selected' : '';
-            return `<div class="rp-ap-row${sel}" data-ip="${h.ip}">
-                <span class="rp-ap-name">${h.ps5 ? '🎮' : '🎮'} ${h.name} <span class="rp-ap-sig">${h.ps5 ? 'PS5' : 'PS4'} · ${h.ready ? 'ready' : 'standby'}</span></span>
+            const nm = (h.name || 'PlayStation').replace(/"/g, '&quot;');
+            return `<div class="rp-ap-row${sel}" data-ip="${h.ip}" data-name="${nm}">
+                <span class="rp-ap-name">🎮 ${h.name} <span class="rp-ap-sig">${h.ps5 ? 'PS5' : 'PS4'} · ${h.ready ? 'ready' : 'standby'}</span></span>
                 <span class="rp-ap-sig">${h.ip}</span>
             </div>`;
         }).join('');
-        box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', () => {
+        box.querySelectorAll('.rp-ap-row').forEach(row => row.addEventListener('click', async () => {
             const ip = row.getAttribute('data-ip');
+            const name = row.getAttribute('data-name') || 'PlayStation';
             const ipInput = this.el.querySelector('#rpPs5Ip');
             if (ipInput) ipInput.value = ip;
             box.querySelectorAll('.rp-ap-row').forEach(r => r.classList.remove('selected'));
             row.classList.add('selected');
+            // Persist the target IP so it's remembered. Note: this only SELECTS the
+            // console — it can't stream yet (the Remote Play engine isn't built).
+            try {
+                await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ip });
+                this.#msg(`Target set: ${name} (${ip}). Pairing + streaming engine not built yet — see Session status.`, 'success');
+            } catch (e) {
+                this.#msg(`Could not save target: ${e.message}`, 'error');
+            }
         }));
     }
 
@@ -324,7 +334,14 @@ export class WifiOutputCard {
             const set = (id, v) => { const e = this.el.querySelector(id); if (e) e.textContent = v; };
             set('#rpWifiState', `${r.wifi_state || '—'}${r.wifi_ssid ? ' (' + r.wifi_ssid + ')' : ''}`);
             set('#rpIp', r.ip || '—');
-            set('#rpSession', r.session || '—');
+            const sessionLabel = {
+                'engine-not-built': 'not available yet (streaming engine not built)',
+                'idle': r.have_registration ? 'idle' : 'idle — needs pairing (RP-Key)',
+                'connecting': 'connecting…',
+                'ready': 'connected ✓',
+                'error': 'error',
+            }[r.session] || (r.session || '—');
+            set('#rpSession', sessionLabel);
             this._oauth = r.oauth || '';
             this._oauthError = r.oauth_error || '';
             const acctStr = r.have_account
