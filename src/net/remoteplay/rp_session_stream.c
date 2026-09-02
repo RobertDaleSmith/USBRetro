@@ -126,11 +126,20 @@ static void rand_bytes(uint8_t* b, size_t n)
 // ============================ wakeup (rest-mode consoles) ===================
 // Wake a rest-mode PS5 so it opens the session port. Credential = the PS5
 // registration key as a big-endian integer (chiaki: "regist key as hex").
+static int hexv(int ch){ if(ch>='0'&&ch<='9')return ch-'0'; if(ch>='a'&&ch<='f')return ch-'a'+10;
+                         if(ch>='A'&&ch<='F')return ch-'A'+10; return -1; }
 static void send_wakeup(void)
 {
     rp_config_t* c = rp_config_get();
+    // The stored regist_key bytes are ASCII hex chars (zero-padded). The wakeup
+    // credential (pyremoteplay format_regist_key) = big-endian integer of
+    // hex-decoding that ASCII string. e.g. bytes "12345678" -> 0x12345678.
     uint64_t cred = 0;
-    for (int i = 0; i < 8; i++) cred = (cred << 8) | c->regist_key[i]; // BE64 of first 8 bytes
+    for (int i = 0; i+1 < RP_REGIST_LEN && c->regist_key[i] && c->regist_key[i+1]; i += 2) {
+        int hi = hexv(c->regist_key[i]), lo = hexv(c->regist_key[i+1]);
+        if (hi < 0 || lo < 0) break;
+        cred = (cred << 8) | ((hi << 4) | lo);
+    }
     char pkt[256];
     int n = snprintf(pkt, sizeof(pkt),
         "WAKEUP * HTTP/1.1\n"
