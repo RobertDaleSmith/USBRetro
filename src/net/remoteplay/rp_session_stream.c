@@ -49,6 +49,7 @@
 #define TK_TYPE_CONTROL   0
 #define TK_TYPE_FBHISTORY 1
 #define TK_TYPE_FBSTATE   6
+#define TK_TYPE_CONGESTION 5
 #define TK_HDR_SIZE       0x10
 #define TK_A_RWND         0x19000
 #define TK_STREAMS        0x64
@@ -100,7 +101,8 @@ static uint8_t  s_cookie[TK_COOKIE_SIZE];
 static ChiakiControllerState s_cstate;
 static uint16_t s_fb_seq;
 static uint64_t s_key_pos;
-static uint32_t s_last_fb_ms, s_last_hb_ms;
+static uint32_t s_last_fb_ms, s_last_hb_ms, s_last_cong_ms;
+static uint16_t s_recv_count;   // takion packets received since last congestion report
 
 // net
 static struct tcp_pcb* s_tcp;         // sessreq then ctrl (reused sequentially)
@@ -478,7 +480,8 @@ static void handle_bang(const uint8_t* proto, size_t len)
         static uint8_t cc[32]; size_t cl=rp_proto_encode_controller_connection(cc,sizeof(cc),true);
         takion_send_data(cc,(uint16_t)cl,1,false);
         memset(&s_cstate, 0, sizeof(s_cstate));
-        s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=now_ms();
+        s_recv_count=0;
+        s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
         printf("[rp_stream] STREAMING\n");
     } else if (type==RP_TKMSG_DISCONNECT) {
         fail("console disconnected");
@@ -495,6 +498,7 @@ static void takion_recv(void* a, struct udp_pcb* pcb, struct pbuf* p, const ip_a
     int n=p->tot_len<(int)sizeof(buf)?p->tot_len:(int)sizeof(buf);
     pbuf_copy_partial(p,buf,n,0); pbuf_free(p);
     if (n<1) return;
+    if (s_recv_count<0xffff) s_recv_count++;   // for congestion feedback
     uint8_t base=buf[0]&0xf;
     if (base!=TK_TYPE_CONTROL) return; // ignore AV/feedback-history from console for now
     if (n < 1+TK_HDR_SIZE) return;
@@ -555,6 +559,35 @@ static void start_takion(void)
     takion_send_init();
     s_state=S_TAKION_INIT; s_deadline=now_ms()+5000;
     printf("[rp_stream] takion INIT sent\n");
+}
+
+// ============================ keep-alive ====================================
+// Stream heartbeat: type-only HEARTBEAT protobuf as a reliable DATA message.
+static void send_heartbeat(void)
+{
+    uint8_t hb[8]; size_t hl=rp_proto_encode_type_only(hb,sizeof(hb),RP_TKMSG_HEARTBEAT);
+    takion_send_data(hb,(uint16_t)hl,1,false);
+}
+
+// Congestion feedback (base type 5): GMAC-authenticated, not encrypted. Reports
+// how many packets we received; keeps the console streaming (it drops us without).
+static void send_congestion(void)
+{
+    uint8_t pkt[0xf]; memset(pkt,0,sizeof(pkt));
+    pkt[0]=TK_TYPE_CONGESTION;
+    tk_wr16(pkt+1,0);              // word_0
+    tk_wr16(pkt+3,s_recv_count);   // received
+    tk_wr16(pkt+5,0);              // lost
+    if (s_crypt_ready) {
+        uint64_t kp=s_key_pos;
+        tk_wr32(pkt+0xb,(uint32_t)kp);
+        uint32_t saved=tk_rd32(pkt+0xb); memset(pkt+0xb,0,4);  // zero key_pos for GMAC
+        chiaki_gkcrypt_gmac(&s_gk_local,kp,pkt,sizeof(pkt),pkt+7);
+        tk_wr32(pkt+0xb,saved);
+        s_key_pos+=sizeof(pkt);
+    }
+    tk_send(pkt,sizeof(pkt));
+    s_recv_count=0;
 }
 
 // ============================ feedback loop =================================
@@ -645,7 +678,9 @@ void rp_session_task(void)
         case S_TAKION_INIT:  if (!s_udp) start_takion(); break;
         case S_BIG:          send_big(); break;   // send_big advances to S_BANG_WAIT
         case S_STREAM:
-            if (t-s_last_fb_ms>=16) { s_last_fb_ms=t; send_feedback_state(); }
+            if (t-s_last_fb_ms>=16)    { s_last_fb_ms=t;   send_feedback_state(); }
+            if (t-s_last_cong_ms>=200) { s_last_cong_ms=t; send_congestion(); }
+            if (t-s_last_hb_ms>=1000)  { s_last_hb_ms=t;   send_heartbeat(); }
             break;
         case S_ERROR: {
             // keep retrying the whole session (e.g. while the console wakes up),
