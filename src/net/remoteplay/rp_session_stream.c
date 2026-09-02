@@ -123,6 +123,34 @@ static void fail(const char* m)
 static void rand_bytes(uint8_t* b, size_t n)
 { for (size_t i = 0; i < n; i += 4) { uint32_t r = get_rand_32(); size_t k = n-i<4?n-i:4; memcpy(b+i,&r,k); } }
 
+// ============================ wakeup (rest-mode consoles) ===================
+// Wake a rest-mode PS5 so it opens the session port. Credential = the PS5
+// registration key as a big-endian integer (chiaki: "regist key as hex").
+static void send_wakeup(void)
+{
+    rp_config_t* c = rp_config_get();
+    uint64_t cred = 0;
+    for (int i = 0; i < 8; i++) cred = (cred << 8) | c->regist_key[i]; // BE64 of first 8 bytes
+    char pkt[256];
+    int n = snprintf(pkt, sizeof(pkt),
+        "WAKEUP * HTTP/1.1\n"
+        "client-type:vr\nauth-type:R\nmodel:w\napp-type:r\n"
+        "user-credential:%llu\n"
+        "device-discovery-protocol-version:00030010\n",
+        (unsigned long long)cred);
+    struct udp_pcb* u = udp_new();
+    if (!u) return;
+    udp_bind(u, IP_ANY_TYPE, 0);
+    struct pbuf* pb = pbuf_alloc(PBUF_TRANSPORT, n, PBUF_RAM);
+    if (pb) {
+        memcpy(pb->payload, pkt, n);
+        cyw43_arch_lwip_begin(); udp_sendto(u, pb, &s_ip, 9302); cyw43_arch_lwip_end();
+        pbuf_free(pb);
+    }
+    udp_remove(u);
+    printf("[rp_stream] sent wakeup (cred=%llu)\n", (unsigned long long)cred);
+}
+
 // ============================ session request (RP-Nonce) ====================
 static void tcp_close_safe(void)
 {
@@ -532,6 +560,7 @@ void rp_session_start(void)
     if (!rp_ecdh_init(&s_ecdh)){ fail("ecdh init"); return; }
     s_crypt_ready=false; s_fb_seq=0; s_key_pos=0; s_session_id_len=0;
     printf("[rp_stream] starting session to %s\n",c->ps5_ip);
+    send_wakeup();     // in case the console is in rest mode; harmless if already awake
     start_sessreq();
 }
 
