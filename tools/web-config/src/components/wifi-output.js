@@ -90,6 +90,19 @@ export class WifiOutputCard {
                     </div>
                     <div id="rpHosts" class="rp-ap-list"></div>
 
+                    <h3>Pair with console</h3>
+                    <p class="hint">
+                        On the PS5: <b>Settings → System → Remote Play → Link Device</b>. It shows
+                        an 8-digit PIN. Select your console above, enter the PIN here, and Pair.
+                        The adapter registers on-device and stores the keys (RP-Key + Regist Key).
+                    </p>
+                    <div class="form-row">
+                        <label for="rpPin">Link PIN</label>
+                        <input type="text" id="rpPin" inputmode="numeric" maxlength="8" placeholder="12345678">
+                        <button id="rpPairBtn">Pair</button>
+                    </div>
+                    <div id="rpPairMsg" class="hint"></div>
+
                     <details class="rp-advanced">
                         <summary>Advanced — manual credentials</summary>
                         <p class="hint">Paired keys from <code>remote-play-lab/rp.py</code>. On-device
@@ -111,6 +124,42 @@ export class WifiOutputCard {
         this.el.querySelector('#rpSignInBtn').addEventListener('click', () => this.signIn());
         this.el.querySelector('#rpCompleteBtn').addEventListener('click', () => this.completeSignIn());
         this.el.querySelector('#rpUnlinkBtn').addEventListener('click', () => this.unlink());
+        this.el.querySelector('#rpPairBtn').addEventListener('click', () => this.pair());
+    }
+
+    async pair() {
+        const pin = (this.el.querySelector('#rpPin').value || '').trim();
+        const ip = (this.el.querySelector('#rpPs5Ip').value || '').trim();
+        if (!ip) { this.#pairMsg('Select or enter your console IP first', 'error'); return; }
+        if (!/^\d{8}$/.test(pin)) { this.#pairMsg('Enter the 8-digit PIN from the console', 'error'); return; }
+        const btn = this.el.querySelector('#rpPairBtn');
+        btn.disabled = true; btn.textContent = 'Pairing…';
+        try {
+            // Make sure the target IP is saved, then start registration.
+            await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { ps5_ip: ip });
+            const r = await this.protocol.sendCommand('OUTPUT.NATIVE.SET', { pair_pin: pin });
+            if (r && r.status && r.status !== 'pairing') {
+                this.#pairMsg(`Couldn't start: ${r.status}`, 'error');
+            } else {
+                this.#pairMsg('Registering with console…', 'success');
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(res => setTimeout(res, 1000));
+                    await this.refresh();
+                    const st = this._regist || '';
+                    if (st === 'paired') { this.#pairMsg('Paired ✓ — RP-Key stored', 'success'); this.el.querySelector('#rpPin').value = ''; break; }
+                    if (st === 'error') { this.#pairMsg(`Pairing failed: ${this._registError || 'unknown'}`, 'error'); break; }
+                    if (st === 'unavailable') { this.#pairMsg('This firmware build has pairing stubbed out', 'error'); break; }
+                }
+            }
+        } catch (e) {
+            this.#pairMsg(`Pair failed: ${e.message}`, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Pair';
+    }
+
+    #pairMsg(text, kind) {
+        const e = this.el.querySelector('#rpPairMsg');
+        if (e) { e.textContent = text; e.className = 'hint ' + (kind === 'error' ? 'error' : 'success'); }
     }
 
     async unlink() {
@@ -335,8 +384,10 @@ export class WifiOutputCard {
             set('#rpWifiState', `${r.wifi_state || '—'}${r.wifi_ssid ? ' (' + r.wifi_ssid + ')' : ''}`);
             set('#rpIp', r.ip || '—');
             const sessionLabel = {
-                'engine-not-built': 'not available yet (streaming engine not built)',
-                'idle': r.have_registration ? 'idle' : 'idle — needs pairing (RP-Key)',
+                'engine-not-built': r.have_registration
+                    ? 'paired ✓ — streaming engine not built yet'
+                    : 'not available yet (streaming engine not built)',
+                'idle': r.have_registration ? 'paired ✓ (idle)' : 'idle — needs pairing (Link PIN)',
                 'connecting': 'connecting…',
                 'ready': 'connected ✓',
                 'error': 'error',
@@ -344,6 +395,8 @@ export class WifiOutputCard {
             set('#rpSession', sessionLabel);
             this._oauth = r.oauth || '';
             this._oauthError = r.oauth_error || '';
+            this._regist = r.regist || '';
+            this._registError = r.regist_error || '';
             const acctStr = r.have_account
                 ? (r.psn_online_id ? `signed in as ${r.psn_online_id}` : 'signed in ✓')
                 : (r.oauth && r.oauth !== 'idle' && r.oauth !== 'done'

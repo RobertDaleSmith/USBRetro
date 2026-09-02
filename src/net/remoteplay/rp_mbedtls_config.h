@@ -89,6 +89,7 @@ long rp_mbedtls_time(long* t);           // defined in rp_oauth.c
 #define MBEDTLS_AES_FEWER_TABLES
 #define MBEDTLS_GCM_C
 #define MBEDTLS_CIPHER_MODE_CBC
+#define MBEDTLS_CIPHER_MODE_CFB    // chiaki rpcrypt (console registration) uses AES-CFB128
 #define MBEDTLS_CIPHER_C
 #define MBEDTLS_MD_C
 #define MBEDTLS_MD5_C            // TLS 1.2 PRF / legacy

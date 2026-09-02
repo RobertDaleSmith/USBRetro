@@ -6,6 +6,7 @@
 #include "rp_session.h"
 #include "rp_discovery.h"
 #include "rp_oauth.h"
+#include "rp_regist.h"
 #include "core/router/router.h"
 #include "platform/platform.h"
 #include <stdio.h>
@@ -57,6 +58,7 @@ static void rp_out_init(void)
     rp_config_init();
     rp_session_init();
     rp_oauth_init();
+    rp_regist_init();
 }
 
 static void rp_out_task(void)
@@ -68,6 +70,7 @@ static void rp_out_task(void)
     if (wifi_started) wifi_station_task();
     rp_discovery_task();
     rp_oauth_task();
+    rp_regist_task();
     rp_session_task();
 
     // Forward the merged controller state to the session.
@@ -98,11 +101,13 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
         "\"type\":\"remoteplay\",\"wifi_ssid\":\"%s\",\"wifi_state\":\"%s\","
         "\"ip\":\"%s\",\"ps5_ip\":\"%s\",\"have_wifi\":%s,"
         "\"have_account\":%s,\"psn_online_id\":\"%s\",\"oauth\":\"%s\",\"oauth_error\":\"%s\","
+        "\"regist\":\"%s\",\"regist_error\":\"%s\","
         "\"have_registration\":%s,\"session\":\"%s\",\"scanning\":%s,\"hosts\":[",
         cfg->wifi_ssid, wstate, ip, cfg->ps5_ip,
         cfg->have_wifi ? "true" : "false",
         have_account ? "true" : "false",
         rp_oauth_online_id(), rp_oauth_state_str(), rp_oauth_error(),
+        rp_regist_state_str(), rp_regist_error(),
         cfg->have_registration ? "true" : "false",
         rp_session_state_str(),
         rp_discovery_in_progress() ? "true" : "false");
@@ -159,6 +164,20 @@ static bool rp_out_set_native_config(const char* json, char* resp, uint16_t resp
         rp_config_clear();
         snprintf(resp, resp_size, "{\"status\":\"cleared\"}");
         return true;
+    }
+    // Action: pair with the console using its 8-digit "Link Device" PIN. Uses the
+    // stored ps5_ip + PSN account id; on success stores RP-Key + Regist Key.
+    {
+        char pinstr[16];
+        if (json_str(json, "pair_pin", pinstr, sizeof(pinstr))) {
+            rp_config_t* c = rp_config_get();
+            uint32_t pin = (uint32_t)strtoul(pinstr, NULL, 10);
+            bool ok = rp_regist_start(c->ps5_ip, pin);
+            const char* e = rp_regist_error();
+            snprintf(resp, resp_size, "{\"status\":\"%s\"}",
+                     ok ? "pairing" : (e[0] ? e : "busy"));
+            return ok;
+        }
     }
     // Action: PSN sign-in. Browser hands us the authorization code from Sony's
     // post-login redirect; the device does the HTTPS token exchange on-chip and

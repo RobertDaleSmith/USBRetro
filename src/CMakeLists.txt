@@ -1922,6 +1922,21 @@ if (PICO_BOARD STREQUAL "pico_w" OR
     # mode, NOT Bluetooth — so no BTstack. Session engine is stubbed (staged
     # chiaki port; needs a Pico 2 W for RAM). Same PIO0/CYW43-PIO1 coexistence as
     # btusb2usb. See .dev/docs/ps5-remoteplay-output.md.
+    # On-device PS5 pairing needs chiaki's rpcrypt (AGPL, vendored under src/lib/
+    # chiaki which is gitignored/local-only). When present, compile the real
+    # registration + rpcrypt; otherwise fall back to the stub so CI/fresh checkouts
+    # still build. See src/net/remoteplay/rp_regist.h.
+    set(CHIAKI_RPCRYPT ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/src/rpcrypt.c)
+    if(EXISTS ${CHIAKI_RPCRYPT})
+        set(RP_REGIST_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist.c
+            ${CHIAKI_RPCRYPT})
+        message(STATUS "usb2wifi: chiaki vendored — on-device PS5 pairing enabled")
+    else()
+        set(RP_REGIST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_regist_stub.c)
+        message(STATUS "usb2wifi: chiaki not vendored — PS5 pairing stubbed")
+    endif()
+
     add_executable(joypad_usb2wifi)
     target_compile_definitions(joypad_usb2wifi PRIVATE
         CONFIG_USB2WIFI=1
@@ -1942,8 +1957,15 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_oauth.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/rp_session_stub.c
         ${CMAKE_CURRENT_SOURCE_DIR}/net/remoteplay/remoteplay_output.c
+        ${RP_REGIST_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi/app.c
     )
+    if(EXISTS ${CHIAKI_RPCRYPT})
+        target_include_directories(joypad_usb2wifi PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/lib/chiaki/include)
+        target_compile_definitions(joypad_usb2wifi PRIVATE
+            CHIAKI_LIB_ENABLE_MBEDTLS=1 RP_HAVE_REGIST=1)
+    endif()
     target_include_directories(joypad_usb2wifi PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/apps/usb2wifi
         ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbd
