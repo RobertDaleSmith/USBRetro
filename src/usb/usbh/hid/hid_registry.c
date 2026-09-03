@@ -14,6 +14,7 @@
 #include "devices/vendors/8bitdo/8bitdo_bta.h"
 #include "devices/vendors/8bitdo/8bitdo_m30.h"
 #include "devices/vendors/8bitdo/8bitdo_pce.h"
+#include "devices/vendors/8bitdo/8bitdo_sn30.h"
 #include "devices/vendors/nintendo/gamecube_adapter.h"
 #include "devices/vendors/nintendo/switch_pro.h"
 #include "devices/vendors/nintendo/switch2_pro.h"
@@ -41,6 +42,7 @@ void register_devices() {
     device_interfaces[CONTROLLER_8BITDO_BTA] = &bitdo_bta_interface;
     device_interfaces[CONTROLLER_8BITDO_M30] = &bitdo_m30_interface;
     device_interfaces[CONTROLLER_8BITDO_PCE] = &bitdo_pce_interface;
+    device_interfaces[CONTROLLER_8BITDO_SN30] = &bitdo_sn30_interface;
     device_interfaces[CONTROLLER_HORIPAD] = &hori_horipad_interface;
     device_interfaces[CONTROLLER_POKKEN] = &hori_pokken_interface;
     device_interfaces[CONTROLLER_WINGMAN] = &logitech_wingman_interface;

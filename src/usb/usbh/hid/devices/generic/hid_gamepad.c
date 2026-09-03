@@ -24,7 +24,7 @@ typedef struct TU_ATTR_PACKED
   dinput_usage_t rxLoc;
   dinput_usage_t ryLoc;
   dinput_usage_t hatLoc;
-  dinput_usage_t buttonLoc[MAX_BUTTONS]; // assuming a maximum of 12 buttons
+  dinput_usage_t buttonLoc[MAX_TOTAL_BUTTONS]; // 12 named + 12 spillover-to-aux
   uint8_t buttonCnt;
   uint8_t type;
   bool xbox_axes;  // Xbox HID convention: Rx/Ry=right stick, Z=triggers
@@ -235,7 +235,9 @@ void parse_descriptor(uint8_t dev_addr, uint8_t instance)
           if (HID_DEBUG) TU_LOG1(" HID_USAGE_PAGE_BUTTON ");
           uint8_t usage = item->Attributes.Usage.Usage;
 
-          if (usage >= 1 && usage <= MAX_BUTTONS) {
+          // Store up to MAX_TOTAL_BUTTONS locations: usages 1..12 feed the named
+          // JP_BUTTON mapping, usages 13..24 spill into aux_buttons (see below).
+          if (usage >= 1 && usage <= MAX_TOTAL_BUTTONS) {
             hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].byteIndex = byteIndex;
             hid_devices[dev_addr].instances[instance].buttonLoc[usage - 1].bitMask = bitMask;
           }
@@ -358,6 +360,7 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
 {
   uint32_t buttons = 0;
   static dinput_gamepad_t previous[MAX_DEVICES][5];
+  static uint32_t previous_aux[MAX_DEVICES][5];   // spillover buttons (usages 13..24)
   dinput_gamepad_t current = {0};
   current.value = 0;
 
@@ -389,6 +392,18 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
     }
   }
 
+  // Spillover net: capture buttons past the 12 named slots (usages 13..24) into
+  // aux bits 0..11. These never reach current.value (the 12-bit union), so a
+  // controller with >12 buttons would otherwise silently drop them — this routes
+  // them to input_event.aux_buttons (spare SInput slots) so they stay bindable.
+  uint32_t aux_buttons = 0;
+  for (int i = MAX_BUTTONS; i < MAX_TOTAL_BUTTONS; i++) {
+    if (inst->buttonLoc[i].bitMask &&
+        (report[inst->buttonLoc[i].byteIndex] & inst->buttonLoc[i].bitMask)) {
+      aux_buttons |= (1u << (i - MAX_BUTTONS));
+    }
+  }
+
   // parse analog from report (sign-aware; sticks default centered, triggers to 0)
   current.x  = inst->xLoc.bitMask  ? scale_axis(&inst->xLoc, xValue)   : 128;
   current.y  = inst->yLoc.bitMask  ? scale_axis(&inst->yLoc, yValue)   : 128;
@@ -398,9 +413,11 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
   current.ry = inst->ryLoc.bitMask ? scale_axis(&inst->ryLoc, ryValue) : 0;
 
   // TODO: based on diff report rather than current's datastructure in order to get subtle analog changes
-  if (previous[dev_addr-1][instance].value != current.value)
+  if (previous[dev_addr-1][instance].value != current.value ||
+      previous_aux[dev_addr-1][instance] != aux_buttons)
   {
     previous[dev_addr-1][instance] = current;
+    previous_aux[dev_addr-1][instance] = aux_buttons;
 
     uint8_t buttonCount = inst->buttonCnt;
     if (buttonCount > MAX_BUTTONS) buttonCount = MAX_BUTTONS;
@@ -488,6 +505,7 @@ void process_hid_gamepad(uint8_t dev_addr, uint8_t instance, uint8_t const* repo
       .type = INPUT_TYPE_GAMEPAD,
       .transport = INPUT_TRANSPORT_USB,
       .buttons = buttons,
+      .aux_buttons = aux_buttons,
       .button_count = buttonCount,
       .analog = {axis_x, axis_y, axis_z, axis_rz, current.rx, current.ry},
       .keys = 0,
