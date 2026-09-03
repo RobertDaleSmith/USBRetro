@@ -1,6 +1,6 @@
-// rf24g_host.c - SN30 2.4G link state machine, scheduler, pairing
+// rf24g_host.c - SF30 2.4G link state machine, scheduler, pairing
 //
-// See rf24g_host.h for the public API and sn30_protocol.h for the protocol
+// See rf24g_host.h for the public API and sf30_protocol.h for the protocol
 // this implements. This file is the third of three layers (rf24g_hal ->
 // nrf24l01 -> here) so the protocol logic is testable independently of the
 // chip and the chip independently of the board.
@@ -41,11 +41,11 @@
 // plus pairing-confirmation and per-second stats bookkeeping.
 
 #include "rf24g_host.h"
-#include "rf24g_hal.h"       // must precede sn30_protocol.h: this is where
+#include "rf24g_hal.h"       // must precede sf30_protocol.h: this is where
                              // __not_in_flash_func gets pulled in (see
                              // rf24g_hal.h's header comment), and
-                             // sn30_identity()/sn30_next_idx() below need it
-#include "sn30_protocol.h"
+                             // sf30_identity()/sf30_next_idx() below need it
+#include "sf30_protocol.h"
 #include "nrf24l01.h"
 #include "core/router/router.h"
 #include "core/input_event.h"
@@ -57,7 +57,7 @@
 
 // ============================================================================
 // TUNING CONSTANTS -- all empirically derived on real hardware against a
-// real SN30 2.4G controller. Do not "fix" these to look more plausible;
+// real SF30 2.4G controller. Do not "fix" these to look more plausible;
 // several already-plausible-looking values (10100, 10204) were measured and
 // then found wrong -- see DWELL_US.
 // ============================================================================
@@ -153,7 +153,7 @@ static bool s_initialized = false;
 // functions (rf24g_host_is_pairing(), rf24g_host_state_name(),
 // rf24g_host_print_stats()).
 static volatile rf24g_link_state_t s_state  = RF24G_LINK_PARK;
-static volatile uint8_t            s_cur_ch = SN30_PARK_CH;
+static volatile uint8_t            s_cur_ch = SF30_PARK_CH;
 static bool               s_following  = false;  // dwell is following the
                                                    // link? false in PARK/
                                                    // SEARCH/PAIRING
@@ -164,7 +164,7 @@ static uint16_t           s_sweep_hops = 0;
 static rf24g_slot_t s_slot;
 
 // FNV-1a hash of the board's factory unique ID, computed once in
-// rf24g_host_init_pins() -- see sn30_protocol.h's "Receiver identity". Comes
+// rf24g_host_init_pins() -- see sf30_protocol.h's "Receiver identity". Comes
 // out identical on every boot, so a controller stays paired across a reboot
 // or reflash and needs re-pairing only if it moves to a different board.
 static uint8_t s_receiver_id[4];
@@ -231,7 +231,7 @@ static uint32_t s_pair_last_req_us;
 static uint32_t s_pair_started_us;
 static uint16_t s_pair_requests;
 static uint16_t s_pair_cycle_reqs;
-static uint8_t  s_pair_reply[SN30_PAIR_RSP_LEN];
+static uint8_t  s_pair_reply[SF30_PAIR_RSP_LEN];
 
 // Tracks whether pairing_end() accepted a claim not yet confirmed by an
 // actual frame arriving -- "controller stopped asking" isn't proof it took
@@ -280,12 +280,12 @@ static void __not_in_flash_func(drop_slot_link)(void);
 static void __not_in_flash_func(apply_pipe_addresses)(void)
 {
     uint8_t addr0[5];
-    sn30_identity(s_receiver_id, addr0);
+    sf30_identity(s_receiver_id, addr0);
 
     nrf24_write_reg_buf(NRF24_REG_RX_ADDR_P0, addr0, NRF24_ADDR_LEN);
 
     // The receiver's identity is permanent, derived once from the board's
-    // unique ID (see sn30_protocol.h's "Receiver identity"), so pipe 0 is
+    // unique ID (see sf30_protocol.h's "Receiver identity"), so pipe 0 is
     // enabled UNCONDITIONALLY -- there is no "claimed" bitmap to gate this
     // on.
     nrf24_write_reg(NRF24_REG_EN_RXADDR, RF24G_PIPE_MASK);
@@ -325,7 +325,7 @@ static void radio_init(void)
     // this file.
     //
     // Bit 0 of FEATURE is EN_DYN_ACK, which enables the NO_ACK mechanism.
-    // The SN30 controller's unlinked probe frames ARE sent NO_ACK. A genuine
+    // The SF30 controller's unlinked probe frames ARE sent NO_ACK. A genuine
     // nRF24L01+ that honours EN_DYN_ACK therefore REFUSES to acknowledge
     // them -- the controller then waits forever for the ACK it needs before
     // it will start hopping, and the link never comes up. The OEM dongle's
@@ -350,8 +350,8 @@ static void radio_init(void)
 
     apply_pipe_addresses();
 
-    nrf24_set_channel(SN30_PARK_CH);
-    s_cur_ch = SN30_PARK_CH;
+    nrf24_set_channel(SF30_PARK_CH);
+    s_cur_ch = SF30_PARK_CH;
     nrf24_power_up_rx();
     rf24g_hal_ce(true);
 }
@@ -403,8 +403,8 @@ static void __not_in_flash_func(enter_park)(void)
     // SAME park channel), and the dongle itself never taps CE across
     // thousands of park re-arms. Dropping CE would cost ~130us of RX
     // settling on every one of those for nothing.
-    nrf24_set_channel(SN30_PARK_CH);
-    s_cur_ch = SN30_PARK_CH;
+    nrf24_set_channel(SF30_PARK_CH);
+    s_cur_ch = SF30_PARK_CH;
     nrf24_power_up_rx();     // restore PRX mode in case pairing left us in PTX
     rf24g_hal_ce(true);
 
@@ -423,8 +423,8 @@ static void __not_in_flash_func(enter_search)(void)
     s_following  = false;
     s_sweep_hops = 0;
 
-    s_sweep_idx = sn30_next_idx(s_sweep_idx);
-    radio_retune(SN30_HOP_TABLE[s_sweep_idx]);
+    s_sweep_idx = sf30_next_idx(s_sweep_idx);
+    radio_retune(SF30_HOP_TABLE[s_sweep_idx]);
     rf24g_hal_alarm_schedule(rf24g_hal_time_us() + DWELL_US, on_alarm);
 }
 
@@ -449,7 +449,7 @@ static void __not_in_flash_func(schedule_next)(void)
     uint32_t now = rf24g_hal_time_us();
 
     s_following = true;
-    radio_retune(SN30_HOP_TABLE[s_slot.hop_idx]);
+    radio_retune(SF30_HOP_TABLE[s_slot.hop_idx]);
 
     uint32_t deadline = s_slot.last_rx_us + s_slot.period_us + HOP_GUARD_US;
     if ((int32_t)(deadline - now) < 0) deadline = now;   // already due
@@ -499,7 +499,7 @@ static uint32_t __not_in_flash_func(rf24g_div_u32)(uint32_t num, uint32_t den)
 static void __not_in_flash_func(handle_frame)(const uint8_t* buf, uint32_t now)
 {
     rf24g_slot_t* s = &s_slot;
-    uint8_t ctr = buf[SN30_OFF_COUNTER];
+    uint8_t ctr = buf[SF30_OFF_COUNTER];
 
     s_seen = true;
 
@@ -527,14 +527,14 @@ static void __not_in_flash_func(handle_frame)(const uint8_t* buf, uint32_t now)
 
     s->last_ctr   = ctr;
     s->last_rx_us = now;
-    s->hop_idx    = sn30_next_idx(ctr);
+    s->hop_idx    = sf30_next_idx(ctr);
     s->misses     = 0;
 
     // Only a LINKED frame is real button state -- byte3 bit 0x20 (Start) is
     // also the controller's power button and is set on most unlinked probe
     // frames, so decoding an unlinked frame would report a phantom Start
-    // press every time a controller probes. See sn30_protocol.h.
-    ring_push(buf[SN30_OFF_BTN_LO], buf[SN30_OFF_BTN_HI]);
+    // press every time a controller probes. See sf30_protocol.h.
+    ring_push(buf[SF30_OFF_BTN_LO], buf[SF30_OFF_BTN_HI]);
 
     // Let the hardware auto-ACK finish before touching RF_CH. The ACK
     // starts ~130us after the packet ends and is itself ~300us at 250kbps;
@@ -553,7 +553,7 @@ static void __not_in_flash_func(on_radio_irq)(void)
 
     uint32_t now = rf24g_hal_time_us();
 
-    uint8_t last[SN30_PKT_LEN];
+    uint8_t last[SF30_PKT_LEN];
     bool    got = false;
 
     // Drain the FIFO (3 deep) and keep only the newest valid frame -- if
@@ -574,14 +574,14 @@ static void __not_in_flash_func(on_radio_irq)(void)
 
         // Do NOT validate byte 12 against 0x10 -- the contact frame that
         // begins a link carries 0x31 there. Header + length + the 13-byte
-        // width are enough to identify a frame; see sn30_protocol.h.
-        if (len == SN30_PKT_LEN &&
-            buf[SN30_OFF_HEADER] == SN30_HDR_MAGIC &&
-            buf[SN30_OFF_LENGTH] == SN30_LEN_MAGIC &&
+        // width are enough to identify a frame; see sf30_protocol.h.
+        if (len == SF30_PKT_LEN &&
+            buf[SF30_OFF_HEADER] == SF30_HDR_MAGIC &&
+            buf[SF30_OFF_LENGTH] == SF30_LEN_MAGIC &&
             pipe == 0) {
             // Byte loop, not memcpy: ISR context, and at -O0 a libc memcpy
             // call would be flash-resident. See nrf24l01.c's nrf24_xfer().
-            for (uint8_t k = 0; k < SN30_PKT_LEN; k++) last[k] = buf[k];
+            for (uint8_t k = 0; k < SF30_PKT_LEN; k++) last[k] = buf[k];
             got = true;
         }
     }
@@ -590,7 +590,7 @@ static void __not_in_flash_func(on_radio_irq)(void)
 
     if (!got) return;
 
-    uint8_t ctr = last[SN30_OFF_COUNTER];
+    uint8_t ctr = last[SF30_OFF_COUNTER];
 
     // Is this an unlinked probe rather than a genuine hop-sequence frame?
     // A probe fails the hop_table[counter]==curCh identity, or carries the
@@ -598,8 +598,8 @@ static void __not_in_flash_func(on_radio_irq)(void)
     // NOT a channel index yet -- following hop_table[48+1] walks away from
     // the only channel a cold controller uses.
     bool probe = !s_slot.linked &&
-                 (SN30_HOP_TABLE[ctr & 0x3F] != s_cur_ch ||
-                  last[SN30_OFF_TRAILER] == 0x31);
+                 (SF30_HOP_TABLE[ctr & 0x3F] != s_cur_ch ||
+                  last[SF30_OFF_TRAILER] == 0x31);
 
     if (probe) {
         s_slot.last_ctr = ctr;
@@ -618,13 +618,13 @@ static void __not_in_flash_func(on_alarm)(void)
 
     switch (s_state) {
     case RF24G_LINK_PARK:
-        nrf24_set_channel(SN30_PARK_CH);
+        nrf24_set_channel(SF30_PARK_CH);
         rf24g_hal_alarm_schedule(now + PARK_REARM_US, on_alarm);
         break;
 
     case RF24G_LINK_SEARCH:
-        s_sweep_idx = sn30_next_idx(s_sweep_idx);
-        radio_retune(SN30_HOP_TABLE[s_sweep_idx]);
+        s_sweep_idx = sf30_next_idx(s_sweep_idx);
+        radio_retune(SF30_HOP_TABLE[s_sweep_idx]);
         if (++s_sweep_hops >= SEARCH_HOPS) {
             enter_park();
         } else {
@@ -650,7 +650,7 @@ static void __not_in_flash_func(on_alarm)(void)
         // retune anyway, so a stall self-heals the moment a packet lands
         // (every received frame re-syncs both index AND phase -- see
         // handle_frame()).
-        s->hop_idx = sn30_next_idx(s->hop_idx);
+        s->hop_idx = sf30_next_idx(s->hop_idx);
 
         // Advance by exactly one period, NOT to `now` -- `now` already
         // includes HOP_GUARD_US, so re-anchoring there slips the schedule on
@@ -695,20 +695,20 @@ static void submit_event(uint8_t b2, uint8_t b3)
 
     // Up sets a bit in BOTH bytes (byte2:0x80 and byte3:0x40 together) --
     // treat either as Up, never surface byte3:0x40 as its own button.
-    if (sn30_up_pressed(b2, b3)) buttons |= JP_BUTTON_DU;
-    if (b2 & SN30_DOWN)  buttons |= JP_BUTTON_DD;
-    if (b2 & SN30_LEFT)  buttons |= JP_BUTTON_DL;
-    if (b2 & SN30_RIGHT) buttons |= JP_BUTTON_DR;
+    if (sf30_up_pressed(b2, b3)) buttons |= JP_BUTTON_DU;
+    if (b2 & SF30_DOWN)  buttons |= JP_BUTTON_DD;
+    if (b2 & SF30_LEFT)  buttons |= JP_BUTTON_DL;
+    if (b2 & SF30_RIGHT) buttons |= JP_BUTTON_DR;
 
-    if (b2 & SN30_B) buttons |= JP_BUTTON_B1;
-    if (b2 & SN30_A) buttons |= JP_BUTTON_B2;
-    if (b2 & SN30_Y) buttons |= JP_BUTTON_B3;
-    if (b2 & SN30_X) buttons |= JP_BUTTON_B4;
+    if (b2 & SF30_B) buttons |= JP_BUTTON_B1;
+    if (b2 & SF30_A) buttons |= JP_BUTTON_B2;
+    if (b2 & SF30_Y) buttons |= JP_BUTTON_B3;
+    if (b2 & SF30_X) buttons |= JP_BUTTON_B4;
 
-    if (b3 & SN30_L)      buttons |= JP_BUTTON_L1;
-    if (b3 & SN30_R)      buttons |= JP_BUTTON_R1;
-    if (b3 & SN30_SELECT) buttons |= JP_BUTTON_S1;
-    if (b3 & SN30_START)  buttons |= JP_BUTTON_S2;
+    if (b3 & SF30_L)      buttons |= JP_BUTTON_L1;
+    if (b3 & SF30_R)      buttons |= JP_BUTTON_R1;
+    if (b3 & SF30_SELECT) buttons |= JP_BUTTON_S1;
+    if (b3 & SF30_START)  buttons |= JP_BUTTON_S2;
 
     input_event_t event;
     init_input_event(&event);
@@ -718,7 +718,7 @@ static void submit_event(uint8_t b2, uint8_t b3)
     event.transport = INPUT_TRANSPORT_NATIVE;
     event.layout    = LAYOUT_NINTENDO_4FACE;
     event.buttons   = buttons;
-    // No analog axes -- the SN30 2.4G has no sticks. init_input_event()
+    // No analog axes -- the SF30 2.4G has no sticks. init_input_event()
     // already centred analog[] at 128.
     router_submit_input(&event);
 }
@@ -805,11 +805,11 @@ static void __not_in_flash_func(pairing_listen)(void)
 {
     nrf24_flush_rx();
     nrf24_flush_tx();
-    nrf24_write_reg_buf(NRF24_REG_RX_ADDR_P0, SN30_ADDR_P1, NRF24_ADDR_LEN);
-    nrf24_write_reg_buf(NRF24_REG_TX_ADDR,    SN30_ADDR_P1, NRF24_ADDR_LEN);
+    nrf24_write_reg_buf(NRF24_REG_RX_ADDR_P0, SF30_ADDR_P1, NRF24_ADDR_LEN);
+    nrf24_write_reg_buf(NRF24_REG_TX_ADDR,    SF30_ADDR_P1, NRF24_ADDR_LEN);
     nrf24_write_reg(NRF24_REG_EN_RXADDR, 0x01);   // pipe 0 only while pairing
-    nrf24_set_channel(SN30_PARK_CH);
-    s_cur_ch = SN30_PARK_CH;
+    nrf24_set_channel(SF30_PARK_CH);
+    s_cur_ch = SF30_PARK_CH;
     nrf24_power_up_rx();
     rf24g_hal_ce(true);
     nrf24_write_reg(NRF24_REG_STATUS,
@@ -831,7 +831,7 @@ static void __not_in_flash_func(pairing_send_reply)(void)
     nrf24_flush_tx();
     nrf24_write_reg(NRF24_REG_STATUS,
                      (uint8_t)(NRF24_STATUS_TX_DS | NRF24_STATUS_MAX_RT));
-    nrf24_w_tx_payload(s_pair_reply, SN30_PAIR_RSP_LEN);
+    nrf24_w_tx_payload(s_pair_reply, SF30_PAIR_RSP_LEN);
     rf24g_hal_ce(true);
     uint32_t deadline = rf24g_hal_time_us() + 15;   // >=10us CE pulse triggers TX
     while ((int32_t)(rf24g_hal_time_us() - deadline) < 0) { /* spin */ }
@@ -870,7 +870,7 @@ static void __not_in_flash_func(pairing_on_rx_irq)(void)
         if (len == 0 || len > NRF24_MAX_PAYLOAD) { nrf24_flush_rx(); break; }
         uint8_t buf[NRF24_MAX_PAYLOAD];
         nrf24_r_rx_payload(buf, len);
-        if (len == SN30_PAIR_REQ_LEN && buf[0] == SN30_PAIR_HDR) reqs++;
+        if (len == SF30_PAIR_REQ_LEN && buf[0] == SF30_PAIR_HDR) reqs++;
     }
     nrf24_write_reg(NRF24_REG_STATUS, NRF24_STATUS_RX_DR);
 
@@ -941,8 +941,8 @@ bool rf24g_host_begin_pairing(void)
         return false;
 
     uint8_t addr[5];
-    sn30_identity(s_receiver_id, addr);
-    sn30_pair_reply(addr, s_pair_reply);
+    sf30_identity(s_receiver_id, addr);
+    sf30_pair_reply(addr, s_pair_reply);
 
     s_pair_phase        = PAIR_WAIT;
     s_pair_cycle        = 0;
@@ -990,7 +990,7 @@ void rf24g_host_init_pins(uint8_t sck, uint8_t mosi, uint8_t miso,
     s_slot.period_us = DWELL_US;
 
     // Derive this receiver's permanent identity from the board's own
-    // factory-programmed unique ID -- see sn30_protocol.h's "Receiver
+    // factory-programmed unique ID -- see sf30_protocol.h's "Receiver
     // identity" and s_receiver_id's declaration above. Flash-resident and
     // core-0-only, which is safe here (this runs once at init, before
     // radio_init() below and before rf24g_hal_irq_attach() further down --
@@ -999,7 +999,7 @@ void rf24g_host_init_pins(uint8_t sck, uint8_t mosi, uint8_t miso,
     // performs a flash operation on RP2040.
     uint8_t uid[8];
     platform_get_unique_id(uid, sizeof(uid));
-    sn30_derive_receiver_id(uid, sizeof(uid), s_receiver_id);
+    sf30_derive_receiver_id(uid, sizeof(uid), s_receiver_id);
     printf("[rf24g] receiver id %02X %02X %02X %02X (derived from board unique id)\n",
            s_receiver_id[0], s_receiver_id[1], s_receiver_id[2], s_receiver_id[3]);
 
@@ -1017,7 +1017,7 @@ void rf24g_host_init_pins(uint8_t sck, uint8_t mosi, uint8_t miso,
     enter_park();
 
     printf("[rf24g] parked on ch %u (%u MHz), nothing seen yet\n",
-           SN30_PARK_CH, 2400 + SN30_PARK_CH);
+           SF30_PARK_CH, 2400 + SF30_PARK_CH);
 }
 
 bool rf24g_host_is_connected(void)

@@ -352,7 +352,7 @@ set(LODGENET_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/lodgenet/lodgenet_host.c
 )
 
-# 24G host sources (nRF24L01+ radio, SN30 2.4G wireless dongle emulation)
+# 24G host sources (nRF24L01+ radio, SF30 2.4G wireless dongle emulation)
 set(RF24G_HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/rf24g/rf24g_host.c
     ${CMAKE_CURRENT_SOURCE_DIR}/native/host/rf24g/nrf24l01.c
@@ -2709,7 +2709,7 @@ endif()
 joypad_target_common(joypad_pce2usb)
 
 
-# --- 24G2USB (nRF24L01+ / SN30 2.4G wireless receiver -> USB HID) ---
+# --- 24G2USB (nRF24L01+ / SF30 2.4G wireless receiver -> USB HID) ---
 add_executable(joypad_24g2usb)
 target_compile_definitions(joypad_24g2usb PRIVATE CONFIG_24G2USB=1 CONFIG_USB=1 DISABLE_USB_HOST=1 USE_BOOTSEL_BUTTON=1)
 target_sources(joypad_24g2usb PUBLIC ${CORE_SOURCES} ${USB_DEVICE_SOURCES}

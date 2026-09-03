@@ -1,14 +1,14 @@
 # 24g2usb
 
-8BitDo SN30 2.4G wireless receiver to USB HID gamepad.
+8BitDo SF30 2.4G wireless receiver to USB HID gamepad.
 
 ## Overview
 
-Drives an nRF24L01+ radio over SPI, impersonating the 8BitDo SN30 2.4G dongle closely enough that a SN30 2.4G controller pairs and links to it directly. The linked controller is presented to the host as a USB HID gamepad -- no 8BitDo dongle required. The receiver supports exactly one controller at a time; see "Single controller only" below for why.
+Drives an nRF24L01+ radio over SPI, impersonating the 8BitDo SF30 2.4G dongle closely enough that a SF30 2.4G controller pairs and links to it directly. The linked controller is presented to the host as a USB HID gamepad -- no 8BitDo dongle required. The receiver supports exactly one controller at a time; see "Single controller only" below for why.
 
 ## Input
 
-[24G Input](../input/24g.md) -- interrupt-driven nRF24L01+ receiver decoding the SN30 2.4G wire protocol (64-channel frequency hopping, 13-byte frames). See [24G Protocol](../protocols/24g.md) for the full wire format.
+[24G Input](../input/24g.md) -- interrupt-driven nRF24L01+ receiver decoding the SF30 2.4G wire protocol (64-channel frequency hopping, 13-byte frames). See [24G Protocol](../protocols/24g.md) for the full wire format.
 
 ## Output
 
@@ -50,10 +50,10 @@ Pins are clear of GP23/24/25/29, which the CYW43 module claims on `_w` boards.
 
 ## Key Features
 
-- **No dongle required** -- a SN30 2.4G controller pairs and links directly, cold-acquiring in under a second.
+- **No dongle required** -- a SF30 2.4G controller pairs and links directly, cold-acquiring in under a second.
 - **Interrupt-driven radio** -- the receiver runs off the nRF24's IRQ line and a hardware alarm, not the main polling loop, so flash writes and other core-0 work can't stall a dwell and drop a packet.
 - **Pairing gesture** -- hold the BOOTSEL button ~1.5s to begin pairing. See [24G Input](../input/24g.md#pairing) for the full flow.
-- **LED indicator** -- reflects linked controller count (0 or 1) via `leds_set_connected_devices()`.
+- **LED indicator** -- solid while a controller is linked (`leds_set_connected_devices()`), fast ~100ms blink while a pairing rendezvous is in progress (`leds_set_pairing()`), slow ~500ms blink otherwise (idle, waiting for a controller).
 - **USB output modes** -- SInput, XInput, PS3, PS4, Switch, Keyboard/Mouse (BOOTSEL double-click to cycle, triple-click to reset to HID).
 
 ## Single controller only

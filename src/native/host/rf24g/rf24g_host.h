@@ -1,11 +1,11 @@
-// rf24g_host.h - SN30 2.4G wireless dongle emulation, native host driver
+// rf24g_host.h - SF30 2.4G wireless dongle emulation, native host driver
 //
-// Drives an nRF24L01+ over SPI to impersonate the 8BitDo SN30 2.4G dongle
-// well enough that SN30 2.4G controllers pair and link to it, and presents
+// Drives an nRF24L01+ over SPI to impersonate the 8BitDo SF30 2.4G dongle
+// well enough that SF30 2.4G controllers pair and link to it, and presents
 // them to the router as native gamepad input. Protocol details (radio
 // config, hop table, framing, pairing rendezvous) are ground truth
 // recovered by a logic-analyser tap on an original dongle -- see
-// sn30_protocol.h.
+// sf30_protocol.h.
 //
 // Physical: nRF24L01+ module on spi0, exactly one paired controller, on
 // nRF24 pipe 0. The receiver's own identity is derived from the board's

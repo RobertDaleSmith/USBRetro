@@ -1,8 +1,8 @@
 // app.c - 24G2USB App Entry Point
-// 8BitDo SN30 2.4G wireless receiver to USB HID gamepad adapter
+// 8BitDo SF30 2.4G wireless receiver to USB HID gamepad adapter
 //
-// Drives an nRF24L01+ over SPI, impersonating the 8BitDo SN30 2.4G dongle
-// well enough that SN30 2.4G controllers pair and link to it, and routes
+// Drives an nRF24L01+ over SPI, impersonating the 8BitDo SF30 2.4G dongle
+// well enough that SF30 2.4G controllers pair and link to it, and routes
 // linked controllers to USB device output.
 
 #include "app.h"
@@ -135,7 +135,7 @@ void app_init(void)
     players_init_with_config(&player_cfg);
 
     printf("[app:24g2usb] Initialization complete\n");
-    printf("[app:24g2usb]   Routing: SN30 2.4G -> USB HID Gamepad\n");
+    printf("[app:24g2usb]   Routing: SF30 2.4G -> USB HID Gamepad\n");
     printf("[app:24g2usb]   Pins: SCK=%d MOSI=%d MISO=%d CSN=%d CE=%d IRQ=%d\n",
            RF24G_PIN_SCK, RF24G_PIN_MOSI, RF24G_PIN_MISO,
            RF24G_PIN_CSN, RF24G_PIN_CE, RF24G_PIN_IRQ);
@@ -162,6 +162,7 @@ void app_task(void)
 
     uint8_t linked = rf24g_host_get_device_count();
     leds_set_connected_devices(linked);
+    leds_set_pairing(rf24g_host_is_pairing());
 
 #ifdef RF24G_STATS_VERBOSE
     // Periodic radio diagnostics on UART/CDC: packets/sec, measured frame

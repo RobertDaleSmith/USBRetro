@@ -40,7 +40,7 @@ static uint8_t __not_in_flash_func(nrf24_xfer)(uint8_t cmd, const uint8_t* tx,
     // If this function is touched again: re-verify with disassembly on BOTH
     // `pico` (RP2040/Cortex-M0+) and `pico2` (RP2350) builds -- the two
     // architectures' loop-idiom recognition thresholds differ, and a fixed
-    // trip count is not immune (see sn30_protocol.h's sn30_identity()).
+    // trip count is not immune (see sf30_protocol.h's sf30_identity()).
     volatile uint8_t *t = txbuf;
     t[0] = cmd;
     for (uint8_t i = 0; i < len; i++)

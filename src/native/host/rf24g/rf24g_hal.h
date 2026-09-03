@@ -2,7 +2,7 @@
 //
 // nrf24l01.c and rf24g_host.c talk to hardware ONLY through this interface
 // -- no pico-sdk (or any other platform SDK) calls outside the HAL
-// implementation file. That keeps sn30_protocol.h, nrf24l01.c and
+// implementation file. That keeps sf30_protocol.h, nrf24l01.c and
 // rf24g_host.c portable: a future ESP32-S3 or nRF52840 build needs a new
 // rf24g_hal_<platform>.c and nothing else.
 //

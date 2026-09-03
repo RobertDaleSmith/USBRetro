@@ -1,8 +1,8 @@
 // app.h - 24G2USB App Manifest
-// 8BitDo SN30 2.4G wireless receiver to USB HID gamepad adapter
+// 8BitDo SF30 2.4G wireless receiver to USB HID gamepad adapter
 //
-// Drives an nRF24L01+ over SPI, impersonating the 8BitDo SN30 2.4G dongle well
-// enough that SN30 2.4G controllers pair and link to it, and presents them to
+// Drives an nRF24L01+ over SPI, impersonating the 8BitDo SF30 2.4G dongle well
+// enough that SF30 2.4G controllers pair and link to it, and presents them to
 // the host as a USB gamepad via the existing router -> usbd path.
 //
 // This manifest is a human-readable summary of what this app uses.
@@ -19,7 +19,7 @@
 // APP METADATA
 // ============================================================================
 #define APP_NAME "24G2USB"
-#define APP_DESCRIPTION "8BitDo SN30 2.4G wireless receiver to USB HID gamepad adapter"
+#define APP_DESCRIPTION "8BitDo SF30 2.4G wireless receiver to USB HID gamepad adapter"
 #define APP_AUTHOR "FatBeard"
 
 // ============================================================================
