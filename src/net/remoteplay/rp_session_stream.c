@@ -103,6 +103,7 @@ static ChiakiFeedbackHistoryBuffer s_hist;
 static bool     s_hist_init;
 static uint32_t s_prev_buttons;
 static uint8_t  s_prev_l2, s_prev_r2;
+static ChiakiControllerTouch s_prev_touches[CHIAKI_CONTROLLER_TOUCHES_MAX];
 static uint16_t s_hist_seq;
 static uint16_t s_fb_seq;
 static int      s_consec_fail;   // consecutive connect failures (cap retries)
@@ -519,6 +520,10 @@ static void handle_bang(const uint8_t* proto, size_t len)
         // chiaki_controller_state_set_idle). set_controller_state never touches the
         // IMU fields, so an all-zero frame would ship orient_w=0 (invalid) forever.
         s_cstate.accel_y=1.0f; s_cstate.orient_w=1.0f;
+        // touch ids: -1 = no finger. memset left them 0 (a valid id), so reset both
+        // the live and the prev-snapshot slots or slot 0 would look permanently down.
+        for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++){ s_cstate.touches[i].id=-1; s_prev_touches[i].id=-1; s_prev_touches[i].x=0; s_prev_touches[i].y=0; }
+        s_cstate.touch_id_next=0;
         s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0;
         if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
@@ -722,8 +727,25 @@ static void feedback_history_update(void)
         chiaki_feedback_history_event_set_button(&ev, CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, s_cstate.r2_state);
         chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
     }
+    // touchpad: per-slot diff -> touch-up (0xc0) when a finger lifts or its id
+    // changes, else touch-down/move (0xd0) when a live finger's id or x/y changes.
+    // Mirrors chiaki feedbacksender SendState touch handling.
+    for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++) {
+        ChiakiControllerTouch* pv=&s_prev_touches[i];
+        ChiakiControllerTouch* nw=&s_cstate.touches[i];
+        if (pv->id>=0 && pv->id!=nw->id) {
+            ChiakiFeedbackHistoryEvent ev;
+            chiaki_feedback_history_event_set_touchpad(&ev, false, (uint8_t)pv->id, pv->x, pv->y);
+            chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
+        } else if (nw->id>=0 && (pv->id!=nw->id || pv->x!=nw->x || pv->y!=nw->y)) {
+            ChiakiFeedbackHistoryEvent ev;
+            chiaki_feedback_history_event_set_touchpad(&ev, true, (uint8_t)nw->id, nw->x, nw->y);
+            chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
+        }
+    }
     if (any) {
         s_prev_buttons=b; s_prev_l2=s_cstate.l2_state; s_prev_r2=s_cstate.r2_state;
+        for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++) s_prev_touches[i]=s_cstate.touches[i];
         send_feedback_history();
     }
 }
@@ -841,6 +863,7 @@ void rp_session_set_controller_state(const input_event_t* ev, uint32_t buttons)
     M(JP_BUTTON_S1, CHIAKI_CONTROLLER_BUTTON_SHARE);
     M(JP_BUTTON_S2, CHIAKI_CONTROLLER_BUTTON_OPTIONS);
     M(JP_BUTTON_A1, CHIAKI_CONTROLLER_BUTTON_PS);
+    M(JP_BUTTON_A2, CHIAKI_CONTROLLER_BUTTON_TOUCHPAD);   // touchpad/capture click
     #undef M
     s_cstate.buttons=b;
     s_cstate.l2_state=(buttons&JP_BUTTON_L2)?0xff:0;
@@ -850,6 +873,24 @@ void rp_session_set_controller_state(const input_event_t* ev, uint32_t buttons)
     s_cstate.left_y =(int16_t)((ev->analog[ANALOG_LY]-128)*258);
     s_cstate.right_x=(int16_t)((ev->analog[ANALOG_RX]-128)*258);
     s_cstate.right_y=(int16_t)((ev->analog[ANALOG_RY]-128)*258);
+    // touchpad: normalized touch[i] (0..65535 per axis) -> DualSense native
+    // 1919x1079. Slot index is the finger identity: allocate a chiaki touch id on
+    // the inactive->active edge, keep it while held, release (id=-1) on lift. The
+    // feedback-history diff (send_feedback_history path) turns these into the
+    // 0xd0 down/move / 0xc0 up touch events the console expects.
+    for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++) {
+        bool active = ev->has_touch && ev->touch[i].active;
+        if (active) {
+            if (s_cstate.touches[i].id < 0) {
+                s_cstate.touches[i].id = (int8_t)s_cstate.touch_id_next;
+                s_cstate.touch_id_next = (s_cstate.touch_id_next + 1) & 0x7f;
+            }
+            s_cstate.touches[i].x = touch_norm_to_range(ev->touch[i].x, 1919);
+            s_cstate.touches[i].y = touch_norm_to_range(ev->touch[i].y, 1079);
+        } else {
+            s_cstate.touches[i].id = -1;
+        }
+    }
 }
 
 bool rp_session_get_feedback(output_feedback_t* fb){ (void)fb; return false; }
