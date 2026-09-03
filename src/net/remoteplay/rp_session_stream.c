@@ -105,6 +105,8 @@ static uint32_t s_prev_buttons;
 static uint8_t  s_prev_l2, s_prev_r2;
 static ChiakiControllerTouch s_prev_touches[CHIAKI_CONTROLLER_TOUCHES_MAX];
 static uint16_t s_hist_seq;
+static int      s_hist_resend;    // redundant resends left for the last history change
+static uint32_t s_last_hist_ms;   // last feedback-history send time (for resend spacing)
 static uint16_t s_fb_seq;
 static int      s_consec_fail;   // consecutive connect failures (cap retries)
 static bool     s_slot_busy;     // last failure was "Remote Play in use" → long backoff
@@ -534,7 +536,7 @@ static void handle_bang(const uint8_t* proto, size_t len)
         // the live and the prev-snapshot slots or slot 0 would look permanently down.
         for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++){ s_cstate.touches[i].id=-1; s_prev_touches[i].id=-1; s_prev_touches[i].x=0; s_prev_touches[i].y=0; }
         s_cstate.touch_id_next=0;
-        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0; s_slot_busy=false;
+        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_hist_resend=0; s_last_hist_ms=0; s_consec_fail=0; s_slot_busy=false;
         if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
         printf("[rp_stream] STREAMING\n");
@@ -753,10 +755,22 @@ static void feedback_history_update(void)
             chiaki_feedback_history_buffer_push(&s_hist,&ev); any=true;
         }
     }
+    // FEEDBACK_HISTORY rides lossy UDP with no ACK. A single lost packet drops an
+    // edge: a lost press never registers, a lost release sticks the button. So on
+    // every change send once and arm a few spaced RESENDS. Re-sending the same ring
+    // is safe — the console applies the buffer newest-wins and converges to the
+    // latest edge per control (this is exactly why chiaki overlaps history packets),
+    // so redundant sends can't double-fire, they only paper over loss.
+    uint32_t t=now_ms();
     if (any) {
         s_prev_buttons=b; s_prev_l2=s_cstate.l2_state; s_prev_r2=s_cstate.r2_state;
         for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++) s_prev_touches[i]=s_cstate.touches[i];
         send_feedback_history();
+        s_hist_resend=4; s_last_hist_ms=t;
+    } else if (s_hist_resend>0 && (int32_t)(t-s_last_hist_ms)>=12) {
+        // spread the resends over ~48ms so a burst of loss doesn't take them all
+        send_feedback_history();
+        s_hist_resend--; s_last_hist_ms=t;
     }
 }
 
