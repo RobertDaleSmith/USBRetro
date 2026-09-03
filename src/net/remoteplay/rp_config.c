@@ -9,13 +9,14 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stddef.h>
 
 // Dedicated store: one 4KB sector placed below everything the shared settings
 // journal uses (flash.c reserves down to PICO_FLASH_SIZE - 20KB on RP2350).
 // -24KB is clear on both RP2350 and RP2040. XIP-mapped at XIP_BASE + offset.
 #define RP_CFG_FLASH_OFFSET  (PICO_FLASH_SIZE_BYTES - (6 * FLASH_SECTOR_SIZE))
 #define RP_CFG_MAGIC         0x52504346u   // "RPCF"
-#define RP_CFG_VERSION       1u
+#define RP_CFG_VERSION       2u            // v2 added auto_connect (appended field)
 
 typedef struct {
     uint32_t    magic;
@@ -60,9 +61,17 @@ void rp_config_init(void)
         p->crc == crc32((const uint8_t*)&p->cfg, sizeof(rp_config_t))) {
         memcpy(&cfg, &p->cfg, sizeof(cfg));
         recompute_flags();
-        printf("[rp_config] loaded from flash: wifi=%s account=%s\n",
+        printf("[rp_config] loaded from flash: wifi=%s account=%s auto=%d\n",
                cfg.have_wifi ? cfg.wifi_ssid : "(none)",
-               cfg.have_registration ? "linked" : "(partial)");
+               cfg.have_registration ? "linked" : "(partial)", cfg.auto_connect);
+    } else if (p->magic == RP_CFG_MAGIC && p->version == 1u &&
+               p->crc == crc32((const uint8_t*)&p->cfg, offsetof(rp_config_t, auto_connect))) {
+        // v1 store (no auto_connect field): keep the user's wifi/registration,
+        // default auto_connect off. crc was computed over the shorter v1 struct.
+        memcpy(&cfg, &p->cfg, offsetof(rp_config_t, auto_connect));
+        cfg.auto_connect = false;
+        recompute_flags();
+        printf("[rp_config] migrated v1->v2 (auto_connect=off)\n");
     } else {
         printf("[rp_config] no saved config (blank flash)\n");
     }
@@ -120,6 +129,14 @@ bool rp_config_set_ps5_ip(const char* ip)
     strncpy(cfg.ps5_ip, ip, RP_IP_MAX - 1); cfg.ps5_ip[RP_IP_MAX - 1] = '\0';
     printf("[rp_config] ps5 ip set: %s\n", cfg.ps5_ip);
     return true;
+}
+
+void rp_config_set_auto_connect(bool en)
+{
+    if (cfg.auto_connect == en) return;   // no-op → skip the flash write
+    cfg.auto_connect = en;
+    rp_config_save();
+    printf("[rp_config] auto_connect = %d\n", en);
 }
 
 bool rp_config_set_account_id(const uint8_t* id8)

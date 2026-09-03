@@ -107,6 +107,7 @@ static ChiakiControllerTouch s_prev_touches[CHIAKI_CONTROLLER_TOUCHES_MAX];
 static uint16_t s_hist_seq;
 static uint16_t s_fb_seq;
 static int      s_consec_fail;   // consecutive connect failures (cap retries)
+static bool     s_slot_busy;     // last failure was "Remote Play in use" → long backoff
 static uint64_t s_key_pos;
 static uint32_t s_last_fb_ms, s_last_hb_ms, s_last_cong_ms;
 static uint16_t s_recv_count;   // takion packets received since last congestion report
@@ -218,8 +219,11 @@ static err_t sessreq_recv(void* a, struct tcp_pcb* pcb, struct pbuf* p, err_t e)
         // Stop retrying so we don't keep the console busy — it clears on its own
         // (~2 min) or on a PS5 restart. Otherwise our 5s retries never let it free.
         if (strstr(reason,"80108b10")) {
-            s_stream_enabled=false;
-            fail("PS5 says Remote Play is in use — wait ~2 min or restart the PS5, then Start again");
+            // Slot busy. Stay armed (sticky reconnect) but flag a long backoff so we
+            // don't perpetuate the console's cooldown; it clears on its own or on a
+            // PS5 restart, then the next probe connects.
+            s_slot_busy=true;
+            fail("PS5 says Remote Play is in use — will keep retrying (Disconnect to stop)");
         } else {
             char m[80]; snprintf(m,sizeof(m),"sessreq HTTP %s%s%s",code, reason[0]?" reason=":"", reason);
             fail(m);
@@ -268,8 +272,10 @@ static void tcp_err_cb(void* a, err_t e){ (void)a; s_tcp=NULL;
         // another half-session and re-arms the console's ~2-3 min cooldown, so it
         // NEVER clears. Stop and require a manual Start once the slot frees.
         if (s_state==S_CTRL_CONNECT || s_state==S_CTRL_WAIT) {
-            s_stream_enabled=false;
-            fail("PS5 refused control channel (Remote Play in use) — wait ~2 min or restart the PS5, then Start again");
+            // ctrl refused after a good sessreq = slot in use. Stay armed (sticky)
+            // with a long backoff so we don't re-arm the console's cooldown.
+            s_slot_busy=true;
+            fail("PS5 refused control channel (Remote Play in use) — will keep retrying (Disconnect to stop)");
         } else {
             char m[56];
             snprintf(m,sizeof(m),"tcp reset (err %d) in %s — is the PS5 awake?",(int)e,rp_session_state_str());
@@ -524,7 +530,7 @@ static void handle_bang(const uint8_t* proto, size_t len)
         // the live and the prev-snapshot slots or slot 0 would look permanently down.
         for (int i=0;i<CHIAKI_CONTROLLER_TOUCHES_MAX;i++){ s_cstate.touches[i].id=-1; s_prev_touches[i].id=-1; s_prev_touches[i].x=0; s_prev_touches[i].y=0; }
         s_cstate.touch_id_next=0;
-        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0;
+        s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0; s_slot_busy=false;
         if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
         printf("[rp_stream] STREAMING\n");
@@ -751,7 +757,17 @@ static void feedback_history_update(void)
 }
 
 // ============================ public API ====================================
-void rp_session_init(void){ s_state=S_IDLE; s_pub=RP_SESS_IDLE; s_err[0]=0; }
+void rp_session_init(void){
+    s_state=S_IDLE; s_pub=RP_SESS_IDLE; s_err[0]=0;
+    // Sticky reconnect: if the user previously connected to a console (auto_connect
+    // persisted) and we still have registration, arm streaming so the S_IDLE task
+    // auto-starts the session on boot. Cleared only by a user Disconnect.
+    rp_config_t* c=rp_config_get();
+    if (c->auto_connect && c->have_registration) {
+        s_stream_enabled=true;
+        printf("[rp_stream] auto_connect armed for %s\n", c->ps5_ip);
+    }
+}
 
 void rp_session_start(void)
 {
@@ -783,11 +799,15 @@ void rp_session_stop(void)
     s_state=S_IDLE; s_pub=RP_SESS_IDLE;
 }
 
-// Enable/disable streaming. Disabling tears down any active session (with a clean
-// DISCONNECT) so the console's TV comes back.
+// Enable/disable streaming. This is the user's Start/Disconnect intent and is
+// sticky: Start persists auto_connect so we reconnect to this console across
+// drops and reboots; Disconnect clears it (and tears down the session with a
+// clean DISCONNECT so the console's TV comes back).
 void rp_session_set_enabled(bool en)
 {
     s_stream_enabled = en;
+    if (en) { s_slot_busy=false; s_consec_fail=0; }
+    rp_config_set_auto_connect(en);   // persist the sticky-reconnect intent
     if (!en) rp_session_stop();
     printf("[rp_stream] streaming %s\n", en?"ENABLED":"disabled");
 }
@@ -817,17 +837,18 @@ void rp_session_task(void)
             if (t-s_last_hb_ms>=1000)  { s_last_hb_ms=t;   send_heartbeat(); }
             break;
         case S_ERROR: {
-            // Retry while streaming is enabled, backing off ~15s. But cap consecutive
-            // failures: a failed ctrl leaves a slot on the console, so endless retries
-            // keep it busy forever. After 3 tries, stop and let it clear (~2 min) —
-            // the user re-presses Start. s_consec_fail resets on a successful stream.
+            // Sticky reconnect: keep retrying as long as streaming is enabled (only a
+            // user Disconnect clears s_stream_enabled). Back off ~10s for ordinary
+            // failures; but when the console reported the Remote Play slot busy
+            // (ctrl reset after nonce, or 0x80108b10), a failed attempt re-arms the
+            // console's ~2-3 min cooldown — so wait 200s (> cooldown) before probing
+            // again, otherwise we'd perpetually re-stick it and it would never clear.
             static uint32_t eretry=0;
-            if (s_stream_enabled && t>eretry) {
-                eretry=t+15000;
-                if (++s_consec_fail>=3) {
-                    s_stream_enabled=false; s_consec_fail=0;
-                    snprintf(s_err,sizeof(s_err),"couldn't connect (console busy?) — wait ~2 min, then Start again");
-                } else { tcp_close_safe(); rp_session_start(); }
+            if (s_stream_enabled && (int32_t)(t-eretry)>=0) {
+                uint32_t backoff = s_slot_busy ? 200000u : 10000u;
+                eretry = t + backoff;
+                s_consec_fail++;
+                tcp_close_safe(); rp_session_start();
             }
             break;
         }

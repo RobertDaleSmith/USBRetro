@@ -101,7 +101,7 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
         "\"type\":\"remoteplay\",\"wifi_ssid\":\"%s\",\"wifi_state\":\"%s\","
         "\"ip\":\"%s\",\"ps5_ip\":\"%s\",\"have_wifi\":%s,"
         "\"have_account\":%s,\"psn_online_id\":\"%s\",\"oauth\":\"%s\",\"oauth_error\":\"%s\","
-        "\"regist\":\"%s\",\"regist_error\":\"%s\",\"streaming\":%s,"
+        "\"regist\":\"%s\",\"regist_error\":\"%s\",\"streaming\":%s,\"auto_connect\":%s,"
         "\"have_registration\":%s,\"session\":\"%s\",\"scanning\":%s,\"hosts\":[",
         cfg->wifi_ssid, wstate, ip, cfg->ps5_ip,
         cfg->have_wifi ? "true" : "false",
@@ -109,6 +109,7 @@ static uint16_t rp_out_get_native_config(char* buf, uint16_t buf_size)
         rp_oauth_online_id(), rp_oauth_state_str(), rp_oauth_error(),
         rp_regist_state_str(), rp_regist_error(),
         rp_session_is_enabled() ? "true" : "false",
+        cfg->auto_connect ? "true" : "false",
         cfg->have_registration ? "true" : "false",
         rp_session_state_str(),
         rp_discovery_in_progress() ? "true" : "false");

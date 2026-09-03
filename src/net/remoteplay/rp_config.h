@@ -31,6 +31,10 @@ typedef struct {
     uint8_t regist_key[RP_REGIST_LEN];
     bool    have_wifi;                   // ssid+pass set
     bool    have_registration;           // account+ip+keys set
+    bool    auto_connect;                // sticky: reconnect to ps5_ip until the
+                                         // user hits Disconnect in web config.
+                                         // MUST stay last (v1->v2 migration relies
+                                         // on it being appended at the end).
 } rp_config_t;
 
 void rp_config_init(void);                 // load from flash (or defaults)
@@ -43,5 +47,6 @@ bool rp_config_set_wifi(const char* ssid, const char* pass);
 bool rp_config_set_ps5_ip(const char* ip);
 bool rp_config_set_account_id(const uint8_t* id8);
 bool rp_config_set_keys(const uint8_t* rp_key16, const uint8_t* regist16);
+void rp_config_set_auto_connect(bool en);  // persist sticky-reconnect intent
 
 #endif // RP_CONFIG_H
