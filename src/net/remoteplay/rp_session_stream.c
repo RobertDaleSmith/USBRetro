@@ -272,10 +272,14 @@ static void tcp_err_cb(void* a, err_t e){ (void)a; s_tcp=NULL;
         // another half-session and re-arms the console's ~2-3 min cooldown, so it
         // NEVER clears. Stop and require a manual Start once the slot frees.
         if (s_state==S_CTRL_CONNECT || s_state==S_CTRL_WAIT) {
-            // ctrl refused after a good sessreq = slot in use. Stay armed (sticky)
-            // with a long backoff so we don't re-arm the console's cooldown.
-            s_slot_busy=true;
-            fail("PS5 refused control channel (Remote Play in use) — will keep retrying (Disconnect to stop)");
+            // ctrl refused after a good sessreq. Ambiguous: either the console just
+            // booted and its Remote Play service isn't ready yet (transient — retry
+            // soon), or the slot is genuinely in use (a stuck prior session — long
+            // backoff so we don't re-arm its cooldown). Don't assume "in use" here;
+            // the S_ERROR retry starts with short backoffs and only escalates to the
+            // long one once ctrl keeps failing. Definitive "in use" is the explicit
+            // 0x80108b10 from sessreq, which sets s_slot_busy directly.
+            fail("control channel refused — retrying (console may still be starting Remote Play)");
         } else {
             char m[56];
             snprintf(m,sizeof(m),"tcp reset (err %d) in %s — is the PS5 awake?",(int)e,rp_session_state_str());
@@ -845,7 +849,15 @@ void rp_session_task(void)
             // again, otherwise we'd perpetually re-stick it and it would never clear.
             static uint32_t eretry=0;
             if (s_stream_enabled && (int32_t)(t-eretry)>=0) {
-                uint32_t backoff = s_slot_busy ? 200000u : 10000u;
+                // Backoff: explicit "in use" (0x80108b10) -> 200s immediately (the
+                // slot is definitively held; probing re-arms its cooldown). A ctrl
+                // reset is transient at first (console still starting Remote Play) so
+                // retry at 8s for the first ~6 tries (~50s), then escalate to 120s in
+                // case it's actually a stuck slot. Ordinary errors: 8s.
+                uint32_t backoff;
+                if (s_slot_busy)            backoff = 200000u;
+                else if (s_consec_fail > 6) backoff = 120000u;
+                else                        backoff = 8000u;
                 eretry = t + backoff;
                 s_consec_fail++;
                 tcp_close_safe(); rp_session_start();
