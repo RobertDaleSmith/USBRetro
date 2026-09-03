@@ -260,8 +260,21 @@ static err_t sessreq_connected(void* a, struct tcp_pcb* pcb, err_t e)
 }
 
 static void tcp_err_cb(void* a, err_t e){ (void)a; s_tcp=NULL;
-    if (s_state!=S_DONE && s_state!=S_ERROR){ char m[56];
-        snprintf(m,sizeof(m),"tcp reset (err %d) in %s — is the PS5 awake?",(int)e,rp_session_state_str()); fail(m);} }
+    if (s_state!=S_DONE && s_state!=S_ERROR){
+        // A reset during ctrl (after sessreq gave us the nonce) means the console
+        // accepted the session request but refused the control channel — the Remote
+        // Play slot is already in use (a stuck prior session). Retrying just opens
+        // another half-session and re-arms the console's ~2-3 min cooldown, so it
+        // NEVER clears. Stop and require a manual Start once the slot frees.
+        if (s_state==S_CTRL_CONNECT || s_state==S_CTRL_WAIT) {
+            s_stream_enabled=false;
+            fail("PS5 refused control channel (Remote Play in use) — wait ~2 min or restart the PS5, then Start again");
+        } else {
+            char m[56];
+            snprintf(m,sizeof(m),"tcp reset (err %d) in %s — is the PS5 awake?",(int)e,rp_session_state_str());
+            fail(m);
+        }
+    } }
 
 static void start_sessreq(void)
 {
@@ -502,6 +515,10 @@ static void handle_bang(const uint8_t* proto, size_t len)
         static uint8_t cc[32]; size_t cl=rp_proto_encode_controller_connection(cc,sizeof(cc),true);
         takion_send_data(cc,(uint16_t)cl,1,false);
         memset(&s_cstate, 0, sizeof(s_cstate));
+        // idle IMU frame: gravity on +Y, identity orientation quaternion (matches
+        // chiaki_controller_state_set_idle). set_controller_state never touches the
+        // IMU fields, so an all-zero frame would ship orient_w=0 (invalid) forever.
+        s_cstate.accel_y=1.0f; s_cstate.orient_w=1.0f;
         s_recv_count=0; s_prev_buttons=0; s_prev_l2=0; s_prev_r2=0; s_hist_seq=0; s_consec_fail=0;
         if (!s_hist_init) { chiaki_feedback_history_buffer_init(&s_hist, 0x10); s_hist_init=true; }
         s_state=S_STREAM; s_pub=RP_SESS_READY; s_last_fb_ms=s_last_hb_ms=s_last_cong_ms=now_ms();
@@ -550,23 +567,29 @@ static void takion_recv(void* a, struct udp_pcb* pcb, struct pbuf* p, const ip_a
             if (s_reasm_len+dlen<=(int)sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
             if (flags&1) { handle_bang(s_reasm,s_reasm_len); s_reasm_len=0; }
         }
-        // streaming: incoming DATA is gkcrypt-encrypted. Decrypt, reassemble, and
-        // if it's STREAMINFO reply STREAMINFOACK so the console fully starts the
-        // stream (otherwise it can sit on a black screen — chiaki does this).
+        // streaming: incoming CONTROL DATA protobuf (STREAMINFO/DISCONNECT) is
+        // NOT gkcrypt-encrypted — the takion layer only GMAC-verifies it, chiaki
+        // parses the protobuf as plaintext (stream_connection_takion_data_protobuf).
+        // Only AV packets are decrypted. So reassemble the plaintext protobuf and,
+        // if it's STREAMINFO, reply STREAMINFOACK so the console fully starts the
+        // stream (otherwise it sits on a black screen). data_type is subheader[8];
+        // 0=PROTOBUF, 7=rumble, 9=pad_info, 11=trigger_effects — only PROTOBUF
+        // feeds the reassembly buffer (others would corrupt it).
         else if (s_state==S_STREAM && s_crypt_ready) {
-            uint32_t kp=tk_rd32(hdr+8);
-            if (dlen>0) chiaki_gkcrypt_decrypt(&s_gk_remote, kp, data, dlen);
-            if (s_reasm_len+dlen<=(int)sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
-            if (flags&1) {
-                int mt=rp_proto_parse_message(s_reasm,s_reasm_len,NULL);
-                if (mt==RP_TKMSG_STREAMINFO) {
-                    uint8_t ack[16]; size_t al=rp_proto_encode_type_only(ack,sizeof(ack),RP_TKMSG_STREAMINFOACK);
-                    takion_send_data(ack,(uint16_t)al,1,false);
-                    printf("[rp_stream] STREAMINFOACK sent\n");
-                } else if (mt==RP_TKMSG_DISCONNECT) {
-                    fail("console disconnected");
+            uint8_t data_type = (plsz>=9) ? pl[8] : 0xff;
+            if (data_type==0 /*PROTOBUF*/) {
+                if (s_reasm_len+dlen<=(int)sizeof(s_reasm)){ memcpy(s_reasm+s_reasm_len,data,dlen); s_reasm_len+=dlen; }
+                if (flags&1) {
+                    int mt=rp_proto_parse_message(s_reasm,s_reasm_len,NULL);
+                    if (mt==RP_TKMSG_STREAMINFO) {
+                        uint8_t ack[16]; size_t al=rp_proto_encode_type_only(ack,sizeof(ack),RP_TKMSG_STREAMINFOACK);
+                        takion_send_data(ack,(uint16_t)al,1,false);
+                        printf("[rp_stream] STREAMINFOACK sent\n");
+                    } else if (mt==RP_TKMSG_DISCONNECT) {
+                        fail("console disconnected");
+                    }
+                    s_reasm_len=0;
                 }
-                s_reasm_len=0;
             }
         }
     }
