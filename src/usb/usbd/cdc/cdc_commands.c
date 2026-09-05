@@ -828,8 +828,23 @@ static void cmd_ble_mode_set(const char* json)
         return;
     }
 
-    if (mode < 0 || mode >= BLE_MODE_COUNT) {
+    // Reject unknown modes and modes not compiled into this build (e.g. Switch-BT
+    // on a BLE-only radio) — the same gate the list uses, so a stale client can't
+    // select something this firmware can't run.
+    if (!ble_output_mode_available((ble_output_mode_t)mode)) {
         send_error("invalid mode");
+        return;
+    }
+
+    // Switch-BT (Bluetooth Classic Pro Controller) selectability is plumbed, but the
+    // device-side protocol isn't landed yet. Report pending rather than rebooting
+    // into a mode with no output. Replace with the normal persist+reboot path below
+    // once the Classic HID device is implemented.
+    if ((ble_output_mode_t)mode == BLE_MODE_SWITCH_BT) {
+        snprintf(response_buf, sizeof(response_buf),
+                 "{\"mode\":%d,\"name\":\"%s\",\"pending\":true}",
+                 mode, ble_output_get_mode_name((ble_output_mode_t)mode));
+        send_json(response_buf);
         return;
     }
 
@@ -864,6 +879,9 @@ static void cmd_ble_mode_list(const char* json)
 
     bool first = true;
     for (int i = 0; i < BLE_MODE_COUNT && pos < (int)sizeof(response_buf) - 50; i++) {
+        // Hide modes this build can't run (e.g. Switch-BT on a BLE-only radio) so
+        // the web config never offers a mode with no implementation behind it.
+        if (!ble_output_mode_available((ble_output_mode_t)i)) continue;
         if (!first) pos += snprintf(response_buf + pos, sizeof(response_buf) - pos, ",");
         first = false;
         pos += snprintf(response_buf + pos, sizeof(response_buf) - pos,

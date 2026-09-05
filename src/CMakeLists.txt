@@ -2092,6 +2092,11 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ENABLE_BTSTACK=1
         REQUIRE_BLE_OUTPUT=1
         REQUIRE_BT_INPUT=1
+        # Bluetooth Classic output modes (e.g. Switch Pro Controller emulation).
+        # Only the CYW43 radio supports BR/EDR — ESP32-S3 / nRF52840 builds are
+        # BLE-only and must NOT define this, so those modes are hidden + rejected
+        # by the mode-list/select plumbing (see ble_output_mode_available()).
+        CONFIG_BT_CLASSIC_OUTPUT=1
         SENSOR_PAD=1
         SENSOR_JOYWING=1
         PICO_DEFAULT_PIO_USB_DP_PIN=16

@@ -1039,7 +1039,7 @@ ble_output_mode_t ble_output_get_mode(void)
 
 void ble_output_set_mode(ble_output_mode_t mode)
 {
-    if (mode >= BLE_MODE_COUNT || mode == current_mode) return;
+    if (!ble_output_mode_available(mode) || mode == current_mode) return;
 
     printf("[ble_output] Switching mode from %s to %s\n",
            ble_output_get_mode_name(current_mode),
@@ -1062,26 +1062,35 @@ void ble_output_set_mode(ble_output_mode_t mode)
 
 ble_output_mode_t ble_output_get_next_mode(void)
 {
-    return (ble_output_mode_t)((current_mode + 1) % BLE_MODE_COUNT);
+    // Skip modes not compiled into this build (e.g. Switch-BT on BLE-only radios)
+    // so the physical mode-cycle button never lands on an unavailable mode.
+    ble_output_mode_t m = current_mode;
+    for (int i = 0; i < BLE_MODE_COUNT; i++) {
+        m = (ble_output_mode_t)((m + 1) % BLE_MODE_COUNT);
+        if (ble_output_mode_available(m)) return m;
+    }
+    return current_mode;
 }
 
 const char* ble_output_get_mode_name(ble_output_mode_t mode)
 {
     switch (mode) {
-        case BLE_MODE_STANDARD: return "Standard BLE";
-        case BLE_MODE_XBOX:     return "Xbox BLE";
-        case BLE_MODE_SINPUT:   return "SInput BLE";
-        default:                return "Unknown";
+        case BLE_MODE_STANDARD:  return "Standard BLE";
+        case BLE_MODE_XBOX:      return "Xbox BLE";
+        case BLE_MODE_SINPUT:    return "SInput BLE";
+        case BLE_MODE_SWITCH_BT: return "Switch (BT)";
+        default:                 return "Unknown";
     }
 }
 
 void ble_output_get_mode_color(ble_output_mode_t mode, uint8_t *r, uint8_t *g, uint8_t *b)
 {
     switch (mode) {
-        case BLE_MODE_STANDARD: *r = 0; *g = 0; *b = 64; break;   // Blue
-        case BLE_MODE_XBOX:     *r = 0; *g = 64; *b = 0; break;   // Green
-        case BLE_MODE_SINPUT:   *r = 0; *g = 32; *b = 64; break;  // Cyan
-        default:                *r = 64; *g = 64; *b = 64; break;  // White
+        case BLE_MODE_STANDARD:  *r = 0; *g = 0; *b = 64; break;   // Blue
+        case BLE_MODE_XBOX:      *r = 0; *g = 64; *b = 0; break;   // Green
+        case BLE_MODE_SINPUT:    *r = 0; *g = 32; *b = 64; break;  // Cyan
+        case BLE_MODE_SWITCH_BT: *r = 64; *g = 0; *b = 0; break;   // Red (Switch/Classic)
+        default:                 *r = 64; *g = 64; *b = 64; break;  // White
     }
 }
 
