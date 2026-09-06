@@ -189,6 +189,31 @@ void router_get_motion_remap(int out[3]);
 void router_set_inject_buttons(uint32_t buttons);
 uint32_t router_get_inject_buttons(void);
 
+// Host-injected analog (INPUT.INJECT "analog"). Seven axes in input_event_t
+// order: LX, LY, RX, RY, L2, R2, RZ. Merged into every real input event the
+// same way the buttons are, taking whichever value sits further from the axis
+// resting position — so an injected stick and a real one cannot cancel each
+// other out, and a released trigger never beats a real pull. Pass NULL to stop
+// injecting analog entirely, which is not the same as passing a neutral array:
+// neutral still overrides a real stick that is barely off centre.
+void router_set_inject_analog(const uint8_t* analog);
+bool router_get_inject_analog(uint8_t* out);
+
+// Address the router sees synthetic input arrive from, so a heartbeat event can
+// be told apart from a real controller's.
+#define ROUTER_INJECT_ADDR 0xD8
+
+// Keeps injected input flowing when nothing else is attached.
+//
+// Injection is an overlay on real input events, so with no controller plugged
+// into the device there is nothing to overlay and the injected state never
+// reaches the output at all. This submits a synthetic event to carry it, but
+// only while no real input is arriving — with a controller attached its events
+// carry the injection already, and adding a second source would double it.
+//
+// Call from the main loop; it rate-limits itself.
+void router_inject_task(void);
+
 // Set global d-pad mode (applies to all inputs in router)
 // 0=d-pad, 1=left stick, 2=right stick
 void router_set_dpad_mode(uint8_t mode);

@@ -123,6 +123,42 @@ Step-by-step walkthrough of a single input event:
    - Find all matching routes via `router_find_routes()` (checks input source, device address, instance filters).
    - For each match, write the event to the specified output target and player slot.
 
+## Host-Injected Input
+
+A host on the other end of USB CDC can press buttons and move sticks with
+[`INPUT.INJECT`](../core/web-config.md). This lets an external program — a chat
+bot, an accessibility device, an AI agent — drive the console through the same
+pipeline a real controller uses.
+
+```json
+{"cmd":"INPUT.INJECT","buttons":1}
+{"cmd":"INPUT.INJECT","buttons":0,"analog":[200,128,128,128,0,0,128]}
+{"cmd":"INPUT.INJECT","buttons":0,"analog":false}
+```
+
+Injected state is **an overlay, not a player slot**. It is merged into every real
+input event at the top of `router_submit_input()`, before profiles and overlays,
+so it works in every routing mode rather than only the ones that merge:
+
+- **Buttons** are OR'd, so an injected press cannot cancel a held one.
+- **Analog** takes whichever value is further from the axis's resting position.
+  Sticks rest at 128 and triggers at 0, so the distance is measured from a
+  different place for each — measured from centre, a released trigger would look
+  like a large deflection and beat a real pull.
+
+The state is held until replaced. Omitting `analog` leaves the axes as they were,
+so a host sending only buttons never disturbs the sticks; `"analog":false` stops
+injecting them and hands the axes back to the real controller. A short array is
+padded with resting values, so a host that only cares about the sticks can send
+four.
+
+With **no controller attached** there is no event to overlay onto, and injected
+state would never reach the output at all. `router_inject_task()` covers that: it
+submits a synthetic event from `ROUTER_INJECT_ADDR` at 60Hz, but only while no
+real input has arrived for 100ms — with a controller attached, its events already
+carry the injection, and a second source would press everything twice. Call it
+from the main loop; on USB builds `cdc_commands_task()` already does.
+
 ## Output Retrieval
 
 Output drivers on Core 1 read state via:

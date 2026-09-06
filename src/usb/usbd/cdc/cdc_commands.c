@@ -1747,12 +1747,17 @@ static void cmd_overlay_clear(const char* json)
 // Body: {
 //   "buttons": <uint32 JP_BUTTON_* mask>,        required
 //   "slot":    0..7,                             optional, default 0
-//   "analog":  [LX,LY,RX,RY,L2,R2,RZ],           optional, defaults to neutral
+//   "analog":  [LX,LY,RX,RY,L2,R2,RZ],           optional, 0-255 each
 // }
 //
 // Stateful: each INPUT.INJECT call replaces the synthetic slot's full
 // state (matches how real controllers report). For a tap, the host sends
 // {buttons:N} then {buttons:0} after a few ms.
+//
+// Omitting "analog" leaves whatever was last injected in place, so a host
+// sending only buttons never disturbs the sticks. Send an explicit neutral
+// array ([128,128,128,128,0,0,128]) to centre them, or "analog":false to stop
+// injecting analog at all and hand the axes back to the real controller.
 static void cmd_input_inject(const char* json)
 {
     int buttons_val;
@@ -1764,17 +1769,37 @@ static void cmd_input_inject(const char* json)
     json_get_int(json, "slot", &slot);
     if (slot < 0 || slot > 7) slot = 0;
 
-    (void)slot;  // reserved; today we OR a single global mask into events
+    (void)slot;  // reserved; today we merge a single global state into events
 
-    // Cache the synthetic button state in the router. Each real input event
-    // (PSX poll, USB poll, BT notification) gets `buttons |= s_inject_buttons`
-    // applied at the top of router_submit_input — works regardless of the
-    // app's routing mode (SIMPLE, MERGE, BROADCAST). Pass buttons=0 to release.
+    // Cache the synthetic state in the router. Each real input event (PSX poll,
+    // USB poll, BT notification) gets the buttons OR'd and the analog merged at
+    // the top of router_submit_input — works regardless of the app's routing
+    // mode (SIMPLE, MERGE, BROADCAST). Pass buttons=0 to release. With no
+    // controller attached, router_inject_task carries it instead.
     router_set_inject_buttons((uint32_t)buttons_val);
 
+    bool analog_clear = false;
+    if (json_get_bool(json, "analog", &analog_clear) && !analog_clear) {
+        // "analog":false gives the axes back to the real controller.
+        router_set_inject_analog(NULL);
+    } else {
+        uint8_t analog[ANALOG_COUNT];
+        int count = json_get_int_array(json, "analog", analog, ANALOG_COUNT);
+        if (count > 0) {
+            // A short array is padded with resting values rather than rejected,
+            // so a host that only cares about the sticks can send four.
+            for (int i = count; i < ANALOG_COUNT; i++) {
+                analog[i] = (i == ANALOG_L2 || i == ANALOG_R2) ? 0 : 128;
+            }
+            router_set_inject_analog(analog);
+        }
+    }
+
+    uint8_t current[ANALOG_COUNT];
+    bool has_analog = router_get_inject_analog(current);
     snprintf(response_buf, sizeof(response_buf),
-             "{\"ok\":true,\"buttons\":%u}",
-             (unsigned)buttons_val);
+             "{\"ok\":true,\"buttons\":%u,\"analog\":%s}",
+             (unsigned)buttons_val, has_analog ? "true" : "false");
     send_json(response_buf);
 }
 
@@ -3103,6 +3128,10 @@ static void cmd_rumble_stop(const char* json)
 // Call from main loop to auto-stop rumble after duration and drain log buffer
 void cdc_commands_task(void)
 {
+    // Carries injected input when no controller is attached to overlay it onto.
+    // Rate-limits itself and stands down while real input is arriving.
+    router_inject_task();
+
 #ifdef CONFIG_DS5_COMPANION
     mic_ring_drain();
     voice_notify_drain();

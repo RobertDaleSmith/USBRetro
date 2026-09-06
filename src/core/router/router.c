@@ -1104,6 +1104,23 @@ static inline void router_merge_mode(const input_event_t* event, output_target_t
 // Host-side synthetic button overlay (INPUT.INJECT). OR'd into every real
 // input event before profile/overlay processing. RAM only, never persisted.
 static uint32_t s_inject_buttons = 0;
+// Injected analog, and whether any is being injected at all. The flag is not
+// redundant with an all-neutral array: neutral is a real instruction to hold the
+// sticks centred, and must still override a real stick that is drifting.
+static uint8_t s_inject_analog[ANALOG_COUNT];
+static bool s_inject_analog_set = false;
+// Last time a real controller submitted anything, so the heartbeat below only
+// runs when there is nothing else carrying the injection.
+static uint32_t s_last_real_input_ms = 0;
+static uint32_t s_inject_last_beat_ms = 0;
+
+// Resting position per axis. Sticks sit at centre and triggers at zero, so
+// "further from rest" has to be measured from a different place for each — from
+// centre, a released trigger looks like a large deflection and would beat a real
+// pull every time.
+static uint8_t inject_axis_rest(uint8_t index) {
+    return (index == ANALOG_L2 || index == ANALOG_R2) ? 0 : 128;
+}
 
 void router_set_inject_buttons(uint32_t buttons) {
     s_inject_buttons = buttons;
@@ -1111,6 +1128,52 @@ void router_set_inject_buttons(uint32_t buttons) {
 
 uint32_t router_get_inject_buttons(void) {
     return s_inject_buttons;
+}
+
+void router_set_inject_analog(const uint8_t* analog) {
+    if (!analog) {
+        s_inject_analog_set = false;
+        return;
+    }
+    memcpy(s_inject_analog, analog, ANALOG_COUNT);
+    s_inject_analog_set = true;
+}
+
+bool router_get_inject_analog(uint8_t* out) {
+    if (!s_inject_analog_set) return false;
+    if (out) memcpy(out, s_inject_analog, ANALOG_COUNT);
+    return true;
+}
+
+// Take whichever of the two sits further from the axis's resting position.
+static void inject_merge_analog(input_event_t* event) {
+    for (uint8_t i = 0; i < ANALOG_COUNT; i++) {
+        int rest = inject_axis_rest(i);
+        int real = (int)event->analog[i] - rest;
+        int injected = (int)s_inject_analog[i] - rest;
+        if (abs(injected) > abs(real)) event->analog[i] = s_inject_analog[i];
+    }
+}
+
+void router_inject_task(void) {
+    if (!s_inject_buttons && !s_inject_analog_set) return;
+
+    uint32_t now = platform_time_ms();
+    // A real controller's events already carry the injection; a second source
+    // would press everything twice.
+    if ((uint32_t)(now - s_last_real_input_ms) < 100) return;
+    // 60Hz is what the outputs consume; faster only adds work.
+    if ((uint32_t)(now - s_inject_last_beat_ms) < 16) return;
+    s_inject_last_beat_ms = now;
+
+    input_event_t event;
+    memset(&event, 0, sizeof(event));
+    event.dev_addr = ROUTER_INJECT_ADDR;
+    event.instance = 0;
+    event.type = INPUT_TYPE_GAMEPAD;
+    event.transport = INPUT_TRANSPORT_NATIVE;
+    for (uint8_t i = 0; i < ANALOG_COUNT; i++) event.analog[i] = inject_axis_rest(i);
+    router_submit_input(&event);
 }
 
 // Timestamp of the last "active" input across all sources, for idle/sleep
@@ -1124,6 +1187,10 @@ uint32_t router_ms_since_activity(void) {
 void router_submit_input(const input_event_t* event) {
     if (!event) return;
     if (route_count == 0) return;
+
+    // Note real input so the injection heartbeat stands down while a controller
+    // is attached — its events already carry the injected state.
+    if (event->dev_addr != ROUTER_INJECT_ADDR) s_last_real_input_ms = platform_time_ms();
 
     // Global on-the-fly runtime profile gesture (SELECT-hold → autofire / live
     // remap). Detected on the raw input; the mapping it builds is applied by
@@ -1194,13 +1261,14 @@ void router_submit_input(const input_event_t* event) {
     static input_event_t remapped;
     bool did_remap = false;
 
-    // Host-side synthetic button overlay (INPUT.INJECT) — OR'd into the
-    // real event so chat-driven button presses merge with the streamer's
-    // controller regardless of routing mode (works on SIMPLE, MERGE,
-    // BROADCAST). Buttons-only for now; analog injection lives below.
-    if (s_inject_buttons) {
+    // Host-side synthetic input overlay (INPUT.INJECT) — merged into the real
+    // event so host-driven presses join the streamer's controller regardless of
+    // routing mode (works on SIMPLE, MERGE, BROADCAST). Buttons are OR'd;
+    // analog takes whichever value is further from the axis's resting position.
+    if (s_inject_buttons || s_inject_analog_set) {
         remapped = *event;
         remapped.buttons |= s_inject_buttons;
+        if (s_inject_analog_set) inject_merge_analog(&remapped);
         did_remap = true;
         event = &remapped;
     }
