@@ -6,6 +6,9 @@
 // HID Host for Classic BT HID devices.
 
 #include "btstack_host.h"
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+#include "ble_output/ble_output.h"   // ble_output_get_mode() / BLE_MODE_SWITCH_BT
+#endif
 
 #ifdef BTSTACK_DEFER_SCAN
 static bool btstack_host_scan_enabled = false;
@@ -1549,6 +1552,14 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 // Set local name (for devices that want to see us)
                 // Skip when acting as BLE peripheral — ble_output sets its own name
 #ifndef CONFIG_USB2BLE
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+                // In Switch-BT output mode we ARE a Pro Controller — this handler
+                // runs after switch_bt_late_init and would otherwise clobber the
+                // identity, so set the right one here (the authoritative post-HCI point).
+                if (ble_output_get_mode() == BLE_MODE_SWITCH_BT)
+                    gap_set_local_name("Pro Controller");
+                else
+#endif
                 gap_set_local_name("Joypad Adapter");
 #endif
 
@@ -1562,6 +1573,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 #ifndef CONFIG_USB2BLE
                 // Set class of device to Computer (Desktop Workstation)
                 // Skip when acting as BLE peripheral — appearance is set in adv data
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+                if (ble_output_get_mode() == BLE_MODE_SWITCH_BT)
+                    gap_set_class_of_device(0x002508);  // peripheral / gamepad (Pro Controller)
+                else
+#endif
                 gap_set_class_of_device(0x000104);  // Major: Computer, Minor: Desktop
 
                 // Enable SSP (Secure Simple Pairing) on the controller
