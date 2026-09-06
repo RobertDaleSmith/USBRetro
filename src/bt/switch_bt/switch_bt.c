@@ -56,10 +56,16 @@ static uint8_t          s_hid_sdp[300];
 static uint8_t          s_devid_sdp[100];
 static btstack_packet_callback_registration_t s_hci_cb;
 static btstack_timer_source_t s_send_timer;   // report pump, runs in BTstack context
+static btstack_timer_source_t s_reconnect_timer; // pages the bonded console while idle
+static bd_addr_t              s_console_addr;   // last/paired console (page target)
+static bool                   s_have_console;   // s_console_addr is valid
+#define RECONNECT_INTERVAL_MS 5000               // how often we re-page while disconnected
 // Persistent handshake counters — dumped periodically so we can see what happened
 // during a connection even though the live CDC log drops out under BT load.
 static uint32_t s_stat_connects, s_stat_tx, s_stat_rx;
 static uint8_t  s_stat_last_rx_sub = 0xff;
+
+static void reconnect_timer_start(void);   // defined below; started once the radio is up
 
 // Apply the Pro Controller Classic identity (name + gamepad CoD). Called from the
 // BT-host HCI_STATE_WORKING handler — the authoritative point after the HCI
@@ -87,6 +93,9 @@ void switch_bt_apply_gap_identity(void)
     // clears the bond and re-advertises, the firmware equivalent of the sync button.
     gap_connectable_control(1);
     gap_discoverable_control(1);
+    // If we already hold a bond (persisted in flash), start paging that console right
+    // away so a power-cycle reconnects on its own — no Change Grip/Order needed.
+    reconnect_timer_start();
     (void)sw_write_iac_lap_one;
 }
 
@@ -103,8 +112,47 @@ static void do_sync(void* ctx)
     printf("[switch_bt] SYNC: dropping bond + re-advertising for fresh pairing\n");
     if (s_connected) hid_device_disconnect(s_hid_cid);  // drop stale link so it re-pairs
     gap_delete_all_link_keys();
+    s_have_console = false;   // forget the page target; wait for a fresh pair instead
     gap_connectable_control(1);
     gap_discoverable_control(1);
+}
+
+// ---- auto-reconnect (device pages the bonded console) ----------------------------
+// A real Pro Controller re-pages its last console on wake rather than waiting to be
+// paged — so once paired, you never revisit Change Grip/Order. We do the same: while
+// disconnected and holding a bond, page the console every RECONNECT_INTERVAL_MS. The
+// target is the console we last connected to this session, or (after a cold boot) the
+// first entry in the flash-backed Classic link-key DB. Runs in BTstack context.
+static bool reconnect_target(bd_addr_t out)
+{
+    if (s_have_console) { memcpy(out, s_console_addr, sizeof(bd_addr_t)); return true; }
+    btstack_link_key_iterator_t it;
+    if (!gap_link_key_iterator_init(&it)) return false;
+    bd_addr_t addr; link_key_t key; link_key_type_t type;
+    bool found = gap_link_key_iterator_get_next(&it, addr, key, &type);
+    gap_link_key_iterator_done(&it);
+    if (found) { memcpy(s_console_addr, addr, sizeof(bd_addr_t)); s_have_console = true;
+                 memcpy(out, addr, sizeof(bd_addr_t)); }
+    return found;
+}
+static void reconnect_timer_handler(btstack_timer_source_t* ts)
+{
+    if (!s_connected) {
+        bd_addr_t target;
+        if (reconnect_target(target)) {
+            printf("[switch_bt] reconnect: paging %s\n", bd_addr_to_str(target));
+            hid_device_connect(target, &s_hid_cid);
+        }
+    }
+    btstack_run_loop_set_timer(ts, RECONNECT_INTERVAL_MS);
+    btstack_run_loop_add_timer(ts);
+}
+static void reconnect_timer_start(void)
+{
+    btstack_run_loop_remove_timer(&s_reconnect_timer);   // no-op if not queued
+    btstack_run_loop_set_timer_handler(&s_reconnect_timer, reconnect_timer_handler);
+    btstack_run_loop_set_timer(&s_reconnect_timer, RECONNECT_INTERVAL_MS);
+    btstack_run_loop_add_timer(&s_reconnect_timer);
 }
 
 void switch_bt_request_sync(void)
@@ -187,6 +235,10 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t* packet, uint
             s_connected = true;
             s_proto.report_mode = SW_MODE_SIMPLE;   // fresh session; host will promote
             s_stat_connects++;
+            // Remember this console as the page target for future auto-reconnects.
+            hid_subevent_connection_opened_get_bd_addr(packet, s_console_addr);
+            s_have_console = true;
+            btstack_run_loop_remove_timer(&s_reconnect_timer);   // connected; stop paging
             printf("[switch_bt] Switch connected (cid=0x%04x)\n", s_hid_cid);
             // Start the report pump in the BTstack context (self-re-arming).
             btstack_run_loop_set_timer_handler(&s_send_timer, send_timer_handler);
@@ -199,6 +251,7 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t* packet, uint
             btstack_run_loop_remove_timer(&s_send_timer);
             gap_discoverable_control(1);
             gap_connectable_control(1);
+            reconnect_timer_start();   // resume paging the bonded console
             break;
         case HID_SUBEVENT_CAN_SEND_NOW: {
             uint8_t msg[66];
