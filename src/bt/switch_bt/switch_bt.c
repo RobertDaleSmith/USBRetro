@@ -46,6 +46,17 @@ static const uint8_t k_hid_descriptor[] = {
     0xC0
 };
 
+// Extended Inquiry Response: what the Switch reads during its Change Grip/Order
+// inquiry to decide a device is a pairable controller. Must advertise the HID
+// service UUID (0x1124) + the name + gamepad class. 240-byte fixed buffer (BTstack
+// copies the full EIR length), AD structures up front, rest zero.
+static const uint8_t k_eir[240] = {
+    0x0F, 0x09, 'P','r','o',' ','C','o','n','t','r','o','l','l','e','r', // Complete Local Name (len 15)
+    0x03, 0x03, 0x24, 0x11,                                             // Complete 16-bit UUIDs: HID 0x1124
+    0x04, 0x0D, 0x08, 0x25, 0x00,                                       // Class of Device 0x002508 (LE)
+    // remainder zero-padded
+};
+
 static switch_proto_t   s_proto;
 static switch_input_t   s_input;
 static uint16_t         s_hid_cid;
@@ -55,6 +66,21 @@ static uint32_t         s_last_send_ms;
 static uint8_t          s_hid_sdp[300];
 static uint8_t          s_devid_sdp[100];
 static btstack_packet_callback_registration_t s_hci_cb;
+
+// Apply the Pro Controller Classic identity (name + gamepad CoD + EIR). Called from
+// the BT-host HCI_STATE_WORKING handler — the authoritative point after the HCI
+// controller is up, so it isn't clobbered by the host's default identity.
+void switch_bt_apply_gap_identity(void)
+{
+    gap_set_local_name(SW_NAME);
+    gap_set_class_of_device(SW_COD);
+    gap_set_extended_inquiry_response(k_eir);
+    // HCI is up now, so our BD_ADDR is valid — use it in the emulated device-info /
+    // SPI responses (the Switch cross-checks the MAC).
+    bd_addr_t local;
+    gap_local_bd_addr(local);
+    memcpy(s_proto.mac, local, 6);
+}
 
 // ---- engine hooks -----------------------------------------------------------------
 static void hook_set_player(void* c, uint8_t player, uint8_t mask)
@@ -140,17 +166,26 @@ void switch_bt_init(void)
 
 void switch_bt_late_init(void)
 {
-    printf("[switch_bt] bringing up Switch Pro (BT Classic) HID device\n");
-
-    // We are emulating a controller, not reading one — stop the BT-HID host scan so
-    // it doesn't fight for the radio while we pair with the Switch.
+    // Runs early (from ble_output_late_init) — its main job is to keep ble_output
+    // from bringing up the BLE GATT stack for this mode. The actual HID-device
+    // registration happens in switch_bt_register_device(), called from
+    // setup_hid_handlers() AFTER l2cap_init()/sdp_init() — registering before
+    // l2cap_init would be silently wiped. Stop the BT-HID host scan here so it
+    // doesn't fight for the radio.
+    printf("[switch_bt] Switch-BT mode active (device registration deferred to BT init)\n");
     extern void btstack_host_suppress_scan(bool suppress);
     btstack_host_suppress_scan(true);
+}
 
-    l2cap_init();
+// Register the Classic HID *device* role + SDP. MUST be called after l2cap_init()
+// and sdp_init() (from setup_hid_handlers), or the L2CAP service registration is
+// discarded. GAP identity (name/CoD/EIR) + BD_ADDR are applied later from the
+// HCI_STATE_WORKING handler via switch_bt_apply_gap_identity().
+void switch_bt_register_device(void)
+{
+    printf("[switch_bt] registering Switch Pro HID device (SDP + L2CAP)\n");
 
     // SDP: HID service record (gamepad subclass) + Device ID (Nintendo VID/PID).
-    sdp_init();
     memset(s_hid_sdp, 0, sizeof(s_hid_sdp));
     hid_sdp_record_t rec = {
         .hid_device_subclass      = 0x08,    // gamepad/joystick
@@ -175,25 +210,12 @@ void switch_bt_late_init(void)
                                 DEVICE_ID_VENDOR_ID_SOURCE_BLUETOOTH, SW_VID, SW_PID, 0x0100);
     sdp_register_service(s_devid_sdp);
 
-    // Classic GAP identity: name + gamepad class, discoverable + just-works pairing.
-    gap_set_local_name(SW_NAME);
-    gap_set_class_of_device(SW_COD);
-    gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
-    gap_set_allow_role_switch(true);
-    gap_discoverable_control(1);
-    gap_connectable_control(1);
-
-    // HID device role.
+    // HID device role (registers the L2CAP control/interrupt services).
     hid_device_init(/*boot_protocol=*/0, sizeof(k_hid_descriptor), k_hid_descriptor);
     s_hci_cb.callback = &packet_handler;
     hci_add_event_handler(&s_hci_cb);
     hid_device_register_packet_handler(&packet_handler);
     hid_device_register_report_data_callback(&report_data_cb);
-
-    // Use our real BD_ADDR in the emulated device-info / SPI responses.
-    bd_addr_t local;
-    gap_local_bd_addr(local);
-    memcpy(s_proto.mac, local, 6);
 }
 
 void switch_bt_task(void)

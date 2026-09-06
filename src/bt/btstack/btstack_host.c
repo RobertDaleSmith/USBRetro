@@ -8,6 +8,13 @@
 #include "btstack_host.h"
 #ifdef CONFIG_BT_CLASSIC_OUTPUT
 #include "ble_output/ble_output.h"   // ble_output_get_mode() / BLE_MODE_SWITCH_BT
+#include "switch_bt/switch_bt.h"     // switch_bt_apply_gap_identity()
+// True when this build is acting as a Switch Pro Controller (HID device role). In
+// that mode the BT-HID *host* logic must stand down on incoming connections — the
+// Switch is connecting to OUR device role, not us hosting a controller.
+static inline bool bh_switch_bt_mode(void) { return ble_output_get_mode() == BLE_MODE_SWITCH_BT; }
+#else
+static inline bool bh_switch_bt_mode(void) { return false; }
 #endif
 
 #ifdef BTSTACK_DEFER_SCAN
@@ -721,20 +728,43 @@ static void setup_hid_handlers(void)
     printf("[BTSTACK_HOST] Init LE Device DB...\n");
     le_device_db_init();
 
-    // Initialize classic BT HID Host
-    printf("[BTSTACK_HOST] Init Classic HID Host...\n");
-    memset(&classic_state, 0, sizeof(classic_state));
-    // Set security level BEFORE hid_host_init (it registers L2CAP services with this level)
-    gap_set_security_level(LEVEL_0);  // DS3 doesn't support SSP
-    hid_host_init(classic_hid_descriptor_storage, sizeof(classic_hid_descriptor_storage));
-    hid_host_register_packet_handler(hid_host_packet_handler);
+    // Initialize classic BT HID Host — but NOT in Switch-BT output mode: the HID
+    // host registers L2CAP listening services on PSM 0x11/0x13 (control/interrupt),
+    // the exact channels our HID *device* role needs. Both can't own them, so the
+    // Switch's inbound connection would land on the host handler instead of
+    // switch_bt. In Switch-BT mode we emulate a controller (input comes from GPIO/
+    // USB), so the host is unnecessary — skip it and let switch_bt own the channels.
+    bool skip_hid_host = false;
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    skip_hid_host = (ble_output_get_mode() == BLE_MODE_SWITCH_BT);
+#endif
+    if (!skip_hid_host) {
+        printf("[BTSTACK_HOST] Init Classic HID Host...\n");
+        memset(&classic_state, 0, sizeof(classic_state));
+        // Set security level BEFORE hid_host_init (it registers L2CAP services with this level)
+        gap_set_security_level(LEVEL_0);  // DS3 doesn't support SSP
+        hid_host_init(classic_hid_descriptor_storage, sizeof(classic_hid_descriptor_storage));
+        hid_host_register_packet_handler(hid_host_packet_handler);
+    } else {
+        printf("[BTSTACK_HOST] Switch-BT mode: skipping HID host (device role owns PSM 0x11/0x13)\n");
+    }
 
     // SDP server - needed for DS4/DS5 reconnection (they query Device ID)
     sdp_init();
-    device_id_create_sdp_record(device_id_sdp_service_buffer, 0x10003,
-                                DEVICE_ID_VENDOR_ID_SOURCE_BLUETOOTH,
-                                BLUETOOTH_COMPANY_ID_BLUEKITCHEN_GMBH, 1, 1);
-    sdp_register_service(device_id_sdp_service_buffer);
+    // Skip the adapter's own Device ID record in Switch-BT mode — switch_bt registers
+    // the Nintendo (057E/2009) Device ID, and a second record would let the Switch
+    // read the wrong VID/PID.
+    if (!skip_hid_host) {
+        device_id_create_sdp_record(device_id_sdp_service_buffer, 0x10003,
+                                    DEVICE_ID_VENDOR_ID_SOURCE_BLUETOOTH,
+                                    BLUETOOTH_COMPANY_ID_BLUEKITCHEN_GMBH, 1, 1);
+        sdp_register_service(device_id_sdp_service_buffer);
+    }
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    // Switch-BT mode: register our Pro Controller HID device role now — AFTER
+    // l2cap_init()/sdp_init() above (registering earlier would be wiped).
+    if (skip_hid_host) switch_bt_register_device();
+#endif
     printf("[BTSTACK_HOST] SDP server initialized\n");
 
     // Allow sniff mode and role switch for classic BT (improves compatibility)
@@ -1555,9 +1585,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 #ifdef CONFIG_BT_CLASSIC_OUTPUT
                 // In Switch-BT output mode we ARE a Pro Controller — this handler
                 // runs after switch_bt_late_init and would otherwise clobber the
-                // identity, so set the right one here (the authoritative post-HCI point).
+                // identity, so set the full Pro Controller GAP identity (name +
+                // gamepad CoD + EIR advertising the HID service) here, the
+                // authoritative post-HCI point. Returns before the generic setup.
                 if (ble_output_get_mode() == BLE_MODE_SWITCH_BT)
-                    gap_set_local_name("Pro Controller");
+                    switch_bt_apply_gap_identity();
                 else
 #endif
                 gap_set_local_name("Joypad Adapter");
@@ -1574,9 +1606,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 // Set class of device to Computer (Desktop Workstation)
                 // Skip when acting as BLE peripheral — appearance is set in adv data
 #ifdef CONFIG_BT_CLASSIC_OUTPUT
-                if (ble_output_get_mode() == BLE_MODE_SWITCH_BT)
-                    gap_set_class_of_device(0x002508);  // peripheral / gamepad (Pro Controller)
-                else
+                if (ble_output_get_mode() != BLE_MODE_SWITCH_BT)  // gamepad CoD already set above
 #endif
                 gap_set_class_of_device(0x000104);  // Major: Computer, Minor: Desktop
 
@@ -2119,8 +2149,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                             }
                         }
 
-                        if (!is_direct_l2cap) {
+                        if (!is_direct_l2cap && !bh_switch_bt_mode()) {
                             // Standard incoming connection flow (DS3, DS4, DS5, or unknown device).
+                            // Skipped in Switch-BT device mode: the Switch is connecting to our
+                            // HID device role, so hid_device + SM handle L2CAP/security — the
+                            // host must not run remote-name/auth here.
                             // If this is actually a Wiimote reconnection where the name wasn't
                             // available yet, it will be detected later when the name resolves
                             // (see REMOTE_NAME_REQUEST_COMPLETE and HID_SUBEVENT_CONNECTION_OPENED).
@@ -2333,6 +2366,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
         }
 
         case HCI_EVENT_REMOTE_NAME_REQUEST_COMPLETE: {
+            // Switch-BT device mode: don't run host driver-matching / hid_host_connect.
+            // The incoming connection is the Switch pairing to our HID device role;
+            // let hid_device handle the L2CAP channels.
+            if (bh_switch_bt_mode()) break;
             bd_addr_t name_addr;
             hci_event_remote_name_request_complete_get_bd_addr(packet, name_addr);
             uint8_t name_status = hci_event_remote_name_request_complete_get_status(packet);
