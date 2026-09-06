@@ -2128,6 +2128,11 @@ if (PICO_BOARD STREQUAL "pico_w" OR
         ${CMAKE_CURRENT_SOURCE_DIR}/bt/ble_output/ble_output_mouse.c
         ${CMAKE_CURRENT_SOURCE_DIR}/bt/ble_output/ble_output_xbox.c
         ${CMAKE_CURRENT_SOURCE_DIR}/bt/ble_output/ble_nus.c
+        # Switch Pro Controller over BT Classic (build-gated by CONFIG_BT_CLASSIC_OUTPUT).
+        # Transport-agnostic protocol engine + emulated SPI flash; the BTstack Classic
+        # HID-device role that drives them is wired separately.
+        ${CMAKE_CURRENT_SOURCE_DIR}/bt/switch_bt/switch_proto.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/bt/switch_bt/switch_spi.c
         ${BTHID_DEVICE_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/usb/usbh/hid/devices/generic/hid_parser.c
         ${CMAKE_CURRENT_SOURCE_DIR}/bt/btstack/btstack_host.c
