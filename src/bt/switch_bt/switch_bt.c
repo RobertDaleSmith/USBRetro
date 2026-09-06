@@ -31,6 +31,7 @@
 #define SW_NAME       "Pro Controller"
 #define SEND_INTERVAL_MS 8       // ~120 Hz report cadence
 
+
 // Published Pro Controller BT HID report descriptor (134 bytes): input reports
 // 0x21/0x30 (48B vendor) + 0x3F (basic HID), output reports 0x01/0x10 (48B vendor).
 static const uint8_t k_hid_descriptor[] = {
@@ -46,17 +47,6 @@ static const uint8_t k_hid_descriptor[] = {
     0xC0
 };
 
-// Extended Inquiry Response: what the Switch reads during its Change Grip/Order
-// inquiry to decide a device is a pairable controller. Must advertise the HID
-// service UUID (0x1124) + the name + gamepad class. 240-byte fixed buffer (BTstack
-// copies the full EIR length), AD structures up front, rest zero.
-static const uint8_t k_eir[240] = {
-    0x0F, 0x09, 'P','r','o',' ','C','o','n','t','r','o','l','l','e','r', // Complete Local Name (len 15)
-    0x03, 0x03, 0x24, 0x11,                                             // Complete 16-bit UUIDs: HID 0x1124
-    0x04, 0x0D, 0x08, 0x25, 0x00,                                       // Class of Device 0x002508 (LE)
-    // remainder zero-padded
-};
-
 static switch_proto_t   s_proto;
 static switch_input_t   s_input;
 static uint16_t         s_hid_cid;
@@ -67,19 +57,27 @@ static uint8_t          s_hid_sdp[300];
 static uint8_t          s_devid_sdp[100];
 static btstack_packet_callback_registration_t s_hci_cb;
 
-// Apply the Pro Controller Classic identity (name + gamepad CoD + EIR). Called from
-// the BT-host HCI_STATE_WORKING handler — the authoritative point after the HCI
-// controller is up, so it isn't clobbered by the host's default identity.
+// Apply the Pro Controller Classic identity (name + gamepad CoD). Called from the
+// BT-host HCI_STATE_WORKING handler — the authoritative point after the HCI
+// controller is up, so it isn't clobbered by the host's default identity. NOTE:
+// EIR / limited-IAC / BD_ADDR-change were tried and removed — general discoverable
+// (BTstack default) + this identity is HOJA's documented first-pairing config, and
+// the CYW43 BD_ADDR can't be changed at runtime anyway.
+// Write Current IAC LAP with a single IAC (opcode 0x0C3A; format "13" = num=1 + one
+// 3-byte LAP). A real Pro Controller in sync mode is LIMITED discoverable, so it only
+// answers the Switch's limited inquiry (and a phone's general scan can't see it).
+static const hci_cmd_t sw_write_iac_lap_one = {
+    HCI_OPCODE_HCI_WRITE_CURRENT_IAC_LAP_TWO_IACS, "13"
+};
+
 void switch_bt_apply_gap_identity(void)
 {
     gap_set_local_name(SW_NAME);
     gap_set_class_of_device(SW_COD);
-    gap_set_extended_inquiry_response(k_eir);
-    // HCI is up now, so our BD_ADDR is valid — use it in the emulated device-info /
-    // SPI responses (the Switch cross-checks the MAC).
-    bd_addr_t local;
-    gap_local_bd_addr(local);
-    memcpy(s_proto.mac, local, 6);
+    // Sync mode: respond ONLY to the LIMITED inquiry (LIAC) the Switch's Change
+    // Grip/Order screen uses. This makes us invisible to a phone's general scan
+    // (like a real controller in sync mode) but visible to the Switch.
+    hci_send_cmd(&sw_write_iac_lap_one, 1, (uint32_t)GAP_IAC_LIMITED_INQUIRY);
 }
 
 // ---- engine hooks -----------------------------------------------------------------
@@ -175,6 +173,9 @@ void switch_bt_late_init(void)
     printf("[switch_bt] Switch-BT mode active (device registration deferred to BT init)\n");
     extern void btstack_host_suppress_scan(bool suppress);
     btstack_host_suppress_scan(true);
+
+    // (BD_ADDR is set from apply_gap_identity via the BCM vendor command once HCI is
+    // up — hci_set_bd_addr's chipset path is skipped under HAVE_HOST_CONTROLLER_API.)
 }
 
 // Register the Classic HID *device* role + SDP. MUST be called after l2cap_init()
@@ -220,6 +221,18 @@ void switch_bt_register_device(void)
 
 void switch_bt_task(void)
 {
+    // Periodically log the ACTUAL radio BD_ADDR (after the async Read BD_ADDR
+    // completes) so we can confirm the BCM Write BD_ADDR took effect, and keep
+    // s_proto.mac in sync with the real radio address (device-info/SPI must match).
+    static uint32_t last_addr_log = 0;
+    uint32_t tnow = platform_time_ms();
+    if (last_addr_log == 0 || (uint32_t)(tnow - last_addr_log) >= 10000) {
+        last_addr_log = tnow;
+        bd_addr_t radio; gap_local_bd_addr(radio);
+        if (radio[0] | radio[1] | radio[2]) memcpy(s_proto.mac, radio, 6);
+        printf("[switch_bt] radio BD_ADDR %02X:%02X:%02X:%02X:%02X:%02X connected=%d\n",
+               radio[0], radio[1], radio[2], radio[3], radio[4], radio[5], s_connected);
+    }
     // Pull merged controller state (routed to the BLE peripheral target).
     const input_event_t* ev = router_get_output(OUTPUT_TARGET_BLE_PERIPHERAL, 0);
     if (ev) {
