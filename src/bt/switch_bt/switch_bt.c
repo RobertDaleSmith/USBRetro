@@ -29,7 +29,7 @@
 #define SW_PID        0x2009
 #define SW_COD        0x002508   // peripheral / gamepad
 #define SW_NAME       "Pro Controller"
-#define SEND_INTERVAL_MS 8       // ~120 Hz report cadence
+#define SEND_INTERVAL_MS 16      // ~60 Hz report cadence (Pro Controller default)
 
 
 // Published Pro Controller BT HID report descriptor (134 bytes): input reports
@@ -51,11 +51,15 @@ static switch_proto_t   s_proto;
 static switch_input_t   s_input;
 static uint16_t         s_hid_cid;
 static bool             s_connected;
-static uint32_t         s_last_send_ms;
 
 static uint8_t          s_hid_sdp[300];
 static uint8_t          s_devid_sdp[100];
 static btstack_packet_callback_registration_t s_hci_cb;
+static btstack_timer_source_t s_send_timer;   // report pump, runs in BTstack context
+// Persistent handshake counters — dumped periodically so we can see what happened
+// during a connection even though the live CDC log drops out under BT load.
+static uint32_t s_stat_connects, s_stat_tx, s_stat_rx;
+static uint8_t  s_stat_last_rx_sub = 0xff;
 
 // Apply the Pro Controller Classic identity (name + gamepad CoD). Called from the
 // BT-host HCI_STATE_WORKING handler — the authoritative point after the HCI
@@ -74,10 +78,13 @@ void switch_bt_apply_gap_identity(void)
 {
     gap_set_local_name(SW_NAME);
     gap_set_class_of_device(SW_COD);
-    // Sync mode: respond ONLY to the LIMITED inquiry (LIAC) the Switch's Change
-    // Grip/Order screen uses. This makes us invisible to a phone's general scan
-    // (like a real controller in sync mode) but visible to the Switch.
-    hci_send_cmd(&sw_write_iac_lap_one, 1, (uint32_t)GAP_IAC_LIMITED_INQUIRY);
+    // SYNC MODE: forget any stored Classic bond. A bonded controller doesn't appear
+    // on Change Grip/Order — the Switch silently reconnects it instead. Clearing our
+    // link keys makes us present as a brand-new, unpaired controller (exactly what
+    // holding the sync button does), so the Switch's pairing screen detects us and
+    // does a fresh SSP pair. Runs at boot (no active link yet), so it's safe.
+    gap_delete_all_link_keys();
+    (void)sw_write_iac_lap_one;
 }
 
 // ---- engine hooks -----------------------------------------------------------------
@@ -102,17 +109,40 @@ static const switch_proto_hooks_t s_hooks = {
 // ---- incoming host reports (OUT: 0x01 rumble+subcmd, 0x10 rumble) ------------------
 // hid_device passes the report payload without the leading report-id byte, so we
 // rebuild [id | payload] for the engine (which keys off data[0]).
-static void report_data_cb(uint16_t cid, hid_report_type_t type, uint16_t report_id,
-                           int size, uint8_t* report)
+static void feed_output(uint16_t report_id, int size, uint8_t* report, const char* via)
 {
-    (void)cid; (void)type;
     if (size < 0 || size > 62) return;
     uint8_t buf[64];
     buf[0] = (uint8_t)report_id;
     if (size) memcpy(&buf[1], report, (size_t)size);
+    // Log received host reports: for 0x01 the subcommand id is at data[10] (=report[9]).
+    uint8_t sub = (report_id == SW_OUT_ID_RUMBLE_SUBCMD && size >= 10) ? report[9] : 0xff;
+    s_stat_rx++; if (sub != 0xff) s_stat_last_rx_sub = sub;
+    printf("[switch_bt] RX %s id=0x%02x sub=0x%02x len=%d\n", via, report_id, sub, size + 1);
     switch_proto_handle_output(&s_proto, buf, (uint16_t)(size + 1));
     if (s_connected && s_proto.reply_pending)
         hid_device_request_can_send_now_event(s_hid_cid);
+}
+static void report_data_cb(uint16_t cid, hid_report_type_t type, uint16_t report_id,
+                           int size, uint8_t* report)
+{ (void)cid; (void)type; feed_output(report_id, size, report, "DATA"); }
+// Some hosts push output reports via SET_REPORT on the control channel — handle those too.
+static void set_report_cb(uint16_t cid, hid_report_type_t type, int size, uint8_t* report)
+{
+    (void)cid; (void)type;
+    if (size < 1) return;
+    feed_output(report[0], size - 1, report + 1, "SETREP");
+}
+
+// Report pump — runs in the BTstack run-loop context (NOT the main loop). Requesting
+// a can-send-now from the main loop races the CYW43 async BTstack context and stalls
+// everything; a BTstack timer is the correct place. Re-arms itself while connected.
+static void send_timer_handler(btstack_timer_source_t* ts)
+{
+    if (!s_connected) return;
+    hid_device_request_can_send_now_event(s_hid_cid);
+    btstack_run_loop_set_timer(ts, SEND_INTERVAL_MS);
+    btstack_run_loop_add_timer(ts);
 }
 
 static void packet_handler(uint8_t type, uint16_t channel, uint8_t* packet, uint16_t size)
@@ -129,19 +159,34 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t* packet, uint
             s_hid_cid = hid_subevent_connection_opened_get_hid_cid(packet);
             s_connected = true;
             s_proto.report_mode = SW_MODE_SIMPLE;   // fresh session; host will promote
+            s_stat_connects++;
             printf("[switch_bt] Switch connected (cid=0x%04x)\n", s_hid_cid);
-            hid_device_request_can_send_now_event(s_hid_cid);
+            // Start the report pump in the BTstack context (self-re-arming).
+            btstack_run_loop_set_timer_handler(&s_send_timer, send_timer_handler);
+            btstack_run_loop_set_timer(&s_send_timer, SEND_INTERVAL_MS);
+            btstack_run_loop_add_timer(&s_send_timer);
             break;
         case HID_SUBEVENT_CONNECTION_CLOSED:
             printf("[switch_bt] Switch disconnected\n");
             s_connected = false;
+            btstack_run_loop_remove_timer(&s_send_timer);
             gap_discoverable_control(1);
             gap_connectable_control(1);
             break;
         case HID_SUBEVENT_CAN_SEND_NOW: {
-            uint8_t report[64];
-            int n = switch_proto_build_input(&s_proto, &s_input, report);
-            if (n > 0) hid_device_send_interrupt_message(s_hid_cid, report, (uint16_t)n);
+            uint8_t msg[66];
+            // hid_device_send_interrupt_message is a raw l2cap_send — it does NOT add
+            // the HIDP header, so we must: [0xA1 = DATA|INPUT][reportID][payload].
+            // Without this the Switch gets malformed reports, ignores them, and never
+            // starts the subcommand handshake (rx stayed 0 while tx climbed to 1000s).
+            msg[0] = 0xA1;
+            int n = switch_proto_build_input(&s_proto, &s_input, &msg[1]);
+            if (n > 0) {
+                s_stat_tx++;
+                if (msg[1] == SW_IN_ID_SUBCMD_REPLY)
+                    printf("[switch_bt] TX 0x21 ack=0x%02x sub=0x%02x\n", msg[14], msg[15]);
+                hid_device_send_interrupt_message(s_hid_cid, msg, (uint16_t)(n + 1));
+            }
             break;
         }
         default: break;
@@ -217,6 +262,7 @@ void switch_bt_register_device(void)
     hci_add_event_handler(&s_hci_cb);
     hid_device_register_packet_handler(&packet_handler);
     hid_device_register_report_data_callback(&report_data_cb);
+    hid_device_register_set_report_callback(&set_report_cb);
 }
 
 void switch_bt_task(void)
@@ -230,8 +276,9 @@ void switch_bt_task(void)
         last_addr_log = tnow;
         bd_addr_t radio; gap_local_bd_addr(radio);
         if (radio[0] | radio[1] | radio[2]) memcpy(s_proto.mac, radio, 6);
-        printf("[switch_bt] radio BD_ADDR %02X:%02X:%02X:%02X:%02X:%02X connected=%d\n",
-               radio[0], radio[1], radio[2], radio[3], radio[4], radio[5], s_connected);
+        printf("[switch_bt] STAT conn=%lu tx=%lu rx=%lu lastsub=0x%02x mode=0x%02x connected=%d\n",
+               (unsigned long)s_stat_connects, (unsigned long)s_stat_tx, (unsigned long)s_stat_rx,
+               s_stat_last_rx_sub, s_proto.report_mode, s_connected);
     }
     // Pull merged controller state (routed to the BLE peripheral target).
     const input_event_t* ev = router_get_output(OUTPUT_TARGET_BLE_PERIPHERAL, 0);
@@ -243,12 +290,9 @@ void switch_bt_task(void)
         s_input.ry = ev->analog[ANALOG_RY];
     }
 
-    if (!s_connected) return;
-    uint32_t now = platform_time_ms();
-    if ((uint32_t)(now - s_last_send_ms) >= SEND_INTERVAL_MS) {
-        s_last_send_ms = now;
-        hid_device_request_can_send_now_event(s_hid_cid);
-    }
+    // NOTE: the report pump lives in send_timer_handler (BTstack context). Do NOT
+    // call any hid_device_* / BTstack API from here — this runs on the main loop and
+    // would race the CYW43 async context (that stalled the pump after one report).
 }
 
 bool switch_bt_is_connected(void) { return s_connected; }
