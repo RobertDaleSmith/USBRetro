@@ -78,13 +78,40 @@ void switch_bt_apply_gap_identity(void)
 {
     gap_set_local_name(SW_NAME);
     gap_set_class_of_device(SW_COD);
-    // SYNC MODE: forget any stored Classic bond. A bonded controller doesn't appear
-    // on Change Grip/Order — the Switch silently reconnects it instead. Clearing our
-    // link keys makes us present as a brand-new, unpaired controller (exactly what
-    // holding the sync button does), so the Switch's pairing screen detects us and
-    // does a fresh SSP pair. Runs at boot (no active link yet), so it's safe.
-    gap_delete_all_link_keys();
+    // Stay connectable AND discoverable: connectable so a bonded Switch can page us
+    // back on wake, discoverable so a new one finds us on Change Grip/Order. We do
+    // NOT delete link keys here anymore — wiping the bond on every boot is what made
+    // reconnection flaky (the Switch believed it was still paired and its silent
+    // reconnect failed against our forgotten key). Re-pairing to a fresh/reset console
+    // is now an explicit user action: switch_bt_request_sync() (single button click)
+    // clears the bond and re-advertises, the firmware equivalent of the sync button.
+    gap_connectable_control(1);
+    gap_discoverable_control(1);
     (void)sw_write_iac_lap_one;
+}
+
+// ---- user-button "sync" (re-pair) ------------------------------------------------
+// switch_bt_request_sync() is called from the main loop (button callback), but every
+// BTstack/GAP call must run in the run-loop context — so we marshal the work across
+// with execute_on_main_thread. do_sync() forgets the current bond and re-advertises,
+// so the Switch's Change Grip/Order screen sees us as a brand-new controller. Press
+// L+R on the console afterwards to complete the fresh SSP pair.
+static btstack_context_callback_registration_t s_sync_cb;
+static void do_sync(void* ctx)
+{
+    (void)ctx;
+    printf("[switch_bt] SYNC: dropping bond + re-advertising for fresh pairing\n");
+    if (s_connected) hid_device_disconnect(s_hid_cid);  // drop stale link so it re-pairs
+    gap_delete_all_link_keys();
+    gap_connectable_control(1);
+    gap_discoverable_control(1);
+}
+
+void switch_bt_request_sync(void)
+{
+    s_sync_cb.callback = &do_sync;
+    s_sync_cb.context  = NULL;
+    btstack_run_loop_execute_on_main_thread(&s_sync_cb);
 }
 
 // ---- engine hooks -----------------------------------------------------------------

@@ -36,6 +36,9 @@
 
 #if REQUIRE_BLE_OUTPUT
 #include "bt/ble_output/ble_output.h"
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+#include "bt/switch_bt/switch_bt.h"   // switch_bt_request_sync() / switch_bt_is_connected()
+#endif
 #include "bt/transport/bt_transport.h"
 
 #ifdef BTSTACK_USE_CYW43
@@ -242,6 +245,21 @@ static void on_button_event(button_event_t event)
 {
     switch (event) {
         case BUTTON_EVENT_CLICK:
+#if REQUIRE_BLE_OUTPUT && defined(CONFIG_BT_CLASSIC_OUTPUT)
+            // Switch-BT output: a click acts as the controller's sync button. When not
+            // connected, forget the old bond + re-advertise so the console's Change
+            // Grip/Order screen detects us fresh — then press L+R there to pair.
+            if (ble_output_get_mode() == BLE_MODE_SWITCH_BT) {
+                if (!switch_bt_is_connected()) {
+                    printf("[app:controller_btusb] Switch-BT SYNC — re-advertising; press L+R on the console\n");
+                    switch_bt_request_sync();
+                    neopixel_indicate_profile(2);  // visual ack
+                } else {
+                    printf("[app:controller_btusb] Switch-BT already connected\n");
+                }
+                break;
+            }
+#endif
 #if REQUIRE_BT_INPUT
             if (bt_input_enabled) {
                 // If a controller is already connected, scan for 60s then stop.

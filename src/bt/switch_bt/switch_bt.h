@@ -30,6 +30,13 @@ void switch_bt_task(void);
 // True while a Switch is connected on the interrupt channel.
 bool switch_bt_is_connected(void);
 
+// Enter "sync mode": forget the current Classic bond and re-advertise so the Switch's
+// Change Grip/Order screen detects us as a fresh, unpaired controller (the firmware
+// equivalent of holding the sync button). Safe to call from the main loop — the work
+// is marshalled onto the BTstack run loop. Intended for a user-button click when in
+// Switch-BT mode and not connected; press L+R on the console afterwards to pair.
+void switch_bt_request_sync(void);
+
 // Apply the Pro Controller Classic GAP identity (name + gamepad CoD + EIR). Called
 // from the BT-host HCI_STATE_WORKING handler so it isn't clobbered by the host's
 // default identity. No-op unless built with CONFIG_BT_CLASSIC_OUTPUT.
