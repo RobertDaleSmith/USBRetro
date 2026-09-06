@@ -12,6 +12,9 @@
 #include "ble_output_keyboard.h"
 #include "ble_output_mouse.h"
 #include "ble_output_xbox.h"
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+#include "switch_bt/switch_bt.h"
+#endif
 #include "ble_nus.h"
 #include "ble_gamepad.h"  // Generated from ble_gamepad.gatt by compile_gatt.py
 
@@ -641,8 +644,13 @@ void ble_output_init(void)
 #ifdef CONFIG_CONTROLLER_BTUSB
     // controller_btusb is a gamepad and (on builds like the tucked-away XIAO)
     // has no practical USB/CDC access to switch modes — SInput is THE BLE device
-    // mode here, carrying buttons + gyro/accel + battery to SDL/Steam.
-    current_mode = BLE_MODE_SINPUT;
+    // mode here, carrying buttons + gyro/accel + battery to SDL/Steam. But honor an
+    // explicitly-selected Switch-BT (Bluetooth Classic) mode, which is a different
+    // radio role handled by switch_bt.c.
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    if (current_mode != BLE_MODE_SWITCH_BT)
+#endif
+        current_mode = BLE_MODE_SINPUT;
 #endif
 
     printf("[ble_output] Initializing BLE output (mode: %s)\n",
@@ -666,6 +674,10 @@ void ble_output_init(void)
     pending_xbox.rx = 32768;
     pending_xbox.ry = 32768;
     last_sent_xbox = pending_xbox;
+
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    if (current_mode == BLE_MODE_SWITCH_BT) switch_bt_init();
+#endif
 }
 
 // ATT write callback — debug logging for all GATT writes
@@ -729,6 +741,9 @@ static void usb_dom_timer_handler(btstack_timer_source_t *ts)
 // Called after bt_init() — BTstack must be running before GATT/GAP setup
 void ble_output_late_init(void)
 {
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    if (current_mode == BLE_MODE_SWITCH_BT) { switch_bt_late_init(); return; }
+#endif
     printf("[ble_output] Setting up BLE GATT services (mode: %s)\n",
            ble_output_get_mode_name(current_mode));
 
@@ -1017,6 +1032,9 @@ static void ble_output_task_sinput(void)
 
 void ble_output_task(void)
 {
+#ifdef CONFIG_BT_CLASSIC_OUTPUT
+    if (current_mode == BLE_MODE_SWITCH_BT) { switch_bt_task(); return; }
+#endif
     if (!ble_connected || con_handle == HCI_CON_HANDLE_INVALID) return;
 
     if (current_mode == BLE_MODE_XBOX) {

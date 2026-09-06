@@ -836,18 +836,6 @@ static void cmd_ble_mode_set(const char* json)
         return;
     }
 
-    // Switch-BT (Bluetooth Classic Pro Controller) selectability is plumbed, but the
-    // device-side protocol isn't landed yet. Report pending rather than rebooting
-    // into a mode with no output. Replace with the normal persist+reboot path below
-    // once the Classic HID device is implemented.
-    if ((ble_output_mode_t)mode == BLE_MODE_SWITCH_BT) {
-        snprintf(response_buf, sizeof(response_buf),
-                 "{\"mode\":%d,\"name\":\"%s\",\"pending\":true}",
-                 mode, ble_output_get_mode_name((ble_output_mode_t)mode));
-        send_json(response_buf);
-        return;
-    }
-
     ble_output_mode_t current = ble_output_get_mode();
     if ((ble_output_mode_t)mode == current) {
         snprintf(response_buf, sizeof(response_buf),
