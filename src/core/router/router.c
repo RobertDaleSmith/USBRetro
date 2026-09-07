@@ -1156,12 +1156,19 @@ static void inject_merge_analog(input_event_t* event) {
 }
 
 void router_inject_task(void) {
-    if (!s_inject_buttons && !s_inject_analog_set) return;
+    // needs_flush: we last published an injected frame that still needs one more
+    // beat to clear once inject goes empty. Without this, releasing the last
+    // injected button leaves it stuck in the output — nothing re-publishes the
+    // cleared state when no real controller is actively feeding events.
+    static bool needs_flush = false;
+    bool active = s_inject_buttons || s_inject_analog_set;
+    if (!active && !needs_flush) return;
 
     uint32_t now = platform_time_ms();
-    // A real controller's events already carry the injection; a second source
-    // would press everything twice.
-    if ((uint32_t)(now - s_last_real_input_ms) < 100) return;
+    // A real controller's events already carry the injection (and clear it on
+    // release); a second source would press everything twice, so stand down —
+    // the real events also flush any residual inject.
+    if ((uint32_t)(now - s_last_real_input_ms) < 100) { needs_flush = false; return; }
     // 60Hz is what the outputs consume; faster only adds work.
     if ((uint32_t)(now - s_inject_last_beat_ms) < 16) return;
     s_inject_last_beat_ms = now;
@@ -1173,7 +1180,12 @@ void router_inject_task(void) {
     event.type = INPUT_TYPE_GAMEPAD;
     event.transport = INPUT_TRANSPORT_NATIVE;
     for (uint8_t i = 0; i < ANALOG_COUNT; i++) event.analog[i] = inject_axis_rest(i);
+    // router_submit_input OR-s in the current s_inject_buttons (0 while clearing).
     router_submit_input(&event);
+
+    // While inject is active, keep the flush pending; once it's empty this beat
+    // just published the neutral/cleared frame, so we're done.
+    needs_flush = active;
 }
 
 // Timestamp of the last "active" input across all sources, for idle/sleep
