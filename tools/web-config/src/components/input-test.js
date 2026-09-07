@@ -29,10 +29,13 @@ function renderAxes(prefix) {
         const pct = i < 4 ? '50%' : '0%';
         return `<div class="axis">
             <div>${name}: <span id="${prefix}Axis${name}">${val}</span></div>
-            <div class="axis-bar"><div class="axis-bar-fill" id="${prefix}Axis${name}Bar" style="width:${pct}"></div></div>
+            <div class="axis-bar" id="${prefix}Bar${i}" data-axis="${i}"><div class="axis-bar-fill" id="${prefix}Axis${name}Bar" style="width:${pct}"></div></div>
         </div>`;
     }).join('')}</div>`;
 }
+
+// Rest value per axis: sticks center at 128, triggers release to 0 (RZ centered).
+function axisNeutral(idx) { return (idx === 4 || idx === 5) ? 0 : 128; }
 
 export class InputTestCard {
     constructor(container, protocol, log) {
@@ -43,6 +46,17 @@ export class InputTestCard {
         this.players = {};  // keyed by player index
         this.pendingUpdates = {};  // buffered display updates keyed by prefix
         this.rafScheduled = false;
+        // Manual inject (INPUT.INJECT): held button bitmask driven by mouse clicks
+        // on the inject pad. Sends are coalesced/serialized so rapid presses only
+        // ever transmit the latest mask and frames never interleave.
+        this.injectMask = 0;
+        this.injectSending = false;
+        this.injectDirty = false;
+        // Injected analog axes [LX,LY,RX,RY,L2,R2,RZ]; only sent while
+        // injectAnalogActive (a drag is engaged), else axes go back to the real
+        // controller (INPUT.INJECT "analog":false).
+        this.injectAnalog = [128, 128, 128, 128, 0, 0, 128];
+        this.injectAnalogActive = false;
     }
 
     render() {
@@ -51,17 +65,139 @@ export class InputTestCard {
                 <div class="card-header">
                     <h2>Input Test</h2>
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="injectClearBtn" class="btn-sm secondary" title="Release all injected buttons">Release All</button>
                         <button id="rumbleBtn" class="btn-sm secondary" title="Test rumble">Rumble</button>
                         <button id="streamBtn" class="btn-sm secondary">Start Stream</button>
                     </div>
                 </div>
                 <div id="playerGroups" class="player-groups">
-                    <p class="hint" id="streamHint">Start streaming to see connected controllers.</p>
+                    <p class="hint" id="streamHint">Start streaming to see connected controllers. Click the Output buttons to drive input over serial (INPUT.INJECT).</p>
                 </div>
             </div>`;
 
         this.el.querySelector('#streamBtn').addEventListener('click', () => this.toggleStreaming());
         this.el.querySelector('#rumbleBtn').addEventListener('click', () => this.testRumble());
+        this.el.querySelector('#injectClearBtn').addEventListener('click', () => this.injectClear());
+    }
+
+    // Make an Output (Merged) button row clickable to inject: pointer-down presses a
+    // bit, pointer-up/leave/cancel releases it. Pointer (not click) gives real
+    // press-and-hold so combos work. The pressed visual is optimistic; when streaming
+    // the round-tripped output confirms it via updateDisplay.
+    wireOutputInject(prefix) {
+        const row = this.el.querySelector(`#${prefix}Btns`);
+        if (!row || row.dataset.injectWired) return;
+        row.dataset.injectWired = '1';
+        row.style.cursor = 'pointer';
+        row.style.touchAction = 'none';
+        row.style.userSelect = 'none';
+        row.querySelectorAll('.btn').forEach(btn => {
+            const bit = parseInt(btn.dataset.bit);
+            const press = (e) => { e.preventDefault(); btn.classList.add('pressed'); this.injectSet(this.injectMask | (1 << bit)); };
+            const release = () => {
+                if (!(this.injectMask & (1 << bit))) return;  // not injecting this bit
+                btn.classList.remove('pressed');  // optimistic (stream confirms when live)
+                this.injectSet(this.injectMask & ~(1 << bit));
+            };
+            btn.addEventListener('pointerdown', press);
+            btn.addEventListener('pointerup', release);
+            btn.addEventListener('pointerleave', release);
+            btn.addEventListener('pointercancel', release);
+        });
+        this.wireAxisDrag(prefix);
+    }
+
+    // Make the Output axis bars click-and-draggable: drag left/right to set the
+    // axis (0..255), release to spring back to rest (stick=center, trigger=0).
+    // Drives INPUT.INJECT "analog"; when every axis is at rest the axes are handed
+    // back to the real controller.
+    wireAxisDrag(prefix) {
+        for (let i = 0; i < 6; i++) {
+            const bar = this.el.querySelector(`#${prefix}Bar${i}`);
+            if (!bar || bar.dataset.injectWired) continue;
+            bar.dataset.injectWired = '1';
+            bar.style.cursor = 'ew-resize';
+            bar.style.touchAction = 'none';
+            const valueAt = (e) => {
+                const r = bar.getBoundingClientRect();
+                let v = Math.round((e.clientX - r.left) / r.width * 255);
+                return Math.max(0, Math.min(255, v));
+            };
+            const setAxis = (v) => {
+                if (this.injectAnalog[i] === v && this.injectAnalogActive) return;
+                this.injectAnalog[i] = v;
+                this.injectAnalogActive = true;
+                this.updateAxisVisual(prefix, i, v);
+                this.injectDirty = true;
+                if (!this.injectSending) this.flushInject();
+            };
+            bar.addEventListener('pointerdown', (e) => { e.preventDefault(); bar.setPointerCapture(e.pointerId); setAxis(valueAt(e)); });
+            bar.addEventListener('pointermove', (e) => { if (bar.hasPointerCapture(e.pointerId)) setAxis(valueAt(e)); });
+            const end = (e) => {
+                if (!bar.hasPointerCapture?.(e.pointerId)) return;
+                bar.releasePointerCapture(e.pointerId);
+                this.injectAnalog[i] = axisNeutral(i);
+                this.updateAxisVisual(prefix, i, this.injectAnalog[i]);
+                // If every axis is back at rest, release analog to the real controller.
+                const allRest = this.injectAnalog.every((v, idx) => v === axisNeutral(idx));
+                if (allRest) this.injectAnalogActive = false;
+                this.injectDirty = true;
+                if (!this.injectSending) this.flushInject();
+            };
+            bar.addEventListener('pointerup', end);
+            bar.addEventListener('pointercancel', end);
+        }
+    }
+
+    updateAxisVisual(prefix, idx, v) {
+        const name = AXES[idx];
+        const el = document.getElementById(`${prefix}Axis${name}`);
+        const bar = document.getElementById(`${prefix}Axis${name}Bar`);
+        if (el) el.textContent = v;
+        if (bar) bar.style.width = (v / 255 * 100) + '%';
+    }
+
+    injectClear() {
+        // Clear optimistic pressed state on the clickable Output rows (stream, if
+        // live, will immediately repaint real controller state).
+        this.el.querySelectorAll('.buttons[data-inject-wired] .btn.pressed')
+            .forEach(b => b.classList.remove('pressed'));
+        this.injectAnalog = [128, 128, 128, 128, 0, 0, 128];
+        this.injectAnalogActive = false;
+        this.injectSet(0);
+        this.injectDirty = true;
+        if (!this.injectSending) this.flushInject();
+    }
+
+    injectSet(mask) {
+        mask = mask >>> 0;  // keep unsigned (L5/R5 live at bits 24/25)
+        if (mask === this.injectMask) return;
+        this.injectMask = mask;
+        this.injectDirty = true;
+        if (!this.injectSending) this.flushInject();
+    }
+
+    async flushInject() {
+        this.injectSending = true;
+        try {
+            while (this.injectDirty) {
+                this.injectDirty = false;
+                // analog: array holds the axes while dragging; false hands them back
+                // to the real controller when no drag is engaged.
+                const args = {
+                    buttons: this.injectMask,
+                    analog: this.injectAnalogActive ? this.injectAnalog.slice() : false,
+                };
+                try {
+                    await this.protocol.sendCommand('INPUT.INJECT', args);
+                } catch (e) {
+                    this.log(`Inject failed: ${e.message}`, 'error');
+                    break;
+                }
+            }
+        } finally {
+            this.injectSending = false;
+        }
     }
 
     handleEvent(event) {
@@ -121,6 +257,10 @@ export class InputTestCard {
         container.appendChild(group);
 
         this.players[player] = { sources: {} };
+
+        // The Output (Merged) row doubles as the manual-inject pad — click its
+        // buttons to drive input over serial (INPUT.INJECT).
+        this.wireOutputInject(`p${player}out`);
     }
 
     ensureInputSource(player, addr, name, source) {
@@ -192,13 +332,16 @@ export class InputTestCard {
             this.log(this.streaming ? 'Input streaming enabled' : 'Input streaming disabled');
 
             if (this.streaming) {
-                // Pre-populate player groups from connected players
+                // Always show Player 1 so its Output row is clickable to inject even
+                // with no controller connected, then fill in any real players.
+                this.ensurePlayerGroup(0);
                 await this.refreshPlayers();
             } else {
-                // Clear all player groups
+                // Release any held inject and clear all player groups.
+                this.injectClear();
                 this.players = {};
                 const container = this.el.querySelector('#playerGroups');
-                container.innerHTML = '<p class="hint" id="streamHint">Start streaming to see connected controllers.</p>';
+                container.innerHTML = '<p class="hint" id="streamHint">Start streaming to see connected controllers. Click the Output buttons to drive input over serial (INPUT.INJECT).</p>';
             }
         } catch (e) {
             this.log(`Failed to toggle streaming: ${e.message}`, 'error');
@@ -233,6 +376,14 @@ export class InputTestCard {
     }
 
     async stop() {
+        // Release any held inject first so we never leave the board with a stuck
+        // synthetic mask (the router holds INPUT.INJECT state until cleared/reboot).
+        if (this.injectMask || this.injectAnalogActive) {
+            this.injectMask = 0;
+            this.injectAnalogActive = false;
+            this.injectAnalog = [128, 128, 128, 128, 0, 0, 128];
+            try { await this.protocol.sendCommand('INPUT.INJECT', { buttons: 0, analog: false }); } catch (e) { /* ignore */ }
+        }
         if (this.streaming) {
             try { await this.protocol.enableInputStream(false); } catch (e) { /* ignore */ }
             this.streaming = false;
