@@ -15,6 +15,10 @@
 #define BUTTON_PORT_LABEL DT_NODELABEL(gpio1)
 #define BUTTON_PIN 2   // P1.02 (User switch)
 #define BUTTON_PIN_STR "P1.02"
+#elif defined(BOARD_RAYTAC_MDBT50Q_RX)
+#define BUTTON_PORT_LABEL DT_NODELABEL(gpio0)
+#define BUTTON_PIN 15  // P0.15 (user button, active low with pull-up)
+#define BUTTON_PIN_STR "P0.15"
 #elif defined(BOARD_MAKERDIARY_NRF52840)
 #define BUTTON_PORT_LABEL DT_NODELABEL(gpio0)
 #define BUTTON_PIN 18  // P0.18 (onboard USER button)

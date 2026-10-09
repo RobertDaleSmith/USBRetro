@@ -1,0 +1,151 @@
+/* Joypad — Raytac MDBT50Q-RX dongle devicetree overlay
+ *
+ * Built as the upstream Zephyr board `nrf52840dongle/nrf52840` + this overlay
+ * (see nrf/Makefile ZEPHYR_BOARD mapping for BOARD=raytac_mdbt50q_rx). That is
+ * the same upstream board the April Brother dongle uses, so the two are told
+ * apart by JOYPAD_BOARD, not by the Zephyr board name.
+ *
+ * Bootloader: Adafruit nRF52 UF2, no SoftDevice, MBR at 0x0-0x1000 and the app
+ * at 0x1000. Presents drive MDBT50QBOOT in bootloader mode.
+ *
+ * Pin facts taken from the Augmental mouthpad-usb board support for this same
+ * dongle (boards/raytac_mdbt50q_rx.overlay there), which is hardware-verified:
+ *   single LED  P1.13, active LOW
+ *   user button P0.15, active LOW with pull-up
+ *
+ * TinyUSB drives the USB hardware directly, so Zephyr's USBD node is disabled.
+ * That is also why none of mouthpad-usb's CDC/HID devicetree nodes carry over:
+ * there the Zephyr USB stack owns the port, here it must not.
+ */
+
+&usbd {
+	status = "disabled";
+};
+
+/* The upstream dongle's console is a USB CDC node hanging off zephyr_udc0, which
+ * the line above removes -- leaving zephyr,console pointing at a device that no
+ * longer exists (link fails on an undefined __device_dts_ord_*). Point it at the
+ * real UART instead, as the other dongle overlays here do. */
+/ {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+/* Single LED on P1.13 (active low). The upstream dongle dts describes one
+ * green LED plus an RGB; point every channel at the one LED this board has so
+ * any consumer of the colour nodes still resolves. */
+&led0_green {
+	gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+	label = "Raytac LED";
+};
+
+&led1_red {
+	gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+	label = "Raytac LED";
+};
+
+&led1_green {
+	gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+	label = "Raytac LED";
+};
+
+&led1_blue {
+	gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+	label = "Raytac LED";
+};
+
+/* User button = P0.15 on this dongle, not the upstream board's pin. */
+&button0 {
+	gpios = <&gpio0 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+	label = "Raytac Button";
+};
+
+/* SAADC — platform_gpio_nrf.c compiles DT_NODELABEL(adc) whenever CONFIG_ADC
+ * is on (prj.conf), and the upstream dts leaves the node disabled. */
+&adc {
+	status = "okay";
+};
+
+/* No OLED on this dongle, and the shared display service probes i2c1 at boot on
+ * every non-Feather board. The upstream dongle dts leaves i2c1 ENABLED with no
+ * bias-pull-up, so that probe drives a floating bus and the TWIM can hang --
+ * before USB is ever brought up, so the board simply never enumerates and there
+ * is no console to see it happen. display_i2c_init() uses DEVICE_DT_GET_OR_NULL
+ * plus device_is_ready(), so a disabled bus is handled cleanly as "not ready".
+ * (The Makerdiary overlay instead keeps i2c1 and adds internal pull-ups, because
+ * that board exposes the pads for an optional display.)
+ */
+&i2c1 {
+	status = "disabled";
+};
+
+/* Brownout fix, as on the Makerdiary MDK dongle. This board is USB-5V powered in
+ * high-voltage mode (VDDH -> internal REG0 -> VDD) and the upstream dts enables
+ * DCDC only on REG1, leaving REG0 -- the stage carrying the whole 5V->3.3V load
+ * -- in LDO mode, where it collapses VDD under sustained radio load.
+ *
+ * The observed failure here matches that exactly: the board resets endlessly with
+ * NO fault crumb and noinit RAM wiped, which is a POR (brownout), not a CPU
+ * fault -- so the safe-boot path never engages and USB never enumerates.
+ * mouthpad-usb does not set this on the same dongle, but it is not driving this
+ * radio load, so that is not evidence against it.
+ */
+&reg0 {
+	status = "okay";
+};
+
+/* UF2 / no-SoftDevice flash layout (code at 0x1000). The upstream dongle dts
+ * uses the Nordic bootloader partitions — replace them.
+ *
+ * Sizes from the hardware-verified mouthpad-usb map for this dongle: code
+ * 0x1000-0xEE000, storage 0xEE000-0xFE000 (64 kB), and the MBR params page at
+ * 0xFE000 deliberately left outside our partitions. Getting this wrong does not
+ * fail loudly — NVS lands on bootloader flash and bonds/settings corrupt.
+ */
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Adafruit UF2 bootloader MBR */
+		boot_partition: partition@0 {
+			label = "adafruit_boot";
+			reg = <0x00000000 0x00001000>;
+		};
+
+		/* Application code, immediately after the MBR (no SoftDevice) */
+		code_partition: partition@1000 {
+			label = "code_partition";
+			reg = <0x00001000 0x000ed000>;
+		};
+
+		/* Settings/bonds storage (64 kB), ending before the MBR params page */
+		storage_partition: partition@ee000 {
+			label = "storage";
+			reg = <0x000ee000 0x00010000>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		zephyr,code-partition = &code_partition;
+		zephyr,settings-partition = &storage_partition;
+	};
+};
+
+/* Zephyr open-source link layer instead of Nordic's SoftDevice Controller: the
+ * closed controller refuses the Switch 2's 5 ms connection interval, and the
+ * open one is patchable (see nrf/patches). Selecting it needs this chosen node,
+ * not just CONFIG_BT_LL_SW_SPLIT. */
+&bt_hci_sdc { status = "disabled"; };
+&bt_hci_controller { status = "okay"; };
+/ { chosen { zephyr,bt-hci = &bt_hci_controller; }; };

@@ -1124,6 +1124,36 @@ monitor-bt2usb_makerdiary_nrf52840:
 	@cd nrf && $(MAKE) monitor
 
 # --- Makerdiary nRF52840 MDK USB Dongle universal (GPIO pad + BLE + USB) ---
+.PHONY: universal_raytac_mdbt50q_rx
+universal_raytac_mdbt50q_rx:
+	@echo "$(YELLOW)Building universal for Raytac MDBT50Q-RX dongle...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=raytac_mdbt50q_rx APP_TYPE=universal
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_raytac_mdbt50q_rx.uf2
+	@echo "$(GREEN)✓ universal_raytac_mdbt50q_rx built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_raytac_mdbt50q_rx.uf2"
+	@echo ""
+
+.PHONY: flash-universal_raytac_mdbt50q_rx
+flash-universal_raytac_mdbt50q_rx: universal_raytac_mdbt50q_rx
+	@cd nrf && $(MAKE) flash-uf2
+
+.PHONY: bt2usb_raytac_mdbt50q_rx
+bt2usb_raytac_mdbt50q_rx:
+	@echo "$(YELLOW)Building bt2usb for Raytac MDBT50Q-RX dongle...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=raytac_mdbt50q_rx APP_TYPE=bt2usb
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_raytac_mdbt50q_rx.uf2
+	@echo "$(GREEN)✓ bt2usb_raytac_mdbt50q_rx built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_raytac_mdbt50q_rx.uf2"
+	@echo ""
+
+.PHONY: flash-bt2usb_raytac_mdbt50q_rx
+flash-bt2usb_raytac_mdbt50q_rx: bt2usb_raytac_mdbt50q_rx
+	@cd nrf && $(MAKE) flash-uf2
+
 .PHONY: universal_makerdiary_nrf52840
 universal_makerdiary_nrf52840:
 	@echo "$(YELLOW)Building universal for Makerdiary nRF52840 MDK USB Dongle...$(NC)"

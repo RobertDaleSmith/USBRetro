@@ -374,8 +374,11 @@ static bool bt_nrf_addr_claimed = false;
 
 static void nrf_apply_local_addr(bd_addr_t local_addr)
 {
-    bt_nrf_ident_mode = (int)ble_output_get_mode();
 #ifdef CONFIG_BLE_PER_MODE_IDENTITY
+    // Must stay inside this guard: ble_output_get_mode() only exists in builds
+    // that compile the BLE peripheral. Central-only apps (bt2usb) do not, and an
+    // unguarded call here broke their link.
+    bt_nrf_ident_mode = (int)ble_output_get_mode();
     // Each output mode advertises from its own permanent address so hosts treat the
     // modes as separate peers and never reuse a cached GATT database across a mode
     // switch. Deterministic, so a mode's bond survives reboots and reflashes.

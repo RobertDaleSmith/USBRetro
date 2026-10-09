@@ -258,6 +258,11 @@ static bool ble_output_is_enabled(void)
 }
 #endif
 #if REQUIRE_BT_INPUT
+// NOTE: on a fresh flash (router_saved == 0) this stays false while ROUTER.GET
+// reports "bt_input": true for a REQUIRE_BT_INPUT build -- the device claims the
+// BT host is enabled and never scans until some router setting is saved. Real
+// inconsistency, but fixing it changes boot behaviour on every universal board,
+// so it is deliberately left alone here rather than ridden in on a board port.
 static bool bt_input_enabled = false;
 #endif
 

@@ -1,7 +1,7 @@
 # Makefile for Joypad on nRF52840 boards (nRF Connect SDK / Zephyr)
 #
 # Supported boards: xiao_ble, adafruit_feather_nrf52840, aprbrother_nrf52840,
-#                   makerdiary_nrf52840
+#                   makerdiary_nrf52840, raytac_mdbt50q_rx
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined),
 #                   universal (sensor input + BLE peripheral + USB)
@@ -32,6 +32,16 @@ endif
 ifeq ($(BOARD),makerdiary_nrf52840)
     ZEPHYR_BOARD := nrf52840_mdk_usb_dongle
 endif
+# Raytac MDBT50Q-RX is the upstream nrf52840dongle board + its own overlay --
+# the SAME upstream board as the April Brother dongle, so these two can only be
+# told apart by the alias below, never by ZEPHYR_BOARD.
+ifeq ($(BOARD),raytac_mdbt50q_rx)
+    ZEPHYR_BOARD := nrf52840dongle/nrf52840
+    # Explicit, so this Adafruit-bootloader layout applies to THIS board only.
+    # Naming it pm_static_nrf52840dongle_nrf52840.yml would also capture the
+    # April Brother dongle, which shares that Zephyr board.
+    PM_STATIC := $(shell pwd)/pm_static_raytac_mdbt50q_rx.yml
+endif
 
 # Auto-detect NCS toolchain (adds west, cmake, python3, etc. to PATH)
 NCS_TOOLCHAIN := $(lastword $(wildcard /opt/nordic/ncs/toolchains/*/bin))
@@ -48,6 +58,18 @@ APP_CONF := $(wildcard $(shell pwd)/prj_$(APP_TYPE).conf)
 
 BUILD_ARGS := west build -b $(ZEPHYR_BOARD) . --pristine=always --
 BUILD_ARGS += -DAPP_TYPE=$(APP_TYPE)
+# west builds against ZEPHYR_BOARD, so CMake never sees our alias. Pass it
+# explicitly: two aliases can map to one Zephyr board (April Brother and Raytac
+# RX both use nrf52840dongle) and the board identity must follow the alias.
+#
+# NOTE: under sysbuild neither -DVAR nor -Dnrf_VAR reaches the application
+# image's CMake -- both only land in the sysbuild cache. nrf/CMakeLists.txt
+# therefore discriminates boards on DTC_OVERLAY_FILE, which IS propagated. This
+# is kept only for the sysbuild layer and for `make` readability.
+BUILD_ARGS += -DJOYPAD_BOARD=$(BOARD)
+ifneq ($(PM_STATIC),)
+    BUILD_ARGS += -DPM_STATIC_YML_FILE=$(PM_STATIC)
+endif
 ifneq ($(OVERLAY),)
     BUILD_ARGS += -DDTC_OVERLAY_FILE="$(OVERLAY)"
 endif

@@ -171,6 +171,18 @@ static void blue_led_set(bool on)
     }
 }
 
+#elif defined(BOARD_RAYTAC_MDBT50Q_RX)
+
+// ============================================================================
+// Raytac MDBT50Q-RX dongle: ONE LED (P1.13), active LOW. There is no RGB and no
+// WS2812 here, so colour cannot be shown -- the indicator is on whenever any
+// channel is non-zero (see set_rgb below), which keeps the blink/solid status
+// behaviour while losing only the mode colour.
+// ============================================================================
+
+#define LED_SINGLE_PIN 13  // P1.13
+#define LED_PORT_LABEL DT_NODELABEL(gpio1)
+
 #elif defined(BOARD_MAKERDIARY_NRF52840)
 
 // ============================================================================
@@ -235,9 +247,15 @@ static uint32_t state_change_ms = 0;
 static void set_rgb(bool r, bool g, bool b)
 {
     if (!led_port) return;
+#ifdef LED_SINGLE_PIN
+    // One LED for all three channels: OR them. Writing each channel to the same
+    // pin would let the last one win, so a red-only colour would read as OFF.
+    gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 0 : 1);
+#else
     gpio_pin_set(led_port, LED_RED_PIN, r ? 0 : 1);
     gpio_pin_set(led_port, LED_GREEN_PIN, g ? 0 : 1);
     gpio_pin_set(led_port, LED_BLUE_PIN, b ? 0 : 1);
+#endif
 }
 
 static void set_color(uint8_t r, uint8_t g, uint8_t b)
@@ -324,18 +342,27 @@ void neopixel_init(void)
 
     blue_led_set(true);
 #else
-    led_port = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+    // Use the board's declared port, not a hardcoded gpio0: the Raytac RX's one
+    // LED is on P1.13, so grabbing gpio0 here drove pin 13 of the WRONG port and
+    // the LED never lit. LED_PORT_LABEL is set per board above.
+    led_port = DEVICE_DT_GET(LED_PORT_LABEL);
     if (!device_is_ready(led_port)) {
         printf("[led_nrf] GPIO port not ready\n");
         led_port = NULL;
         return;
     }
 
+#ifdef LED_SINGLE_PIN
+    // HIGH = off (active low). Only one LED on this board.
+    gpio_pin_configure(led_port, LED_SINGLE_PIN, GPIO_OUTPUT_HIGH);
+    printf("[led_nrf] single LED initialized (P1.%d, active low)\n", LED_SINGLE_PIN);
+#else
     gpio_pin_configure(led_port, LED_RED_PIN, GPIO_OUTPUT_HIGH);
     gpio_pin_configure(led_port, LED_GREEN_PIN, GPIO_OUTPUT_HIGH);
     gpio_pin_configure(led_port, LED_BLUE_PIN, GPIO_OUTPUT_HIGH);
     printf("[led_nrf] RGB LEDs initialized (R=P0.%d G=P0.%d B=P0.%d, active low)\n",
            LED_RED_PIN, LED_GREEN_PIN, LED_BLUE_PIN);
+#endif
 #endif
 }
 

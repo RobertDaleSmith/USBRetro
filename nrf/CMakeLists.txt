@@ -867,7 +867,18 @@ endif()
 string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 
 # Board-specific compile definitions
-if(BOARD MATCHES "adafruit_feather_nrf52840")
+# April Brother and Raytac MDBT50Q-RX are both built as the upstream
+# nrf52840dongle board, so BOARD alone cannot distinguish them. Discriminate on
+# the board overlay path, which IS present in this image's cache
+# (DTC_OVERLAY_FILE) -- unlike a plain -D variable, which under sysbuild lands
+# only in the sysbuild cache and never reaches the application image. Passing
+# -DJOYPAD_BOARD (with or without the nrf_ image prefix) silently left it empty
+# here, and the Raytac RX came up identifying as an April Brother, with that
+# board's LED and button pins.
+if(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_rx")
+    set(BOARD_DEFINE "BOARD_RAYTAC_MDBT50Q_RX=1")
+    set(BOARD_NAME_STR "raytac_mdbt50q_rx")
+elseif(BOARD MATCHES "adafruit_feather_nrf52840")
     set(BOARD_DEFINE "BOARD_FEATHER_NRF52840=1")
     set(BOARD_NAME_STR "adafruit_feather_nrf52840")
 elseif(BOARD MATCHES "nrf52840dongle")
