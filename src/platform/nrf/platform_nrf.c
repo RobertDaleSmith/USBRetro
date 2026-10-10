@@ -91,10 +91,22 @@ uint32_t tusb_time_millis_api(void)
 
 void platform_reboot_bootloader(void)
 {
+#ifdef BOARD_RAYTAC_MDBT50Q_CX40
+    // This dongle ships Nordic's Open Bootloader, not the Adafruit UF2 one, and
+    // it looks for 0xB1 (BOOTLOADER_DFU_START). Writing 0x57 here would be
+    // ignored and the board would just reboot into the app -- leaving no software
+    // route back into DFU, which matters because this board has no UF2 drive and
+    // is flashed over `nrfutil dfu serial`.
+    //
+    // Hardware fallback if an image is ever truly dud: hold SW1 (P1.6, on the far
+    // side from the USB connector) while plugging in. The bootloader itself lives
+    // at 0xF4000-0x100000 and is never written by our images.
+    NRF_POWER->GPREGRET = 0xB1;
+#else
     // Adafruit nRF52 UF2 bootloader checks GPREGRET for magic value 0x57
     // on boot. If set, it enters UF2 mass storage mode instead of the app.
-    // Nordic DFU bootloader uses 0xB1 instead.
     NRF_POWER->GPREGRET = 0x57;
+#endif
     sys_reboot(SYS_REBOOT_COLD);
 }
 

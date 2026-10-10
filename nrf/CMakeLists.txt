@@ -875,7 +875,10 @@ string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 # -DJOYPAD_BOARD (with or without the nrf_ image prefix) silently left it empty
 # here, and the Raytac RX came up identifying as an April Brother, with that
 # board's LED and button pins.
-if(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_rx")
+if(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_cx_40")
+    set(BOARD_DEFINE "BOARD_RAYTAC_MDBT50Q_CX40=1")
+    set(BOARD_NAME_STR "raytac_mdbt50q_cx_40")
+elseif(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_rx")
     set(BOARD_DEFINE "BOARD_RAYTAC_MDBT50Q_RX=1")
     set(BOARD_NAME_STR "raytac_mdbt50q_rx")
 elseif(BOARD MATCHES "adafruit_feather_nrf52840")

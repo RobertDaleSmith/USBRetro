@@ -1124,6 +1124,45 @@ monitor-bt2usb_makerdiary_nrf52840:
 	@cd nrf && $(MAKE) monitor
 
 # --- Makerdiary nRF52840 MDK USB Dongle universal (GPIO pad + BLE + USB) ---
+.PHONY: universal_raytac_mdbt50q_cx_40
+universal_raytac_mdbt50q_cx_40:
+	@echo "$(YELLOW)Building universal for Raytac MDBT50Q-CX-40 dongle...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=raytac_mdbt50q_cx_40 APP_TYPE=universal
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.hex \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_raytac_mdbt50q_cx_40.hex
+	@echo "$(GREEN)✓ universal_raytac_mdbt50q_cx_40 built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_raytac_mdbt50q_cx_40.hex"
+	@echo "  Nordic legacy DFU board: package with nrfutil, there is no UF2 drive."
+	@echo ""
+
+.PHONY: flash-universal_raytac_mdbt50q_cx_40
+flash-universal_raytac_mdbt50q_cx_40: universal_raytac_mdbt50q_cx_40
+	@# Nordic legacy DFU, not UF2: package the HEX and push it over the DFU serial
+	@# port. hw-version 52 / sd-req 0x00 = nRF52 with no SoftDevice, matching the
+	@# pm_static layout (app right after the MBR at 0x1000).
+	@echo "$(YELLOW)Packaging DFU image...$(NC)"
+	@nrfutil pkg generate --hw-version 52 --sd-req 0x00 \
+	    --application-version $${DFU_VERSION:-1} \
+	    --application $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_raytac_mdbt50q_cx_40.hex \
+	    /tmp/joypad_cx40_dfu.zip
+	@echo "$(YELLOW)Put the dongle in DFU mode, then set CX_PORT and re-run if autodetect picks wrong.$(NC)"
+	@PORT="$${CX_PORT:-$$(ls /dev/cu.usbmodem* 2>/dev/null | head -1)}"; \
+	 echo "Flashing via $$PORT"; \
+	 nrfutil dfu serial -pkg /tmp/joypad_cx40_dfu.zip -p "$$PORT"
+	@echo "$(GREEN)✓ flashed$(NC)"
+
+.PHONY: bt2usb_raytac_mdbt50q_cx_40
+bt2usb_raytac_mdbt50q_cx_40:
+	@echo "$(YELLOW)Building bt2usb for Raytac MDBT50Q-CX-40 dongle...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=raytac_mdbt50q_cx_40 APP_TYPE=bt2usb
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.hex \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_raytac_mdbt50q_cx_40.hex
+	@echo "$(GREEN)✓ bt2usb_raytac_mdbt50q_cx_40 built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_raytac_mdbt50q_cx_40.hex"
+	@echo ""
+
 .PHONY: universal_raytac_mdbt50q_rx
 universal_raytac_mdbt50q_rx:
 	@echo "$(YELLOW)Building universal for Raytac MDBT50Q-RX dongle...$(NC)"

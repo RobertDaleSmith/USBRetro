@@ -171,6 +171,19 @@ static void blue_led_set(bool on)
     }
 }
 
+#elif defined(BOARD_RAYTAC_MDBT50Q_CX40)
+
+// ============================================================================
+// Raytac MDBT50Q-CX-40 dongle: TWO LEDs, D1 = P0.06 and D2 = P0.08, active LOW.
+// Three colour channels over two pins, so two channels necessarily share one --
+// see set_rgb, which ORs channels that land on the same pin.
+// ============================================================================
+
+#define LED_RED_PIN    8  // P0.08 (D2)
+#define LED_GREEN_PIN  6  // P0.06 (D1)
+#define LED_BLUE_PIN   6  // P0.06 (D1), shared with green
+#define LED_PORT_LABEL DT_NODELABEL(gpio0)
+
 #elif defined(BOARD_RAYTAC_MDBT50Q_RX)
 
 // ============================================================================
@@ -248,13 +261,28 @@ static void set_rgb(bool r, bool g, bool b)
 {
     if (!led_port) return;
 #ifdef LED_SINGLE_PIN
-    // One LED for all three channels: OR them. Writing each channel to the same
-    // pin would let the last one win, so a red-only colour would read as OFF.
+    // One LED for every channel (Raytac RX): OR them.
     gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 0 : 1);
 #else
-    gpio_pin_set(led_port, LED_RED_PIN, r ? 0 : 1);
-    gpio_pin_set(led_port, LED_GREEN_PIN, g ? 0 : 1);
-    gpio_pin_set(led_port, LED_BLUE_PIN, b ? 0 : 1);
+    // Boards with fewer than three LEDs map two channels onto one pin (Raytac
+    // CX-40: green and blue both on D1). Writing each channel in turn would let
+    // the LAST one win, so e.g. green-only would be switched on by green and
+    // straight back off by blue. OR the channels that share a pin, then write
+    // each pin once.
+    const uint8_t pin[3] = { LED_RED_PIN, LED_GREEN_PIN, LED_BLUE_PIN };
+    bool on[3] = { r, g, b };
+    for (int i = 0; i < 3; i++) {
+        for (int j = i + 1; j < 3; j++) {
+            if (pin[j] == pin[i]) {
+                bool any = on[i] || on[j];
+                on[i] = any;
+                on[j] = any;
+            }
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        gpio_pin_set(led_port, pin[i], on[i] ? 0 : 1);
+    }
 #endif
 }
 

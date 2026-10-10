@@ -1,0 +1,38 @@
+# Static partition layout for the Raytac MDBT50Q-CX-40 dongle ONLY.
+#
+# Selected explicitly via -DPM_STATIC_YML_FILE from nrf/Makefile. Partition
+# Manager owns the flash map in this sysbuild build and ignores devicetree
+# `partitions` nodes entirely; with no static layout it invents one, and on the
+# sibling RX dongle the invented layout put the app at 0x0 (unrunnable, since the
+# image is linked at 0x1000) and NVS inside the bootloader.
+#
+# Nordic nRF5 legacy DFU bootloader, which lives at the top of flash:
+#   0x000000-0x001000  MBR
+#   0x001000-0x0ec000  application
+#   0x0ec000-0x0f4000  settings/NVS (32 kB)
+#   0x0f4000-0x100000  legacy DFU bootloader -- must stay reserved
+app:
+  address: 0x1000
+  end_address: 0xEC000
+  region: flash_primary
+  size: 0xEB000
+nrf5_mbr:
+  address: 0x0
+  end_address: 0x1000
+  region: flash_primary
+  size: 0x1000
+settings_storage:
+  address: 0xEC000
+  end_address: 0xF4000
+  region: flash_primary
+  size: 0x8000
+legacy_bootloader_storage:
+  address: 0xF4000
+  end_address: 0x100000
+  region: flash_primary
+  size: 0xC000
+sram_primary:
+  address: 0x20000000
+  end_address: 0x20040000
+  region: sram_primary
+  size: 0x40000

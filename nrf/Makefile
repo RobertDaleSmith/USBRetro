@@ -1,7 +1,8 @@
 # Makefile for Joypad on nRF52840 boards (nRF Connect SDK / Zephyr)
 #
 # Supported boards: xiao_ble, adafruit_feather_nrf52840, aprbrother_nrf52840,
-#                   makerdiary_nrf52840, raytac_mdbt50q_rx
+#                   makerdiary_nrf52840, raytac_mdbt50q_rx,
+#                   raytac_mdbt50q_cx_40
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined),
 #                   universal (sensor input + BLE peripheral + USB)
@@ -42,6 +43,14 @@ ifeq ($(BOARD),raytac_mdbt50q_rx)
     # April Brother dongle, which shares that Zephyr board.
     PM_STATIC := $(shell pwd)/pm_static_raytac_mdbt50q_rx.yml
 endif
+# Raytac MDBT50Q-CX-40 has NO upstream Zephyr definition, so it is built from the
+# out-of-tree board in boards/raytac/mdbt50q_cx_40 (hence BOARD_ROOT). Nordic
+# legacy DFU bootloader, so the artifact is a HEX/.zip, not a UF2.
+ifeq ($(BOARD),raytac_mdbt50q_cx_40)
+    ZEPHYR_BOARD := raytac_mdbt50q_cx_40/nrf52840
+    BOARD_ROOT_ARG := -DBOARD_ROOT=$(shell pwd)
+    PM_STATIC := $(shell pwd)/pm_static_raytac_mdbt50q_cx_40.yml
+endif
 
 # Auto-detect NCS toolchain (adds west, cmake, python3, etc. to PATH)
 NCS_TOOLCHAIN := $(lastword $(wildcard /opt/nordic/ncs/toolchains/*/bin))
@@ -69,6 +78,9 @@ BUILD_ARGS += -DAPP_TYPE=$(APP_TYPE)
 BUILD_ARGS += -DJOYPAD_BOARD=$(BOARD)
 ifneq ($(PM_STATIC),)
     BUILD_ARGS += -DPM_STATIC_YML_FILE=$(PM_STATIC)
+endif
+ifneq ($(BOARD_ROOT_ARG),)
+    BUILD_ARGS += $(BOARD_ROOT_ARG)
 endif
 ifneq ($(OVERLAY),)
     BUILD_ARGS += -DDTC_OVERLAY_FILE="$(OVERLAY)"

@@ -1,0 +1,59 @@
+/* Joypad — Raytac MDBT50Q-CX-40 dongle devicetree overlay
+ *
+ * Built as the OUT-OF-TREE board `raytac_mdbt50q_cx_40/nrf52840` (definition in
+ * boards/raytac/mdbt50q_cx_40, carried from Augmental's mouthpad-usb, which runs
+ * this dongle in production) + this overlay. Unlike the RX, upstream Zephyr has
+ * no definition for this board, which is why BOARD_ROOT is needed.
+ *
+ * Bootloader: Nordic nRF5 legacy DFU (NOT UF2) living at the top of flash, so
+ * the image ships as a signed .zip flashed with nrfutil over the serial DFU
+ * port -- there is no drag-and-drop drive for this board.
+ *
+ * Hardware (from the board dts):
+ *   LED D1  P0.06, active LOW
+ *   LED D2  P0.08, active LOW
+ *   button  P1.06, active LOW with pull-up   <-- note gpio1, not gpio0
+ *
+ * TinyUSB drives the USB hardware directly, so Zephyr's USBD node is disabled.
+ * That is why none of mouthpad-usb's CDC/HID devicetree nodes carry over: there
+ * the Zephyr USB stack owns the port, here it must not.
+ */
+
+&usbd {
+	status = "disabled";
+};
+
+/* The board's console is a USB CDC node on zephyr_udc0, which the line above
+ * removes -- leaving zephyr,console pointing at a device that no longer exists
+ * (the link then fails on an undefined __device_dts_ord_*). Point it at uart0,
+ * as the other dongle overlays here do. */
+/ {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+/* No display on this dongle. */
+&i2c1 {
+	status = "disabled";
+};
+
+/* SAADC — platform_gpio_nrf.c compiles DT_NODELABEL(adc) whenever CONFIG_ADC is
+ * on (prj.conf), and the board dts leaves the node disabled. */
+&adc {
+	status = "okay";
+};
+
+/* Partitions are deliberately NOT declared here. This is a sysbuild build, so
+ * Partition Manager owns the flash map and silently ignores a `partitions` node
+ * in an overlay -- see pm_static_raytac_mdbt50q_cx_40.yml, selected explicitly
+ * via -DPM_STATIC_YML_FILE. */
+
+/* Zephyr open-source link layer instead of Nordic's SoftDevice Controller: the
+ * closed controller refuses the Switch 2's 5 ms connection interval, and the
+ * open one is patchable (see nrf/patches). Selecting it needs this chosen node,
+ * not just CONFIG_BT_LL_SW_SPLIT. */
+&bt_hci_sdc { status = "disabled"; };
+&bt_hci_controller { status = "okay"; };
+/ { chosen { zephyr,bt-hci = &bt_hci_controller; }; };
