@@ -739,6 +739,10 @@ static void cmd_flash_b(const char* json)
 static void cmd_ota(const char* json)
 {
     (void)json;
+    if (!platform_has_ota()) {
+        send_error("no OTA path on this board");
+        return;
+    }
     send_ok();
     pending_reboot = PENDING_OTA;
     pending_reboot_time = platform_time_ms();

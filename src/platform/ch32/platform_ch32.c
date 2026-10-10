@@ -90,6 +90,16 @@ void platform_reboot_bootloader(void) {
   platform_reboot();
 }
 
+bool platform_has_ota(void) {
+  // No software-reachable update mode at all (see above), so the CDC OTA command
+  // refuses rather than resetting into the running app.
+  return false;
+}
+
+void platform_reboot_ota(void) {
+  platform_reboot_bootloader();
+}
+
 // Note: tusb_time_millis_api()/tusb_time_delay_ms_api() (used by the ch32 USB
 // drivers) are provided by the TinyUSB board layer (hw/bsp/board.c). A future
 // standalone ch32/ build without that board layer must supply them itself.

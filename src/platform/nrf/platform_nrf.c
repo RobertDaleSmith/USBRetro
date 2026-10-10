@@ -110,6 +110,20 @@ void platform_reboot_bootloader(void)
     sys_reboot(SYS_REBOOT_COLD);
 }
 
+bool platform_has_ota(void)
+{
+#ifdef BOARD_RAYTAC_MDBT50Q_CX40
+    // Nordic's Open Bootloader has no BLE OTA path -- its only DFU transport is
+    // USB CDC -- so 0xA8 means nothing on this dongle. Rebooting anyway would be
+    // worse than refusing: asked over the BLE NUS it would strand the board in a
+    // mode that needs a physical USB connection to get out of. Use BOOTSEL (which
+    // writes this bootloader's own 0xB1 magic) and `nrfutil dfu serial` instead.
+    return false;
+#else
+    return true;
+#endif
+}
+
 void platform_reboot_ota(void)
 {
     // Adafruit nRF52 bootloader: GPREGRET = 0xA8 (DFU_MAGIC_OTA_APP_RESET) boots

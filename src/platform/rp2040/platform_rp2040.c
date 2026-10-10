@@ -53,6 +53,12 @@ void platform_reboot_bootloader(void)
     reset_usb_boot(0, 0);
 }
 
+bool platform_has_ota(void)
+{
+    // No wireless DFU, but the fallback below does reach a usable update mode.
+    return true;
+}
+
 void platform_reboot_ota(void)
 {
     // No BLE OTA path on RP2040 — fall back to the USB bootloader.

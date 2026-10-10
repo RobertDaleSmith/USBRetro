@@ -47,6 +47,11 @@ void platform_reboot_bootloader(void);
 // other platforms fall back to the normal bootloader.
 void platform_reboot_ota(void);
 
+// True if platform_reboot_ota() can actually reach a firmware-update mode. False
+// on boards whose bootloader has no OTA path at all, so callers can refuse
+// instead of rebooting into something that never comes back.
+bool platform_has_ota(void);
+
 // True if the device is currently powered from USB (VBUS present).
 bool platform_usb_powered(void);
 

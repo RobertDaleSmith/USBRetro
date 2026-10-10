@@ -161,6 +161,12 @@ void platform_reboot_bootloader(void)
 #endif
 }
 
+bool platform_has_ota(void)
+{
+    // No wireless DFU, but the fallback below does reach a usable update mode.
+    return true;
+}
+
 void platform_reboot_ota(void)
 {
     // No BLE OTA path here — fall back to the TinyUF2 bootloader.
