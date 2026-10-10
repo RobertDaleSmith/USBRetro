@@ -27,7 +27,7 @@
 #include "hid_parser.h"
 #include <string.h>
 #include <stdbool.h>
-#include <assert.h>
+#include <stdio.h>
 
 #ifdef DYNAMIC
 #include <malloc.h>
@@ -39,6 +39,7 @@ __attribute__ ((always_inline)) static inline void release_##structure(structure
 enum { MAX_##structure =  size }; \
 static structure##_t structure##s[MAX_##structure]; \
 static bool structure##sAcquired[MAX_##structure]; \
+static bool structure##PoolWarned; \
 static structure##_t* acquire_##structure() \
 {\
 	for(uint8_t i=0; i < MAX_##structure; i++) \
@@ -49,19 +50,39 @@ static structure##_t* acquire_##structure() \
 			return &structure##s[i];\
 		}\
 	}\
-	assert(false);\
+	if (!structure##PoolWarned)\
+	{\
+		structure##PoolWarned = true;\
+		printf("[HID_PARSER] " #structure " pool exhausted (%u) - descriptor rejected\n", (unsigned)MAX_##structure);\
+	}\
 	return NULL;\
 }\
 static void release_##structure(structure##_t* pointer)\
 {\
+	if (!pointer) return;\
+	if (pointer < &structure##s[0] || pointer > &structure##s[MAX_##structure - 1]) return;\
 	structure##sAcquired[pointer - structure##s] = false;\
 }
 #endif
 
-ACQUIRE_AND_RELEASE(HID_ReportSizeInfo, 100);
-ACQUIRE_AND_RELEASE(HID_CollectionPath, 25);
+// Pool sizes. A descriptor that needs more is now rejected with a parse error
+// rather than resetting the device, so these are a capability limit, not a
+// crash threshold. Overridable per build because the cost is RAM that every
+// app pays: HID_ReportItem_t is 64 bytes, so the item pool dominates.
+#ifndef HID_PARSER_MAX_REPORT_SIZE_INFO
+#define HID_PARSER_MAX_REPORT_SIZE_INFO 100
+#endif
+#ifndef HID_PARSER_MAX_COLLECTION_PATHS
+#define HID_PARSER_MAX_COLLECTION_PATHS 25
+#endif
+#ifndef HID_PARSER_MAX_REPORT_ITEMS
+#define HID_PARSER_MAX_REPORT_ITEMS 50
+#endif
+
+ACQUIRE_AND_RELEASE(HID_ReportSizeInfo, HID_PARSER_MAX_REPORT_SIZE_INFO);
+ACQUIRE_AND_RELEASE(HID_CollectionPath, HID_PARSER_MAX_COLLECTION_PATHS);
 ACQUIRE_AND_RELEASE(HID_ReportInfo, 1);
-ACQUIRE_AND_RELEASE(HID_ReportItem, 50);
+ACQUIRE_AND_RELEASE(HID_ReportItem, HID_PARSER_MAX_REPORT_ITEMS);
 
 void USB_FreeReportInfo(HID_ReportInfo_t *ReportInfo)
 {
@@ -86,8 +107,19 @@ uint8_t USB_ProcessHIDReport(uint8_t dev_addr,
 {
 	HID_ReportSizeInfo_t *FirstReportIDSize = acquire_HID_ReportSizeInfo();
 	HID_CollectionPath_t *FirstCollectionPath = acquire_HID_CollectionPath();
-	memset(FirstCollectionPath, 0, sizeof(HID_CollectionPath_t));
 	HID_ReportInfo_t *ParserData = acquire_HID_ReportInfo();
+	if (!FirstReportIDSize || !FirstCollectionPath || !ParserData)
+	{
+		// A previous parse may still hold the pools (one ReportInfo total), or the
+		// descriptor before this one exhausted them. Hand everything back and let
+		// the caller fail cleanly instead of dereferencing NULL.
+		release_HID_ReportInfo(ParserData);
+		release_HID_CollectionPath(FirstCollectionPath);
+		release_HID_ReportSizeInfo(FirstReportIDSize);
+		return FirstReportIDSize ? HID_PARSE_InsufficientCollectionPaths
+		                         : HID_PARSE_InsufficientReportIDItems;
+	}
+	memset(FirstCollectionPath, 0, sizeof(HID_CollectionPath_t));
 	HID_StateTable_t StateTable[HID_STATETABLE_STACK_DEPTH];
 	HID_StateTable_t *CurrStateTable = &StateTable[0];
 	HID_CollectionPath_t *CurrCollectionPath = NULL;
@@ -220,8 +252,14 @@ uint8_t USB_ProcessHIDReport(uint8_t dev_addr,
 
 					if (CurrReportIDInfo == NULL)
 					{
+						CurrReportIDInfo = acquire_HID_ReportSizeInfo();
+						if (CurrReportIDInfo == NULL)
+						{
+							Result = HID_PARSE_InsufficientReportIDItems;
+							break;
+						}
 						ParserData->TotalDeviceReports++;
-						iterator->Next = CurrReportIDInfo = acquire_HID_ReportSizeInfo();
+						iterator->Next = CurrReportIDInfo;
 						memset(CurrReportIDInfo, 0x00, sizeof(HID_ReportSizeInfo_t));
 					}
 				}
@@ -267,6 +305,11 @@ uint8_t USB_ProcessHIDReport(uint8_t dev_addr,
 						CurrCollectionPath = CurrCollectionPath->Next;
 					}
 					HID_CollectionPath_t *NewCollectionPath = acquire_HID_CollectionPath();
+					if (NewCollectionPath == NULL)
+					{
+						Result = HID_PARSE_InsufficientCollectionPaths;
+						break;
+					}
 					CurrCollectionPath->Next = NewCollectionPath;
 					CurrCollectionPath = NewCollectionPath;
 					memset(CurrCollectionPath, 0, sizeof(HID_CollectionPath_t));
@@ -351,16 +394,25 @@ uint8_t USB_ProcessHIDReport(uint8_t dev_addr,
 
 					if (!(ReportItemData & HID_IOF_CONSTANT) && CALLBACK_HIDParser_FilterHIDReportItem(dev_addr, instance, &NewReportItem))
 					{
+						HID_ReportItem_t *NextReportItem = acquire_HID_ReportItem();
+						if (NextReportItem == NULL)
+						{
+							// Out of item slots. Bail out with an error instead of
+							// asserting: this descriptor came from whatever device
+							// just connected, and a reset here is a remotely
+							// triggered reboot loop.
+							Result = HID_PARSE_InsufficientReportItems;
+							break;
+						}
 						if (!ParserData->FirstReportItem)
 						{
-							ParserData->FirstReportItem = acquire_HID_ReportItem();
-							ParserData->LastReportItem = ParserData->FirstReportItem;
+							ParserData->FirstReportItem = NextReportItem;
 						}
 						else
 						{
-							ParserData->LastReportItem->Next = acquire_HID_ReportItem();
-							ParserData->LastReportItem = ParserData->LastReportItem->Next;
+							ParserData->LastReportItem->Next = NextReportItem;
 						}
+						ParserData->LastReportItem = NextReportItem;
 						memcpy(ParserData->LastReportItem, &NewReportItem, sizeof(HID_ReportItem_t));
 						ParserData->LastReportItem->Next = NULL;
 						ParserData->TotalReportItems++;

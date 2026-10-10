@@ -163,6 +163,10 @@ extern "C"
 		HID_PARSE_UnexpectedEndCollection = 3,	   /**< An END COLLECTION item found without matching COLLECTION item. */
 		HID_PARSE_UsageListOverflow = 4,		   /**< More than \ref HID_USAGE_STACK_DEPTH usages listed in a row. */
 		HID_PARSE_NoUnfilteredReportItems = 5,	   /**< All report items from the device were filtered by the filtering callback routine. */
+		HID_PARSE_InsufficientReportItems = 6,	   /**< The report item pool ran out; the descriptor needs more than
+		                                            *   \ref HID_PARSER_MAX_REPORT_ITEMS filtered items. */
+		HID_PARSE_InsufficientCollectionPaths = 7, /**< The collection path pool ran out. */
+		HID_PARSE_InsufficientReportIDItems = 8,   /**< The per-report-ID size info pool ran out. */
 	};
 
 	/* Private Interface - For use in library only: */
