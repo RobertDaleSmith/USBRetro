@@ -1,5 +1,8 @@
 PRIMARY_SERVICE, GAP_SERVICE
-CHARACTERISTIC, GAP_DEVICE_NAME, READ, "JoypadOS Controller"
+// DYNAMIC so ble_output.c can serve the per-mode name (mode_gap_name) -- a
+// static value here was reported by every non-Xbox mode regardless of what it
+// actually advertised.
+CHARACTERISTIC, GAP_DEVICE_NAME, DYNAMIC | READ,
 // Appearance: Gamepad (0x03C4) — tells macOS to use gamepad icon
 CHARACTERISTIC, GAP_APPEARANCE, READ, C4 03
 

@@ -656,14 +656,55 @@ static void request_send_on_btstack_thread(void *context)
     }
 }
 
+// When the last send request was made, for the stall watchdog in
+// ble_output_send_stall_task(). Nothing acknowledges a can-send-now request, so
+// a lost one is silent and permanent.
+static volatile uint32_t send_req_ms;
+
 static void ble_request_can_send_now(uint16_t handle)
 {
     send_req_handle = handle;
+    send_req_ms = btstack_run_loop_get_time_ms();
     if (send_req_queued) return;  // marshal already in flight; it sends latest
     send_req_queued = true;
     send_req_marshal.callback = &request_send_on_btstack_thread;
     send_req_marshal.context = NULL;
     btstack_run_loop_execute_on_main_thread(&send_req_marshal);
+}
+
+// Recover a wedged send path. Two ways it can stick, both observed on hardware
+// as "connected and subscribed, zero reports, forever":
+//
+//  * send_req_queued never clears. It coalesces requests, so if the marshalled
+//    callback is ever lost, every later request returns early and no report is
+//    ever queued again.
+//  * pending_type stays PENDING_SINPUT_FEATURE. The SInput task deliberately
+//    stashes input behind an in-flight feature response, so a feature that never
+//    goes out holds every subsequent input hostage.
+//
+// Neither is self-correcting, and the controller looks dead while the link is
+// perfectly healthy. If something has been queued for a while with no
+// CAN_SEND_NOW serviced, re-arm: clear the coalescing flag, drop a feature that
+// is going nowhere, and ask again.
+#define BLE_SEND_STALL_MS 400
+static void ble_output_send_stall_task(void)
+{
+    if (!ble_connected || con_handle == HCI_CON_HANDLE_INVALID) return;
+    if (pending_type == PENDING_NONE) return;
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if ((uint32_t)(now - send_req_ms) < BLE_SEND_STALL_MS) return;
+
+    bt_diag_mark(0xC10000FFu);   // send path re-armed
+    if (pending_type == PENDING_SINPUT_FEATURE) {
+        // The feature response is not getting out; stop letting it block input.
+        pending_type = sinput_input_after_feature ? PENDING_SINPUT : PENDING_NONE;
+        sinput_input_after_feature = false;
+    }
+    send_req_queued = false;
+    send_req_ms = now;
+    if (pending_type != PENDING_NONE) {
+        ble_request_can_send_now(con_handle);
+    }
 }
 
 static btstack_context_callback_registration_t hid2_req_marshal;
@@ -689,14 +730,40 @@ static void hid2_request_can_send_now(uint16_t handle)
 }
 #else
 // Single-threaded ports (Pico W): direct call, same context as BTstack.
+static volatile uint32_t send_req_ms;
+
 static void ble_request_can_send_now(uint16_t handle)
 {
+    send_req_ms = btstack_run_loop_get_time_ms();
     hids_device_request_can_send_now_event(handle);
 }
 
 static void hid2_request_can_send_now(uint16_t handle)
 {
     hid2_request_send(handle);
+}
+
+// Same stall recovery as the marshalled ports, minus the coalescing flag they
+// have to clear. There is still one way to wedge here: the SInput task parks
+// input behind an in-flight feature response, so a feature that never goes out
+// holds every later input hostage and the pad looks dead on a healthy link.
+#define BLE_SEND_STALL_MS 400
+static void ble_output_send_stall_task(void)
+{
+    if (!ble_connected || con_handle == HCI_CON_HANDLE_INVALID) return;
+    if (pending_type == PENDING_NONE) return;
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if ((uint32_t)(now - send_req_ms) < BLE_SEND_STALL_MS) return;
+
+    bt_diag_mark(0xC10000FFu);   // send path re-armed
+    if (pending_type == PENDING_SINPUT_FEATURE) {
+        pending_type = sinput_input_after_feature ? PENDING_SINPUT : PENDING_NONE;
+        sinput_input_after_feature = false;
+    }
+    send_req_ms = now;
+    if (pending_type != PENDING_NONE) {
+        ble_request_can_send_now(con_handle);
+    }
 }
 #endif
 
@@ -749,6 +816,39 @@ static const uint8_t scan_resp_standard[] = {
     0x14, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
     'J', 'o', 'y', 'p', 'a', 'd', 'O', 'S', ' ',
     'C', 'o', 'n', 't', 'r', 'o', 'l', 'l', 'e', 'r',
+};
+
+// Per-mode GAP name. One source of truth: the advertising arrays below embed it,
+// gap_set_local_name() publishes it, and the GAP Device Name characteristic is
+// served from here so a host reads the same name after connecting that it saw
+// while scanning. Keep each name's length in step with its adv array -- the
+// legacy advertising payload is capped at 31 bytes.
+#define BLE_SINPUT_NAME "JoypadOS (SInput)"
+
+static const char *mode_gap_name(ble_output_mode_t mode)
+{
+    switch (mode) {
+        case BLE_MODE_XBOX:   return "Joypad Xinput";
+        case BLE_MODE_KBM:    return "Joypad KB+Mouse";
+        case BLE_MODE_KBD:    return "Joypad Keyboard";
+        case BLE_MODE_MOUSE:  return "Joypad Mouse";
+        case BLE_MODE_SINPUT: return BLE_SINPUT_NAME;
+        default:              return "JoypadOS Controller";
+    }
+}
+
+// SInput's name lives in the scan response, like standard mode's. It cannot go
+// in the primary packet: flags(3) + HID UUID(4) + appearance(4) = 11 leaves 20,
+// and the 128-bit NUS UUID alone is 18 of those. Evicting NUS to make room was
+// tried and reverted -- NUS has to be in the PRIMARY packet because that is what
+// companion-app discovery filters on (a NUS-filtered scan stopped finding the
+// device entirely), and the name buys nothing in exchange: our own central
+// defers one advertisement for the scan response and then connects as generic
+// regardless, so it never needed the name inline.
+static const uint8_t scan_resp_sinput[] = {
+    0x12, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
+    'J', 'o', 'y', 'p', 'a', 'd', 'O', 'S', ' ',
+    '(', 'S', 'I', 'n', 'p', 'u', 't', ')',
 };
 
 static const uint8_t adv_data_kbd[] = {
@@ -1129,6 +1229,25 @@ void ble_output_init(void)
 #endif
 }
 
+// ATT read callback. The composite GATT declares GAP Device Name DYNAMIC so the
+// name a host reads after connecting is the same one it saw advertised -- it used
+// to be a single baked-in "JoypadOS Controller" shared by every non-Xbox mode,
+// so a keyboard or an SInput pad reported a name it never advertised. Returning
+// 0 for anything else leaves the static database and hids_device's own service
+// handler untouched.
+static uint16_t att_read_callback(hci_con_handle_t con_handle, uint16_t attribute_handle,
+                                  uint16_t offset, uint8_t *buffer, uint16_t buffer_size)
+{
+    (void)con_handle;
+    if (current_mode != BLE_MODE_XBOX &&
+        attribute_handle == ATT_CHARACTERISTIC_GAP_DEVICE_NAME_01_VALUE_HANDLE) {
+        const char *name = mode_gap_name(current_mode);
+        return att_read_callback_handle_blob((const uint8_t *)name, (uint16_t)strlen(name),
+                                             offset, buffer, buffer_size);
+    }
+    return 0;
+}
+
 // ATT write callback — debug logging for all GATT writes
 static int att_write_callback(hci_con_handle_t con_handle, uint16_t att_handle,
                                uint16_t transaction_mode, uint16_t offset,
@@ -1202,7 +1321,7 @@ void ble_output_late_init(void)
         ? ble_xbox_profile_data : profile_data;
     printf("[ble_output] Using %s GATT database (ptr=%p)\n",
            (current_mode == BLE_MODE_XBOX) ? "Xbox" : "Standard", gatt_db);
-    att_server_init(gatt_db, NULL, att_write_callback);
+    att_server_init(gatt_db, att_read_callback, att_write_callback);
 
 #ifdef SINPUT_BLE_COMPOSITE
     // HID service instance #2 (keyboard + mouse), SInput mode only. hids_device
@@ -1359,28 +1478,23 @@ void ble_output_late_init(void)
     const char *gap_name;
     const uint8_t *adv_data;
     uint16_t adv_data_len;
+    gap_name = mode_gap_name(current_mode);
     if (current_mode == BLE_MODE_XBOX) {
-        gap_name = "Joypad Xinput";
         adv_data = adv_data_xbox;
         adv_data_len = sizeof(adv_data_xbox);
     } else if (current_mode == BLE_MODE_KBM) {
-        gap_name = "Joypad KB+Mouse";
         adv_data = adv_data_kbm;
         adv_data_len = sizeof(adv_data_kbm);
     } else if (current_mode == BLE_MODE_KBD) {
-        gap_name = "Joypad Keyboard";
         adv_data = adv_data_kbd;
         adv_data_len = sizeof(adv_data_kbd);
     } else if (current_mode == BLE_MODE_MOUSE) {
-        gap_name = "Joypad Mouse";
         adv_data = adv_data_mouse;
         adv_data_len = sizeof(adv_data_mouse);
     } else if (current_mode == BLE_MODE_SINPUT) {
-        gap_name = "Joypad SInput";
-        adv_data = adv_data_standard;  // generic HID adv (appearance = gamepad)
+        adv_data = adv_data_standard;  // generic HID adv (appearance = gamepad) + NUS
         adv_data_len = sizeof(adv_data_standard);
     } else {
-        gap_name = "JoypadOS Controller";
         adv_data = adv_data_standard;
         adv_data_len = sizeof(adv_data_standard);
     }
@@ -1392,12 +1506,22 @@ void ble_output_late_init(void)
     memset(null_addr, 0, 6);
     gap_advertisements_set_params(adv_int_min, adv_int_max, 0, 0, null_addr, 0x07, 0x00);
     gap_advertisements_set_data(adv_data_len, (uint8_t *)adv_data);
-    // Standard mode keeps the complete name in the scan response (the primary
-    // adv packet has no room — see adv_data_standard note). Xbox mode's name
-    // fits in its adv packet, so no scan response needed there.
-    if (current_mode != BLE_MODE_XBOX) {
+    // Scan response per mode. Standard is the only one with no room for its name
+    // in the primary packet, so it alone puts the name here. The modes that do
+    // carry their name inline (SInput, KBM, keyboard, mouse) advertise the NUS
+    // UUID here instead -- they used to get scan_resp_standard too, which meant a
+    // keyboard advertised "Joypad Keyboard" in one packet and "JoypadOS
+    // Controller" in the other and hosts could show either. Xbox mode sets no
+    // scan response at all (its GATT has no NUS, and its name is inline).
+    if (current_mode == BLE_MODE_STANDARD) {
         gap_scan_response_set_data(sizeof(scan_resp_standard), (uint8_t *)scan_resp_standard);
+    } else if (current_mode == BLE_MODE_SINPUT) {
+        gap_scan_response_set_data(sizeof(scan_resp_sinput), (uint8_t *)scan_resp_sinput);
     }
+    // KBM/keyboard/mouse carry their name in the primary packet already, and Xbox
+    // mode sets no scan response at all. They used to be handed
+    // scan_resp_standard, so a keyboard advertised "Joypad Keyboard" in one
+    // packet and "JoypadOS Controller" in the other and a host could show either.
     // Always advertise: wireless policy only routes input, never turns BT off.
     set_adv(true);
 
@@ -1656,6 +1780,9 @@ void ble_output_task(void)
     if (current_mode == BLE_MODE_SWITCH2) { switch2_ble_task(); return; }
 #endif
     if (!ble_connected || con_handle == HCI_CON_HANDLE_INVALID) return;
+
+    // Before building anything new, make sure the send path is not wedged.
+    ble_output_send_stall_task();
 
     if (current_mode == BLE_MODE_XBOX) {
         ble_output_task_xbox();
