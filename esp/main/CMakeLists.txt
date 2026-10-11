@@ -412,6 +412,10 @@ if(APP_NEEDS_BTSTACK)
             "${BTSTACK_PATH}/src/ble/gatt-service/nordic_spp_service_server.c"
             # BTstack HID parser (needed by hids_device.c)
             "${BTSTACK_PATH}/src/btstack_hid_parser.c"
+            # GATT *client* in a peripheral build: switch2_ble.c starts the ATT
+            # MTU exchange against our own link, because an ATT server never
+            # initiates it and the Switch 2 console will not pair at MTU 23.
+            "${BTSTACK_PATH}/src/ble/gatt_client.c"
             # BTstack Classic link key DB (needed by btstack_port_esp32.c)
             "${BTSTACK_PATH}/src/classic/btstack_link_key_db_tlv.c"
             # Stub btstack_host_nus_send: cdc_commands.c's FACE.* NUS relay
