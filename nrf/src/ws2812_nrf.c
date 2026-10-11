@@ -174,14 +174,29 @@ static void blue_led_set(bool on)
 #elif defined(BOARD_RAYTAC_MDBT50Q_CX40)
 
 // ============================================================================
-// Raytac MDBT50Q-CX-40 dongle: TWO LEDs, D1 = P0.06 and D2 = P0.08, active LOW.
-// Three colour channels over two pins, so two channels necessarily share one --
-// see set_rgb, which ORs channels that land on the same pin.
+// Raytac MDBT50Q-CX-40 dongle: TWO LEDs, D1 = P0.06 (blue) and D2 = P0.08
+// (red), active LOW. Three colour channels over two pins, so two channels
+// necessarily share one -- see set_rgb, which ORs channels that land on the
+// same pin.
+//
+// D1 is also the "something is on" indicator (LED_PIN_ANY): it lights for any
+// non-black colour, not just its own channels. Without that, a red-only mode
+// colour -- USB output mode Switch is the only one, 64/0/0 -- would depend
+// entirely on D2 and the dongle just looks dead. Augmental's mouthpad-usb runs
+// this same board and routes every channel through D1 for the same reason
+// ("Map primary LED (D1/blue) to all channels"), never relying on D2. Red still
+// drives D2 as well, so red-vs-not stays distinguishable if D2 is populated.
+//
+// Note the stock board definition labels D1 as led0-green; it is physically
+// blue, per mouthpad-usb's overlay for this dongle. Only the colour NAME is
+// wrong -- the pin is right -- so this mapping keeps the pins and ignores the
+// labels.
 // ============================================================================
 
-#define LED_RED_PIN    8  // P0.08 (D2)
-#define LED_GREEN_PIN  6  // P0.06 (D1)
+#define LED_RED_PIN    8  // P0.08 (D2, red)
+#define LED_GREEN_PIN  6  // P0.06 (D1, blue)
 #define LED_BLUE_PIN   6  // P0.06 (D1), shared with green
+#define LED_PIN_ANY    6  // P0.06 (D1) also lights for ANY channel
 #define LED_PORT_LABEL DT_NODELABEL(gpio0)
 
 #elif defined(BOARD_RAYTAC_MDBT50Q_RX)
@@ -280,6 +295,13 @@ static void set_rgb(bool r, bool g, bool b)
             }
         }
     }
+#ifdef LED_PIN_ANY
+    // This board's primary LED stands in for every channel, so a colour that
+    // uses none of its own channels still shows up.
+    for (int i = 0; i < 3; i++) {
+        if (pin[i] == LED_PIN_ANY && (r || g || b)) on[i] = true;
+    }
+#endif
     for (int i = 0; i < 3; i++) {
         gpio_pin_set(led_port, pin[i], on[i] ? 0 : 1);
     }

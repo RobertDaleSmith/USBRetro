@@ -9,8 +9,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Xbox BLE input report (16 bytes, Report ID 3)
-// Matches Xbox One S / Series X BLE format
+// Xbox BLE input report (16 bytes, Report ID 1)
+// Matches Xbox One S / Series X BLE format, which uses input report ID 1
+// (ble_xbox.gatt declares REPORT_REFERENCE 1,1 and ble_output.c sends on ID 1)
 typedef struct __attribute__((packed)) {
     uint16_t lx;            // Left stick X  (0-65535, 32768=center)
     uint16_t ly;            // Left stick Y  (0-65535, 32768=center)
@@ -23,7 +24,8 @@ typedef struct __attribute__((packed)) {
     uint8_t share;          // Share button (bit 0) + padding
 } ble_xbox_report_t;
 
-// Xbox BLE rumble output report (8 bytes, Report ID 4)
+// Xbox BLE rumble output report (8 bytes, Report ID 3 -- ble_xbox.gatt
+// declares REPORT_REFERENCE 3,2 for the output report)
 typedef struct __attribute__((packed)) {
     uint8_t enable;         // Actuator enable bits (0x03 = strong + weak)
     uint8_t lt_force;       // Left trigger rumble (0-100)
