@@ -147,6 +147,11 @@ typedef struct {
 void uart_peer_init(const uart_peer_config_t* config);
 // Pump RX (decode + dispatch frames) and drain the TX ring. Call every loop.
 void uart_peer_task(void);
+
+// Link loss telemetry. Both are silent-drop paths on an unacknowledged link: a
+// CRC mismatch on receive, and a full TX ring on send. Non-zero means the
+// periodic state refresh is doing real work.
+void uart_peer_get_link_stats(uint32_t* crc_drops, uint32_t* ring_drops);
 // True if a valid frame was received within the link timeout.
 bool uart_peer_is_connected(void);
 // Link RX diagnostics: total raw bytes seen on the wire / valid frames decoded.

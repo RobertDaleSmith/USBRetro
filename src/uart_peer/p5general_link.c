@@ -76,15 +76,38 @@ void p5general_link_on_frame(uint8_t type, const uint8_t* payload, uint16_t plen
 //   Signing is kept to one request in flight (hash_pending stays set until the
 //   signed report returns, which also blocks the mode from building a new one).
 // ============================================================================
+// How long to wait for a SIGN_RESP before re-sending the request. The PS5 polls
+// at ~250 Hz, so a few frames of latency on a dropped request is invisible --
+// whereas never retrying stalls the output permanently.
+#define P5G_SIGN_RETRY_MS 20
+
 void p5general_link_device_task(void) {
     p5general_auth_data_t* a = &p5general_auth_data;
     static bool sign_in_flight = false;
 
-    // Report to sign: forward once; keep hash_pending set (mode uses it to hold
-    // off building the next report) until SIGN_RESP clears it.
-    if (a->hash_pending && !sign_in_flight) {
+    // Report to sign: forward it, and RETRY if no SIGN_RESP comes back.
+    //
+    // This used to send exactly once and then wait on sign_in_flight forever.
+    // The link drops a frame silently when the TX ring is full (see uart_peer.c),
+    // and a single lost SIGN_REQ -- or lost SIGN_RESP -- then wedged the output
+    // permanently: hash_pending stayed set, so p5general_mode_send_report()
+    // returned false on every call and the PS5 received NOTHING, for good.
+    //
+    // It showed up as "works with a wired controller, dead over BLE": running the
+    // BLE central on this board puts input frames on the same link, so the ring
+    // is far likelier to be full exactly when a SIGN_REQ needs to go out. The
+    // measured ring-drop counter made that concrete.
+    //
+    // Retrying costs one duplicate 64-byte request in the worst case -- the
+    // dongle signs whatever it is handed, and the mode only consumes the next
+    // SIGN_RESP -- which is cheap next to a console that has stopped responding.
+    static uint32_t sign_sent_ms;
+    const uint32_t now_ms = platform_time_ms();
+    if (a->hash_pending &&
+        (!sign_in_flight || (uint32_t)(now_ms - sign_sent_ms) >= P5G_SIGN_RETRY_MS)) {
         uart_peer_send_frame(UART_PEER_MSG_P5G_SIGN_REQ, a->hash_pending_buffer, P5G_BUF);
         sign_in_flight = true;
+        sign_sent_ms = now_ms;
     }
     if (!a->hash_pending) {
         sign_in_flight = false;  // SIGN_RESP arrived (or reset); ready for the next

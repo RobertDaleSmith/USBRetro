@@ -28,7 +28,13 @@
 #define SLIP_ESC_ESC  0xDD
 
 #define UART_PEER_TIMEOUT_MS  500
-#define TX_RING_SIZE          512   // power of two
+// 2 KB, not 512 B. In P5General mode this link carries per-report signing
+// traffic (A->B SIGN_REQ, B->A SIGN_RESP at the console's ~250 Hz) alongside
+// input frames, and a full ring drops frames silently -- measured at ~200
+// drops/second, which is what made BLE input choppy with presses missed and
+// releases held. The ring lives in .bss, so this costs RAM, not image size
+// (which matters: B's image has ~2.5 KB of slot headroom).
+#define TX_RING_SIZE          2048  // power of two
 #define RX_FRAME_MAX          128   // > max raw frame (1 + 46 + 4 = 51)
 
 static uart_inst_t* peer_uart = NULL;
@@ -41,6 +47,20 @@ static uint16_t rx_len;
 static bool     rx_in_esc;
 
 static uint32_t last_rx_ms;
+
+// Link loss telemetry + last-event cache for the periodic refresh below. This
+// link is unacknowledged: a frame lost to a CRC mismatch or a full TX ring is
+// simply gone, and input is only sent when it changes. One lost frame therefore
+// left the consumer holding a stale state until the next change -- a dropped
+// press vanished outright, a dropped release stayed pressed. Measured on a PS5
+// in P5General mode, where this link also carries the per-report signing
+// traffic: input arrived choppy, some presses missed, others held.
+static uint32_t rx_crc_drops;
+static uint32_t tx_ring_drops;
+static uart_peer_event_t last_event;
+static bool      last_event_valid;
+static uint32_t  last_event_tx_ms;
+#define EVENT_REFRESH_MS 100   // resend the current state at least this often
 
 // Link RX telemetry (diagnostics): raw bytes seen on the wire vs valid frames
 // decoded. raw>0 & frames==0 => peer is transmitting a different/garbled
@@ -82,7 +102,7 @@ static uint32_t crc32(const uint8_t* data, size_t len) {
 
 static inline bool tx_ring_push(uint8_t byte) {
     uint16_t next = (uint16_t)((tx_head + 1) % TX_RING_SIZE);
-    if (next == tx_tail) return false;   // full — drop
+    if (next == tx_tail) { tx_ring_drops++; return false; }   // full — drop
     tx_ring[tx_head] = byte;
     tx_head = next;
     return true;
@@ -182,7 +202,7 @@ static void dispatch_frame(const uint8_t* frame, uint16_t len) {
                     ((uint32_t)frame[len - 3] << 8) |
                     ((uint32_t)frame[len - 2] << 16) |
                     ((uint32_t)frame[len - 1] << 24);
-    if (crc32(frame, body) != want) return;    // corrupt frame — drop
+    if (crc32(frame, body) != want) { rx_crc_drops++; return; }   // corrupt frame — drop
 
     uint8_t type = frame[0];
     const uint8_t* payload = &frame[1];
@@ -306,6 +326,26 @@ void uart_peer_task(void) {
         uart_putc_raw(peer_uart, tx_ring[tx_tail]);
         tx_tail = (uint16_t)((tx_tail + 1) % TX_RING_SIZE);
     }
+
+    // Periodic state refresh. Nothing acks or retransmits a frame, so without
+    // this a single lost EVENT frame sticks until the next input change. Both
+    // directions of that hurt: a dropped press is never seen, a dropped release
+    // stays held. Resending the current state costs one 12-byte frame per
+    // 100 ms while idle and makes any loss self-correcting. Skipped while the
+    // ring still has traffic queued, so a refresh never competes with real
+    // input or (in P5General mode) with the report-signing frames.
+    if (last_event_valid && tx_tail == tx_head) {
+        uint32_t now = to_ms_since_boot(get_absolute_time());
+        if ((uint32_t)(now - last_event_tx_ms) >= EVENT_REFRESH_MS) {
+            last_event_tx_ms = now;
+            frame_send(UART_PEER_MSG_EVENT, &last_event, sizeof(last_event));
+        }
+    }
+}
+
+void uart_peer_get_link_stats(uint32_t* crc_drops, uint32_t* ring_drops) {
+    if (crc_drops)  *crc_drops  = rx_crc_drops;
+    if (ring_drops) *ring_drops = tx_ring_drops;
 }
 
 bool uart_peer_is_connected(void) {
@@ -365,6 +405,9 @@ void uart_peer_producer_tap(output_target_t output, uint8_t player_index,
     }
 
     frame_send(UART_PEER_MSG_EVENT, &packed, sizeof(packed));
+    last_event = packed;
+    last_event_valid = true;
+    last_event_tx_ms = to_ms_since_boot(get_absolute_time());
 }
 
 bool uart_peer_get_status(uart_peer_status_t* out) {
