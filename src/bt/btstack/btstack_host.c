@@ -795,6 +795,29 @@ static void setup_hid_handlers(void)
     #define JP_ATT_MTU_CEILING (HCI_ACL_PAYLOAD_SIZE - 4)
     l2cap_set_max_le_mtu(JP_ATT_MTU_CEILING < 512 ? JP_ATT_MTU_CEILING : 512);
 
+    // Connection parameters for every outgoing BLE link. BTstack's defaults
+    // (hci.c) are built for low-power sensors, not input devices: interval
+    // 10-30 ms with connection latency 4, which lets the peripheral skip up to
+    // four connection events and pushes worst-case input latency past 150 ms.
+    // Worse, a peripheral that coalesces (ours keeps only the newest pending
+    // report, as does basically every gamepad) loses a press and release that
+    // both land inside one window, so fast taps never reach the wire at all.
+    //
+    // 7.5-15 ms with latency 0 is the usual HID/gaming range and is what the
+    // nRF link layer is already allowed to run (joypad_le_interval_min = 6);
+    // nothing here goes below that floor, so the controller never asserts.
+    // Supervision timeout stays at BTstack's 720 ms -- long enough to ride out
+    // the low-duty scan that runs alongside the link.
+    gap_set_connection_parameters(
+        0x0060,  // conn scan interval: 60 ms (unit 0.625 ms) -- BTstack default
+        0x0030,  // conn scan window:   30 ms (unit 0.625 ms) -- BTstack default
+        6,       // conn interval min:  7.5 ms (unit 1.25 ms)
+        12,      // conn interval max:  15 ms  (unit 1.25 ms)
+        0,       // conn latency:       0 -- never skip a connection event
+        0x0048,  // supervision timeout: 720 ms (unit 10 ms)
+        0x0010,  // min CE length: 10 ms (unit 0.625 ms) -- BTstack default
+        0x0030); // max CE length: 30 ms (unit 0.625 ms) -- BTstack default
+
     printf("[BTSTACK_HOST] Init SM...\n");
     sm_init();
 
@@ -1367,6 +1390,49 @@ void btstack_host_connect_ble(bd_addr_t addr, bd_addr_type_t addr_type)
     // Create connection
     uint8_t status = gap_connect(addr, addr_type);
     printf("[BTSTACK_HOST] gap_connect returned status=%d\n", status);
+
+    if (status != ERROR_CODE_SUCCESS) {
+        // The attempt was never issued, so no LE_CONNECTION_COMPLETE can arrive.
+        // Staying in CONNECTING parked the radio for BLE_CONNECT_TIMEOUT_MS and
+        // then retried into the same refusal, forever: every periodic reconnect
+        // logged status=12 and the receiver could never connect again until it
+        // was power-cycled.
+        hid_state.state = BLE_STATE_IDLE;
+        hid_state.reconnect_attempt_time = 0;
+
+        if (status == ERROR_CODE_COMMAND_DISALLOWED) {
+            // gap_connect() refuses for two persistent reasons (hci.c): an
+            // outgoing LE connect still flagged active, or an hci_connection_t
+            // for this address left in any state but RECEIVED_DISCONNECTION_
+            // COMPLETE. Neither clears itself.
+            //
+            // But a LIVE link refuses for the same reason, because the entry is
+            // OPEN -- a periodic reconnect that fires while the pad is already
+            // connected lands here. Tearing that down would drop the working
+            // link (local-terminate, reason 0x16), so an OPEN entry means
+            // "already connected" and there is nothing to recover.
+            hci_connection_t *existing = hci_connection_for_bd_addr_and_type(addr, addr_type);
+            if (existing != NULL && existing->state == OPEN) {
+                printf("[BTSTACK_HOST] Already connected to this address — reconnect skipped\n");
+                // Put back what this function changed before the doomed attempt:
+                // the link is up, and the scan it stopped is the low-duty scan
+                // that runs alongside a connection.
+                hid_state.state = BLE_STATE_CONNECTED;
+                btstack_host_start_scan();
+                return;
+            }
+            gap_connect_cancel();
+            if (existing != NULL && existing->con_handle != HCI_CON_HANDLE_INVALID) {
+                printf("[BTSTACK_HOST] Stale connection entry (state=%d) handle=0x%04X — disconnecting\n",
+                       (int)existing->state, existing->con_handle);
+                gap_disconnect(existing->con_handle);
+            }
+        }
+
+        // Scanning was stopped above for a connect that never happened. Put the
+        // radio back to work instead of idling until the next periodic attempt.
+        btstack_host_start_scan();
+    }
 }
 
 // ============================================================================
@@ -1599,8 +1665,25 @@ void btstack_host_process(void)
     // bonding — they expect the central to connect directly via gap_connect().
     // After the rapid reconnect attempts (right after disconnect) are exhausted,
     // alternate between scanning and reconnection attempts.
+    // The scan keeps running at low duty while a link is up, and the state/scan
+    // sync above can put the state back to SCANNING, so without the bonded_up
+    // test this fires at every interval against an already-connected pad. The
+    // refused gap_connect() then looked like a stale entry and tore the live
+    // link down (local terminate, reason 0x16). The IDLE path below has always
+    // made this check; this one has to make it too.
+    bool periodic_bonded_up = false;
+    if (hid_state.has_last_connected) {
+        for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+            if (hid_state.connections[i].handle != HCI_CON_HANDLE_INVALID &&
+                memcmp(hid_state.connections[i].addr, hid_state.last_connected_addr, 6) == 0) {
+                periodic_bonded_up = true;
+                break;
+            }
+        }
+    }
     if (hid_state.state == BLE_STATE_SCANNING &&
         hid_state.has_last_connected &&
+        !periodic_bonded_up &&
         hid_state.scan_start_time != 0 &&
         (btstack_run_loop_get_time_ms() - hid_state.scan_start_time) >= BLE_RECONNECT_INTERVAL_MS) {
         printf("[BTSTACK_HOST] Periodic reconnection to bonded device '%s'\n",
@@ -2925,10 +3008,13 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                     hid_state.reconnect_attempts++;
                     printf("[BTSTACK_HOST] Attempting BLE reconnection to stored device (attempt %d)...\n",
                            hid_state.reconnect_attempts);
+                    // Byte order matches btstack_host_connect_ble()'s log and the
+                    // scan reports. Printing this one reversed made a single pad
+                    // look like two different addresses in the same log.
                     printf("[BTSTACK_HOST] Connecting to %02X:%02X:%02X:%02X:%02X:%02X name='%s'\n",
-                           hid_state.last_connected_addr[5], hid_state.last_connected_addr[4],
-                           hid_state.last_connected_addr[3], hid_state.last_connected_addr[2],
-                           hid_state.last_connected_addr[1], hid_state.last_connected_addr[0],
+                           hid_state.last_connected_addr[0], hid_state.last_connected_addr[1],
+                           hid_state.last_connected_addr[2], hid_state.last_connected_addr[3],
+                           hid_state.last_connected_addr[4], hid_state.last_connected_addr[5],
                            hid_state.last_connected_name);
                     // Copy stored name to pending so it's available when connection completes
                     strncpy(hid_state.pending_name, hid_state.last_connected_name, sizeof(hid_state.pending_name) - 1);
