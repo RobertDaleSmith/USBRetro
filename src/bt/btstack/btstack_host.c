@@ -214,6 +214,11 @@ typedef struct {
 // BLE conn_index offset (BLE devices use conn_index >= this value)
 #define BLE_CONN_INDEX_OFFSET MAX_CLASSIC_CONNECTIONS
 
+// How long a BLE link may sit connected without reaching HID-ready before it is
+// dropped and retried. Generous: bonded reconnects on a busy radio legitimately
+// take seconds to finish discovery, subscribe and (for some pads) read DIS.
+#define BLE_HID_READY_TIMEOUT_MS 15000
+
 typedef enum {
     GATT_IDLE,
     GATT_DISCOVERING_SERVICES,
@@ -1175,6 +1180,19 @@ static bool scan_suppressed_hard = false;
 // reported by BT.STATUS.
 static const char *scan_supp_src = "none";
 
+// Scan paused because a controller is connected (the radio belongs to the link).
+// This has to be a flag that btstack_host_start_scan() itself honours, not just a
+// stop_scan call: the idle safety net below counts only CLASSIC links, so with a
+// BLE pad connected it kept "resuming" the scan, the policy kept stopping it, and
+// the two ping-ponged every loop iteration -- thrashing the radio hard enough to
+// stall HID notifications on the very link it was protecting. Deliberately NOT
+// the app-facing scan_suppressed flag, which the app owns for its own reasons.
+static bool scan_paused_for_link;
+
+// BLE diagnostics surfaced to the peer debug frame (see uart_peer_debug_t).
+static uint32_t ble_reports_seen;
+static uint8_t  ble_last_disc_reason;
+
 bool btstack_host_scan_hard_suppressed(void)
 {
     return scan_suppressed_hard;
@@ -1209,6 +1227,10 @@ void btstack_host_start_scan(void)
 #endif
     if (scan_suppressed || scan_suppressed_hard) {
         return;  // App suppressed scanning (e.g. BT host disabled)
+    }
+
+    if (scan_paused_for_link) {
+        return;  // a controller is connected; discovery is an explicit act
     }
 
     if (!hid_state.powered_on) {
@@ -1289,6 +1311,7 @@ void btstack_host_start_timed_scan(uint32_t timeout_ms)
         return;
     }
     scan_suppressed = false;  // Explicit scan request clears suppression
+    scan_paused_for_link = false;  // the user asked for discovery; allow it
     scan_supp_src = "timed-scan";
     scan_timeout_end = btstack_run_loop_get_time_ms() + timeout_ms;
     printf("[BTSTACK_HOST] Starting timed scan (%lums)\n", (unsigned long)timeout_ms);
@@ -1423,9 +1446,28 @@ void btstack_host_connect_ble(bd_addr_t addr, bd_addr_type_t addr_type)
             }
             gap_connect_cancel();
             if (existing != NULL && existing->con_handle != HCI_CON_HANDLE_INVALID) {
-                printf("[BTSTACK_HOST] Stale connection entry (state=%d) handle=0x%04X — disconnecting\n",
-                       (int)existing->state, existing->con_handle);
-                gap_disconnect(existing->con_handle);
+                if (existing->state == SENT_DISCONNECT) {
+                    // Already mid-disconnect: gap_disconnect() is a no-op here,
+                    // and the controller never delivered the matching
+                    // DISCONNECTION_COMPLETE, so the entry never reaches
+                    // RECEIVED_DISCONNECTION_COMPLETE and hci.c refuses every
+                    // future gap_connect() to this address. Observed as an
+                    // endless scan -> connect -> status=12 loop with the pad
+                    // sitting there advertising, unconnectable until reboot.
+                    //
+                    // RECEIVED_DISCONNECTION_COMPLETE is the one state
+                    // gap_connect() accepts and reuses (it resets the role and
+                    // dials again), so parking the entry there is what lets the
+                    // next attempt through without leaking the slot.
+                    printf("[BTSTACK_HOST] Connection stuck in SENT_DISCONNECT "
+                           "(handle=0x%04X) — releasing it for reconnect\n",
+                           existing->con_handle);
+                    existing->state = RECEIVED_DISCONNECTION_COMPLETE;
+                } else {
+                    printf("[BTSTACK_HOST] Stale connection entry (state=%d) handle=0x%04X — disconnecting\n",
+                           (int)existing->state, existing->con_handle);
+                    gap_disconnect(existing->con_handle);
+                }
             }
         }
 
@@ -1488,6 +1530,7 @@ void btstack_host_process(void)
     // Process any pending BLE HID report (deferred from BTstack callback to avoid stack overflow)
     if (ble_report_pending) {
         ble_report_pending = false;
+        ble_reports_seen++;
         route_ble_hid_report(pending_ble_conn_index, pending_ble_report, pending_ble_report_len);
     }
 
@@ -1532,10 +1575,87 @@ void btstack_host_process(void)
         hid_state.reconnect_attempt_time = 0;
     }
 
-    // Scan duty cycle follows the link state: a connection that comes up while a
-    // scan is already running would otherwise keep the 50% duty cycle that
-    // starves it, and a scan left at low duty after the last device disconnects
-    // would discover far more slowly than it needs to.
+    // Reap phantom BLE connections. Our table is bookkeeping; BTstack's own
+    // connection list is the truth. If a link dropped without us processing the
+    // disconnect -- a missed event, or a handle we had already overwritten --
+    // the entry here survives forever, and that is ruinous in three ways at
+    // once: the controller's last report stays applied (a direction held at the
+    // moment it died stays held), the connection count keeps the scan switched
+    // off so the pad can never be rediscovered, and the slot is never freed.
+    // Observed in the field as "B reports conn_count=1 but no input arrives".
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        ble_connection_t *bc = &hid_state.connections[i];
+        if (bc->handle == HCI_CON_HANDLE_INVALID) continue;
+        if (hci_connection_for_handle(bc->handle) != NULL) continue;  // still real
+
+        printf("[BTSTACK_HOST] Reaping phantom BLE connection handle=0x%04X name='%s'\n",
+               bc->handle, bc->name);
+        // Zero the controller's input through the normal disconnect path so the
+        // held state clears, then free the slot.
+        if (bc->conn_index > 0) {
+            bt_on_disconnect(bc->conn_index);
+        }
+        if (bc->hids_cid != 0) {
+            hids_client_disconnect(bc->hids_cid);
+        }
+        mp_nus_disconnected(bc->handle);
+        memset(bc, 0, sizeof(*bc));
+        bc->handle = HCI_CON_HANDLE_INVALID;
+        if (hid_state.state == BLE_STATE_CONNECTED || hid_state.state == BLE_STATE_READY) {
+            hid_state.state = BLE_STATE_IDLE;
+        }
+        // The scan was suppressed on the strength of this connection; with it
+        // gone, discovery has to come back or the receiver stays deaf.
+        btstack_host_start_scan();
+    }
+
+    // HID-ready watchdog for BLE links. Classic has had one of these since
+    // forever (CLASSIC_CONNECT_TIMEOUT_MS below); BLE never did, and the gap is
+    // ugly: a link that completes at HCI level but never finishes GATT
+    // discovery/subscription keeps its slot indefinitely. BTstack still holds a
+    // real hci_connection, so the phantom reaper above correctly leaves it
+    // alone, yet no report ever arrives -- the controller's last state stays
+    // applied (a direction held when it stalled stays held) and the connection
+    // count keeps discovery quiet. Drop it and let the reconnect path retry.
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        ble_connection_t *bc = &hid_state.connections[i];
+        if (bc->handle == HCI_CON_HANDLE_INVALID) continue;
+        if (bc->hid_ready || bc->connect_ms == 0) continue;
+        uint32_t held = (uint32_t)(btstack_run_loop_get_time_ms() - bc->connect_ms);
+        if (held < BLE_HID_READY_TIMEOUT_MS) continue;
+        printf("[BTSTACK_HOST] BLE link never reached HID-ready in %lums "
+               "(handle=0x%04X name='%s') — dropping to retry\n",
+               (unsigned long)held, bc->handle, bc->name);
+        gap_disconnect(bc->handle);
+    }
+
+    // Scan policy: once something is connected the radio belongs to the link.
+    // Discovery runs while nothing is connected (the reconnect paths below dial
+    // the bonded device first), and picking up a SECOND device is an explicit
+    // act -- the dongle button or BT.SCAN, both of which arrive as a timed scan
+    // and are left alone for their window.
+    //
+    // This used to merely drop the scan to a low duty cycle and keep hunting
+    // forever alongside the link. On a single radio that is pure interference
+    // for a receiver that already has its pad.
+    {
+        const bool linked = btstack_classic_get_connection_count() > 0;
+        if (linked && scan_timeout_end == 0) {
+            if (!scan_paused_for_link) {
+                scan_paused_for_link = true;
+                printf("[BTSTACK_HOST] Device connected — pausing scan"
+                       " (button or BT.SCAN to add another)\n");
+            }
+            if (hid_state.scan_active) btstack_host_stop_scan();
+        } else if (!linked && scan_paused_for_link) {
+            scan_paused_for_link = false;
+            printf("[BTSTACK_HOST] Last device gone — resuming discovery\n");
+            btstack_host_start_scan();
+        }
+    }
+
+    // While an explicit timed scan does run next to a live link, keep it at the
+    // gentler duty cycle so it does not starve that link.
     if (hid_state.scan_active &&
         (btstack_classic_get_connection_count() > 0) != scan_params_busy) {
         btstack_host_stop_scan();
@@ -1637,6 +1757,10 @@ void btstack_host_process(void)
 #ifndef CONFIG_USB2BLE
     if (hid_state.powered_on &&
         !scan_suppressed && !scan_suppressed_hard &&
+        // Honour the connected-link pause, or this fires every tick: it calls
+        // start_scan(), start_scan() returns early because of the pause, nothing
+        // changes, and it fires again -- ~48 log lines a second.
+        !scan_paused_for_link &&
         hid_state.state == BLE_STATE_IDLE &&
         hid_state.reconnect_attempt_time == 0 &&
         !hid_state.scan_active &&
@@ -2952,6 +3076,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             uint8_t reason = hci_event_disconnection_complete_get_reason(packet);
 
             printf("[BTSTACK_HOST] Disconnected: handle=0x%04X reason=0x%02X\n", handle, reason);
+            ble_last_disc_reason = reason;
 
             ble_connection_t *conn = find_connection_by_handle(handle);
             if (conn) {
@@ -6752,5 +6877,34 @@ void btstack_host_forget_device(const uint8_t bd_addr[6])
         memset(hid_state.last_connected_addr, 0, 6);
         hid_state.has_last_connected = false;
         btstack_host_save_last_connected();  // Save the cleared state
+    }
+}
+
+// Central diagnostics for the A-side heartbeat (see uart_peer_debug_t). B has no
+// USB, so this is the only window onto the BLE central's state.
+void btstack_host_get_ble_diag(uint32_t* reports, uint8_t* flags,
+                               uint8_t* last_disc_reason, char* name, int name_len)
+{
+    if (reports) *reports = ble_reports_seen;
+    if (last_disc_reason) *last_disc_reason = ble_last_disc_reason;
+    uint8_t f = 0;
+    const ble_connection_t* found = NULL;
+    for (int i = 0; i < MAX_BLE_CONNECTIONS; i++) {
+        const ble_connection_t* bc = &hid_state.connections[i];
+        if (bc->handle == HCI_CON_HANDLE_INVALID) continue;
+        found = bc;
+        if (bc->hid_ready) f |= 0x01;
+        f |= 0x02;
+        break;
+    }
+    if (flags) *flags = f;
+    if (name && name_len > 0) {
+        if (found && found->name[0]) {
+            int n = name_len - 1;
+            for (int i = 0; i < n; i++) name[i] = found->name[i];
+            name[n] = 0;
+        } else {
+            name[0] = 0;
+        }
     }
 }
