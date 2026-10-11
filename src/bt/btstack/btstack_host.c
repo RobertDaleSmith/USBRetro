@@ -150,6 +150,7 @@ static void switch2_handle_feedback(void);
 #endif
 #ifndef SCAN_WINDOW
 #define SCAN_WINDOW   0x0050  // 50ms (default)
+#endif
 
 // Scanning at a 50% duty cycle (50 ms window every 100 ms) takes the radio off a
 // live connection half the time, so input arrives in bursts -- seen as analog
@@ -157,10 +158,13 @@ static void switch2_handle_feedback(void);
 // restarts. That was harmless while scanning was a 60 s window at boot; it is not
 // once a receiver scans continuously. Once a controller is connected, drop to a
 // low duty cycle: discovery still works, just slower.
+//
+// NOT inside the #ifndef above: these are used unconditionally by
+// btstack_host_start_scan(), so letting an app that defines its own SCAN_WINDOW
+// skip them is a build break for that app (bt2nuon_pico_w, which sets both).
 static bool scan_params_busy;      // duty cycle the active scan was started with
 #define SCAN_INTERVAL_BUSY 0x0200  // 320 ms
 #define SCAN_WINDOW_BUSY   0x0018  // 15 ms  (~4.7% duty vs 50%)
-#endif
 
 // ============================================================================
 // STATE
