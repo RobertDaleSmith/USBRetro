@@ -1,0 +1,20 @@
+diff --git a/src/ble/gatt-service/hids_client.c b/src/ble/gatt-service/hids_client.c
+index 21daafb58..85f98c24e 100644
+--- a/src/ble/gatt-service/hids_client.c
++++ b/src/ble/gatt-service/hids_client.c
+@@ -988,7 +988,14 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
+     // hids_client_report_t * boot_keyboard_report;
+     // hids_client_report_t * boot_mouse_report;
+     const uint8_t * characteristic_descriptor_value;
+-    uint8_t i;
++    // uint16_t, not uint8_t: this indexes the HID report map chunk in
++    // GATT_EVENT_LONG_CHARACTERISTIC_VALUE_QUERY_RESULT, whose value_length is a
++    // uint16_t. With a large ATT MTU a report map of 256 bytes or more arrives in
++    // one chunk, and a uint8_t index wraps at 255 and re-stores the first 256
++    // bytes until the descriptor storage fills -- the client ends up with
++    // hid_descriptor_len == storage size, holding N copies of the first 256
++    // bytes, and the tail of the real descriptor is never stored at all.
++    uint16_t i;
+     uint8_t report_index;
+ 
+     const uint8_t * value;

@@ -514,6 +514,8 @@ init:
 	@cd src/lib/pico-sdk && git checkout 2.2.0
 	@echo "$(YELLOW)Checking out TinyUSB 0.19.0...$(NC)"
 	@cd src/lib/tinyusb && git fetch --tags && git checkout 0.19.0
+	@echo "$(YELLOW)Applying submodule patches...$(NC)"
+	@patches/apply.sh
 	@echo "$(GREEN)✓ Initialization complete!$(NC)"
 	@echo "$(GREEN)  You can now run 'make build' or 'make all'$(NC)"
 	@echo ""
