@@ -800,28 +800,6 @@ static void setup_hid_handlers(void)
     #define JP_ATT_MTU_CEILING (HCI_ACL_PAYLOAD_SIZE - 4)
     l2cap_set_max_le_mtu(JP_ATT_MTU_CEILING < 512 ? JP_ATT_MTU_CEILING : 512);
 
-    // Connection parameters for every outgoing BLE link. BTstack's defaults
-    // (hci.c) are built for low-power sensors, not input devices: interval
-    // 10-30 ms with connection latency 4, which lets the peripheral skip up to
-    // four connection events and pushes worst-case input latency past 150 ms.
-    // Worse, a peripheral that coalesces (ours keeps only the newest pending
-    // report, as does basically every gamepad) loses a press and release that
-    // both land inside one window, so fast taps never reach the wire at all.
-    //
-    // 7.5-15 ms with latency 0 is the usual HID/gaming range and is what the
-    // nRF link layer is already allowed to run (joypad_le_interval_min = 6);
-    // nothing here goes below that floor, so the controller never asserts.
-    // Supervision timeout stays at BTstack's 720 ms -- long enough to ride out
-    // the low-duty scan that runs alongside the link.
-    gap_set_connection_parameters(
-        0x0060,  // conn scan interval: 60 ms (unit 0.625 ms) -- BTstack default
-        0x0030,  // conn scan window:   30 ms (unit 0.625 ms) -- BTstack default
-        6,       // conn interval min:  7.5 ms (unit 1.25 ms)
-        12,      // conn interval max:  15 ms  (unit 1.25 ms)
-        0,       // conn latency:       0 -- never skip a connection event
-        0x0048,  // supervision timeout: 720 ms (unit 10 ms)
-        0x0010,  // min CE length: 10 ms (unit 0.625 ms) -- BTstack default
-        0x0030); // max CE length: 30 ms (unit 0.625 ms) -- BTstack default
 
     printf("[BTSTACK_HOST] Init SM...\n");
     sm_init();
@@ -1189,6 +1167,36 @@ static const char *scan_supp_src = "none";
 // the app-facing scan_suppressed flag, which the app owns for its own reasons.
 static bool scan_paused_for_link;
 
+// Connection parameters for outgoing BLE links, applied once the stack is up.
+// BTstack's defaults (hci.c) are built for low-power sensors, not input
+// devices: interval 10-30 ms with connection latency 4, which lets the
+// peripheral skip four connection events and pushes worst-case input latency
+// past 150 ms. Worse, a peripheral that coalesces (ours keeps only the newest
+// pending report, as does basically every gamepad) loses a press and release
+// that both land inside one window, so fast taps never reach the wire.
+//
+// Applied lazily, NOT from init: gap_set_connection_parameters() writes through
+// BTstack's hci_stack POINTER, which is NULL until hci_init() runs. Boards that
+// let this layer bring BTstack up are fine, but the ones where BTstack is
+// initialised externally (the USB-dongle host) reached the eager call first and
+// hard-faulted at boot -- the MCU went silent and its dongle never powered up.
+static void apply_ble_conn_params_once(void)
+{
+    static bool done;
+    if (done || !hid_state.powered_on) return;
+    done = true;
+    gap_set_connection_parameters(
+        0x0060,  // conn scan interval: 60 ms (unit 0.625 ms) -- BTstack default
+        0x0030,  // conn scan window:   30 ms (unit 0.625 ms) -- BTstack default
+        6,       // conn interval min:  7.5 ms (unit 1.25 ms)
+        12,      // conn interval max:  15 ms  (unit 1.25 ms)
+        0,       // conn latency:       0 -- never skip a connection event
+        0x0048,  // supervision timeout: 720 ms (unit 10 ms)
+        0x0010,  // min CE length: 10 ms (unit 0.625 ms) -- BTstack default
+        0x0030); // max CE length: 30 ms (unit 0.625 ms) -- BTstack default
+    printf("[BTSTACK_HOST] BLE connection parameters applied (7.5-15ms, latency 0)\n");
+}
+
 // BLE diagnostics surfaced to the peer debug frame (see uart_peer_debug_t).
 static uint32_t ble_reports_seen;
 static uint8_t  ble_last_disc_reason;
@@ -1410,6 +1418,8 @@ void btstack_host_connect_ble(bd_addr_t addr, bd_addr_type_t addr_type)
     hid_state.state = BLE_STATE_CONNECTING;
     hid_state.reconnect_attempt_time = btstack_run_loop_get_time_ms();
 
+    apply_ble_conn_params_once();
+
     // Create connection
     uint8_t status = gap_connect(addr, addr_type);
     printf("[BTSTACK_HOST] gap_connect returned status=%d\n", status);
@@ -1574,6 +1584,8 @@ void btstack_host_process(void)
         hid_state.state = BLE_STATE_IDLE;
         hid_state.reconnect_attempt_time = 0;
     }
+
+    apply_ble_conn_params_once();
 
     // Reap phantom BLE connections. Our table is bookkeeping; BTstack's own
     // connection list is the truth. If a link dropped without us processing the
