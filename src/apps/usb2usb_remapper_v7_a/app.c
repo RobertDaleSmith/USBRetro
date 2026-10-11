@@ -182,32 +182,12 @@ void app_task(void)
     static bool b_is_current = false;   // B has reported the new-firmware magic
     uart_peer_debug_t dbg;
     if (uart_peer_get_debug(&dbg)) {
-        if (dbg.magic == 0xE4) b_is_current = true;  // 0xE4 = B carries the BLE diagnostics
-        // crcd = EVENT frames this side threw away on a CRC mismatch. Input
-        // travels B->A, so A's receive counter is the one that explains a stale
-        // input state; non-zero means the link is dropping real frames and the
-        // periodic refresh in uart_peer_task is what is covering for it.
-        uint32_t crc_drops = 0, ring_drops = 0;
-        uart_peer_get_link_stats(&crc_drops, &ring_drops);
-        char buf[260];
-        // rpts = BLE HID reports B has received. Zero while bt reports a
-        // connection means the data path is dead, not the link -- the single
-        // most useful number for telling those apart. peer = who B thinks it is
-        // connected to; disc = the last disconnect reason B saw.
-        char pname[13];
-        for (size_t i = 0; i < sizeof(dbg.peer_name) && i < sizeof(pname) - 1; i++) {
-            char ch = dbg.peer_name[i];
-            pname[i] = (ch >= 0x20 && ch < 0x7f) ? ch : '\0';
-            if (!pname[i]) break;
-        }
-        pname[sizeof(pname) - 1] = '\0';
+        if (dbg.magic == 0xE3) b_is_current = true;  // 0xDD = B built from this era
+        char buf[112];
         snprintf(buf, sizeof(buf),
-                 "{\"type\":\"peer\",\"magic\":%u,\"devs\":%u,\"vid\":\"%04X\",\"pid\":\"%04X\",\"up\":%lu,\"bt\":%u,\"crcd\":%lu,\"ringd\":%lu,\"rpts\":%lu,\"bflags\":%u,\"disc\":\"%02X\",\"peer\":\"%s\"}",
+                 "{\"type\":\"peer\",\"magic\":%u,\"devs\":%u,\"vid\":\"%04X\",\"pid\":\"%04X\",\"up\":%lu,\"bt\":%u}",
                  dbg.magic, dbg.dev_count, dbg.last_vid, dbg.last_pid,
-                 (unsigned long)dbg.uptime_ms, dbg.bt_status,
-                 (unsigned long)crc_drops, (unsigned long)ring_drops,
-                 (unsigned long)dbg.ble_reports, dbg.ble_flags,
-                 dbg.last_disc_reason, pname);
+                 (unsigned long)dbg.uptime_ms, dbg.bt_status);
         cdc_protocol_send_event(cdc_commands_get_protocol(), buf);
     }
 
@@ -220,11 +200,7 @@ void app_task(void)
     // flash over SWD, never A's own). B then needs one power-cycle to run it;
     // after that it reports magic 0xDC and this never fires again.
     static bool b_autoflash_done = false;
-    // 20s, not 6s: B's boot plus its first accepted heartbeat has to fit inside
-    // this window, or A reflashes a B that was perfectly fine -- and an SWD
-    // flash halts B until the next power cycle, so a too-eager window turns one
-    // slow boot into a dead peer that needs a cable pull to recover.
-    if (!b_autoflash_done && !b_is_current && now > 20000) {
+    if (!b_autoflash_done && !b_is_current && now > 6000) {
         const volatile uint32_t* bimg = (const volatile uint32_t*)(0x10040000u);
         if (bimg[0] == 0x42494D47u) {   // "BIMG" staged image present
             b_autoflash_done = true;

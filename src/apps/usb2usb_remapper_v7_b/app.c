@@ -182,7 +182,7 @@ void app_task(void)
         last_dbg_ms = now;
 
         uart_peer_debug_t dbg = {
-            .magic = 0xE4,   // 0xE4 => adds the BLE diagnostics below
+            .magic = 0xE3,   // 0xDD => this era (bt_status field + DS4-auth relay diag)
             .dev_count = 0,
             .last_vid = 0,
             .last_pid = 0,
@@ -204,10 +204,6 @@ void app_task(void)
                       | (btstack_host_is_powered_on() ? 0x02 : 0)
                       | (btstack_host_is_scanning()   ? 0x04 : 0)
                       | ((bt_get_connection_count() & 0x0F) << 4);
-        extern void btstack_host_get_ble_diag(uint32_t*, uint8_t*, uint8_t*, char*, int);
-        btstack_host_get_ble_diag(&dbg.ble_reports, &dbg.ble_flags,
-                                  &dbg.last_disc_reason,
-                                  dbg.peer_name, (int)sizeof(dbg.peer_name));
 #endif
         uart_peer_send_debug(&dbg);
     }

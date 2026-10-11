@@ -82,14 +82,6 @@ typedef struct __attribute__((packed)) {
     uint32_t uptime_ms;        // B uptime (changing value => B loop running)
     uint8_t  bt_status;        // BT state (magic 0xDC): bit0=ready bit1=powered
                                // bit2=scanning bit3=has_btstack; bits4-7=conn_count
-    // B-side BLE diagnostics (magic 0xE4). B owns the dongle and BTstack, and
-    // has no USB of its own, so without these the central is a black box from
-    // A's CDC: bt_status can report "1 connection" while no input arrives and
-    // there is no way to tell a wrong peer from a dead data path.
-    uint32_t ble_reports;      // BLE HID reports B has received (0 = none ever)
-    uint8_t  ble_flags;        // bit0=hid_ready bit1=has_ble_conn
-    uint8_t  last_disc_reason; // last HCI disconnect reason B saw (0 = none)
-    char     peer_name[12];    // connected BLE peer's name, truncated
 } uart_peer_debug_t;
 
 // 12-byte wire event — byte-identical to i2c_peer_event_t so the two peer
@@ -155,11 +147,6 @@ typedef struct {
 void uart_peer_init(const uart_peer_config_t* config);
 // Pump RX (decode + dispatch frames) and drain the TX ring. Call every loop.
 void uart_peer_task(void);
-
-// Link loss telemetry. Both are silent-drop paths (unacknowledged link): a CRC
-// mismatch on receive, and a full TX ring on send. Non-zero means the periodic
-// state refresh is doing real work and the link itself deserves a look.
-void uart_peer_get_link_stats(uint32_t* crc_drops, uint32_t* ring_drops);
 // True if a valid frame was received within the link timeout.
 bool uart_peer_is_connected(void);
 // Link RX diagnostics: total raw bytes seen on the wire / valid frames decoded.
