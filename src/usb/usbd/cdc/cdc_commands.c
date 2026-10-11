@@ -905,9 +905,23 @@ static void cmd_bt_scan(const char* json)
 #ifdef ENABLE_BTSTACK
     extern void btstack_host_suppress_scan(bool suppress);
     extern void btstack_host_start_scan(void);
+    extern void btstack_host_start_timed_scan(uint32_t timeout_ms);
+    extern uint8_t btstack_classic_get_connection_count(void);
     btstack_host_suppress_scan(false);
-    btstack_host_start_scan();
-    send_ok();
+    // Mirror the dongle button. Scanning stops once something is connected
+    // (the radio belongs to the link), so this is the "add another device"
+    // request: time-box it when a controller is already attached, and scan
+    // open-endedly only when there is nothing to protect.
+    int scan_ms = 0;
+    if (btstack_classic_get_connection_count() > 0) {
+        scan_ms = 60000;
+        btstack_host_start_timed_scan((uint32_t)scan_ms);
+    } else {
+        btstack_host_start_scan();
+    }
+    snprintf(response_buf, sizeof(response_buf),
+             "{\"ok\":true,\"timed_ms\":%d}", scan_ms);
+    send_json(response_buf);
 #else
     send_json("{\"ok\":false,\"error\":\"no bt host in build\"}");
 #endif

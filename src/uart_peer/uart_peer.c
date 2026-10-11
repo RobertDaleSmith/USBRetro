@@ -42,6 +42,18 @@ static bool     rx_in_esc;
 
 static uint32_t last_rx_ms;
 
+// Link loss telemetry + last-event cache for the periodic refresh below. The
+// link is unacknowledged: a frame lost to a CRC mismatch or a full TX ring is
+// simply gone. Input is only sent when it changes, so one lost frame left the
+// consumer holding a stale state until the next change -- a quick d-pad tap
+// whose release frame was the casualty stayed pressed indefinitely.
+static uint32_t rx_crc_drops;
+static uint32_t tx_ring_drops;
+static uart_peer_event_t last_event;
+static bool      last_event_valid;
+static uint32_t  last_event_tx_ms;
+#define EVENT_REFRESH_MS 100   // resend the current state at least this often
+
 // Link RX telemetry (diagnostics): raw bytes seen on the wire vs valid frames
 // decoded. raw>0 & frames==0 => peer is transmitting a different/garbled
 // protocol; raw==0 => nothing arriving (peer silent or wiring/flow issue).
@@ -82,7 +94,7 @@ static uint32_t crc32(const uint8_t* data, size_t len) {
 
 static inline bool tx_ring_push(uint8_t byte) {
     uint16_t next = (uint16_t)((tx_head + 1) % TX_RING_SIZE);
-    if (next == tx_tail) return false;   // full — drop
+    if (next == tx_tail) { tx_ring_drops++; return false; }   // full — drop
     tx_ring[tx_head] = byte;
     tx_head = next;
     return true;
@@ -182,7 +194,7 @@ static void dispatch_frame(const uint8_t* frame, uint16_t len) {
                     ((uint32_t)frame[len - 3] << 8) |
                     ((uint32_t)frame[len - 2] << 16) |
                     ((uint32_t)frame[len - 1] << 24);
-    if (crc32(frame, body) != want) return;    // corrupt frame — drop
+    if (crc32(frame, body) != want) { rx_crc_drops++; return; }   // corrupt frame — drop
 
     uint8_t type = frame[0];
     const uint8_t* payload = &frame[1];
@@ -210,10 +222,16 @@ static void dispatch_frame(const uint8_t* frame, uint16_t len) {
             }
             break;
         case UART_PEER_MSG_DEBUG:
-            // Accept the current 16-byte struct AND the legacy 12-byte one (no
-            // bt_status, magic 0xDB) so a device MCU on either firmware version
-            // is visible. Zero-fill first so the absent bt_status reads as 0.
-            if (plen == sizeof(uart_peer_debug_t) || plen == 12) {
+            // Accept the current struct AND every earlier size: 16 bytes (magic
+            // 0xE3, before the BLE diagnostics) and 12 bytes (magic 0xDB, before
+            // bt_status). Zero-fill first so absent fields read as 0.
+            //
+            // Accepting the older sizes matters more than it looks. A's
+            // auto-flash fires when it has heard NO valid frame from B, so
+            // rejecting a stale-but-working B makes A reflash it -- which halts
+            // B until a power cycle and looks exactly like a dead peer. Taking
+            // the frame lets A read the stale magic and decide deliberately.
+            if (plen == sizeof(uart_peer_debug_t) || plen == 16 || plen == 12) {
                 memset(&latest_debug, 0, sizeof(latest_debug));
                 memcpy(&latest_debug, payload,
                        plen < sizeof(latest_debug) ? plen : sizeof(latest_debug));
@@ -306,6 +324,25 @@ void uart_peer_task(void) {
         uart_putc_raw(peer_uart, tx_ring[tx_tail]);
         tx_tail = (uint16_t)((tx_tail + 1) % TX_RING_SIZE);
     }
+
+    // Periodic state refresh. Nothing acknowledges or retransmits a frame, so
+    // without this a single lost EVENT frame sticks until the next input change
+    // -- release frames are the ones that hurt, since the stale state is "still
+    // pressed". Resending the current state costs one 12-byte frame per 100 ms
+    // while idle and makes any loss self-correcting. Skipped when the ring still
+    // has traffic queued, so a refresh never competes with real input.
+    if (last_event_valid && tx_tail == tx_head) {
+        uint32_t now = to_ms_since_boot(get_absolute_time());
+        if ((uint32_t)(now - last_event_tx_ms) >= EVENT_REFRESH_MS) {
+            last_event_tx_ms = now;
+            frame_send(UART_PEER_MSG_EVENT, &last_event, sizeof(last_event));
+        }
+    }
+}
+
+void uart_peer_get_link_stats(uint32_t* crc_drops, uint32_t* ring_drops) {
+    if (crc_drops)  *crc_drops  = rx_crc_drops;
+    if (ring_drops) *ring_drops = tx_ring_drops;
 }
 
 bool uart_peer_is_connected(void) {
@@ -365,6 +402,9 @@ void uart_peer_producer_tap(output_target_t output, uint8_t player_index,
     }
 
     frame_send(UART_PEER_MSG_EVENT, &packed, sizeof(packed));
+    last_event = packed;
+    last_event_valid = true;
+    last_event_tx_ms = to_ms_since_boot(get_absolute_time());
 }
 
 bool uart_peer_get_status(uart_peer_status_t* out) {
