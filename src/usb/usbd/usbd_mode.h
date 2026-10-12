@@ -136,6 +136,14 @@ void ds5_mode_set_feature_report(uint8_t report_id, const uint8_t* buffer, uint1
 extern const usbd_mode_t p5general_mode;
 // P5General (PS5 native) auth feature report handler (called from tud_hid_set_report_cb)
 void p5general_mode_set_feature_report(uint8_t report_id, const uint8_t* buffer, uint16_t bufsize);
+// P5General signing is asynchronous (and, on a dual-MCU board, a whole UART
+// round trip away), so the dispatcher must know whether a new report can be
+// built BEFORE it consumes an input event — see usbd_send_p5general_report().
+//   pump_signed: forward a completed signature to the PS5. Needs no input
+//                event; returns true if one was sent (or is still owed).
+//   can_build:   true when the signer is idle and will accept a fresh report.
+bool p5general_mode_pump_signed(void);
+bool p5general_mode_can_build(void);
 extern const usbd_mode_t xid_mode;
 extern const usbd_mode_t xbone_mode;
 extern const usbd_mode_t xac_mode;

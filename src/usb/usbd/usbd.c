@@ -91,6 +91,10 @@ static joypad_hid_report_t hid_report;
 #define USB_MAX_PLAYERS 4
 static input_event_t pending_events[USB_MAX_PLAYERS];
 static bool pending_flags[USB_MAX_PLAYERS] = {false};
+// Button edges accumulated while a P5General signing round trip is in flight and
+// no report can be built — see usbd_send_p5general_report(). Only that path uses
+// it; every other mode consumes its event on the spot and needs no latch.
+static uint32_t p5g_latched_buttons[USB_MAX_PLAYERS] = {0};
 
 // Serial number from board unique ID (12 hex chars + null)
 #define USB_SERIAL_LEN 12
@@ -1325,17 +1329,61 @@ static bool usbd_send_ds5_report(uint8_t player_index)
 // Send PS5 (P5General) report - delegates to mode interface. Unlike DualSense,
 // each report is signed by the dongle before it goes to the PS5; the mode's
 // send_report drives that pipeline (build -> dongle -> forward signed report).
+// P5General is the one mode whose report cannot always be built on demand: every
+// report must be signed by the auth dongle, which on the dual-MCU remapper lives
+// on the OTHER chip (A asks, B relays to the dongle, the signature comes back
+// over the UART link). That round trip takes milliseconds, and the whole time it
+// is in flight no new report can be built.
+//
+// This used to consume the pending input event and THEN discover it could not be
+// used (send_report() bailed on hash_pending), silently throwing that input away.
+// Every event arriving during a signing round trip was lost. pending_events[] is
+// a single latest-wins slot, so with a controller that reports only on change,
+// a lost press stayed lost until the next change -- i.e. the release -- and the
+// press never reached the console at all. A lost release left the button held.
+//
+// That is why it looked like a Bluetooth-only fault: a wired pad on B makes the
+// round trip short, while the BT dongle adds BTstack plus a second USB host
+// device to B's loop and stretches the window wide enough to swallow most
+// events. And why a tap was the worst case -- a hold survives on the link's
+// 100 ms state refresh, a tap has nothing to re-send it.
 static bool usbd_send_p5general_report(uint8_t player_index)
 {
     const usbd_mode_t* mode = usbd_modes[USB_OUTPUT_MODE_PS5];
     if (!mode || !mode->send_report) return false;
     if (mode->is_ready && !mode->is_ready()) return false;
-    if (player_index >= USB_MAX_PLAYERS || !pending_flags[player_index]) return false;
-    const input_event_t* event = &pending_events[player_index];
+    if (player_index >= USB_MAX_PLAYERS) return false;
+
+    // A finished signature is owed to the PS5 and needs no input event.
+    if (p5general_mode_pump_signed()) return true;
+
+    // Signer busy: leave the event QUEUED so the next build sees live state.
+    if (!p5general_mode_can_build()) {
+        // ... but first fold its button edges into a latch. The slot is
+        // latest-wins, so a press and its release can both land inside one
+        // signing window and cancel out, leaving nothing for the next build to
+        // notice. Accumulating the presses means a tap that happened entirely
+        // inside the window still reaches the console (held for one report, then
+        // released by the following build or the link's 100 ms refresh).
+        if (pending_flags[player_index]) {
+            p5g_latched_buttons[player_index] |= pending_events[player_index].buttons;
+        }
+        return false;
+    }
+
+    if (!pending_flags[player_index]) return false;
+
+    // Latch applied to the RAW event, before the profile runs — ORing it into
+    // the processed buttons instead would hand the console presses that never
+    // went through remapping.
+    input_event_t event = pending_events[player_index];
+    event.buttons |= p5g_latched_buttons[player_index];
+    p5g_latched_buttons[player_index] = 0;
     pending_flags[player_index] = false;
+
     profile_output_t profile_out;
-    uint32_t processed_buttons = apply_usbd_profile_player(event, &profile_out, player_index);
-    return mode->send_report(player_index, event, &profile_out, processed_buttons);
+    uint32_t processed_buttons = apply_usbd_profile_player(&event, &profile_out, player_index);
+    return mode->send_report(player_index, &event, &profile_out, processed_buttons);
 }
 
 // Send Xbox One report - delegates to mode interface

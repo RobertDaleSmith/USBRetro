@@ -59,6 +59,29 @@ static bool p5general_mode_is_ready(void)
 
 static uint16_t bswap16(uint16_t v) { return (uint16_t)((v << 8) | (v >> 8)); }
 
+// Forward a dongle-signed report to the PS5. Deliberately needs no input event:
+// the signature completes asynchronously (on the dual-MCU board, a UART round
+// trip after the request went out), so the tick that finally has it in hand is
+// usually not a tick with fresh input.
+bool p5general_mode_pump_signed(void)
+{
+    p5general_auth_data_t* a = &p5general_auth_data;
+    if (!a->hash_ready) return false;
+    if (tud_hid_ready() &&
+        tud_hid_report(0, a->hash_finish_buffer, sizeof(a->hash_finish_buffer))) {
+        a->hash_ready = false;
+    }
+    return true;   // still owed to the PS5 even if the endpoint was busy
+}
+
+// True when the signer will accept a fresh report. While this is false the
+// caller must leave its pending input event QUEUED, not consume it.
+bool p5general_mode_can_build(void)
+{
+    const p5general_auth_data_t* a = &p5general_auth_data;
+    return a->dongle_ready && !a->hash_ready && !a->hash_pending;
+}
+
 // GP2040 process(): forward a signed report when ready; otherwise build the
 // current report and, if changed, hand it to the dongle for signing.
 static bool p5general_mode_send_report(uint8_t player_index,
@@ -69,17 +92,12 @@ static bool p5general_mode_send_report(uint8_t player_index,
     (void)player_index;
     p5general_auth_data_t* a = &p5general_auth_data;
 
+    // Steps 1 and 2 (forward a finished signature / bail while one is in
+    // flight) moved to p5general_mode_pump_signed() + p5general_mode_can_build(),
+    // which the dispatcher calls BEFORE consuming an input event. Keep the
+    // guards here as belt-and-braces for any other caller.
     if (!a->dongle_ready) return false;
-
-    // 1) A completed (signed) report waiting? send it to the PS5.
-    if (a->hash_ready) {
-        if (tud_hid_ready() &&
-            tud_hid_report(0, a->hash_finish_buffer, sizeof(a->hash_finish_buffer))) {
-            a->hash_ready = false;
-        }
-        return true;
-    }
-    // 2) Still waiting for the dongle to sign the last one.
+    if (a->hash_ready) { p5general_mode_pump_signed(); return true; }
     if (a->hash_pending) return false;
 
     // 3) Build the current controller state into p5g_report.
