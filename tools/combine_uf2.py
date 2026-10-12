@@ -30,6 +30,10 @@ XIP_BASE = 0x10000000
 # relay reads it this same boot, so A's later runtime flash writes don't matter.
 B_IMAGE_OFFSET = 0x40000
 B_IMAGE_MAGIC = 0x42494D47  # "BIMG" (LE) — relay checks this before flashing.
+# remapper_v7 carries plain Picos: 2 MB. The top sectors hold A's runtime
+# settings (see flash.c), so the staged image must stay clear of them.
+FLASH_SIZE = 2 * 1024 * 1024
+SETTINGS_RESERVE = 16 * 1024
 
 UF2_MAGIC0 = 0x0A324655
 UF2_MAGIC1 = 0x9E5D5157
@@ -118,6 +122,20 @@ def main():
 
     # B payload = [magic u32][length u32][raw B image].
     b_payload = struct.pack("<II", B_IMAGE_MAGIC, len(b_image)) + b_image
+
+    # Guard: the staged payload must fit in the board's flash, below the runtime
+    # settings region at the top. Without this the UF2 just carries blocks past
+    # the end of flash, which the bootloader drops — B's tail would be silently
+    # missing and the relay would flash a truncated image onto B.
+    b_end = XIP_BASE + B_IMAGE_OFFSET + len(b_payload)
+    if b_end > XIP_BASE + FLASH_SIZE - SETTINGS_RESERVE:
+        sys.stderr.write(
+            "error: staged B image ends at 0x%08X, past the usable flash top "
+            "0x%08X (%d KB flash, %d KB reserved for settings) — shrink B or "
+            "raise FLASH_SIZE in combine_uf2.py for a larger board\n"
+            % (b_end, XIP_BASE + FLASH_SIZE - SETTINGS_RESERVE,
+               FLASH_SIZE // 1024, SETTINGS_RESERVE // 1024))
+        sys.exit(1)
     b_blocks = blocks_for_bytes(b_payload, XIP_BASE + B_IMAGE_OFFSET)
 
     flash_blocks = a_blocks + b_blocks
@@ -137,6 +155,11 @@ def main():
     print("combine_uf2%s: A=%d blocks, B image=%d bytes (%d blocks) @ 0x%08X, relay=%d RAM blocks"
           % (" [stage]" if stage_only else "", len(a_blocks), len(b_image),
              len(b_blocks), XIP_BASE + B_IMAGE_OFFSET, len(ram_blocks)))
+    # Both guards above are cliffs; print how close we are so growth shows up in
+    # the build log instead of as a failed build one commit later.
+    print("            headroom: A %d KB to the B slot, B %d KB to the flash top"
+          % ((XIP_BASE + B_IMAGE_OFFSET - a_hi) // 1024,
+             (XIP_BASE + FLASH_SIZE - SETTINGS_RESERVE - b_end) // 1024))
 
 
 if __name__ == "__main__":
