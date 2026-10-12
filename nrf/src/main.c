@@ -27,6 +27,14 @@
 #ifdef CONFIG_UNIVERSAL
 #include "imu_nrf.h"
 #include "bt/ble_output/ble_output.h"
+
+#ifdef CONFIG_MAX3421
+// The USB Host FeatherWing is optional on this board: the host stack is always
+// compiled in, and usbh_init() probes for the chip before bringing it up. These
+// gate the host-side paths main() owns so a bare board runs cleanly.
+extern bool max3421_is_detected(void);
+extern void max3421_host_enable_int(void);
+#endif
 #endif
 
 // App layer
@@ -471,10 +479,13 @@ int main(void)
     usb_power_init();
 
 #ifdef CONFIG_MAX3421
-    // Enable MAX3421E interrupt now that TinyUSB host is initialized
+    // Enable MAX3421E interrupt now that TinyUSB host is initialized.
+    // Skipped when the chip is absent: the host stack is compiled in whether or
+    // not the FeatherWing is fitted, and usbh_init() already runs the full
+    // probe-then-init-then-arm sequence when it is. Arming here regardless
+    // would point an IRQ at a host that was never initialized.
     {
-        extern void max3421_host_enable_int(void);
-        max3421_host_enable_int();
+        if (max3421_is_detected()) max3421_host_enable_int();
     }
 #endif
 
@@ -496,8 +507,11 @@ int main(void)
         tud_task_ext(0, false);
 
 #ifdef CONFIG_MAX3421
-        // Process TinyUSB host events (MAX3421E ISR handles SPI directly)
-        tuh_task_ext(0, false);
+        // Process TinyUSB host events (MAX3421E ISR handles SPI directly).
+        // No chip means no host was ever initialized, so there is nothing to
+        // pump -- and on this board that is a supported configuration, not a
+        // fault (the USB Host FeatherWing is optional).
+        if (max3421_is_detected()) tuh_task_ext(0, false);
 
         // Periodic diagnostic (every 5s for first 60s)
         {

@@ -236,6 +236,16 @@ bool max3421_host_init(void)
 
 void max3421_host_enable_int(void)
 {
+    // No chip: never arm the IRQ. The pin would be left floating-ish on a pull-up
+    // with nothing driving it, and any edge on it would call hcd_int_handler()
+    // against a host stack that was never tusb_init()'d. This is reachable
+    // because the board builds with the host compiled in whether or not the
+    // FeatherWing is fitted — see usbh_init()'s probe-then-init sequence.
+    if (!max3421_detected) {
+        printf("[max3421] INT not armed (chip not detected)\n");
+        return;
+    }
+
     gpio_pin_interrupt_configure(int_gpio_dev, INT_PIN,
                                  GPIO_INT_EDGE_TO_ACTIVE);
     int_enabled = true;

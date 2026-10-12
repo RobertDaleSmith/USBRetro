@@ -128,6 +128,62 @@ set(INCLUDE_DIRS
 # App-specific sources and definitions
 # ============================================================================
 
+# ---------------------------------------------------------------------------
+# USB host sources (MAX3421E). Shared by every nRF app that can host: usb2usb,
+# btusb2usb, and universal on the Feather. Kept in ONE list on purpose -- three
+# hand-maintained copies is how a driver ends up compiled into one app and
+# missing from another, which is a link error nobody sees until CI runs the
+# right target.
+# ---------------------------------------------------------------------------
+set(JOYPAD_USB_HOST_SRCS
+    "src/max3421_host_nrf.c"
+    "${SHARED_SRC}/usb/usbh/usbh.c"
+    "${SHARED_SRC}/usb/usbh/intel/intel_wireless_series.c"
+    "${SHARED_SRC}/usb/usbh/hid/hid.c"
+    "${SHARED_SRC}/usb/usbh/hid/hid_registry.c"
+    "${SHARED_SRC}/usb/usbh/hid/hid_utils.c"
+    "${SHARED_SRC}/usb/usbh/xinput/xinput.c"
+    "${SHARED_SRC}/usb/usbh/xbone_auth/xbone_auth.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_gamepad.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_keyboard.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_mouse.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/generic/sinput_host.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_bta.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_m30.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_sn30.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/dragonrise/dragonrise.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/elo/elo_vagabond.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/google/google_stadia.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_horipad.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_pokken.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/logitech/logitech_wingman.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_commander.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_dualstrike.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v1.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v2.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/gamecube_adapter.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch2_pro.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch_pro.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/raphnet/raphnet_pce.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sega/sega_astrocity.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds3.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds4.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/ds5_auth.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/p5general_host.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
+    "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
+    "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
+    "${TINYUSB_PATH}/src/host/usbh.c"
+    "${TINYUSB_PATH}/src/host/hub.c"
+    "${TINYUSB_PATH}/src/class/hid/hid_host.c"
+    "${TINYUSB_PATH}/src/class/vendor/vendor_host.c"
+    "${TINYUSB_PATH}/src/portable/analog/max3421/hcd_max3421.c"
+)
+
 if(APP_TYPE STREQUAL "usb2usb")
     # -----------------------------------------------------------------------
     # usb2usb: USB Host (MAX3421E) → USB Device (nRF native)
@@ -137,61 +193,7 @@ if(APP_TYPE STREQUAL "usb2usb")
         # --- App ---
         "${SHARED_SRC}/apps/usb2usb/app.c"
 
-        # --- MAX3421E host (nRF Zephyr port) ---
-        "src/max3421_host_nrf.c"
-
-        # --- USB Host layer ---
-        "${SHARED_SRC}/usb/usbh/usbh.c"
-        "${SHARED_SRC}/usb/usbh/intel/intel_wireless_series.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid_registry.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid_utils.c"
-        "${SHARED_SRC}/usb/usbh/xinput/xinput.c"
-        "${SHARED_SRC}/usb/usbh/xbone_auth/xbone_auth.c"
-
-        # --- USB HID device drivers ---
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_gamepad.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_keyboard.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_mouse.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/sinput_host.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_bta.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_m30.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_sn30.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/dragonrise/dragonrise.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/elo/elo_vagabond.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/google/google_stadia.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_horipad.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_pokken.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/logitech/logitech_wingman.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_commander.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_dualstrike.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v1.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v2.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/gamecube_adapter.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch2_pro.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch_pro.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/raphnet/raphnet_pce.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sega/sega_astrocity.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds3.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds4.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/ds5_auth.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/p5general_host.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
-
-        # --- XInput host driver (tusb_xinput library) ---
-        "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
-
-        # --- TinyUSB host stack ---
-        "${TINYUSB_PATH}/src/host/usbh.c"
-        "${TINYUSB_PATH}/src/host/hub.c"
-        "${TINYUSB_PATH}/src/class/hid/hid_host.c"
-        "${TINYUSB_PATH}/src/class/vendor/vendor_host.c"
-        "${TINYUSB_PATH}/src/portable/analog/max3421/hcd_max3421.c"
+        ${JOYPAD_USB_HOST_SRCS}
     )
 
     list(APPEND INCLUDE_DIRS
@@ -220,61 +222,7 @@ elseif(APP_TYPE STREQUAL "btusb2usb")
         # --- App (shared with usb2usb) ---
         "${SHARED_SRC}/apps/usb2usb/app.c"
 
-        # --- MAX3421E host (nRF Zephyr port) ---
-        "src/max3421_host_nrf.c"
-
-        # --- USB Host layer ---
-        "${SHARED_SRC}/usb/usbh/usbh.c"
-        "${SHARED_SRC}/usb/usbh/intel/intel_wireless_series.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid_registry.c"
-        "${SHARED_SRC}/usb/usbh/hid/hid_utils.c"
-        "${SHARED_SRC}/usb/usbh/xinput/xinput.c"
-        "${SHARED_SRC}/usb/usbh/xbone_auth/xbone_auth.c"
-
-        # --- USB HID device drivers ---
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_gamepad.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_keyboard.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/hid_mouse.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/generic/sinput_host.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_bta.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_m30.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_neo.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_pce.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/8bitdo/8bitdo_sn30.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/dragonrise/dragonrise.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/elo/elo_vagabond.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/google/google_stadia.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_horipad.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/hori/hori_pokken.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/logitech/logitech_wingman.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_commander.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/microsoft/ms_sidewinder_dualstrike.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v1.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/misc/triple_adapter_v2.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/gamecube_adapter.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch2_pro.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/nintendo/switch_pro.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/raphnet/raphnet_pce.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sega/sega_astrocity.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds3.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds4.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/ds5_auth.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/p5general_host.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_ds5.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/sony/sony_psc.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller_2.c"
-        "${SHARED_SRC}/usb/usbh/hid/devices/vendors/valve/steam_controller.c"
-
-        # --- XInput host driver (tusb_xinput library) ---
-        "${SHARED_SRC}/lib/tusb_xinput/xinput_host.c"
-
-        # --- TinyUSB host stack ---
-        "${TINYUSB_PATH}/src/host/usbh.c"
-        "${TINYUSB_PATH}/src/host/hub.c"
-        "${TINYUSB_PATH}/src/class/hid/hid_host.c"
-        "${TINYUSB_PATH}/src/class/vendor/vendor_host.c"
-        "${TINYUSB_PATH}/src/portable/analog/max3421/hcd_max3421.c"
+        ${JOYPAD_USB_HOST_SRCS}
 
         # --- nRF BTstack TLV ---
         "src/btstack_tlv_nrf.c"
@@ -540,7 +488,6 @@ elseif(APP_TYPE STREQUAL "universal")
         SENSOR_PAD=1
         WS2812_PIN=16
         WS2812_NUM_PIXELS=1
-        DISABLE_USB_HOST=1
         BTSTACK_USE_NRF=1
         ENABLE_BTSTACK=1
         REQUIRE_BLE_OUTPUT=1
@@ -556,6 +503,37 @@ elseif(APP_TYPE STREQUAL "universal")
     # only on the Feather. Pad (GPIO) input is always available via SENSOR_PAD.
     if(BOARD MATCHES "adafruit_feather_nrf52840")
         target_compile_definitions(app PRIVATE SENSOR_JOYWING=1)
+    endif()
+
+    # USB host (MAX3421E USB Host FeatherWing) — Feather only, and OPTIONAL at
+    # runtime. The Feather is the one nRF board that can physically take the
+    # wing, so only it compiles the host stack in; every other nRF board keeps
+    # DISABLE_USB_HOST and stays device-only. Within the Feather build the wing
+    # does NOT have to be fitted: usbh_init() reads the MAX3421E REVISION
+    # register and only calls tusb_init()/arms the INT when the chip answers
+    # (src/usb/usbh/usbh.c), and main.c gates its own host paths on
+    # max3421_is_detected(). One UF2 therefore runs on a bare Feather and on a
+    # Feather + host wing.
+    #
+    # This is what lets universal reach the P5General auth dongle, so PS5 output
+    # works here without the dual-MCU UART bridge.
+    if(BOARD MATCHES "adafruit_feather_nrf52840")
+        # MAX_DEVICES: the hid_devices[] array is indexed by USB dev_addr and
+        # costs ~2 KB per slot, so the stock 15 is 30 KB -- which this app, with
+        # BLE central + BLE peripheral + display + pad already resident, cannot
+        # afford (it overflows RAM by 2.2 KB). 7 is the documented floor for this
+        # host config: CFG_TUH_DEVICE_MAX(5) + CFG_TUH_HUB(1) + 1, so hub support
+        # is retained. Frees ~16 KB. Per-app override only -- see core/buttons.h.
+        target_compile_definitions(app PRIVATE CONFIG_MAX3421=1 MAX_DEVICES=7)
+        target_sources(app PRIVATE ${JOYPAD_USB_HOST_SRCS})
+        # Applied here rather than via INCLUDE_DIRS: that list is consumed by
+        # target_include_directories() before this board gate runs.
+        target_include_directories(app PRIVATE
+            "${SHARED_SRC}/usb/usbh"
+            "${SHARED_SRC}/lib/tusb_xinput"
+        )
+    else()
+        target_compile_definitions(app PRIVATE DISABLE_USB_HOST=1)
     endif()
 
     # Bench/coexist option: keep BLE advertising and connections alive while a
