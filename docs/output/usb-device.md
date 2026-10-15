@@ -30,8 +30,8 @@ No PIO state machines or overclock required. The adapter enumerates as a composi
 | SInput | `USB_OUTPUT_MODE_SINPUT` | Joypad HID Gamepad | 2E8A:10C6 | PC/Mac/Linux (default, Steam-compatible) |
 | XInput | `USB_OUTPUT_MODE_XINPUT` | Xbox 360 Controller | 045E:028E | PC and Xbox 360 console |
 | PS3 | `USB_OUTPUT_MODE_PS3` | DualShock 3 | 054C:0268 | PC and PS3 console |
-| PS4 | `USB_OUTPUT_MODE_PS4` | DualShock 4 | 054C:05C4 | PC (console requires auth dongle) |
-| Switch | `USB_OUTPUT_MODE_SWITCH` | Pro Controller | 057E:2009 | Nintendo Switch (docked USB) |
+| PS4 | `USB_OUTPUT_MODE_PS4` | DualShock 4 protocol (as HORI Fighting Commander) | 0F0D:0086 | PC (console requires auth dongle) |
+| Switch | `USB_OUTPUT_MODE_SWITCH` | HORI Pokken Controller | 0F0D:0092 | Nintendo Switch (docked USB) |
 | PS Classic | `USB_OUTPUT_MODE_PSCLASSIC` | PS Classic Controller | -- | PlayStation Classic mini console |
 | Xbox Original | `USB_OUTPUT_MODE_XBOX_ORIGINAL` | Controller S | 045E:0289 | Original Xbox (XID protocol) |
 | Xbox One | `USB_OUTPUT_MODE_XBONE` | Xbox One Controller | -- | Xbox One/Series (GIP protocol) |

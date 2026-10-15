@@ -37,8 +37,8 @@ The CDC protocol uses JSON commands over a framed binary transport. Two CDC port
 | **SInput** | Joypad HID Gamepad | 2E8A:10C6 | PC/Mac/Linux (default, Steam-compatible) |
 | **XInput** | Xbox 360 Controller | 045E:028E | PC and **Xbox 360 console** |
 | **PS3** | DualShock 3 | 054C:0268 | PC and PS3 console |
-| **PS4** | DualShock 4 | 054C:05C4 | PC (console requires auth dongle) |
-| **Switch** | Pro Controller | 057E:2009 | Nintendo Switch (docked USB) |
+| **PS4** | DualShock 4 protocol (as HORI Fighting Commander) | 0F0D:0086 | PC (console requires auth dongle) |
+| **Switch** | HORI Pokken Controller | 0F0D:0092 | Nintendo Switch (docked USB) |
 | **Keyboard/Mouse** | HID KB + Mouse | - | Accessibility / desktop use |
 
 Additional modes (not in cycle, accessible via web config):
