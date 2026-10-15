@@ -60,6 +60,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+#### USB host — DualShock 4 touchpad
+- **Touch coordinates from a USB DS4 were stuck in the top-left corner.** `sony_ds4.c` passed raw
+  1919x942 coordinates into the canonical 0..65535 touch fields, so every output mode scaled
+  them down a second time (~56x15 usable). Now normalized like `ds4_bt.c`; verified full-range
+  one- and two-finger tracking on a USB DS4-protocol pad.
+
 #### BLE host (central)
 - 🔴 **The central could go permanently deaf after one failed reconnect.** The BLE connect
   timeout only fires while the state is `CONNECTING`, and the idle safety net that resumes

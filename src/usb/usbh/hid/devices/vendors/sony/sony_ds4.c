@@ -339,11 +339,13 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .accel_range = 4000,  // ±4g
         .battery_level = bat_level,
         .battery_charging = bat_charging,
-        // Touchpad (2-finger capacitive)
+        // Touchpad (2-finger capacitive). Normalize DS4 native (1919x942) into the
+        // canonical 0..65535 touch space so output modes scale it correctly —
+        // matching ds4_bt.c.
         .has_touch = true,
         .touch = {
-          { .x = tx,  .y = ty,  .active = !ds4_report.tpad_f1_down },
-          { .x = tx2, .y = ty2, .active = !ds4_report.tpad_f2_down },
+          { .x = touch_norm_from_range(tx,  1919), .y = touch_norm_from_range(ty,  942), .active = !ds4_report.tpad_f1_down },
+          { .x = touch_norm_from_range(tx2, 1919), .y = touch_norm_from_range(ty2, 942), .active = !ds4_report.tpad_f2_down },
         },
       };
       router_submit_input(&event);
