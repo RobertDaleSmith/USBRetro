@@ -64,6 +64,8 @@ Complete list of supported input devices for Joypad OS adapters.
 - **Sega Astrocity Mini Controller** - Arcade stick
 - **Hori Pokken Tournament Controller** - Fight stick
 - **Hori Horipad** - Generic Hori gamepads
+- **Nacon Revolution Pro Controller 2** - PS4 modes via the DualShock 4 driver (rumble, lightbar, touchpad, motion); PC mode as Xbox 360 (XInput)
+- **Nacon Daija Arcade Stick** - PS4 mode
 - **Google Stadia Controller** - USB mode
 - **Generic DirectInput Controllers** - Most D-input gamepads
 - **Generic HID Gamepads** - Standard USB HID joysticks

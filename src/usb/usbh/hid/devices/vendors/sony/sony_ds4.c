@@ -115,6 +115,7 @@ bool is_sony_ds4(uint16_t vid, uint16_t pid) {
     // Other
     || (vid == 0x0c12 && pid == 0x1e1b) // Feir Wired FR-225C (Budget PS4 controller)
     || (vid == 0x146b && pid == 0x0d09) // Nacon Daija Arcade Stick (PS4 Mode)
+    || (vid == 0x146b && pid == 0x0d02) // Nacon Revolution Pro Controller 2 (PS4 Mode)
     || (vid == 0x20d6 && pid == 0x792a) // PowerA FUSION Wired FightPad (6-button layout)
     || (vid == 0x1f4f && pid == 0x1002) // ASW Guilty Gear xrd Controller (Collector's Edition)
     || (vid == 0x04d8 && pid == 0x1529) // Universal PCB Project (UPCB Open Source)

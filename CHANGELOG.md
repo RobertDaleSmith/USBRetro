@@ -58,6 +58,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **Mouse & Keyboard test on the web config Input Test page** — drag pad, wheel, click buttons,
   and a key/modifier panel driving `MOUSE.INJECT`/`KEY.INJECT`.
 
+#### USB host — Nacon Revolution Pro Controller 2
+- **`146B:0D02` (PS4 mode) now uses the native DS4 driver** instead of the generic HID parser,
+  gaining rumble, lightbar, touchpad and motion. Its HID descriptor is byte-identical to a
+  genuine DualShock 4.
+
 ### Fixed
 
 #### USB host — DualShock 4 touchpad
