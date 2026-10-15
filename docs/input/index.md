@@ -62,6 +62,7 @@ USB and Bluetooth inputs support a wide range of controllers through vendor-spec
 - Nintendo: Switch Pro, Joy-Con, GameCube adapter, NES/SNES Online
 - 8BitDo: Pro 2, Ultimate, Lite, Zero, M30, SN30, and more
 - HORI: Fighting Commander, RAP, HORIPAD
+- Nacon: Revolution Pro Controller 2, Daija Arcade Stick
 - Logitech: F310, F710
 - Sega: Saturn/Genesis USB pads
 - Raphnet: N64/GC to USB adapters

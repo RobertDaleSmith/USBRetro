@@ -115,6 +115,7 @@ bool is_sony_ds4(uint16_t vid, uint16_t pid) {
     // Other
     || (vid == 0x0c12 && pid == 0x1e1b) // Feir Wired FR-225C (Budget PS4 controller)
     || (vid == 0x146b && pid == 0x0d09) // Nacon Daija Arcade Stick (PS4 Mode)
+    || (vid == 0x146b && pid == 0x0d02) // Nacon Revolution Pro Controller 2 (PS4 Mode)
     || (vid == 0x20d6 && pid == 0x792a) // PowerA FUSION Wired FightPad (6-button layout)
     || (vid == 0x1f4f && pid == 0x1002) // ASW Guilty Gear xrd Controller (Collector's Edition)
     || (vid == 0x04d8 && pid == 0x1529) // Universal PCB Project (UPCB Open Source)
@@ -339,11 +340,13 @@ void input_sony_ds4(uint8_t dev_addr, uint8_t instance, uint8_t const* report, u
         .accel_range = 4000,  // ±4g
         .battery_level = bat_level,
         .battery_charging = bat_charging,
-        // Touchpad (2-finger capacitive)
+        // Touchpad (2-finger capacitive). Normalize DS4 native (1919x942) into the
+        // canonical 0..65535 touch space so output modes scale it correctly —
+        // matching ds4_bt.c.
         .has_touch = true,
         .touch = {
-          { .x = tx,  .y = ty,  .active = !ds4_report.tpad_f1_down },
-          { .x = tx2, .y = ty2, .active = !ds4_report.tpad_f2_down },
+          { .x = touch_norm_from_range(tx,  1919), .y = touch_norm_from_range(ty,  942), .active = !ds4_report.tpad_f1_down },
+          { .x = touch_norm_from_range(tx2, 1919), .y = touch_norm_from_range(ty2, 942), .active = !ds4_report.tpad_f2_down },
         },
       };
       router_submit_input(&event);
@@ -687,6 +690,16 @@ uint8_t* ds3_get_verify_buffer(void) {
     return ds3_verify_buf;
 }
 
+// Read the IMU calibration feature report (0x02) once at mount, as Linux
+// hid-playstation and SDL do. Some DS4-protocol pads only stream accelerometer
+// data after a host has made this request — the Nacon Revolution Pro
+// Controller 2 sends accel = 0 until then, even though it doesn't implement
+// 0x02 and stalls the read. The reply itself is not used.
+static uint8_t ds4_calib_buf[64];
+void ds4_request_calibration(uint8_t dev_addr, uint8_t instance) {
+    tuh_hid_get_report(dev_addr, instance, 0x02, HID_REPORT_TYPE_FEATURE, ds4_calib_buf, 37);
+}
+
 // TinyUSB callback for get_report completion
 void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
@@ -696,6 +709,10 @@ void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
     if (ds5_auth_on_get_report_complete(dev_addr, idx, report_id, len)) return;
     // P5General dongle relay shares this global callback too.
     if (p5general_host_on_get_report_complete(dev_addr, idx, report_id, len)) return;
+
+    // Calibration read from ds4_request_calibration(): only the request matters.
+    // Consumed here so it never reaches the DS4 auth state machine below.
+    if (report_id == 0x02) return;
 
     // Handle DS3 BT address verification (report 0xF5)
     if (report_id == 0xF5) {

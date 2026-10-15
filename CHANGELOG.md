@@ -58,7 +58,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **Mouse & Keyboard test on the web config Input Test page** — drag pad, wheel, click buttons,
   and a key/modifier panel driving `MOUSE.INJECT`/`KEY.INJECT`.
 
+#### USB host — Nacon Revolution Pro Controller 2
+- **`146B:0D02` (PS4 mode) now uses the native DS4 driver** instead of the generic HID parser,
+  gaining rumble, lightbar, touchpad and motion. Its HID descriptor is byte-identical to a
+  genuine DualShock 4.
+
 ### Fixed
+
+#### USB host — DualShock 4 touchpad
+- **Touch coordinates from a USB DS4 were stuck in the top-left corner.** `sony_ds4.c` passed raw
+  1919x942 coordinates into the canonical 0..65535 touch fields, so every output mode scaled
+  them down a second time (~56x15 usable). Now normalized like `ds4_bt.c`; verified full-range
+  one- and two-finger tracking on a USB DS4-protocol pad.
+
+#### USB host — DualShock 4 accelerometer on clones
+- **The Nacon Revolution Pro Controller 2 reported accel = 0 through the adapter** while its
+  gyro worked. The pad only streams accelerometer data after a host has requested the DS4
+  calibration feature report (`0x02`) — it doesn't even implement it and stalls the read, but
+  the request switches accel on. `sony_ds4` now makes that request once at mount, as Linux
+  `hid-playstation` and SDL do; the reply is ignored. Verified 0.98 g at rest end to end.
 
 #### BLE host (central)
 - 🔴 **The central could go permanently deaf after one failed reconnect.** The BLE connect
