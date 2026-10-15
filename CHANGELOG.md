@@ -71,6 +71,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   them down a second time (~56x15 usable). Now normalized like `ds4_bt.c`; verified full-range
   one- and two-finger tracking on a USB DS4-protocol pad.
 
+#### USB host — DualShock 4 accelerometer on clones
+- **The Nacon Revolution Pro Controller 2 reported accel = 0 through the adapter** while its
+  gyro worked. The pad only streams accelerometer data after a host has requested the DS4
+  calibration feature report (`0x02`) — it doesn't even implement it and stalls the read, but
+  the request switches accel on. `sony_ds4` now makes that request once at mount, as Linux
+  `hid-playstation` and SDL do; the reply is ignored. Verified 0.98 g at rest end to end.
+
 #### BLE host (central)
 - 🔴 **The central could go permanently deaf after one failed reconnect.** The BLE connect
   timeout only fires while the state is `CONNECTING`, and the idle safety net that resumes

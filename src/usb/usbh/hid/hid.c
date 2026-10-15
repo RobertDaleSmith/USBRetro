@@ -202,8 +202,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     device_interfaces[dev_type]->init(dev_addr, instance);
     break;
   case CONTROLLER_DUALSHOCK4:
-    // Register DS4 for auth passthrough
+    // Register DS4 for auth passthrough; read calibration so clones enable accel
     ds4_auth_register(dev_addr, instance);
+    ds4_request_calibration(dev_addr, instance);
     break;
   case CONTROLLER_DUALSENSE:
     // Register DualSense for PS5 auth passthrough (sniff-gated, see ds5_auth.h)

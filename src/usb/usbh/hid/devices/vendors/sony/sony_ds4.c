@@ -690,6 +690,16 @@ uint8_t* ds3_get_verify_buffer(void) {
     return ds3_verify_buf;
 }
 
+// Read the IMU calibration feature report (0x02) once at mount, as Linux
+// hid-playstation and SDL do. Some DS4-protocol pads only stream accelerometer
+// data after a host has made this request — the Nacon Revolution Pro
+// Controller 2 sends accel = 0 until then, even though it doesn't implement
+// 0x02 and stalls the read. The reply itself is not used.
+static uint8_t ds4_calib_buf[64];
+void ds4_request_calibration(uint8_t dev_addr, uint8_t instance) {
+    tuh_hid_get_report(dev_addr, instance, 0x02, HID_REPORT_TYPE_FEATURE, ds4_calib_buf, 37);
+}
+
 // TinyUSB callback for get_report completion
 void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
                                     uint8_t report_id, uint8_t report_type,
@@ -699,6 +709,10 @@ void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx,
     if (ds5_auth_on_get_report_complete(dev_addr, idx, report_id, len)) return;
     // P5General dongle relay shares this global callback too.
     if (p5general_host_on_get_report_complete(dev_addr, idx, report_id, len)) return;
+
+    // Calibration read from ds4_request_calibration(): only the request matters.
+    // Consumed here so it never reaches the DS4 auth state machine below.
+    if (report_id == 0x02) return;
 
     // Handle DS3 BT address verification (report 0xF5)
     if (report_id == 0xF5) {

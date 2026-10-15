@@ -170,4 +170,7 @@ void ds4_auth_task(void);
 void ds4_auth_register(uint8_t dev_addr, uint8_t instance);
 void ds4_auth_unregister(uint8_t dev_addr, uint8_t instance);
 
+// Request the IMU calibration feature report once at mount (enables accel on some clones)
+void ds4_request_calibration(uint8_t dev_addr, uint8_t instance);
+
 #endif
