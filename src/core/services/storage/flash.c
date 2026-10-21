@@ -576,6 +576,31 @@ void flash_set_shoulder_swap(uint8_t on)
     flash_save(&runtime_settings);
 }
 
+// Persist the BT discovery policy. Idempotent. Not gated on router_saved —
+// this is a standalone BT preference, not part of the router settings block.
+void flash_set_bt_discovery_mode(uint8_t mode)
+{
+    if (mode > FLASH_BT_DISCOVERY_MAX) return;
+    if (!runtime_settings_loaded) {
+        flash_t tmp;
+        if (!flash_load(&tmp)) memset(&tmp, 0, sizeof(tmp));
+        tmp.bt_discovery_mode = mode;
+        flash_save(&tmp);
+        return;
+    }
+    if (runtime_settings.bt_discovery_mode == mode) {
+        return;
+    }
+    runtime_settings.bt_discovery_mode = mode;
+    flash_save(&runtime_settings);
+}
+
+uint8_t flash_get_bt_discovery_mode(void)
+{
+    if (!runtime_settings_loaded) return FLASH_BT_DISCOVERY_AUTO;
+    return runtime_settings.bt_discovery_mode;
+}
+
 uint8_t flash_get_builtin_disabled_mask(void)
 {
     if (!runtime_settings_loaded) return 0;
