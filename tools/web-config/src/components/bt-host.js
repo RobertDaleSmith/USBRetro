@@ -42,6 +42,15 @@ export class BtHostCard {
                         <span class="label">Transport</span>
                         <span class="value" id="btTransportText">—</span>
                     </div>
+                    <div class="row" id="btDiscoveryRow">
+                        <span class="label">Discovery</span>
+                        <select id="btDiscoverySelect">
+                            <option value="0">Automatic</option>
+                            <option value="1">Bonded devices only</option>
+                            <option value="2">Off</option>
+                        </select>
+                    </div>
+                    <p class="hint" id="btDiscoveryHint"></p>
                     <div id="btDevicesList" style="display:none;"></div>
                 </div>
             </div>
@@ -74,6 +83,7 @@ export class BtHostCard {
         this.el.querySelector('#btHostSaveBtn').addEventListener('click', () => this.saveBtHost());
         this.dirty = new DirtyTracker(this.el.querySelector('#btHostCard'), this.el.querySelector('#btHostSaveBtn'));
         this.el.querySelector('#wiimoteOrientSelect').addEventListener('change', (e) => this.setWiimoteOrient(e.target.value));
+        this.el.querySelector('#btDiscoverySelect').addEventListener('change', (e) => this.setBtDiscovery(e.target.value));
         this.el.querySelector('#clearBtBtn').addEventListener('click', () => this.clearBtBonds());
     }
 
@@ -108,6 +118,36 @@ export class BtHostCard {
         } catch (e) {
             card.style.display = 'none';
         }
+    }
+
+    // Discovery policy: 0=auto, 1=bonded only, 2=off. Applies immediately
+    // and is persisted by the firmware — no reboot needed.
+    async setBtDiscovery(mode) {
+        const value = String(parseInt(mode, 10) || 0);
+        try {
+            await this.protocol.setBtDiscovery(parseInt(value, 10));
+            this.log('Bluetooth discovery policy updated', 'success');
+        } catch (e) {
+            this.log(`Failed to set discovery policy: ${e.message}`, 'error');
+        }
+    }
+
+    // Reflect the firmware's discovery policy in the dropdown. Guarded
+    // against the 2 s status poll stomping on an open dropdown.
+    updateDiscoverySelect(status) {
+        const select = this.el.querySelector('#btDiscoverySelect');
+        const hint = this.el.querySelector('#btDiscoveryHint');
+        const mode = String(status.discovery ?? 0);
+        if (document.activeElement !== select && select.value !== mode) {
+            select.value = mode;
+        }
+        const hints = {
+            0: 'Scans continuously and connects to any controller it finds.',
+            1: 'Scans continuously, but only connects to controllers already paired with this device.',
+            2: 'No scanning. Only controllers that connect on their own are accepted.',
+        };
+        const text = hints[mode] ?? hints[0];
+        if (hint) hint.textContent = text;
     }
 
     async loadBtStatus() {
@@ -164,6 +204,9 @@ export class BtHostCard {
 
             // Show transport
             this.el.querySelector('#btTransportText').textContent = status.transport || '—';
+
+            // Reflect the discovery policy
+            this.updateDiscoverySelect(status);
 
             const devices = status.devices || [];
             if (devices.length > 0) {

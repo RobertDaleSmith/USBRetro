@@ -878,6 +878,25 @@ static void cmd_mode_list(const char* json)
     send_json(response_buf);
 }
 
+// BT.DISCOVERY.SET — set the BT central discovery policy.
+// 0=auto (scan always, auto-connect to any gamepad found)
+// 1=bonded (auto-connect only to devices we hold a link key for)
+// 2=off (no discovery; only devices that connect to us work)
+// Takes effect immediately and is persisted, so no reboot is needed.
+#ifdef ENABLE_BTSTACK
+static void cmd_bt_discovery_set(const char* json)
+{
+    int mode;
+    if (!json_get_int(json, "mode", &mode) || mode < 0 || mode > BT_DISCOVERY_MAX) {
+        send_error("Invalid mode (0=auto, 1=bonded, 2=off)");
+        return;
+    }
+    btstack_host_set_discovery_mode((uint8_t)mode);
+    flash_set_bt_discovery_mode((uint8_t)mode);
+    send_ok();
+}
+#endif
+
 // ============================================================================
 // BLE OUTPUT MODE COMMANDS
 // ============================================================================
@@ -904,7 +923,7 @@ static void cmd_bt_scan(const char* json)
     (void)json;
 #ifdef ENABLE_BTSTACK
     extern void btstack_host_suppress_scan(bool suppress);
-    extern void btstack_host_start_scan(void);
+    extern void btstack_host_start_scan_explicit(void);
     extern void btstack_host_start_timed_scan(uint32_t timeout_ms);
     extern uint8_t btstack_classic_get_connection_count(void);
     btstack_host_suppress_scan(false);
@@ -912,12 +931,14 @@ static void cmd_bt_scan(const char* json)
     // (the radio belongs to the link), so this is the "add another device"
     // request: time-box it when a controller is already attached, and scan
     // open-endedly only when there is nothing to protect.
+    // Explicit: this is a user request, so it also works with the
+    // discovery policy set to OFF (that is how a new device gets paired).
     int scan_ms = 0;
     if (btstack_classic_get_connection_count() > 0) {
         scan_ms = 60000;
         btstack_host_start_timed_scan((uint32_t)scan_ms);
     } else {
-        btstack_host_start_scan();
+        btstack_host_start_scan_explicit();
     }
     snprintf(response_buf, sizeof(response_buf),
              "{\"ok\":true,\"timed_ms\":%d}", scan_ms);
@@ -3238,7 +3259,7 @@ static void cmd_bt_status(const char* json)
 #endif
     int pos = snprintf(response_buf, sizeof(response_buf),
              "{\"enabled\":%s,\"scanning\":%s,\"supp\":%s,\"hsupp\":%s,\"supp_src\":\"%s\",\"connections\":%d,\"nus\":%d,\"gattfree\":%d,\"transport\":\"%s\","
-             "\"up_s\":%lu,\"crash_pc\":\"%08lx\",\"crash_lr\":\"%08lx\",\"devices\":[",
+             "\"up_s\":%lu,\"crash_pc\":\"%08lx\",\"crash_lr\":\"%08lx\",\"discovery\":%d,\"devices\":[",
              btstack_host_is_initialized() ? "true" : "false",
              btstack_host_is_scanning() ? "true" : "false",
              btstack_host_scan_suppressed() ? "true" : "false",
@@ -3247,7 +3268,8 @@ static void cmd_bt_status(const char* json)
              btstack_classic_get_connection_count(),
              nus_state, gattfree, transport,
              (unsigned long)(platform_time_ms() / 1000),
-             (unsigned long)crash_pc, (unsigned long)crash_lr);
+             (unsigned long)crash_pc, (unsigned long)crash_lr,
+             (int)btstack_host_get_discovery_mode());
 
     // Track which bonded addresses are currently connected
     uint8_t connected_addrs[8][6];
@@ -4570,6 +4592,7 @@ static const cmd_entry_t commands[] = {
     {"BLE.DROP", cmd_ble_drop},
     {"BT.BONDS.CLEAR", cmd_bt_bonds_clear},
     {"BT.FORGET", cmd_bt_forget},
+    {"BT.DISCOVERY.SET", cmd_bt_discovery_set},
     {"WIIMOTE.ORIENT.GET", cmd_wiimote_orient_get},
     {"WIIMOTE.ORIENT.SET", cmd_wiimote_orient_set},
 #endif
