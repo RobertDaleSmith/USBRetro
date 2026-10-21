@@ -304,6 +304,26 @@ void flash_set_shoulder_swap(uint8_t on)
     flash_save(&runtime_settings);
 }
 
+// BT discovery policy — referenced by btstack_host (the policy is restored
+// at transport init) and by the BT.DISCOVERY.SET CDC command, both compiled
+// into the nRF build too. Mirrors the RP2040 flash_set_bt_discovery_mode
+// contract. Not gated on router_saved: it is a standalone BT preference,
+// not part of the router settings block.
+void flash_set_bt_discovery_mode(uint8_t mode)
+{
+    if (mode > FLASH_BT_DISCOVERY_MAX) return;
+    if (!runtime_settings_loaded) return;
+    if (runtime_settings.bt_discovery_mode == mode) return;
+    runtime_settings.bt_discovery_mode = mode;
+    flash_save(&runtime_settings);
+}
+
+uint8_t flash_get_bt_discovery_mode(void)
+{
+    if (!runtime_settings_loaded) return FLASH_BT_DISCOVERY_AUTO;
+    return runtime_settings.bt_discovery_mode;
+}
+
 uint8_t flash_get_builtin_disabled_mask(void)
 {
     if (!runtime_settings_loaded) return 0;

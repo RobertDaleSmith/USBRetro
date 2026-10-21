@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "bt/btstack/btstack_host.h"  // BT_DISCOVERY_* constants
+
 bool btstack_host_nus_send(const uint8_t *data, uint16_t len)
 {
     (void)data;
@@ -39,6 +41,25 @@ void btstack_host_start_timed_scan(uint32_t timeout_ms)
     (void)timeout_ms;   // no central scanner on a peripheral build
 }
 
+void btstack_host_start_scan_explicit(void)
+{
+    // A peripheral never scans — see btstack_host_start_timed_scan above.
+}
+
 bool btstack_host_scan_suppressed(void)      { return false; }
 bool btstack_host_scan_hard_suppressed(void) { return false; }
 const char *btstack_host_scan_supp_src(void) { return "none"; }
+
+// --- Discovery policy (BT.DISCOVERY.SET over CDC) ---------------------------
+// The policy lives in the central's scanner (btstack_host.c). A peripheral
+// has no scanner, so there is nothing to gate: report the default and
+// accept the value without doing anything with it.
+void btstack_host_set_discovery_mode(uint8_t mode)
+{
+    (void)mode;   // no central scanner on a peripheral build
+}
+
+uint8_t btstack_host_get_discovery_mode(void)
+{
+    return BT_DISCOVERY_AUTO;
+}

@@ -36,6 +36,17 @@
 #define WIRELESS_POLICY_BLE  2
 #define WIRELESS_POLICY_MAX  2
 
+// BT discovery policy values. Mirrors BT_DISCOVERY_* in
+// src/bt/btstack/btstack_host.h — duplicated on purpose so the storage layer
+// does not have to depend on the BT stack (core must not reach into bt/).
+// 0=AUTO: scan always, auto-connect to any gamepad found
+// 1=BONDED: auto-connect only to devices we hold a link key for
+// 2=OFF: no discovery; only devices that connect to us work
+#define FLASH_BT_DISCOVERY_AUTO   0
+#define FLASH_BT_DISCOVERY_BONDED 1
+#define FLASH_BT_DISCOVERY_OFF    2
+#define FLASH_BT_DISCOVERY_MAX    2
+
 // Button mapping values:
 // 0x00 = passthrough (no remap, keep original button)
 // 0x01-0x1A = remap to JP_BUTTON_* (1-based: 1=B1, ... 18=A2, ... 24=F2, 25=L5, 26=R5)
@@ -175,8 +186,16 @@ typedef struct {
     // so it cannot express "do not bring the peripheral up at all".
     uint8_t ble_output_disabled;
 
-    // Reserved for future global settings (4 bytes)
-    uint8_t reserved[4];
+    // Discovery policy for the BT central role (BT_DISCOVERY_*):
+    // 0=AUTO (scan always, auto-connect to any gamepad found),
+    // 1=BONDED (auto-connect only to devices we hold a link key for),
+    // 2=OFF (no discovery; only devices that connect to us work).
+    // Carved from reserved[] — zero on old flashes = AUTO, which is the
+    // legacy behaviour, so no schema bump.
+    uint8_t bt_discovery_mode;
+
+    // Reserved for future global settings (3 bytes)
+    uint8_t reserved[3];
 
     // Custom profiles (4 x 56 = 224 bytes)
     custom_profile_t profiles[CUSTOM_PROFILE_MAX_COUNT];
@@ -229,6 +248,7 @@ static inline unsigned flash_sanitize_record(flash_t* s)
     FLASH_CLAMP_(bt_input_enabled, 1);
     FLASH_CLAMP_(ble_output_disabled, 1);
     FLASH_CLAMP_(shoulder_swap, 1);
+    FLASH_CLAMP_(bt_discovery_mode, FLASH_BT_DISCOVERY_MAX);   // auto/bonded/off
     FLASH_CLAMP_(wireless_policy, WIRELESS_POLICY_MAX);      // both/USB/BLE
     FLASH_CLAMP_(joybus_data_pin, 28);                        // 0=default, 1-28=GPIO
     FLASH_CLAMP_(wii_sda_pin, 29);                            // stored as GPIO+1
@@ -400,6 +420,15 @@ void flash_set_dpad_mode(uint8_t mode);
 
 // Persist the shoulder-swap toggle (L1<->L2, R1<->R2). Marks router_saved=1.
 void flash_set_shoulder_swap(uint8_t on);
+
+// Persist the BT discovery policy (FLASH_BT_DISCOVERY_*). Standalone
+// preference — not part of the router settings block, so router_saved is
+// not touched.
+void flash_set_bt_discovery_mode(uint8_t mode);
+
+// Read the persisted BT discovery policy. Returns FLASH_BT_DISCOVERY_AUTO
+// if the settings record is not loaded yet.
+uint8_t flash_get_bt_discovery_mode(void);
 
 // Built-in profiles hidden from the SELECT+Up/Down cycle (bit i = built-in i).
 uint8_t flash_get_builtin_disabled_mask(void);

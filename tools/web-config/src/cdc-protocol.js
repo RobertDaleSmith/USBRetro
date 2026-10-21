@@ -728,6 +728,11 @@ class CDCProtocol {
         return this.sendCommand('BT.STATUS');
     }
 
+    // Discovery policy: 0=auto, 1=bonded only, 2=off.
+    async setBtDiscovery(mode) {
+        return this.sendCommand('BT.DISCOVERY.SET', { mode });
+    }
+
     async clearBtBonds() {
         return this.sendCommand('BT.BONDS.CLEAR');
     }
