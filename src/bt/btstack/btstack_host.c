@@ -21,11 +21,12 @@ static inline bool bh_switch_bt_mode(void) { return false; }
 static bool btstack_host_scan_enabled = false;
 void btstack_host_enable_scan(void) {
     btstack_host_scan_enabled = true;
-    btstack_host_start_scan();
+    btstack_host_start_scan_explicit();
 }
 #endif
 #include "btstack_config.h"
 #include "bt_device_db.h"
+#include "core/services/storage/flash.h"  // flash_load() / bt_discovery_mode
 // Include specific BTstack headers instead of umbrella btstack.h
 // (btstack.h pulls in audio codecs which need sbc_encoder.h)
 #include "btstack_defines.h"
@@ -455,6 +456,87 @@ static struct {
     // Connection timeout recovery
     uint32_t recovery_start_time;        // When recovery started (0 = no recovery pending)
 } classic_state;
+
+// ============================================================================
+// DISCOVERY POLICY
+// ============================================================================
+//
+// Classic BT inquiry cannot be restricted to bonded devices — it is a
+// broadcast, and every discoverable device in range answers with its
+// BD_ADDR. The link key is only consulted later, during authentication. So
+// the bond list cannot filter *discovery*; it can only filter what we *act
+// on* (which device we auto-connect to) and whether we run discovery at all.
+//
+// See btstack_host.h for the BT_DISCOVERY_* modes.
+
+static uint8_t discovery_mode = BT_DISCOVERY_AUTO;
+
+// Restore the persisted discovery policy. A flash record written by older
+// firmware reads 0 here (AUTO), so an upgrade keeps the legacy behaviour.
+static void discovery_mode_restore(void)
+{
+    uint8_t mode = flash_get_bt_discovery_mode();
+    discovery_mode = (mode <= BT_DISCOVERY_MAX) ? mode : BT_DISCOVERY_AUTO;
+}
+
+// True if `addr` has a stored link key. Cheap enough for the inquiry path
+// (a handful of bonds, iterated once per discovered device).
+static bool classic_addr_is_bonded(const uint8_t* addr)
+{
+#ifdef ENABLE_CLASSIC
+    btstack_link_key_iterator_t it;
+    if (!gap_link_key_iterator_init(&it)) {
+        // iterator_init is optional in the btstack_link_key_db interface, and
+        // gap_link_key_iterator_init() also returns 0 before HCI reaches the
+        // working state. Without the DB we cannot tell bonded from
+        // stranger — report "not bonded" and let the caller decide.
+        return false;
+    }
+
+    bool found = false;
+    bd_addr_t it_addr;
+    link_key_t link_key;
+    link_key_type_t type;
+    while (gap_link_key_iterator_get_next(&it, it_addr, link_key, &type)) {
+        if (memcmp(it_addr, addr, 6) == 0) {
+            found = true;
+            break;
+        }
+    }
+    gap_link_key_iterator_done(&it);
+
+    memset(link_key, 0, sizeof(link_key));
+    return found;
+#else
+    (void)addr;
+    return false;
+#endif
+}
+
+// Number of stored Classic link keys. Used to distinguish "first-time setup"
+// (no bonds yet — allow everything so pairing works) from "I already have my
+// controllers" (only those are auto-connected).
+static int classic_bond_count(void)
+{
+#ifdef ENABLE_CLASSIC
+    btstack_link_key_iterator_t it;
+    if (!gap_link_key_iterator_init(&it)) return 0;
+
+    int count = 0;
+    bd_addr_t it_addr;
+    link_key_t link_key;
+    link_key_type_t type;
+    while (gap_link_key_iterator_get_next(&it, it_addr, link_key, &type)) {
+        count++;
+    }
+    gap_link_key_iterator_done(&it);
+
+    memset(link_key, 0, sizeof(link_key));
+    return count;
+#else
+    return 0;
+#endif
+}
 
 // ============================================================================
 // WIIMOTE DIRECT L2CAP STATE
@@ -997,6 +1079,11 @@ void btstack_host_init(const void* transport)
     }
     hid_state.hci_transport = (const hci_transport_t*)transport;
 
+    // Restore the discovery policy from flash. storage_init() runs before
+    // any transport init (main.c: storage_init() -> app_init() -> ...), so
+    // the settings record is available by now.
+    discovery_mode_restore();
+
     // HCI dump disabled - too verbose (logs every ACL packet)
     // printf("[BTSTACK_HOST] Init HCI dump (for logging)...\n");
     // hci_dump_init(hci_dump_embedded_stdout_get_instance());
@@ -1040,6 +1127,13 @@ void btstack_host_init_hid_handlers(void)
         hid_state.connections[i].handle = HCI_CON_HANDLE_INVALID;
     }
     // Note: hci_transport is not set here since BTstack was initialized externally
+
+    // Restore the discovery policy from flash (see btstack_host_init()).
+    discovery_mode_restore();
+    if (discovery_mode != BT_DISCOVERY_AUTO) {
+        printf("[BTSTACK_HOST] Discovery mode: %s\n",
+               discovery_mode == BT_DISCOVERY_BONDED ? "BONDED" : "OFF");
+    }
 
     // Set up HID handlers (BTstack core already initialized by btstack_cyw43_init or similar)
     setup_hid_handlers();
@@ -1147,6 +1241,14 @@ static void btstack_host_restore_last_connected(void)
 // ============================================================================
 
 static uint32_t scan_timeout_end = 0;  // 0 = no timeout (indefinite scan)
+
+// True while a scan the user explicitly asked for (BT.SCAN, dongle button)
+// is running. Set by btstack_host_start_scan_explicit(), cleared when the
+// scan ends. It separates "the user wants a scan right now" from the
+// background scan the stack keeps running on its own — the distinction
+// matters in BT_DISCOVERY_OFF mode, where the background scan must not
+// happen but an explicit request still does.
+static bool scan_explicit_window = false;
 static bool scan_suppressed = false;   // App can suppress auto-restart (e.g. USB device connected)
 
 // Hard suppression: a wireless *output* mode owns the radio for the whole session
@@ -1229,8 +1331,45 @@ static struct {
 
 #define BLE_RECONNECT_INTERVAL_MS 20000  // While scanning, try reconnecting to bonded device every 20s
 
-void btstack_host_start_scan(void)
+// Set the discovery policy. See btstack_host.h for the modes.
+void btstack_host_set_discovery_mode(uint8_t mode)
 {
+    if (mode > BT_DISCOVERY_MAX) mode = BT_DISCOVERY_AUTO;
+    if (mode == discovery_mode) return;
+
+    discovery_mode = mode;
+    printf("[BTSTACK_HOST] Discovery mode: %s\n",
+           mode == BT_DISCOVERY_BONDED ? "BONDED" :
+           mode == BT_DISCOVERY_OFF    ? "OFF" : "AUTO");
+
+    if (mode == BT_DISCOVERY_OFF) {
+        // Stop the background scan/inquiry right away — the point of OFF is
+        // that the radio stays quiet.
+        btstack_host_stop_scan();
+    } else {
+        // Leaving OFF (or switching to BONDED) — resume discovery. The
+        // usual gates (already scanning, link up, app suppressed) still
+        // apply inside start_scan().
+        btstack_host_start_scan();
+    }
+}
+
+uint8_t btstack_host_get_discovery_mode(void)
+{
+    return discovery_mode;
+}
+
+// The scan body. `explicit_request` marks a scan the user asked for (dongle
+// button, BT.SCAN) as opposed to the background scan the stack keeps running
+// on its own. The distinction matters only in BT_DISCOVERY_OFF mode, where
+// the background scan must not happen at all but an explicit request still
+// does — it is the "pair a new device now" path.
+static void btstack_host_start_scan_common(bool explicit_request)
+{
+    // Printed first so it shows even on the early-return paths below.
+    if (explicit_request && discovery_mode == BT_DISCOVERY_OFF) {
+        printf("[BTSTACK_HOST] Discovery off, but explicit scan requested\n");
+    }
 #ifdef CONFIG_USB2BLE
     return;  // USB2BLE is BLE peripheral only — no scanning for input devices
 #endif
@@ -1277,13 +1416,40 @@ void btstack_host_start_scan(void)
     // Skip in USB2BLE mode — Classic inquiry interferes with BLE advertising
     // Alternate between GIAC (general) and LIAC (limited) to discover Wiimotes/Wii U Pro
     // which use Limited Discoverable mode when SYNC button is pressed
-    uint32_t lap = classic_state.use_liac ? GAP_IAC_LIMITED_INQUIRY : GAP_IAC_GENERAL_INQUIRY;
+    //
+    // In BONDED/OFF mode we only care about controllers we already hold a
+    // link key for, and a bonded peripheral is expected to sit in Limited
+    // Discoverable mode (that is what the Windows accessory guidelines ask
+    // for). So use LIAC there: it only wakes limited-discoverable devices,
+    // which is exactly the bonded set plus the Wiimotes in pairing mode.
+    // AUTO keeps the legacy GIAC/LIAC alternation.
+    const bool liac_only = (discovery_mode != BT_DISCOVERY_AUTO);
+    uint32_t lap = (liac_only || classic_state.use_liac)
+                       ? GAP_IAC_LIMITED_INQUIRY : GAP_IAC_GENERAL_INQUIRY;
     printf("[BTSTACK_HOST] Starting Classic inquiry (LAP=%s)...\n",
-           classic_state.use_liac ? "LIAC" : "GIAC");
+           (liac_only || classic_state.use_liac) ? "LIAC" : "GIAC");
     gap_inquiry_set_lap(lap);
     gap_inquiry_start(INQUIRY_DURATION);
     classic_state.inquiry_active = true;
 #endif
+}
+
+// Background scan. Honours the discovery policy: in BT_DISCOVERY_OFF mode
+// the radio must not ask "who is out there" on its own.
+void btstack_host_start_scan(void)
+{
+    if (discovery_mode == BT_DISCOVERY_OFF) {
+        return;
+    }
+    btstack_host_start_scan_common(false);
+}
+
+// Scan the user explicitly asked for (dongle button, BT.SCAN). Runs even in
+// BT_DISCOVERY_OFF mode — this is the "pair a new device now" path.
+void btstack_host_start_scan_explicit(void)
+{
+    scan_explicit_window = true;
+    btstack_host_start_scan_common(true);
 }
 
 void btstack_host_stop_scan(void)
@@ -1291,6 +1457,7 @@ void btstack_host_stop_scan(void)
     // Always set state to idle to prevent scanning from restarting
     hid_state.state = BLE_STATE_IDLE;
     hid_state.scan_start_time = 0;
+    scan_explicit_window = false;  // the user-requested scan window is over
 
     if (hid_state.scan_active) {
         printf("[BTSTACK_HOST] Stopping BLE scan\n");
@@ -1327,7 +1494,7 @@ void btstack_host_start_timed_scan(uint32_t timeout_ms)
     scan_supp_src = "timed-scan";
     scan_timeout_end = btstack_run_loop_get_time_ms() + timeout_ms;
     printf("[BTSTACK_HOST] Starting timed scan (%lums)\n", (unsigned long)timeout_ms);
-    btstack_host_start_scan();
+    btstack_host_start_scan_explicit();
 }
 
 const char *btstack_host_scan_supp_src(void)
@@ -2300,6 +2467,24 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
             // Auto-connect to gamepads and Wiimotes
             if ((is_gamepad || is_joystick || is_wiimote_family) && classic_state.inquiry_active) {
+                // BONDED policy: only take the link for a controller we
+                // already hold a link key for. Without this every
+                // gamepad-shaped device in the room grabs the connection
+                // the moment it is discovered — the radio is ours, but
+                // the pad is not.
+                //
+                // With no bonds at all we still connect to everything, so
+                // first-time setup keeps working: a fresh device has no
+                // key yet, and refusing it would make pairing impossible.
+                //
+                // A scan the user asked for (BT.SCAN) is exempt: that is
+                // them saying "connect me to something new right now".
+                if (discovery_mode == BT_DISCOVERY_BONDED && !scan_explicit_window &&
+                    classic_bond_count() > 0 && !classic_addr_is_bonded(addr)) {
+                    printf("[BTSTACK_HOST] Not bonded, not auto-connecting (BONDED mode)\n");
+                    break;
+                }
+
                 // Skip if we already have an active incoming connection to this device
                 // (the device connected to us before we found it in inquiry)
                 if (classic_state.pending_valid && !classic_state.pending_outgoing &&
@@ -2424,11 +2609,22 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 #ifndef CONFIG_USB2BLE
             // Restart inquiry after it completes (if we're still in scan mode)
             // Toggle between GIAC and LIAC to discover all device types
+            //
+            // In OFF mode the inquiry must not come back: the whole point
+            // is that the radio stops asking "who is out there". A scan the
+            // user asked for (BT.SCAN / dongle button) is exempt — it runs
+            // its window and stops on its own.
             if (hid_state.state == BLE_STATE_SCANNING) {
+                if (discovery_mode == BT_DISCOVERY_OFF && !scan_explicit_window) {
+                    printf("[BTSTACK_HOST] Inquiry done, not restarting (discovery off)\n");
+                    break;
+                }
+                const bool liac_only = (discovery_mode != BT_DISCOVERY_AUTO);
                 classic_state.use_liac = !classic_state.use_liac;
-                uint32_t lap = classic_state.use_liac ? GAP_IAC_LIMITED_INQUIRY : GAP_IAC_GENERAL_INQUIRY;
+                uint32_t lap = (liac_only || classic_state.use_liac)
+                                   ? GAP_IAC_LIMITED_INQUIRY : GAP_IAC_GENERAL_INQUIRY;
                 printf("[BTSTACK_HOST] Restarting inquiry (LAP=%s)...\n",
-                       classic_state.use_liac ? "LIAC" : "GIAC");
+                       (liac_only || classic_state.use_liac) ? "LIAC" : "GIAC");
                 gap_inquiry_set_lap(lap);
                 gap_inquiry_start(INQUIRY_DURATION);
                 classic_state.inquiry_active = true;

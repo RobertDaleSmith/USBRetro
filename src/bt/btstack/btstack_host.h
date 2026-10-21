@@ -39,8 +39,46 @@ void btstack_host_power_on(void);
 // SCANNING / PAIRING
 // ============================================================================
 
-// Start scanning for BLE and Classic BT devices
+// Discovery policy for the central role.
+//
+// Classic BT (BR/EDR) has no way to scan for "bonded devices only": inquiry
+// is a broadcast and every discoverable device in range answers with its
+// BD_ADDR. The link key is only consulted later, during authentication. So
+// the bond list cannot filter discovery — but it CAN filter what we act on.
+//
+//   AUTO    - Scan continuously and auto-connect to any gamepad-shaped device
+//             found. Legacy behaviour: a controller in the next room grabs
+//             the link.
+//   BONDED  - Scan continuously, but only auto-connect to devices we already
+//             hold a link key for. Devices seen for the first time are still
+//             discovered (and their name/COD logged) — they just don't take
+//             the link. With no bonds at all, everything is still connectable
+//             so first-time setup keeps working.
+//   OFF     - No discovery at all. Only devices that connect to us work
+//             (bonded controllers that page the host, e.g. Joy-Cons). Use
+//             BT.SCAN to open a discovery window when pairing a new device.
+//
+// BLE discovery is unaffected by the policy in the same way: the BLE side
+// already treats "picking up a second device" as an explicit act (dongle
+// button or BT.SCAN), and OFF suppresses the BLE scan as well.
+#define BT_DISCOVERY_AUTO    0
+#define BT_DISCOVERY_BONDED  1
+#define BT_DISCOVERY_OFF     2
+#define BT_DISCOVERY_MAX     2
+
+// Set the discovery policy. Takes effect immediately: switching to OFF stops
+// the scan, leaving OFF resumes it. Out-of-range values are treated as AUTO.
+void btstack_host_set_discovery_mode(uint8_t mode);
+uint8_t btstack_host_get_discovery_mode(void);
+
+// Start scanning for BLE and Classic BT devices. Honours the discovery
+// policy — in BT_DISCOVERY_OFF mode this is a no-op.
 void btstack_host_start_scan(void);
+
+// Start scanning because the user asked for it (dongle button, BT.SCAN).
+// Runs even in BT_DISCOVERY_OFF mode — this is the "pair a new device
+// now" path.
+void btstack_host_start_scan_explicit(void);
 
 // Stop scanning
 void btstack_host_stop_scan(void);
