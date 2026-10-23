@@ -5,6 +5,9 @@
 // XIAO nRF52840:    D1 = P0.03 on gpio0
 // Feather nRF52840: User switch = P1.02 on gpio1
 // Makerdiary MDK:   USER button = P0.18 on gpio0 (overlay drops gpio-as-nreset)
+// nice!nano / Pro Micro: no user button (RST only); universal builds set
+//                   DISABLE_USER_BUTTON. bt2usb keeps the P0.03 fallback, which
+//                   is not broken out and so reads idle (pulled up).
 
 #include "core/services/button/button.h"
 #include "platform/platform.h"

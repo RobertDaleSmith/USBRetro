@@ -43,6 +43,7 @@ BT-only variant of [usb2usb](usb2usb.md). Pairs Bluetooth controllers and output
 | Feather ESP32-S3 | ESP32-S3 | BLE only | `make bt2usb_feather_esp32s3` |
 | XIAO nRF52840 | nRF52840 | BLE only | `make bt2usb_seeed_xiao_nrf52840` |
 | Feather nRF52840 | nRF52840 | BLE only | `make bt2usb_feather_nrf52840` |
+| nice!nano / nRF52840 Pro Micro | nRF52840 | BLE only | `make bt2usb_nice_nano` |
 
 ## Build and Flash
 
@@ -71,3 +72,4 @@ See [ESP32 platform docs](../platforms/esp32.md) and [nRF52840 platform docs](..
 | XIAO ESP32-S3 | `joypad_os_*_bt2usb_esp32s3.uf2` |
 | XIAO nRF52840 | `joypad_os_*_bt2usb_seeed_xiao_nrf52840.uf2` |
 | Feather nRF52840 | `joypad_os_*_bt2usb_adafruit_feather_nrf52840.uf2` |
+| nice!nano / nRF52840 Pro Micro | `joypad_os_*_bt2usb_nice_nano.uf2` |

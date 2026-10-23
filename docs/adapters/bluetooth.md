@@ -54,6 +54,7 @@ Classic BT controllers (DS3, DS4, DS5, Switch Pro, Wii U Pro) are not supported 
 | ESP32-S3 | `joypad_os_*_bt2usb_esp32s3.uf2` (drag-and-drop via TinyUF2) |
 | XIAO nRF52840 | `joypad_os_*_bt2usb_seeed_xiao_nrf52840.uf2` |
 | Feather nRF52840 | `joypad_os_*_bt2usb_adafruit_feather_nrf52840.uf2` |
+| nice!nano / nRF52840 Pro Micro | `joypad_os_*_bt2usb_nice_nano.uf2` |
 
 ## Pairing
 

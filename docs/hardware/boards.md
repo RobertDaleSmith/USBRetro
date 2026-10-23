@@ -106,6 +106,18 @@ Joypad OS runs on RP2040, ESP32-S3, and nRF52840 microcontrollers.
 - UF2 bootloader for drag-and-drop flashing
 - BLE only
 
+### nice!nano / nRF52840 Pro Micro / SuperMini
+
+- **Features**: USB-C, BLE, Pro Micro pinout, LiPo charging, single status LED (P0.15)
+- **Form Factor**: Pro Micro (1.3" x 0.7")
+- **Apps**: bt2usb, universal (GPIO pad + BLE + USB)
+- **Clones**: [nrfmicro Alternatives](https://github.com/joric/nrfmicro/wiki/Alternatives)
+
+**Notes:**
+- Requires the Adafruit nRF52 UF2 bootloader with SoftDevice s140 6.1.1 (the nice!nano bootloader, drive `NICENANO`)
+- **Untested on hardware.** See [nRF52840 platform docs](../platforms/nrf52840.md#nicenano-nrf52840-pro-micro-supermini)
+- BLE only
+
 ## Board Comparison
 
 ### RP2040
@@ -128,6 +140,7 @@ Joypad OS runs on RP2040, ESP32-S3, and nRF52840 microcontrollers.
 | ESP32-S3 | XIAO ESP32-S3 | BLE only | Yes | No | Compact BLE adapter |
 | nRF52840 | XIAO nRF52840 | BLE only | No | Via MAX3421E | Compact BLE adapter |
 | nRF52840 | Feather nRF52840 | BLE only | No | Via MAX3421E | BLE + USB host |
+| nRF52840 | nice!nano / Pro Micro | BLE only | No | No | Cheap DIY controller |
 
 ## Power Requirements
 

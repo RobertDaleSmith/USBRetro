@@ -2,6 +2,7 @@
 //
 // XIAO nRF52840:      3 discrete LEDs (R=P0.26, G=P0.30, B=P0.06), active LOW
 // Makerdiary MDK:     3 discrete LEDs (R=P0.23, G=P0.22, B=P0.24), active LOW
+// nice!nano / Pro Micro: 1 LED on P0.15, active HIGH
 // Feather nRF52840:   WS2812 NeoPixel on P0.16 via PWM3 + EasyDMA
 //                     + discrete blue LED on P1.10 (fallback alive indicator)
 
@@ -211,6 +212,19 @@ static void blue_led_set(bool on)
 #define LED_SINGLE_PIN 13  // P1.13
 #define LED_PORT_LABEL DT_NODELABEL(gpio1)
 
+#elif defined(BOARD_NICE_NANO)
+
+// ============================================================================
+// nice!nano / nRF52840 Pro Micro / SuperMini: ONE LED (P0.15), active HIGH.
+// Single-LED path like the Raytac RX (colour is lost, on/blink status kept),
+// but with the opposite polarity. Without this branch the XIAO fallback would
+// drive P0.06 -- the Pro Micro D1/TX header pin -- as an LED.
+// ============================================================================
+
+#define LED_SINGLE_PIN 15  // P0.15
+#define LED_SINGLE_ACTIVE_HIGH 1
+#define LED_PORT_LABEL DT_NODELABEL(gpio0)
+
 #elif defined(BOARD_MAKERDIARY_NRF52840)
 
 // ============================================================================
@@ -276,8 +290,12 @@ static void set_rgb(bool r, bool g, bool b)
 {
     if (!led_port) return;
 #ifdef LED_SINGLE_PIN
-    // One LED for every channel (Raytac RX): OR them.
+    // One LED for every channel (Raytac RX, nice!nano): OR them.
+#ifdef LED_SINGLE_ACTIVE_HIGH
+    gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 1 : 0);
+#else
     gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 0 : 1);
+#endif
 #else
     // Boards with fewer than three LEDs map two channels onto one pin (Raytac
     // CX-40: green and blue both on D1). Writing each channel in turn would let
@@ -403,9 +421,15 @@ void neopixel_init(void)
     }
 
 #ifdef LED_SINGLE_PIN
+#ifdef LED_SINGLE_ACTIVE_HIGH
+    // LOW = off (active high). Only one LED on this board.
+    gpio_pin_configure(led_port, LED_SINGLE_PIN, GPIO_OUTPUT_LOW);
+    printf("[led_nrf] single LED initialized (P0.%d, active high)\n", LED_SINGLE_PIN);
+#else
     // HIGH = off (active low). Only one LED on this board.
     gpio_pin_configure(led_port, LED_SINGLE_PIN, GPIO_OUTPUT_HIGH);
     printf("[led_nrf] single LED initialized (P1.%d, active low)\n", LED_SINGLE_PIN);
+#endif
 #else
     gpio_pin_configure(led_port, LED_RED_PIN, GPIO_OUTPUT_HIGH);
     gpio_pin_configure(led_port, LED_GREEN_PIN, GPIO_OUTPUT_HIGH);

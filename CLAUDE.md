@@ -51,6 +51,7 @@ make bt2usb_pico_w     # BT-only → USB HID (Pico W)
 make bt2usb_xiao_esp32s3    # BLE-only → USB HID (ESP32-S3, requires ESP-IDF)
 make bt2usb_seeed_xiao_nrf52840   # BLE-only → USB HID (Seeed XIAO nRF52840, requires NCS)
 make bt2usb_makerdiary_nrf52840   # BLE-only → USB HID (Makerdiary MDK USB Dongle, requires NCS)
+make bt2usb_nice_nano             # BLE-only → USB HID (nice!nano / nRF52840 Pro Micro / SuperMini, NCS)
 make mouthpad_aprbrother_nrf52840 # Augmental MouthPad BLE → USB HID + NUS relay (April Brother dongle, NCS)
 make mouthpad_pico_w              # Augmental MouthPad BLE → USB HID + NUS relay (Pico W)
 make wifi2usb_pico_w   # WiFi → USB HID (Pico W)
@@ -94,7 +95,7 @@ Output: `releases/joypad_os_<commit>_<app>_<board>.uf2`
 | `usb23do` | RP2040-Zero | USB/BT | 3DO |
 | `usb2loopy` | KB2040 | USB/BT | Loopy |
 | `usb2usb` | Feather/RP2040-Zero | USB/BT | USB HID |
-| `bt2usb` | Pico W/Pico 2 W/ESP32-S3/XIAO nRF52840/Makerdiary MDK | BT/BLE | USB HID |
+| `bt2usb` | Pico W/Pico 2 W/ESP32-S3/XIAO nRF52840/Makerdiary MDK/nice!nano | BT/BLE | USB HID |
 | `mouthpad` | April Brother nRF52840/Pico W/Pico 2 W | BLE (Augmental MouthPad) | USB HID (SInput) + NUS relay (CDC) |
 | `wifi2usb` | Pico W/Pico 2 W | WiFi (JOCP) | USB HID |
 | `snes2usb` | KB2040 | SNES | USB HID |
@@ -417,7 +418,7 @@ See `docs/ESP32.md` for full setup, architecture, and board details.
 
 ## nRF52840 Development
 
-The `bt2usb` app also runs on Seeed XIAO nRF52840 (xiao_ble) and the Makerdiary nRF52840 MDK USB Dongle (makerdiary_nrf52840), using BLE (no Classic BT) for controller input and USB for HID output. Uses nRF Connect SDK (Zephyr) with BTstack + TinyUSB (not Zephyr native stacks) to maximize shared code.
+The `bt2usb` app also runs on Seeed XIAO nRF52840 (xiao_ble), the Makerdiary nRF52840 MDK USB Dongle (makerdiary_nrf52840), and nice!nano / nRF52840 Pro Micro clones (nice_nano, built as upstream promicro_nrf52840/nrf52840/uf2), using BLE (no Classic BT) for controller input and USB for HID output. Uses nRF Connect SDK (Zephyr) with BTstack + TinyUSB (not Zephyr native stacks) to maximize shared code.
 
 ```bash
 # Prerequisites: nRF Connect SDK v3.1.0+ (installed via make init-nrf)

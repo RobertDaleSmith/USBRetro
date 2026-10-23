@@ -443,6 +443,10 @@ help:
 	@echo "  make flash-bt2usb_makerdiary_nrf52840 - Flash Makerdiary MDK dongle via UF2 bootloader"
 	@echo "  make universal_makerdiary_nrf52840 - GPIO/BLE -> USB HID (Makerdiary MDK USB Dongle)"
 	@echo "  make flash-universal_makerdiary_nrf52840 - Flash Makerdiary MDK universal via UF2"
+	@echo "  make bt2usb_nice_nano    - Bluetooth -> USB HID (nice!nano / nRF52840 Pro Micro / SuperMini, requires NCS)"
+	@echo "  make flash-bt2usb_nice_nano - Flash nice!nano / Pro Micro via UF2 bootloader (NICENANO drive)"
+	@echo "  make universal_nice_nano - GPIO/BLE -> USB HID (nice!nano / nRF52840 Pro Micro / SuperMini)"
+	@echo "  make flash-universal_nice_nano - Flash nice!nano / Pro Micro universal via UF2"
 	@echo "  make bt2loopy_pico_w    - Bluetooth -> Loopy (Pico W)"
 	@echo "  make bt2nuon_pico_w     - Bluetooth -> Nuon (Pico W)"
 	@echo "  make bt2n64_pico_w      - Bluetooth -> N64 (Pico W)"
@@ -1311,6 +1315,47 @@ flash-universal_seeed_xiao_nrf52840: universal_seeed_xiao_nrf52840
 
 .PHONY: monitor-universal_seeed_xiao_nrf52840
 monitor-universal_seeed_xiao_nrf52840:
+	@cd nrf && $(MAKE) monitor
+
+# --- nice!nano / nRF52840 Pro Micro / SuperMini clones (requires nRF Connect SDK) ---
+# Built as upstream Zephyr promicro_nrf52840/nrf52840/uf2 (nrf/Makefile alias
+# BOARD=nice_nano). Adafruit nRF52 UF2 bootloader, SoftDevice s140 v6 layout.
+.PHONY: bt2usb_nice_nano
+bt2usb_nice_nano:
+	@echo "$(YELLOW)Building bt2usb for nice!nano / nRF52840 Pro Micro...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=nice_nano APP_TYPE=bt2usb
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_nice_nano.uf2
+	@echo "$(GREEN)✓ bt2usb_nice_nano built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_nice_nano.uf2"
+	@echo ""
+
+.PHONY: flash-bt2usb_nice_nano
+flash-bt2usb_nice_nano: bt2usb_nice_nano
+	@cd nrf && $(MAKE) flash-uf2
+
+.PHONY: monitor-bt2usb_nice_nano
+monitor-bt2usb_nice_nano:
+	@cd nrf && $(MAKE) monitor
+
+.PHONY: universal_nice_nano
+universal_nice_nano:
+	@echo "$(YELLOW)Building universal for nice!nano / nRF52840 Pro Micro...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=nice_nano APP_TYPE=universal
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_nice_nano.uf2
+	@echo "$(GREEN)✓ universal_nice_nano built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_nice_nano.uf2"
+	@echo ""
+
+.PHONY: flash-universal_nice_nano
+flash-universal_nice_nano: universal_nice_nano
+	@cd nrf && $(MAKE) flash-uf2
+
+.PHONY: monitor-universal_nice_nano
+monitor-universal_nice_nano:
 	@cd nrf && $(MAKE) monitor
 
 .PHONY: wifi2usb_pico_w

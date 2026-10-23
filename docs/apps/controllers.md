@@ -30,6 +30,7 @@ Modular sensor inputs with dual BLE peripheral + USB device output. First sensor
 | Feather RP2040 | `make universal_feather_rp2040` | No | No |
 | Feather ESP32-S3 | `make universal_feather_esp32s3` | Yes | No |
 | Feather nRF52840 | `make universal_feather_nrf52840` | Yes | No |
+| nice!nano / nRF52840 Pro Micro | `make universal_nice_nano` | Yes | No |
 | ABB (Passthrough) | `make universal_rp2040_abb` | No | Yes (PIO-USB) |
 
 ### ABB (RP2040 Advanced Breakout Board)

@@ -2,7 +2,7 @@
 #
 # Supported boards: xiao_ble, adafruit_feather_nrf52840, aprbrother_nrf52840,
 #                   makerdiary_nrf52840, raytac_mdbt50q_rx,
-#                   raytac_mdbt50q_cx_40
+#                   raytac_mdbt50q_cx_40, nice_nano
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined),
 #                   universal (sensor input + BLE peripheral + USB)
@@ -32,6 +32,13 @@ endif
 # Makerdiary MDK USB Dongle has a native Zephyr board definition.
 ifeq ($(BOARD),makerdiary_nrf52840)
     ZEPHYR_BOARD := nrf52840_mdk_usb_dongle
+endif
+# nice!nano / nRF52840 Pro Micro / SuperMini clones: the upstream Pro Micro
+# board's UF2 variant (Adafruit nRF52 bootloader, SoftDevice s140 v6 layout,
+# code at 0x26000). NCS finds pm_static_promicro_nrf52840_nrf52840_uf2.yml by
+# that board name, so no explicit PM_STATIC is needed.
+ifeq ($(BOARD),nice_nano)
+    ZEPHYR_BOARD := promicro_nrf52840/nrf52840/uf2
 endif
 # Raytac MDBT50Q-RX is the upstream nrf52840dongle board + its own overlay --
 # the SAME upstream board as the April Brother dongle, so these two can only be
@@ -125,7 +132,7 @@ flash-uf2:
 		echo "Error: No UF2 file found. Run 'make build' first."; \
 		exit 1; \
 	fi; \
-	for DRIVE in XIAO-SENSE NRF52BOOT FTHR840BOOT MDBT50QBOOT UF2BOOT MDK-DONGLE; do \
+	for DRIVE in XIAO-SENSE NRF52BOOT FTHR840BOOT MDBT50QBOOT UF2BOOT MDK-DONGLE NICENANO; do \
 		if [ -d "/Volumes/$$DRIVE" ]; then \
 			echo "Copying UF2 to /Volumes/$$DRIVE..."; \
 			cp -X "$$UF2" "/Volumes/$$DRIVE/"; \
@@ -135,7 +142,7 @@ flash-uf2:
 	done; \
 	echo "Error: No UF2 bootloader drive found."; \
 	echo "Enter bootloader mode (double-tap reset) and try again."; \
-	echo "Expected drives: XIAO-SENSE, NRF52BOOT, FTHR840BOOT, MDBT50QBOOT, UF2BOOT, MDK-DONGLE"; \
+	echo "Expected drives: XIAO-SENSE, NRF52BOOT, FTHR840BOOT, MDBT50QBOOT, UF2BOOT, MDK-DONGLE, NICENANO"; \
 	exit 1
 
 # Flash via J-Link debugger
