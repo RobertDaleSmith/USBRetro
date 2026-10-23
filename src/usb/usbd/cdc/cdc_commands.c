@@ -3337,6 +3337,13 @@ static void cmd_bt_status(const char* json)
 static void cmd_bt_bonds_clear(const char* json)
 {
     (void)json;
+    // delete_all_bonds() ends in btstack_host_start_scan(), which goes through
+    // BTstack's hci_stack — NULL when BTstack was never started in this mode
+    // (e.g. usb2gc CDC config mode, #278).
+    if (!btstack_host_is_initialized()) {
+        send_error("bluetooth not running");
+        return;
+    }
     btstack_host_delete_all_bonds();
     send_ok();
 }
