@@ -6809,6 +6809,16 @@ int btstack_host_list_classic_bonds(uint8_t addrs_out[][6], int max_count)
 #ifdef ENABLE_CLASSIC
     if (!addrs_out || max_count <= 0) return 0;
 
+    // gap_link_key_iterator_*() dereference BTstack's hci_stack pointer, which
+    // stays NULL until hci_init() runs. Apps that never bring BTstack up in
+    // their current mode (usb2gc/wii2gc/usb2pce CDC config mode: no USB host,
+    // so no BT transport init) still answer BT.STATUS, and the web config
+    // sends it on every connect. Without this guard the NULL deref read garbage
+    // out of boot ROM, jumped through it and hard-faulted the board: USB stayed
+    // enumerated but every later command (PROFILE.LIST, PROFILE.SET, BOOTSEL)
+    // timed out (#278).
+    if (!hid_state.initialized) return 0;
+
     btstack_link_key_iterator_t it;
     if (!gap_link_key_iterator_init(&it)) {
         // iterator_init is optional in the btstack_link_key_db interface, and
