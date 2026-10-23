@@ -1,0 +1,48 @@
+# Static partition layout for the Pro Micro nRF52840 (nice!nano / SuperMini clones) ONLY.
+#
+# Selected explicitly via -DPM_STATIC_YML_FILE from nrf/Makefile, NOT by the
+# pm_static_<board>.yml naming convention: that convention keys off the ZEPHYR
+# board name, and the Raytac RX and April Brother dongles build as the same
+# `nrf52840dongle`, so a file named for the board would silently impose this
+# layout on those dongles too. Board-specific layouts must stay board-specific.
+#
+# REQUIRED, not optional. This build goes through sysbuild, so Partition Manager
+# owns the flash map and the devicetree `partitions` node in the board overlay is
+# IGNORED. Without this file PM invents a layout, and the one it invented here was
+# actively broken:
+#     PM_APP_ADDRESS        = 0x0        app at zero, but the image is linked and
+#                                        flashed at 0x1000 -> never executes
+#     PM_NVS_STORAGE        = 0xfa000..0x100000   sits inside the bootloader, so
+#                                        the first settings write destroys it
+#
+# Real layout, confirmed from the bootloader itself (INFO_UF2.TXT reports
+# "SoftDevice: not found" once the first UF2 has replaced the factory SoftDevice,
+# so the app starts right after the MBR at 0x1000) and
+# from Adafruit_nRF52_Bootloader linker/nrf52840.ld (bootloader at 0xF4000,
+# MBR params page 0xFE000, settings page 0xFF000):
+#   0x000000-0x001000  MBR / UF2 bootloader entry
+#   0x001000-0x0ec000  application
+#   0x0ec000-0x0f4000  settings/NVS (32 kB), ending exactly at the bootloader
+#   0x0f4000-0x100000  Adafruit UF2 bootloader (0xc000)
+mbr:
+  address: 0x0
+  size: 0x1000
+  region: flash_primary
+app:
+  address: 0x1000
+  size: 0xeb000
+  region: flash_primary
+nvs_storage:
+  address: 0xec000
+  size: 0x8000
+  region: flash_primary
+# Adafruit UF2 bootloader space (not MCUboot) — must stay reserved.
+adafruit_boot:
+  address: 0xf4000
+  size: 0xc000
+  region: flash_primary
+sram_primary:
+  address: 0x20000000
+  end_address: 0x20040000
+  region: sram_primary
+  size: 0x40000

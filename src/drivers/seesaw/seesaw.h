@@ -28,6 +28,22 @@
 #define SEESAW_GPIO_BULK_SET 0x05
 #define SEESAW_GPIO_PULLENSET 0x0B
 
+#define SEESAW_HW_ID_SAMD09    0x55
+#define SEESAW_HW_ID_TINY416   0x46
+#define SEESAW_HW_ID_TINY806   0x84
+#define SEESAW_HW_ID_TINY807   0x85
+#define SEESAW_HW_ID_TINY816   0x86
+#define SEESAW_HW_ID_TINY817   0x87
+#define SEESAW_HW_ID_TINY1616  0x88
+#define SEESAW_HW_ID_TINY1617  0x89
+#define SEESAW_HW_ID_STM32C011 0x90
+#define SEESAW_HW_ID_STM32C031 0x91
+#define SEESAW_HW_ID_STM32C051 0x92
+#define SEESAW_HW_ID_STM32G071 0x93
+
+#define SEESAW_BEGIN_ATTEMPTS  10
+#define SEESAW_BEGIN_RETRY_MS  10
+
 // ADC functions
 #define SEESAW_ADC_CHANNEL_OFFSET 0x07
 #define SEESAW_ADC_ERROR 0xFFFF  // Returned on I2C read failure (valid range 0-1023)
@@ -56,5 +72,7 @@ bool seesaw_reset(seesaw_device_t* dev);
 
 // Read hardware ID (expected: 0x87 for ATtiny8x7)
 uint8_t seesaw_get_hw_id(seesaw_device_t* dev);
+
+uint8_t seesaw_begin(seesaw_device_t* dev);
 
 #endif // SEESAW_H

@@ -1,0 +1,219 @@
+/* Joypad — Pro Micro nRF52840 (nice!nano and compatible boards) devicetree overlay
+ *
+ * Built as the upstream Zephyr board `nrf52840dongle/nrf52840` + this overlay
+ * (see nrf/Makefile ZEPHYR_BOARD mapping for BOARD=promicro_nrf52840).
+ *
+ * Bootloader: Adafruit nRF52 UF2 (double-tap reset, NICENANO / SUPERMINI drive).
+ * Flashing the first UF2 replaces the factory SoftDevice, after which the
+ * bootloader reports "SoftDevice: not found" and starts the app at 0x1000.
+ *
+ * The upstream dongle dts claims pins for its own peripherals (UART on
+ * P0.20/17/24/22, I2C on P0.26/27, PWM on P0.08/P1.09/P0.12). On the Pro Micro
+ * those are header pins that a controller wires buttons to, so each one is
+ * moved here to where this board actually exposes the function:
+ *   UART console   TX = D0 (P0.06), RX = D1 (P0.08), no flow control
+ *   I2C bus 0      SDA = D6 (P1.00), SCL = D7 (P0.11)  (web config "I2C0")
+ *   I2C bus 1      SDA = D13 (P1.13), SCL = D14 (P1.15) (web config "I2C1")
+ *   status LED     P0.15, blue, active HIGH
+ *   EXT_VCC        P0.13, driven HIGH at boot so the VCC pin (3.3V out to
+ *                  JoyWing and other peripherals) is powered. This is the
+ *                  nice!nano v2 polarity (ZMK: GPIO_ACTIVE_HIGH), also used
+ *                  by SuperMini clones. nice!nano v1 is inverted (active low)
+ *                  and is not supported by this target.
+ * Pin facts from the board's published pinout and the nice!nano/ZMK/SlimeVR
+ * board definitions.
+ *
+ * TinyUSB drives the USB hardware directly, so Zephyr's USBD node is disabled.
+ */
+
+&usbd {
+	status = "disabled";
+};
+
+/* The upstream dongle's console is a USB CDC node hanging off zephyr_udc0, which
+ * the line above removes -- leaving zephyr,console pointing at a device that no
+ * longer exists (link fails on an undefined __device_dts_ord_*). Point it at the
+ * real UART instead, as the other dongle overlays here do. */
+/ {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+/* Single LED on P0.15 (active high). The upstream dongle dts describes one
+ * green LED plus an RGB; point every channel at the one LED this board has so
+ * any consumer of the colour nodes still resolves. */
+&led0_green {
+	gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+	label = "Pro Micro LED";
+};
+
+&led1_red {
+	gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+	label = "Pro Micro LED";
+};
+
+&led1_green {
+	gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+	label = "Pro Micro LED";
+};
+
+&led1_blue {
+	gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+	label = "Pro Micro LED";
+};
+
+/* UART console on the Pro Micro's dedicated TX/RX pins instead of the dongle's
+ * D2-D5 pins (including RTS/CTS, which would otherwise be driven). */
+&uart0_default {
+	group1 {
+		psels = <NRF_PSEL(UART_TX, 0, 6)>;
+	};
+	group2 {
+		psels = <NRF_PSEL(UART_RX, 0, 8)>;
+		bias-pull-up;
+	};
+};
+
+&uart0_sleep {
+	group1 {
+		psels = <NRF_PSEL(UART_TX, 0, 6)>,
+			<NRF_PSEL(UART_RX, 0, 8)>;
+		low-power-enable;
+	};
+};
+
+/* I2C bus 0 on D6 (SDA, P1.00) / D7 (SCL, P0.11). Internal pull-ups are added
+ * in case the attached breakout has none. */
+&i2c0_default {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SDA, 1, 0)>,
+			<NRF_PSEL(TWIM_SCL, 0, 11)>;
+		bias-pull-up;
+	};
+};
+
+&i2c0_sleep {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SDA, 1, 0)>,
+			<NRF_PSEL(TWIM_SCL, 0, 11)>;
+		low-power-enable;
+	};
+};
+
+/* The dongle's PWM RGB LED output would claim P0.08, P1.09 and P0.12 at init
+ * even though nothing uses it, which fights the RX pin and any pad GPIO. */
+&pwm0 {
+	status = "disabled";
+};
+
+/* EXT_VCC (P0.13): on nice!nano v2 and SuperMini, HIGH switches the VCC pin
+ * on (ZMK nice_nano 2.0.0 overlay: control-gpios GPIO_ACTIVE_HIGH). */
+&gpio0 {
+	ext_vcc_enable: ext-vcc-enable {
+		gpio-hog;
+		gpios = <13 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "EXT_VCC";
+	};
+};
+
+/* SAADC — platform_gpio_nrf.c compiles DT_NODELABEL(adc) whenever CONFIG_ADC
+ * is on (prj.conf), and the upstream dts leaves the node disabled. */
+&adc {
+	status = "okay";
+};
+
+/* I2C bus 1 on the board's SDA1 / SCL1 pads: D13 (SDA, P1.13) / D14 (SCL,
+ * P1.15). The bt2usb display probe pings i2c1 at boot on non-Feather boards;
+ * internal pull-ups keep that probe from hanging on an empty bus (a NACK
+ * returns at once), as on the Makerdiary overlay. */
+&i2c1 {
+	status = "okay";
+};
+
+&i2c1_default {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SDA, 1, 13)>,
+			<NRF_PSEL(TWIM_SCL, 1, 15)>;
+		bias-pull-up;
+	};
+};
+
+&i2c1_sleep {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SDA, 1, 13)>,
+			<NRF_PSEL(TWIM_SCL, 1, 15)>;
+		low-power-enable;
+	};
+};
+
+/* Brownout fix, as on the Makerdiary MDK dongle. This board is USB-5V powered in
+ * high-voltage mode (VDDH -> internal REG0 -> VDD) and the upstream dts enables
+ * DCDC only on REG1, leaving REG0 -- the stage carrying the whole 5V->3.3V load
+ * -- in LDO mode, where it collapses VDD under sustained radio load.
+ *
+ * The observed failure here matches that exactly: the board resets endlessly with
+ * NO fault crumb and noinit RAM wiped, which is a POR (brownout), not a CPU
+ * fault -- so the safe-boot path never engages and USB never enumerates.
+ * mouthpad-usb does not set this on the same dongle, but it is not driving this
+ * radio load, so that is not evidence against it.
+ */
+&reg0 {
+	status = "okay";
+};
+
+/* UF2 / no-SoftDevice flash layout (code at 0x1000). The upstream dongle dts
+ * uses the Nordic bootloader partitions — replace them.
+ *
+ * Sizes from the hardware-verified mouthpad-usb map for this dongle: code
+ * 0x1000-0xEE000, storage 0xEE000-0xFE000 (64 kB), and the MBR params page at
+ * 0xFE000 deliberately left outside our partitions. Getting this wrong does not
+ * fail loudly — NVS lands on bootloader flash and bonds/settings corrupt.
+ */
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Adafruit UF2 bootloader MBR */
+		boot_partition: partition@0 {
+			label = "adafruit_boot";
+			reg = <0x00000000 0x00001000>;
+		};
+
+		/* Application code, immediately after the MBR (no SoftDevice) */
+		code_partition: partition@1000 {
+			label = "code_partition";
+			reg = <0x00001000 0x000ed000>;
+		};
+
+		/* Settings/bonds storage (64 kB), ending before the MBR params page */
+		storage_partition: partition@ee000 {
+			label = "storage";
+			reg = <0x000ee000 0x00010000>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		zephyr,code-partition = &code_partition;
+		zephyr,settings-partition = &storage_partition;
+	};
+};
+
+/* Zephyr open-source link layer instead of Nordic's SoftDevice Controller: the
+ * closed controller refuses the Switch 2's 5 ms connection interval, and the
+ * open one is patchable (see nrf/patches). Selecting it needs this chosen node,
+ * not just CONFIG_BT_LL_SW_SPLIT. */
+&bt_hci_sdc { status = "disabled"; };
+&bt_hci_controller { status = "okay"; };
+/ { chosen { zephyr,bt-hci = &bt_hci_controller; }; };

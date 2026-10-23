@@ -90,6 +90,12 @@
     #define JOYWING_I2C_BUS 1
     #define JOYWING_SDA_PIN 2
     #define JOYWING_SCL_PIN 3
+#elif defined(BOARD_PROMICRO_NRF52840)
+    // Pro Micro nRF52840 (nice!nano / SuperMini): JoyWing on I2C0 (SDA=D6/P1.00, SCL=D7/P0.11)
+    // Pins configured via devicetree; values here for debug prints only
+    #define JOYWING_I2C_BUS 0
+    #define JOYWING_SDA_PIN 32
+    #define JOYWING_SCL_PIN 11
 #elif defined(BOARD_FEATHER_NRF52840)
     // Adafruit Feather nRF52840: JoyWing on I2C0 (SDA=P0.12, SCL=P0.11)
     // Pins configured via devicetree; values here for debug prints only

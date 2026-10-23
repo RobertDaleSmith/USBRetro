@@ -35,6 +35,47 @@ uint8_t seesaw_get_hw_id(seesaw_device_t* dev)
     return id;
 }
 
+static bool seesaw_hw_id_known(uint8_t id)
+{
+    switch (id) {
+    case SEESAW_HW_ID_SAMD09:
+    case SEESAW_HW_ID_TINY416:
+    case SEESAW_HW_ID_TINY806:
+    case SEESAW_HW_ID_TINY807:
+    case SEESAW_HW_ID_TINY816:
+    case SEESAW_HW_ID_TINY817:
+    case SEESAW_HW_ID_TINY1616:
+    case SEESAW_HW_ID_TINY1617:
+    case SEESAW_HW_ID_STM32C011:
+    case SEESAW_HW_ID_STM32C031:
+    case SEESAW_HW_ID_STM32C051:
+    case SEESAW_HW_ID_STM32G071:
+        return true;
+    default:
+        return false;
+    }
+}
+
+uint8_t seesaw_begin(seesaw_device_t* dev)
+{
+    bool reset_acked = false;
+    for (int attempt = 0; attempt < SEESAW_BEGIN_ATTEMPTS; attempt++) {
+        if (seesaw_reset(dev)) {
+            reset_acked = true;
+            break;
+        }
+        platform_sleep_ms(SEESAW_BEGIN_RETRY_MS);
+    }
+    if (!reset_acked) return 0;
+
+    for (int attempt = 0; attempt < SEESAW_BEGIN_ATTEMPTS; attempt++) {
+        uint8_t id = seesaw_get_hw_id(dev);
+        if (seesaw_hw_id_known(id)) return id;
+        platform_sleep_ms(SEESAW_BEGIN_RETRY_MS);
+    }
+    return 0;
+}
+
 bool seesaw_gpio_set_input_pullup(seesaw_device_t* dev, uint32_t pin_mask)
 {
     // Set direction to input (DIRCLR)

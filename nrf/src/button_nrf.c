@@ -23,6 +23,10 @@
 #define BUTTON_PORT_LABEL DT_NODELABEL(gpio0)
 #define BUTTON_PIN 15  // P0.15 (user button, active low with pull-up)
 #define BUTTON_PIN_STR "P0.15"
+#elif defined(BOARD_PROMICRO_NRF52840)
+#define BUTTON_PORT_LABEL DT_NODELABEL(gpio1)
+#define BUTTON_PIN 6   // P1.06 / D9 (optional external button to GND, pull-up)
+#define BUTTON_PIN_STR "P1.06"
 #elif defined(BOARD_MAKERDIARY_NRF52840)
 #define BUTTON_PORT_LABEL DT_NODELABEL(gpio0)
 #define BUTTON_PIN 18  // P0.18 (onboard USER button)
