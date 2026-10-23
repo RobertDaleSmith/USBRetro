@@ -64,7 +64,9 @@ EXCLUDES = os.path.join(REPO, ".github", "ci-excluded-apps.txt")
 CMAKELISTS = os.path.join(REPO, "src", "CMakeLists.txt")
 
 ESP_SUFFIX = "_esp32s3"
-NRF_SUFFIX = "_nrf52840"
+# nRF targets are named <app>_<board>_nrf52840, except the nice!nano / Pro Micro
+# clone family, whose board name already identifies the chip.
+NRF_SUFFIX = ("_nrf52840", "_nice_nano")
 
 # Pruned when discovering platform backends: build output, locally-installed
 # toolchains (`make init-wch` drops one in wch/toolchain), release staging, and

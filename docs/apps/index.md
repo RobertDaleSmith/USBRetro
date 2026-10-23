@@ -114,6 +114,7 @@ Most apps support multiple board variants. Append the board name to the build co
 | XIAO ESP32-S3 | `_xiao_esp32s3` | ESP32-S3 | BLE, USB OTG, tiny |
 | Seeed XIAO nRF52840 | `_seeed_xiao_nrf52840` | nRF52840 | BLE, USB, tiny |
 | Adafruit Feather nRF52840 | `_feather_nrf52840` | nRF52840 | BLE, USB, NeoPixel |
+| nice!nano / nRF52840 Pro Micro | `_nice_nano` | nRF52840 | BLE, USB, Pro Micro pinout |
 
 ## Building
 

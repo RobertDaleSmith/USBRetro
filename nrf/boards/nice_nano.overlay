@@ -1,0 +1,70 @@
+/* Joypad — nice!nano / nRF52840 Pro Micro / SuperMini devicetree overlay
+ *
+ * Built as the upstream Zephyr board `promicro_nrf52840/nrf52840/uf2` + this
+ * overlay (see nrf/Makefile ZEPHYR_BOARD mapping for BOARD=nice_nano). Zephyr
+ * describes that board as "based on nice!nano, also referred to as Pro Micro,
+ * Promicro, SuperMini nRF52840" — the clone family listed at
+ * https://github.com/joric/nrfmicro/wiki/Alternatives.
+ *
+ * Bootloader: Adafruit nRF52 UF2 (nice!nano build, SoftDevice s140 6.1.1),
+ * drive NICENANO. The uf2 variant's base dts already includes
+ * nrf52840_partition_uf2_sdv6.dtsi (code at 0x26000, storage 0xEC000,
+ * bootloader 0xF4000), so no partition override is needed here.
+ *
+ * UNTESTED ON HARDWARE.
+ *
+ * TinyUSB drives USB hardware directly, so disable Zephyr's USBD node.
+ * Console -> uart0 on the Pro Micro TX/RX header pins (TX=D1/P0.06,
+ * RX=D0/P0.08, 115200 baud), the same D1/D0 convention as the Feather.
+ *
+ * Status LED: P0.15, active HIGH (base board led0). Driven directly by
+ * nrf/src/ws2812_nrf.c, so the base board's pwm0 on that pin is disabled.
+ * There is no user button (the only button is RST).
+ */
+
+&usbd {
+	status = "disabled";
+};
+
+/ {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+/* Base board puts uart0 on P0.09/P0.10 (NFC pads). Move it to the Pro Micro
+ * TX/RX header pins instead. */
+&uart0_default {
+	group1 {
+		psels = <NRF_PSEL(UART_TX, 0, 6)>,
+			<NRF_PSEL(UART_RX, 0, 8)>;
+	};
+};
+
+&uart0_sleep {
+	group1 {
+		psels = <NRF_PSEL(UART_TX, 0, 6)>,
+			<NRF_PSEL(UART_RX, 0, 8)>;
+		low-power-enable;
+	};
+};
+
+/* pwm0 would claim the status LED pin (P0.15) away from GPIO. */
+&pwm0 {
+	status = "disabled";
+};
+
+/* spi2 sits on the three middle pins (P1.01/P1.02/P1.07) and nothing in
+ * JoypadOS uses it on this board — free them for pad GPIO. */
+&spi2 {
+	status = "disabled";
+};
+
+/* i2c0 (SDA=P1.00/D6, SCL=P0.11/D7) only serves the Feather JoyWing and the
+ * XIAO Sense IMU, neither of which exists here — free D6/D7 for pad GPIO.
+ * i2c1 (SDA=P1.04/D8, SCL=P1.06/D9) is kept from the base board: the shared
+ * display service looks it up on every non-Feather board. */
+&i2c0 {
+	status = "disabled";
+};

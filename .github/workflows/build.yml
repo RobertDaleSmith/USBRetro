@@ -261,6 +261,15 @@ jobs:
           - app: universal_seeed_xiao_nrf52840
             board: xiao_ble
             app_type: universal
+          # nice!nano / nRF52840 Pro Micro / SuperMini clones (#280).
+          - app: bt2usb_nice_nano
+            board: nice_nano
+            zephyr_board: promicro_nrf52840/nrf52840/uf2
+            app_type: bt2usb
+          - app: universal_nice_nano
+            board: nice_nano
+            zephyr_board: promicro_nrf52840/nrf52840/uf2
+            app_type: universal
 
     steps:
       - name: Checkout code with submodules
@@ -366,7 +375,7 @@ jobs:
           mv artifacts/*.uf2 releases/
 
           # Known board suffixes (order matters - check longer suffixes first)
-          BOARDS="feather_esp32s3 esp32s3 seeed_xiao_nrf52840 feather_nrf52840_max3421 feather_nrf52840 pico2_w pico2 pico_w rp2040_abb rp2040zero rp2350usba kb2040 feather_rp2040_usb_host_max3421 feather_rp2040_usb_host feather_rp2040_max3421 feather_rp2040 feather pico macropad"
+          BOARDS="feather_esp32s3 esp32s3 seeed_xiao_nrf52840 nice_nano feather_nrf52840_max3421 feather_nrf52840 pico2_w pico2 pico_w rp2040_abb rp2040zero rp2350usba kb2040 feather_rp2040_usb_host_max3421 feather_rp2040_usb_host feather_rp2040_max3421 feather_rp2040 feather pico macropad"
 
           for file in releases/joypad_os_*.uf2; do
             if [ -f "$file" ]; then

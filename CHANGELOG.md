@@ -9,6 +9,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+#### nRF52840 — nice!nano / nRF52840 Pro Micro / SuperMini build target
+- **New board alias `nice_nano`** for the nice!nano and its clones (nRF52840 Pro Micro,
+  SuperMini; see the [nrfmicro Alternatives](https://github.com/joric/nrfmicro/wiki/Alternatives)
+  list). It builds against Zephyr's upstream `promicro_nrf52840/nrf52840/uf2` board, which uses
+  the Adafruit nRF52 UF2 bootloader with SoftDevice s140 v6 (app at `0x26000`). CI ships
+  `bt2usb_nice_nano` and `universal_nice_nano` UF2s. **Untested on hardware.** (#280)
+
 #### universal — dedicated BLE keyboard, mouse, and keyboard+mouse modes
 - **Three new BLE output modes that declare only what they are:** `Keyboard+Mouse BLE`,
   `Keyboard BLE`, and `Mouse BLE`. Standard puts keyboard, mouse and gamepad in one HID

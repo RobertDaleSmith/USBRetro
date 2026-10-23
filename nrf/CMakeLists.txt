@@ -1,7 +1,9 @@
 # Zephyr app CMakeLists for Joypad on nRF52840 boards
 #
 # Supported boards: xiao_ble (Seeed XIAO), adafruit_feather_nrf52840,
-#                   aprbrother_nrf52840, makerdiary_nrf52840 (MDK USB Dongle)
+#                   aprbrother_nrf52840, makerdiary_nrf52840 (MDK USB Dongle),
+#                   nice_nano (nice!nano / nRF52840 Pro Micro / SuperMini, built
+#                   as upstream promicro_nrf52840/nrf52840/uf2)
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined)
 #
@@ -615,6 +617,11 @@ elseif(APP_TYPE STREQUAL "universal")
     if(BOARD MATCHES "xiao_ble")
         target_compile_definitions(app PRIVATE DISABLE_USER_BUTTON=1)
     endif()
+    # nice!nano / Pro Micro clones have no user button at all (RST only), and
+    # the fallback P0.03 is not broken out, so every header pin stays pad GPIO.
+    if(BOARD MATCHES "promicro_nrf52840")
+        target_compile_definitions(app PRIVATE DISABLE_USER_BUTTON=1)
+    endif()
 
 else()
     # -----------------------------------------------------------------------
@@ -867,6 +874,12 @@ elseif(BOARD MATCHES "nrf52840dongle")
     # board + boards/aprbrother_nrf52840.overlay (see nrf/Makefile alias).
     set(BOARD_DEFINE "BOARD_APRBROTHER_NRF52840=1")
     set(BOARD_NAME_STR "aprbrother_nrf52840")
+elseif(BOARD MATCHES "promicro_nrf52840")
+    # nice!nano / nRF52840 Pro Micro / SuperMini clones are built as the
+    # upstream promicro_nrf52840/nrf52840/uf2 board + boards/nice_nano.overlay
+    # (see nrf/Makefile alias).
+    set(BOARD_DEFINE "BOARD_NICE_NANO=1")
+    set(BOARD_NAME_STR "nice_nano")
 elseif(BOARD MATCHES "nrf52840_mdk_usb_dongle")
     # Makerdiary MDK USB Dongle is built as the upstream nrf52840_mdk_usb_dongle
     # board + boards/makerdiary_nrf52840.overlay (see nrf/Makefile alias).

@@ -1,0 +1,28 @@
+# Static partition layout for nice!nano / nRF52840 Pro Micro / SuperMini boards
+# (Zephyr board promicro_nrf52840/nrf52840/uf2, JoypadOS alias nice_nano) with
+# the Adafruit nRF52 UF2 bootloader (SoftDevice s140 v6.1.1 layout).
+#
+# Same layout as the Feather and as Zephyr's nrf52840_partition_uf2_sdv6.dtsi:
+# app at 0x26000, storage 0xEC000-0xF4000, bootloader from 0xF4000.
+# Picked up automatically by NCS from the normalized board target name.
+sd:
+  address: 0x0
+  size: 0x26000
+  region: flash_primary
+app:
+  address: 0x26000
+  size: 0xc6000
+  region: flash_primary
+nvs_storage:
+  address: 0xec000
+  size: 0x8000
+  region: flash_primary
+adafruit_boot:
+  address: 0xf4000
+  size: 0xc000
+  region: flash_primary
+sram_primary:
+  address: 0x20000000
+  end_address: 0x20040000
+  region: sram_primary
+  size: 0x40000
