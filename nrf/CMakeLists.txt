@@ -1,7 +1,8 @@
 # Zephyr app CMakeLists for Joypad on nRF52840 boards
 #
 # Supported boards: xiao_ble (Seeed XIAO), adafruit_feather_nrf52840,
-#                   aprbrother_nrf52840, makerdiary_nrf52840 (MDK USB Dongle)
+#                   aprbrother_nrf52840, makerdiary_nrf52840 (MDK USB Dongle),
+#                   promicro_nrf52840 (nice!nano / SuperMini clones)
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined)
 #
@@ -500,8 +501,9 @@ elseif(APP_TYPE STREQUAL "universal")
     # JoyWing (seesaw I2C sensor) is a Feather-class accessory and registers a
     # separate top-level input interface. On the bare XIAO it's just clutter in
     # the device-info input list (and there's no seesaw attached), so enable it
-    # only on the Feather. Pad (GPIO) input is always available via SENSOR_PAD.
-    if(BOARD MATCHES "adafruit_feather_nrf52840")
+    # only on boards with an I2C bus broken out for it: the Feather and the Pro
+    # Micro (D6/D7). Pad (GPIO) input is always available via SENSOR_PAD.
+    if(BOARD MATCHES "adafruit_feather_nrf52840" OR DTC_OVERLAY_FILE MATCHES "promicro_nrf52840")
         target_compile_definitions(app PRIVATE SENSOR_JOYWING=1)
     endif()
 
@@ -612,7 +614,7 @@ elseif(APP_TYPE STREQUAL "universal")
     # that pad and makes presses cycle the USB output mode (double-click).
     # Disable it so every pad GPIO is free for controller input. The Feather
     # has a real user switch (P1.02), so keep it there.
-    if(BOARD MATCHES "xiao_ble")
+    if(BOARD MATCHES "xiao_ble" OR DTC_OVERLAY_FILE MATCHES "promicro_nrf52840")
         target_compile_definitions(app PRIVATE DISABLE_USER_BUTTON=1)
     endif()
 
@@ -853,7 +855,10 @@ string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 # -DJOYPAD_BOARD (with or without the nrf_ image prefix) silently left it empty
 # here, and the Raytac RX came up identifying as an April Brother, with that
 # board's LED and button pins.
-if(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_cx_40")
+if(DTC_OVERLAY_FILE MATCHES "promicro_nrf52840")
+    set(BOARD_DEFINE "BOARD_PROMICRO_NRF52840=1")
+    set(BOARD_NAME_STR "promicro_nrf52840")
+elseif(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_cx_40")
     set(BOARD_DEFINE "BOARD_RAYTAC_MDBT50Q_CX40=1")
     set(BOARD_NAME_STR "raytac_mdbt50q_cx_40")
 elseif(DTC_OVERLAY_FILE MATCHES "raytac_mdbt50q_rx")

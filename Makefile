@@ -443,6 +443,8 @@ help:
 	@echo "  make flash-bt2usb_makerdiary_nrf52840 - Flash Makerdiary MDK dongle via UF2 bootloader"
 	@echo "  make universal_makerdiary_nrf52840 - GPIO/BLE -> USB HID (Makerdiary MDK USB Dongle)"
 	@echo "  make flash-universal_makerdiary_nrf52840 - Flash Makerdiary MDK universal via UF2"
+	@echo "  make bt2usb_promicro_nrf52840      - Bluetooth -> USB HID (Pro Micro nRF52840 / nice!nano, requires NCS)"
+	@echo "  make universal_promicro_nrf52840   - GPIO/BLE -> USB HID (Pro Micro nRF52840 / nice!nano)"
 	@echo "  make bt2loopy_pico_w    - Bluetooth -> Loopy (Pico W)"
 	@echo "  make bt2nuon_pico_w     - Bluetooth -> Nuon (Pico W)"
 	@echo "  make bt2n64_pico_w      - Bluetooth -> N64 (Pico W)"
@@ -1193,6 +1195,36 @@ bt2usb_raytac_mdbt50q_rx:
 
 .PHONY: flash-bt2usb_raytac_mdbt50q_rx
 flash-bt2usb_raytac_mdbt50q_rx: bt2usb_raytac_mdbt50q_rx
+	@cd nrf && $(MAKE) flash-uf2
+
+.PHONY: bt2usb_promicro_nrf52840
+bt2usb_promicro_nrf52840:
+	@echo "$(YELLOW)Building bt2usb for Pro Micro nRF52840 (nice!nano / SuperMini)...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=promicro_nrf52840
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_promicro_nrf52840.uf2
+	@echo "$(GREEN)✓ bt2usb_promicro_nrf52840 built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_bt2usb_promicro_nrf52840.uf2"
+	@echo ""
+
+.PHONY: flash-bt2usb_promicro_nrf52840
+flash-bt2usb_promicro_nrf52840: bt2usb_promicro_nrf52840
+	@cd nrf && $(MAKE) flash-uf2
+
+.PHONY: universal_promicro_nrf52840
+universal_promicro_nrf52840:
+	@echo "$(YELLOW)Building universal for Pro Micro nRF52840 (nice!nano / SuperMini)...$(NC)"
+	@cd nrf && $(MAKE) build BOARD=promicro_nrf52840 APP_TYPE=universal
+	@mkdir -p $(RELEASE_DIR)
+	@cp nrf/build/nrf/zephyr/zephyr.uf2 \
+	    $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_promicro_nrf52840.uf2
+	@echo "$(GREEN)✓ universal_promicro_nrf52840 built successfully$(NC)"
+	@echo "  File: $(RELEASE_DIR)/joypad_os_$(VERSION_ID)_universal_promicro_nrf52840.uf2"
+	@echo ""
+
+.PHONY: flash-universal_promicro_nrf52840
+flash-universal_promicro_nrf52840: universal_promicro_nrf52840
 	@cd nrf && $(MAKE) flash-uf2
 
 .PHONY: universal_makerdiary_nrf52840

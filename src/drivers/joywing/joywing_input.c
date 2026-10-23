@@ -148,7 +148,7 @@ static void joywing_init_instance(uint8_t idx)
     uint8_t addr = jw->cfg.addr ? jw->cfg.addr : SEESAW_ADDR_DEFAULT;
     seesaw_init(&jw->seesaw, jw->i2c_bus, addr);
 
-    uint8_t hw_id = seesaw_get_hw_id(&jw->seesaw);
+    uint8_t hw_id = seesaw_begin(&jw->seesaw);
     printf("[joywing:%d] Seesaw HW ID: 0x%02X (addr=0x%02X)\n", idx, hw_id, addr);
     if (hw_id == 0) {
         // No Seesaw responded — leave instance disabled so polling doesn't

@@ -2,7 +2,7 @@
 #
 # Supported boards: xiao_ble, adafruit_feather_nrf52840, aprbrother_nrf52840,
 #                   makerdiary_nrf52840, raytac_mdbt50q_rx,
-#                   raytac_mdbt50q_cx_40
+#                   raytac_mdbt50q_cx_40, promicro_nrf52840
 # Supported apps:   bt2usb (default), usb2usb (with MAX3421E FeatherWing),
 #                   btusb2usb (MAX3421E + Bluetooth combined),
 #                   universal (sensor input + BLE peripheral + USB)
@@ -42,6 +42,13 @@ ifeq ($(BOARD),raytac_mdbt50q_rx)
     # Naming it pm_static_nrf52840dongle_nrf52840.yml would also capture the
     # April Brother dongle, which shares that Zephyr board.
     PM_STATIC := $(shell pwd)/pm_static_raytac_mdbt50q_rx.yml
+endif
+# Pro Micro nRF52840 (nice!nano / SuperMini clones) is the upstream
+# nrf52840dongle board + its own overlay, with the Adafruit UF2 bootloader
+# layout selected explicitly for this board only.
+ifeq ($(BOARD),promicro_nrf52840)
+    ZEPHYR_BOARD := nrf52840dongle/nrf52840
+    PM_STATIC := $(shell pwd)/pm_static_promicro_nrf52840.yml
 endif
 # Raytac MDBT50Q-CX-40 has NO upstream Zephyr definition, so it is built from the
 # out-of-tree board in boards/raytac/mdbt50q_cx_40 (hence BOARD_ROOT). Nordic
@@ -125,7 +132,7 @@ flash-uf2:
 		echo "Error: No UF2 file found. Run 'make build' first."; \
 		exit 1; \
 	fi; \
-	for DRIVE in XIAO-SENSE NRF52BOOT FTHR840BOOT MDBT50QBOOT UF2BOOT MDK-DONGLE; do \
+	for DRIVE in XIAO-SENSE NRF52BOOT FTHR840BOOT MDBT50QBOOT UF2BOOT MDK-DONGLE NICENANO SUPERMINI; do \
 		if [ -d "/Volumes/$$DRIVE" ]; then \
 			echo "Copying UF2 to /Volumes/$$DRIVE..."; \
 			cp -X "$$UF2" "/Volumes/$$DRIVE/"; \
@@ -135,7 +142,7 @@ flash-uf2:
 	done; \
 	echo "Error: No UF2 bootloader drive found."; \
 	echo "Enter bootloader mode (double-tap reset) and try again."; \
-	echo "Expected drives: XIAO-SENSE, NRF52BOOT, FTHR840BOOT, MDBT50QBOOT, UF2BOOT, MDK-DONGLE"; \
+	echo "Expected drives: XIAO-SENSE, NRF52BOOT, FTHR840BOOT, MDBT50QBOOT, UF2BOOT, MDK-DONGLE, NICENANO, SUPERMINI"; \
 	exit 1
 
 # Flash via J-Link debugger

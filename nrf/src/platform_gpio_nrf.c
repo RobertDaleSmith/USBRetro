@@ -23,6 +23,9 @@ static const struct device* gpio1_dev = NULL;
 bool platform_gpio_pin_usable(uint8_t pin) {
     if (pin > 47) return false;          // beyond P1.15
     if (pin == 0 || pin == 1) return false;  // LFXO crystal (XL1/XL2)
+#ifdef BOARD_PROMICRO_NRF52840
+    if (pin == 13) return false;
+#endif
     return true;
 }
 

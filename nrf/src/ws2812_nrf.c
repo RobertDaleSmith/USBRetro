@@ -211,6 +211,17 @@ static void blue_led_set(bool on)
 #define LED_SINGLE_PIN 13  // P1.13
 #define LED_PORT_LABEL DT_NODELABEL(gpio1)
 
+#elif defined(BOARD_PROMICRO_NRF52840)
+
+// ============================================================================
+// Pro Micro nRF52840 (nice!nano / SuperMini clones): ONE blue LED (P0.15),
+// active HIGH. Same single-LED handling as the Raytac RX, opposite polarity.
+// ============================================================================
+
+#define LED_SINGLE_PIN 15  // P0.15
+#define LED_SINGLE_ACTIVE_HIGH
+#define LED_PORT_LABEL DT_NODELABEL(gpio0)
+
 #elif defined(BOARD_MAKERDIARY_NRF52840)
 
 // ============================================================================
@@ -276,8 +287,12 @@ static void set_rgb(bool r, bool g, bool b)
 {
     if (!led_port) return;
 #ifdef LED_SINGLE_PIN
-    // One LED for every channel (Raytac RX): OR them.
+    // One LED for every channel: OR them.
+#ifdef LED_SINGLE_ACTIVE_HIGH
+    gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 1 : 0);
+#else
     gpio_pin_set(led_port, LED_SINGLE_PIN, (r || g || b) ? 0 : 1);
+#endif
 #else
     // Boards with fewer than three LEDs map two channels onto one pin (Raytac
     // CX-40: green and blue both on D1). Writing each channel in turn would let
@@ -403,9 +418,14 @@ void neopixel_init(void)
     }
 
 #ifdef LED_SINGLE_PIN
+#ifdef LED_SINGLE_ACTIVE_HIGH
+    gpio_pin_configure(led_port, LED_SINGLE_PIN, GPIO_OUTPUT_LOW);
+    printf("[led_nrf] single LED initialized (pin %d, active high)\n", LED_SINGLE_PIN);
+#else
     // HIGH = off (active low). Only one LED on this board.
     gpio_pin_configure(led_port, LED_SINGLE_PIN, GPIO_OUTPUT_HIGH);
-    printf("[led_nrf] single LED initialized (P1.%d, active low)\n", LED_SINGLE_PIN);
+    printf("[led_nrf] single LED initialized (pin %d, active low)\n", LED_SINGLE_PIN);
+#endif
 #else
     gpio_pin_configure(led_port, LED_RED_PIN, GPIO_OUTPUT_HIGH);
     gpio_pin_configure(led_port, LED_GREEN_PIN, GPIO_OUTPUT_HIGH);

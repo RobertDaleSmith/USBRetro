@@ -238,6 +238,16 @@ jobs:
           # board = overlay/conf name under nrf/boards/; zephyr_board = the
           # real Zephyr board target when it differs (nrf/Makefile does the
           # same mapping locally).
+          - app: bt2usb_promicro_nrf52840
+            board: promicro_nrf52840
+            zephyr_board: nrf52840dongle/nrf52840
+            app_type: bt2usb
+            pm_static: pm_static_promicro_nrf52840.yml
+          - app: universal_promicro_nrf52840
+            board: promicro_nrf52840
+            zephyr_board: nrf52840dongle/nrf52840
+            app_type: universal
+            pm_static: pm_static_promicro_nrf52840.yml
           - app: bt2usb_makerdiary_nrf52840
             board: makerdiary_nrf52840
             zephyr_board: nrf52840_mdk_usb_dongle
@@ -320,6 +330,7 @@ jobs:
         run: |
           west build -b ${{ matrix.zephyr_board || matrix.board }} . --pristine=always -- \
             -DAPP_TYPE=${{ matrix.app_type }} \
+            $([ -n "${{ matrix.pm_static }}" ] && echo "-DPM_STATIC_YML_FILE=$(pwd)/${{ matrix.pm_static }}") \
             $([ -f boards/${{ matrix.board }}.overlay ] && echo "-DDTC_OVERLAY_FILE=$(pwd)/boards/${{ matrix.board }}.overlay") \
             $(EXTRA=""; \
               [ -f boards/${{ matrix.board }}.conf ] && EXTRA="$(pwd)/boards/${{ matrix.board }}.conf"; \
@@ -366,7 +377,7 @@ jobs:
           mv artifacts/*.uf2 releases/
 
           # Known board suffixes (order matters - check longer suffixes first)
-          BOARDS="feather_esp32s3 esp32s3 seeed_xiao_nrf52840 feather_nrf52840_max3421 feather_nrf52840 pico2_w pico2 pico_w rp2040_abb rp2040zero rp2350usba kb2040 feather_rp2040_usb_host_max3421 feather_rp2040_usb_host feather_rp2040_max3421 feather_rp2040 feather pico macropad"
+          BOARDS="feather_esp32s3 esp32s3 seeed_xiao_nrf52840 promicro_nrf52840 feather_nrf52840_max3421 feather_nrf52840 pico2_w pico2 pico_w rp2040_abb rp2040zero rp2350usba kb2040 feather_rp2040_usb_host_max3421 feather_rp2040_usb_host feather_rp2040_max3421 feather_rp2040 feather pico macropad"
 
           for file in releases/joypad_os_*.uf2; do
             if [ -f "$file" ]; then

@@ -9,6 +9,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+#### nRF52840 — Pro Micro boards (nice!nano, SuperMini)
+- **New `promicro_nrf52840` target** for Pro Micro nRF52840 boards with the UF2 bootloader
+  (nice!nano v2, SuperMini and similar clones). Builds `bt2usb` and `universal`; the JoyWing
+  works on it over I2C (D6/D7 or D13/D14). Pin map and flashing notes are in
+  `docs/platforms/nrf52840.md`.
+- **JoyWing startup is more reliable:** the seesaw is now reset and retried at boot the way
+  Adafruit's library does it, so a JoyWing that powers up together with the board isn't
+  missed and disabled.
+
 #### universal — dedicated BLE keyboard, mouse, and keyboard+mouse modes
 - **Three new BLE output modes that declare only what they are:** `Keyboard+Mouse BLE`,
   `Keyboard BLE`, and `Mouse BLE`. Standard puts keyboard, mouse and gamepad in one HID
